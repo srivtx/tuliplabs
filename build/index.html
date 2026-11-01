@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build your own X · Voxel Network Lab</title>
+<meta name="description" content="Build your own calculator, math engine, database, SQLite, git, vim, regex engine, VM, graphics engine, physics engine, neural-net framework and web framework from scratch, with 3D simulations of every part.">
+<meta name="theme-color" content="#3a4fa3">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='2' width='8' height='8' fill='%23e2532c'/><rect x='22' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='2' y='12' width='8' height='8' fill='%2318977f'/><rect x='12' y='12' width='8' height='8' fill='%233a4fa3'/><rect x='22' y='12' width='8' height='8' fill='%23e2532c'/><rect x='2' y='22' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='22' width='8' height='8' fill='%23d99a12'/><rect x='22' y='22' width='8' height='8' fill='%233a4fa3'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<link rel="stylesheet" href="../learn/engine.css">
+</head>
+<body>
+<header class="top">
+  <button class="btn menu-btn" aria-label="Chapters">☰</button>
+  <a class="brand" href="../"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span><b>Voxel Network Lab</b><small>Build your own X: see every part, then write it</small></span></a>
+  <nav class="tracks" aria-label="Sections">
+    <a href="../">3D worlds</a>
+    <a href="../code/">Code: Think Complexity</a>
+    <a href="../modsim/">Code: ModSim</a>
+    <a href="../build/" aria-current="page">Build your own X</a>
+    <a href="../stats/">Probability & Stats</a>
+  </nav>
+  <span class="grow"></span>
+  <span class="stats" id="stats"></span>
+  <a class="rv-btn" href="#review">Review <b id="rv-count" class="zero">0</b></a>
+  <span class="chip" id="py-chip"><i></i><span>Python loads when you open a chapter</span></span>
+</header>
+<div class="wrap">
+  <nav class="side" id="side" aria-label="Chapters"></nav>
+  <main id="main"><p class="empty">Loading lessons…</p></main>
+</div>
+<script>
+window.TRACK = {
+  id: "bx", data: "../content/bx.json", short: "Build your own X", pageTitle: "Build your own X · Voxel Network Lab",
+  heroTitle: "Build your own X, and see every part", heroLede: "Real software is a handful of small ideas wired together. Here you build them one at a time: a calculator, a math engine, a database, a tiny SQLite, git, a vim-style editor, a regex engine, a virtual machine, a 3D renderer, a physics engine, a neural-net framework and a web framework. Every chapter starts with a <b>3D simulation</b> you can poke: click any block to see what that part does and <i>why it was designed that way</i>. Then you write it in Python, piece by piece, and finish with a real-world project.", homeNote: "Chapters go from basics to advanced, and each one reuses ideas from the last: the calculator's parser becomes the math engine, the VM and the SQL parser; the key-value store grows into SQLite. Python runs on this page with nothing to install."
+};
+</script>
+<script src="../learn/viz/core.js"></script>
+<script src="../learn/engine.js"></script>
+</body>
+</html>
