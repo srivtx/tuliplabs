@@ -51,7 +51,7 @@
     clearTimeout(saveT);
     saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }, 150);
   }
-  const XP = { run: 5, predict: 10, parsons: 10, quiz: 5, recall: 10, exercise: 20 };
+  const XP = { run: 5, predict: 10, parsons: 10, quiz: 5, recall: 10, exercise: 20, viz: 10, project: 40 };
   let onProgress = null;
   function award(n, why) {
     S.xp = (S.xp || 0) + n;
@@ -85,7 +85,7 @@
       if (f) {
         const b = f.b;
         const pts = b.type === "exercise" && b.kind === "rebuild" ? 30 : XP[b.type] || 5;
-        award(pts, { run: "ran it", predict: "prediction made", parsons: "order rebuilt", quiz: "answered", recall: "explained", exercise: "all checks pass" }[b.type] || "done");
+        award(pts, { run: "ran it", predict: "prediction made", parsons: "order rebuilt", quiz: "answered", recall: "explained", exercise: "all checks pass", viz: "explored it", project: "project shipped" }[b.type] || "done");
       }
     }
     refreshProgress();
@@ -611,6 +611,63 @@
     return sh.el;
   }
 
+
+  // A live simulation from learn/viz/<name>.js. It marks itself done when the
+  // learner reaches its goal (the widget calls api.done()).
+  function renderViz(b, ctx) {
+    const sh = shell(b, "viz", "Simulate", b.title || "Play with it");
+    sh.el.classList.add("vizblk");
+    const goal = b.goal ? h("div", { class: "vgoal" }, h("b", {}, S.done[b.id] ? "✓ Goal reached: " : "Your goal: "), h("span", { html: b.goal })) : null;
+    const stage = h("div", { class: "vstage" }, h("p", { class: "kbd" }, "Loading the simulation…"));
+    sh.body.append(b.intro ? h("div", { class: "prompt", html: b.intro }) : null, goal, stage);
+    const finish = (msg) => {
+      if (ctx.review) { ctx.onResult(true); return; }
+      if (goal) goal.firstChild.textContent = "✓ Goal reached: ";
+      if (markDone(b.id)) { sh.done(); if (msg) toast(msg); confetti(sh.el.querySelector(".bh")); }
+    };
+    stage.vizDone = finish; // lets tools/e2e.js complete a goal
+    if (!window.VIZ) { stage.textContent = "The simulation library did not load."; return sh.el; }
+    window.VIZ.mount(b.name, stage, { done: finish, height: b.height, wasDone: !!S.done[b.id], key: b.id })
+      .catch((e) => { stage.textContent = "This simulation failed to start: " + (e && e.message || e); });
+    return sh.el;
+  }
+
+  // A real-world project: a brief, why it matters, milestones you tick off, and
+  // stretch ideas. The exercises that follow in the same step are its parts.
+  function renderProject(b, ctx) {
+    const sh = shell(b, "project", "Real-world project", b.title);
+    sh.el.classList.add("projblk");
+    S.ms = S.ms || {};
+    const ticks = S.ms[b.id] = S.ms[b.id] || [];
+    const bar = h("div", { class: "pbar big" }, h("i"));
+    const count = h("span", { class: "kbd" });
+    const ship = h("button", { class: "btn primary", disabled: true }, "I built it ✓");
+    function sync() {
+      const n = b.milestones.length, d = b.milestones.filter((_, i) => ticks[i]).length;
+      bar.firstChild.style.width = Math.round((100 * d) / (n || 1)) + "%";
+      count.textContent = `${d} / ${n} milestones`;
+      ship.disabled = d < n || !!S.done[b.id];
+      if (S.done[b.id]) ship.textContent = "✓ Shipped";
+    }
+    const list = h("ol", { class: "miles" }, b.milestones.map((m, i) => {
+      const cb = h("input", { type: "checkbox", id: `${b.id}-m${i}` });
+      cb.checked = !!ticks[i];
+      cb.onchange = () => { ticks[i] = cb.checked ? 1 : 0; save(); sync(); };
+      return h("li", {}, cb, h("label", { for: `${b.id}-m${i}`, html: m }));
+    }));
+    ship.onclick = () => { if (markDone(b.id)) { sh.done(); confetti(sh.el.querySelector(".bh")); } sync(); };
+    sh.body.append(
+      b.client ? h("div", { class: "client" }, h("b", {}, "Client: "), h("span", { html: b.client })) : null,
+      h("div", { class: "prompt", html: b.brief }),
+      b.why ? h("div", { class: "pwhy" }, h("b", {}, "Where this shows up for real"), h("div", { html: b.why })) : null,
+      b.skills && b.skills.length ? h("div", { class: "skills" }, b.skills.map((k) => h("span", { class: "pill", html: k }))) : null,
+      h("h4", { class: "mh" }, "Milestones"), list,
+      h("div", { class: "btns" }, ship, count), bar,
+      b.stretch && b.stretch.length ? h("details", { class: "stretch" }, h("summary", {}, "Make it yours: stretch ideas"), h("ul", {}, b.stretch.map((x) => h("li", { html: x })))) : null);
+    sync();
+    return sh.el;
+  }
+
   function renderBlock(b, ctx) {
     switch (b.type) {
       case "md": return h("div", { class: "prose", html: b.html });
@@ -620,6 +677,8 @@
       case "exercise": return renderExercise(b, ctx);
       case "quiz": return renderQuiz(b, ctx);
       case "recall": return renderRecall(b, ctx);
+      case "viz": return renderViz(b, ctx);
+      case "project": return renderProject(b, ctx);
       case "bridge": return h("div", { class: "bridge" }, h("div", { class: "cube", "aria-hidden": "true" }, h("i"), h("i"), h("i"), h("i")), h("div", { html: b.html }));
     }
     return h("div");
@@ -627,7 +686,7 @@
 
   // ------------------------------------------------------------ progress --
   let DATA = null;
-  const COUNTABLE = new Set(["run", "predict", "parsons", "exercise", "quiz", "recall"]);
+  const COUNTABLE = new Set(["run", "predict", "parsons", "exercise", "quiz", "recall", "viz", "project"]);
   function chProgress(ch) {
     let n = 0, d = 0;
     for (const s of ch.sections) for (const b of s.blocks) if (COUNTABLE.has(b.type)) { n++; if (S.done[b.id]) d++; }
