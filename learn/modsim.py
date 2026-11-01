@@ -96,7 +96,13 @@ class _Bag:
 
     def __repr__(self):
         width = max((len(k) for k in self._d), default=0)
-        rows = "\n".join(f"  {k:<{width}}  {v!r}" for k, v in self._d.items())
+        def show(v):
+            if isinstance(v, (float, np.floating)):
+                return f"{float(v):.6g}"
+            if isinstance(v, (int, np.integer)) and not isinstance(v, bool):
+                return str(int(v))
+            return repr(v)
+        rows = "\n".join(f"  {k:<{width}}  {show(v)}" for k, v in self._d.items())
         return f"{type(self).__name__}:\n{rows}"
 
 
