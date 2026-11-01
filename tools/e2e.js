@@ -6,14 +6,14 @@ const track = process.argv[2] || "code";
 const chap = process.argv[3] || "1";
 const shots = process.env.SHOTS || ".";
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {});
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/fonts.g|Failed to load resource/.test(m.text())) errors.push("console: " + m.text()); });
   await page.goto(`${BASE}/${track}/?runner=local#${chap}`);
   await page.waitForSelector(".stephead");
-  const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), track === "code" ? "tc" : "ms");
+  const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), ({ code: "tc", modsim: "ms", build: "bx", stats: "ps" })[track]);
   const ch = data.chapters.find((c) => String(c.num) === chap);
   let ok = 0, bad = [];
   for (const s of ch.sections) {
@@ -51,6 +51,19 @@ const shots = process.env.SHOTS || ".";
     } else if (b.type === "quiz") {
       await el.locator(".opt").first().click();
       await el.locator(".why p").first().waitFor();
+      ok++;
+    } else if (b.type === "viz") {
+      await el.locator(".vz-view").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1200);
+      const failed = await el.locator(".vstage").innerText();
+      if (/failed to start|did not load/.test(failed)) { bad.push(b.id + " viz: " + failed.slice(0, 200)); continue; }
+      await el.scrollIntoViewIfNeeded(); await page.waitForTimeout(600);
+      await el.screenshot({ path: `${shots}/${track}-ch${chap}-${b.id}.png` }).catch(() => {});
+      await page.evaluate((id) => document.querySelector("#b-" + CSS.escape(id) + " .vstage").vizDone(), b.id);
+      ok++;
+    } else if (b.type === "project") {
+      for (const cb of await el.locator(".miles input").all()) await cb.check();
+      await el.locator("button:has-text('I built it')").click();
       ok++;
     } else if (b.type === "recall") {
       await el.locator("button:has-text('Compare')").click();
