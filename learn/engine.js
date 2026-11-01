@@ -106,21 +106,36 @@
   const params = new URLSearchParams(location.search);
   const LOCAL = params.get("runner") === "local";
   const Runner = {
-    worker: null, seq: 0, pending: new Map(), state: "idle",
-    start() {
-      if (LOCAL || this.worker) return;
-      this.worker = new Worker("../learn/py-worker.js");
-      this.worker.onmessage = (e) => {
-        const d = e.data;
-        if (d.status) { setChip(d.text === "ready" ? "ready" : "busy", d.text === "ready" ? "Python ready" : d.text); return; }
-        const p = this.pending.get(d.id);
-        if (p) { this.pending.delete(d.id); p.resolve(d.res); }
-        if (!this.pending.size) setChip("ready", "Python ready");
-      };
-      this.worker.onerror = () => setChip("", "Python failed to load. Check your connection and reload.");
-      setChip("busy", "Starting Python…");
+    worker: null, seq: 0, pending: new Map(), state: "idle", listeners: new Set(), warmed: new Set(),
+    start(prelude) {
+      if (LOCAL) return;
+      if (!this.worker) {
+        this.worker = new Worker("../learn/py-worker.js");
+        this.warmed.clear();
+        this.status = null;
+        this.worker.onmessage = (e) => {
+          const d = e.data;
+          if (d.status) {
+            this.status = d.text;
+            setChip(d.text === "ready" ? "ready" : "busy", d.text === "ready" ? "Python ready" : d.text);
+            for (const fn of this.listeners) fn(d.text);
+            return;
+          }
+          const p = this.pending.get(d.id);
+          if (d.started) { if (p && p.onStart) p.onStart(); return; }
+          if (p) { this.pending.delete(d.id); p.resolve(d.res); }
+          if (!this.pending.size) setChip("ready", "Python ready");
+        };
+        this.worker.onerror = () => setChip("", "Python failed to load. Check your connection and reload.");
+        setChip("busy", "Starting Python…");
+      }
+      // Download the packages this chapter needs now, so the first Run doesn't wait for them.
+      if (prelude && !this.warmed.has(prelude)) {
+        this.warmed.add(prelude);
+        this.worker.postMessage({ id: ++this.seq, req: { op: "warm", prelude } });
+      }
     },
-    async run(req) {
+    async run(req, onStart) {
       if (LOCAL) {
         setChip("busy", "Running…");
         try {
@@ -131,7 +146,7 @@
       this.start();
       const id = ++this.seq;
       return new Promise((resolve, reject) => {
-        this.pending.set(id, { resolve, reject });
+        this.pending.set(id, { resolve, reject, onStart });
         this.worker.postMessage({ id, req });
       });
     },
@@ -139,10 +154,12 @@
       if (!this.worker) return;
       this.worker.terminate();
       this.worker = null;
-      for (const p of this.pending.values()) p.resolve({ error: "Stopped. Python was restarted, so earlier examples need running again.", stdout: "", figures: [] });
+      for (const p of this.pending.values()) p.resolve({ error: "You stopped the run. Python was restarted, so run the earlier examples on this page again before this one.", stdout: "", figures: [] });
       this.pending.clear();
       ranCells.clear();
+      const warmed = [...this.warmed];
       this.start();
+      for (const pre of warmed) this.start(pre);
     },
   };
   const ranCells = new Set();
@@ -158,16 +175,34 @@
     const label = btn.textContent;
     const handler = btn.onclick;
     btn.disabled = true;
-    btn.textContent = "Running…";
-    let stopT = setTimeout(() => {
-      if (LOCAL) return;
-      btn.disabled = false;
-      btn.textContent = "■ Stop";
-      btn.onclick = (e) => { e.stopImmediatePropagation(); Runner.stop(); };
-    }, 2500);
-    try { return await Runner.run(req); }
+    btn.textContent = !LOCAL && Runner.status && Runner.status !== "ready" ? Runner.status : "Running…";
+    btn.classList.add("loading");
+    // The first run on a page may wait for Python itself: say so, so a slow start doesn't look broken.
+    let note = null;
+    if (!LOCAL && Runner.status !== "ready") {
+      note = h("div", { class: "load-note" }, "First run: downloading Python into your browser. This happens once per visit and can take up to a minute.");
+      btn.parentNode && btn.parentNode.after(note);
+    }
+    // While Python is still downloading, show its progress on the button. Stop is offered only once
+    // the code itself has been running for a while: stopping a download just starts it over.
+    const onStatus = (text) => { if (btn.disabled) btn.textContent = text === "ready" ? "Running…" : text; };
+    Runner.listeners.add(onStatus);
+    let stopT = null;
+    const onStart = () => {
+      if (btn.disabled) btn.textContent = "Running…";
+      stopT = setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = "■ Stop";
+        btn.classList.remove("loading");
+        btn.onclick = (e) => { e.stopImmediatePropagation(); Runner.stop(); };
+      }, 2500);
+    };
+    try { return await Runner.run(req, onStart); }
     finally {
+      Runner.listeners.delete(onStatus);
       clearTimeout(stopT);
+      btn.classList.remove("loading");
+      if (note) note.remove();
       btn.onclick = handler;
       btn.disabled = false;
       btn.textContent = label;
@@ -871,9 +906,9 @@
       next ? h("a", { class: "btn", href: "#" + next.num }, next.num + ". " + next.title + " →") : h("span")));
     m.append(col);
     document.title = `${ch.num}. ${ch.title} · ${CFG.pageTitle}`;
-    if (sectionId) { const t = document.getElementById("s-" + sectionId); if (t) { t.scrollIntoView(); Runner.start(); return; } }
+    if (sectionId) { const t = document.getElementById("s-" + sectionId); if (t) { t.scrollIntoView(); Runner.start(ch.prelude); return; } }
     window.scrollTo(0, 0);
-    Runner.start();
+    Runner.start(ch.prelude);
   }
 
   function pageReview() {
