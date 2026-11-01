@@ -56,6 +56,13 @@ def _format_error(exc, filename):
     return head + ("\n" + "\n".join(lines) if lines else "")
 
 
+def _is_plot_object(value):
+    """Don't echo things like <matplotlib.legend.Legend object at 0x...>."""
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    return type(value).__module__.split(".")[0] == "matplotlib"
+
+
 def _exec(code, ns, filename):
     """Exec code like a notebook cell: the value of a final bare expression is echoed."""
     tree = ast.parse(code, filename, "exec")
@@ -65,7 +72,7 @@ def _exec(code, ns, filename):
     exec(compile(tree, filename, "exec"), ns)
     if last is not None:
         value = eval(compile(last, filename, "eval"), ns)
-        if value is not None:
+        if value is not None and not _is_plot_object(value):
             print(repr(value))
 
 
