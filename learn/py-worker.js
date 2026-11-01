@@ -39,7 +39,11 @@ async function packagesFor(req) {
   if (/\bcomplexity\b/.test(text)) text += "\n" + sources["complexity.py"];
   const before = Object.keys(py.loadedPackages).length;
   await py.loadPackagesFromImports(text, {
-    messageCallback: (m) => { if (/Loading/.test(m)) status(m.replace(/\.\.\.$/, "…")); },
+    messageCallback: (m) => {
+      if (!/^Loading /.test(m)) return;
+      const names = m.replace(/^Loading /, "").replace(/\.\.\.$/, "").split(", ");
+      status(names.length > 2 ? `Loading ${names.length} packages…` : `Loading ${names.join(", ")}…`);
+    },
   });
   if (Object.keys(py.loadedPackages).length !== before) status("ready");
 }
@@ -50,6 +54,8 @@ onmessage = async (e) => {
     if (!ready) ready = init();
     await ready;
     if (req.op !== "reset") await packagesFor(req);
+    if (req.op === "warm") { postMessage({ id, res: {} }); return; }
+    postMessage({ id, started: true });
     const handle = py.globals.get("harness").handle;
     const out = handle(py.toPy(req));
     const res = out.toJs({ dict_converter: Object.fromEntries });
