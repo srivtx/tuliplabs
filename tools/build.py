@@ -240,6 +240,7 @@ def parse_chapter(path, track):
                        "prompt": md(parts.get("prompt", [""])[0]),
                        "setup": parts.get("setup", [""])[0],
                        "tests": parts.get("tests", [""])[0],
+                       "show": parts.get("show", [""])[0],
                        "hints": [md(h) for h in parts.get("hint", []) if h.strip()]}
                 if kind == "exercise":
                     blk["starter"] = parts["starter"][0]
@@ -340,9 +341,11 @@ def _verify_chapter(ch):
     for sec in ch["sections"]:
         for b in sec["blocks"]:
             if b["type"] == "exercise":
-                good = harness.check(ch["prelude"], b["setup"], b["solution"], b["tests"])
+                good = harness.check(ch["prelude"], b["setup"], b["solution"], b["tests"], b.get("show", ""))
                 if not good["passed"]:
                     problems.append(f"{b['id']}: SOLUTION fails: {good.get('error') or good.get('failed')} -> {good.get('message')}")
+                elif good.get("show", {}).get("error"):
+                    problems.append(f"{b['id']}: show block raised\n{good['show']['error']}")
                 bad = harness.check(ch["prelude"], b["setup"], b["starter"], b["tests"])
                 if bad["passed"]:
                     problems.append(f"{b['id']}: starter already passes the tests")

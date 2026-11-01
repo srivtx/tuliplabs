@@ -14,6 +14,42 @@ import sys
 import traceback
 
 _SPACES = {}          # one notebook-style namespace per chapter
+_ANIMS = []           # flipbooks made by the current run
+MAX_FRAMES = 240
+
+
+def flipbook(frames, cmap="viridis", vmin=None, vmax=None, titles=None, fps=8):
+    """Show a sequence of 2-D arrays (or 1-D rows, stacked as they grow) as an animation.
+
+    Call it with a list of numpy arrays; the page shows a player with play/pause and a slider.
+    """
+    import numpy as np
+    import matplotlib
+    import matplotlib.image as mpimg
+    frames = [np.asarray(f, dtype=float) for f in frames]
+    if not frames:
+        return
+    if len(frames) > MAX_FRAMES:
+        step = len(frames) / MAX_FRAMES
+        frames = [frames[int(i * step)] for i in range(MAX_FRAMES)]
+    lo = min(f.min() for f in frames) if vmin is None else vmin
+    hi = max(f.max() for f in frames) if vmax is None else vmax
+    if hi == lo:
+        hi = lo + 1
+    out = []
+    for f in frames:
+        if f.ndim == 1:
+            f = f[None, :]
+        buf = io.BytesIO()
+        mpimg.imsave(buf, f, cmap=cmap, vmin=lo, vmax=hi, format="png")
+        out.append(base64.b64encode(buf.getvalue()).decode("ascii"))
+    _ANIMS.append({"frames": out, "fps": fps, "titles": list(titles) if titles is not None else None})
+
+
+def _take_anims():
+    out = list(_ANIMS)
+    _ANIMS.clear()
+    return out
 _PRELUDE_DONE = set()
 
 
@@ -110,7 +146,7 @@ def _run(code, ns, filename="<cell>"):
 def _space(nsid, prelude):
     ns = _SPACES.get(nsid)
     if ns is None:
-        ns = {"__name__": "__main__"}
+        ns = {"__name__": "__main__", "flipbook": flipbook}
         _SPACES[nsid] = ns
     if nsid not in _PRELUDE_DONE:
         _PRELUDE_DONE.add(nsid)
@@ -133,7 +169,7 @@ def cell(nsid, prelude, code):
     if err:
         return {"stdout": "", "error": err, "figures": _figures()}
     stdout, error = _run(code, ns)
-    return {"stdout": stdout, "error": error, "figures": _figures()}
+    return {"stdout": stdout, "error": error, "figures": _figures(), "anims": _take_anims()}
 
 
 def _statements(tests):
@@ -147,13 +183,14 @@ def _statements(tests):
     return out
 
 
-def check(prelude, setup, code, tests):
+def check(prelude, setup, code, tests, show=""):
     """Run learner code in a fresh namespace, then each test statement in turn.
 
     Returns passed / failed counts and a message for the first failure, so the
     learner sees one clear thing to fix at a time.
     """
-    ns = {"__name__": "__main__"}
+    ns = {"__name__": "__main__", "flipbook": flipbook}
+    _ANIMS.clear()
     for label, src in (("<prelude>", prelude), ("<setup>", setup)):
         if src:
             _, err = _run(src, ns, label)
@@ -190,8 +227,14 @@ def check(prelude, setup, code, tests):
                         "message": f"{type(exc).__name__}: {exc}", "figures": figures}
     finally:
         sys.stdout, sys.stderr = old
-    return {"passed": True, "stdout": stdout, "error": None, "total": total, "ok": ok,
-            "figures": figures}
+    result = {"passed": True, "stdout": stdout, "error": None, "total": total, "ok": ok,
+              "figures": figures, "anims": _take_anims()}
+    if show:
+        # The reward: run a demo that uses the learner's own (now passing) code.
+        show_out, show_err = _run(show, ns, "<show>")
+        result["show"] = {"stdout": show_out, "error": show_err, "figures": _figures(),
+                          "anims": _take_anims()}
+    return result
 
 
 def handle(req):
@@ -201,7 +244,7 @@ def handle(req):
         return cell(req["ns"], req.get("prelude", ""), req["code"])
     if op == "check":
         return check(req.get("prelude", ""), req.get("setup", ""), req["code"],
-                     req.get("tests", ""))
+                     req.get("tests", ""), req.get("show", ""))
     if op == "reset":
         return reset(req["ns"])
     return {"error": f"unknown op {op!r}"}

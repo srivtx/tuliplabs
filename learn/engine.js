@@ -284,10 +284,59 @@
         if (res.error) { out.classList.add("err"); text += (text ? "\n" : "") + res.error; }
         out.textContent = text;
         figs.textContent = "";
-        for (const f of res.figures || []) figs.append(h("img", { src: "data:image/png;base64," + f, alt: "Plot produced by your code" }));
+        figs.append(visuals(res));
         if (extra) figs.append(extra);
       },
     };
+  }
+
+  // ------------------------------------------------------------ visuals --
+  const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function Player(anim) {
+    const n = anim.frames.length;
+    const img = h("img", { class: "flip", alt: "Animation produced by the code" });
+    const slider = h("input", { type: "range", min: 0, max: n - 1, value: 0, "aria-label": "Frame" });
+    const btn = h("button", { class: "btn small" }, "❚❚ Pause");
+    const lab = h("span", { class: "kbd" });
+    let i = 0, timer = null;
+    function show(k) {
+      i = k;
+      img.src = "data:image/png;base64," + anim.frames[k];
+      slider.value = k;
+      lab.textContent = (anim.titles && anim.titles[k] != null ? anim.titles[k] + " · " : "") + `frame ${k + 1} / ${n}`;
+    }
+    function stop() { clearInterval(timer); timer = null; btn.textContent = "▶ Play"; }
+    function play() {
+      if (n < 2) return;
+      stop();
+      btn.textContent = "❚❚ Pause";
+      timer = setInterval(() => {
+        if (!document.body.contains(img)) return stop();
+        show(i + 1 < n ? i + 1 : 0);
+      }, 1000 / (anim.fps || 8));
+    }
+    btn.onclick = () => (timer ? stop() : play());
+    slider.oninput = () => { stop(); show(+slider.value); };
+    show(0);
+    if (!REDUCED) play(); else stop();
+    return h("div", { class: "player" }, img, h("div", { class: "pctl" }, btn, slider, lab));
+  }
+  function confetti(anchor) {
+    if (REDUCED || !anchor) return;
+    const colors = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)"];
+    const box = h("div", { class: "burst", "aria-hidden": "true" });
+    for (let k = 0; k < 14; k++) {
+      const a = (k / 14) * Math.PI * 2, d = 40 + Math.random() * 40;
+      box.append(h("i", { style: `background:${colors[k % 4]};--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d - 20}px` }));
+    }
+    anchor.append(box);
+    setTimeout(() => box.remove(), 1000);
+  }
+  function visuals(res) {
+    const wrap = h("div", { class: "figs" });
+    for (const f of res.figures || []) wrap.append(h("img", { src: "data:image/png;base64," + f, alt: "Plot produced by the code" }));
+    for (const a of res.anims || []) wrap.append(Player(a));
+    return wrap;
   }
 
   // ------------------------------------------------------------- blocks --
@@ -362,7 +411,7 @@
         h("div", { class: "cmp" },
           h("div", {}, h("b", {}, "Your guess"), h("div", { class: "out" }, guessed ? guess.value : "(skipped)")),
           h("div", {}, h("b", {}, "Python says"), h("div", { class: "out" + (r.error ? " err" : "") }, actual || "(nothing)"))),
-        ...(r.figures || []).map((f) => h("div", { class: "figs" }, h("img", { src: "data:image/png;base64," + f, alt: "Plot" }))),
+        visuals(r),
       );
       lock.disabled = true;
       skip.remove();
@@ -460,12 +509,20 @@
     const hintBtn = b.hints.length ? h("button", { class: "btn" }, `Hint (${b.hints.length})`) : null;
     const solBtn = h("button", { class: "btn", disabled: true, title: "Unlocks after two tries" }, "Show solution");
     async function go() {
-      const r = await runWith(runBtn, { op: "check", prelude: ctx.ch.prelude, setup: b.setup, code: ed.get(), tests: b.tests });
-      out.show({ stdout: r.stdout, error: r.error, figures: r.figures });
+      const r = await runWith(runBtn, { op: "check", prelude: ctx.ch.prelude, setup: b.setup, code: ed.get(), tests: b.tests, show: b.show || "" });
+      out.show({ stdout: r.stdout, error: r.error, figures: r.figures, anims: r.anims });
       res.textContent = "";
       const meter = h("span", { class: "meter" }, Array.from({ length: r.total || 0 }, (_, i) => h("i", { class: i < r.ok ? "on" : "" })));
       if (r.passed) {
-        res.append(h("div", { class: "result pass" }, h("b", {}, "All checks pass."), meter, " ", kind === "rebuild" ? "You rebuilt it from memory. That's the strongest kind of practice." : "Nice work."));
+        const passBox = h("div", { class: "result pass" }, h("b", {}, "All checks pass."), meter, " ", kind === "rebuild" ? "You rebuilt it from memory. That's the strongest kind of practice." : "Nice work.");
+        res.append(passBox);
+        confetti(passBox);
+        if (r.show) {
+          res.append(h("div", { class: "reward" }, h("div", { class: "rw-h" }, "▶ Your code, running"),
+            r.show.stdout ? h("div", { class: "out" }, r.show.stdout) : null,
+            r.show.error ? h("div", { class: "out err" }, r.show.error) : null,
+            visuals(r.show)));
+        }
         if (!solved) {
           solved = true;
           const first = markDone(b.id);
