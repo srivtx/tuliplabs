@@ -69,12 +69,29 @@ def _exec(code, ns, filename):
             print(repr(value))
 
 
+_RC_DONE = []
+
+
+def _style_plots():
+    """Smaller default figures that fit the lesson column (once, after matplotlib loads)."""
+    if _RC_DONE or "matplotlib" not in sys.modules:
+        return
+    import matplotlib
+    matplotlib.rcParams.update({"figure.figsize": (6.4, 3.8), "figure.dpi": 90,
+                                "axes.spines.top": False, "axes.spines.right": False})
+    _RC_DONE.append(1)
+
+
 def _run(code, ns, filename="<cell>"):
+    _style_plots()
     out = _Capture()
     old = sys.stdout, sys.stderr
     sys.stdout = sys.stderr = out
     error = None
     try:
+        if "matplotlib" in code and "matplotlib" not in sys.modules:
+            import matplotlib  # noqa: F401  (so the default style applies to this cell)
+            _style_plots()
         _exec(code, ns, filename)
     except BaseException as exc:  # noqa: BLE001 - we report everything
         error = _format_error(exc, filename)

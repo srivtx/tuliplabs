@@ -51,11 +51,45 @@
     clearTimeout(saveT);
     saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } }, 150);
   }
+  const XP = { run: 5, predict: 10, parsons: 10, quiz: 5, recall: 10, exercise: 20 };
+  let onProgress = null;
+  function award(n, why) {
+    S.xp = (S.xp || 0) + n;
+    const today = new Date().toISOString().slice(0, 10);
+    S.days = S.days || [];
+    if (!S.days.includes(today)) S.days.push(today);
+    save();
+    drawStats();
+    toast(`+${n} XP · ${why}`);
+  }
+  function streak() {
+    const days = new Set(S.days || []);
+    let n = 0;
+    const d = new Date();
+    if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
+    while (days.has(d.toISOString().slice(0, 10))) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+  function drawStats() {
+    const el = document.getElementById("stats");
+    if (!el) return;
+    const st = streak();
+    el.innerHTML = `<b>${S.xp || 0}</b> XP` + (st ? ` · <b>${st}</b>-day streak` : "");
+  }
   function markDone(id) {
     const first = !S.done[id];
     S.done[id] = 1;
     save();
+    if (first && DATA) {
+      const f = findBlock(id);
+      if (f) {
+        const b = f.b;
+        const pts = b.type === "exercise" && b.kind === "rebuild" ? 30 : XP[b.type] || 5;
+        award(pts, { run: "ran it", predict: "prediction made", parsons: "order rebuilt", quiz: "answered", recall: "explained", exercise: "all checks pass" }[b.type] || "done");
+      }
+    }
     refreshProgress();
+    onProgress && onProgress();
     return first;
   }
   function schedule(id, correct) {
@@ -586,6 +620,7 @@
   }
 
   function pageHome() {
+    onProgress = null;
     sidebar("home");
     const m = main();
     m.textContent = "";
@@ -636,25 +671,97 @@
         h("p", { class: "tag" }, ch.tagline),
         h("div", { class: "meta" }, pills),
         ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"), h("ul", {}, ch.goals.map((g) => h("li", { html: g })))) : null),
-      h("nav", { class: "toc", "aria-label": "Sections" }, ch.sections.map((s) => h("a", { href: `#${ch.num}/${s.id}` }, s.title))));
-    for (const s of ch.sections) {
-      const sec = h("section", { class: "sec", id: "s-" + s.id }, h("h2", {}, s.title));
-      for (const b of s.blocks) sec.append(renderBlock(b, ctx));
-      col.append(sec);
+    );
+    // ---- step-by-step: one section at a time, the next unlocks when this one is done
+    S.step = S.step || {};
+    const N = ch.sections.length;
+    let reached = Math.min(S.step[ch.id] || 0, N - 1);
+    const stepsEl = h("div");
+    const dots = h("div", { class: "dots" });
+    const bar = h("div", { class: "stepbar" }, h("div", { class: "stepfill" }));
+    const label = h("div", { class: "steplabel" });
+    const head = h("div", { class: "stephead" }, label, dots, bar);
+    col.append(head, stepsEl);
+    const req = (sec) => sec.blocks.filter((b) => COUNTABLE.has(b.type));
+    const left = (sec) => req(sec).filter((b) => !S.done[b.id]).length;
+    let gate = null, finale = null;
+    function drawHead() {
+      const doneSteps = ch.sections.filter((sec, i) => i < reached || (i === reached && !left(sec) && S.step[ch.id + ":fin"])).length;
+      label.innerHTML = `<b>Step ${reached + 1} of ${N}</b> · ${esc(ch.sections[reached].title)}`;
+      bar.firstChild.style.width = Math.round(100 * (reached + (left(ch.sections[reached]) ? 0 : 1)) / N) + "%";
+      dots.textContent = "";
+      ch.sections.forEach((sec, i) => {
+        const state = i < reached ? "done" : i === reached ? "now" : "locked";
+        const d = h("button", { class: "dot " + state, title: (i + 1) + ". " + sec.title + (state === "locked" ? " (locked)" : ""), "aria-label": `Step ${i + 1}: ${sec.title}`, disabled: state === "locked" });
+        d.onclick = () => document.getElementById("s-" + sec.id)?.scrollIntoView({ behavior: "smooth" });
+        dots.append(d);
+      });
     }
+    function drawGate() {
+      if (gate) gate.remove();
+      const sec = ch.sections[reached];
+      const n = left(sec);
+      const last = reached === N - 1;
+      const go = h("button", { class: "btn primary big", disabled: n > 0 }, last ? "Finish chapter ✓" : `Continue to step ${reached + 2}: ${ch.sections[reached + 1].title} →`);
+      const skip = n > 0 ? h("button", { class: "linkish" }, "skip for now") : null;
+      const msg = n > 0 ? `Finish the ${n} task${n > 1 ? "s" : ""} in this step to unlock the next one.` : (last ? "Every step done. Wrap it up:" : "Step complete. Nice.");
+      gate = h("div", { class: "gate" + (n ? "" : " open") }, h("p", {}, msg), h("div", { class: "btns" }, go, skip));
+      const advance = (earned) => {
+        if (earned) award(10, "step complete");
+        if (last) { S.step[ch.id + ":fin"] = 1; save(); gate.remove(); gate = null; drawHead(); showFinale(); return; }
+        reached++;
+        S.step[ch.id] = Math.max(S.step[ch.id] || 0, reached);
+        save();
+        gate.remove(); gate = null;
+        const el = renderSection(ch.sections[reached]);
+        stepsEl.append(el);
+        drawHead(); drawGate();
+        el.scrollIntoView({ behavior: "smooth" });
+      };
+      go.onclick = () => advance(true);
+      if (skip) skip.onclick = () => advance(false);
+      stepsEl.append(gate);
+    }
+    function renderSection(sec) {
+      const i = ch.sections.indexOf(sec);
+      const el = h("section", { class: "sec", id: "s-" + sec.id }, h("h2", {}, h("span", { class: "stepno" }, "Step " + (i + 1)), sec.title));
+      for (const b of sec.blocks) el.append(renderBlock(b, ctx));
+      return el;
+    }
+    function showFinale() {
+      if (finale) finale.remove();
+      const pr = chProgress(ch);
+      const i = DATA.chapters.indexOf(ch);
+      const nxt = DATA.chapters[i + 1];
+      finale = h("div", { class: "finale" },
+        h("div", { class: "eyebrow" }, "Chapter " + ch.num + " complete"),
+        h("h2", {}, "You can now…"),
+        h("ul", { class: "wins" }, ch.goals.map((g) => h("li", { html: g }))),
+        h("p", {}, `${pr.d} of ${pr.n} tasks done. ${Object.keys(S.rev).filter((k) => k.startsWith(ch.id)).length} items from this chapter are in your review deck; they'll come back tomorrow, then in 3, 7, 16 and 35 days.`),
+        h("div", { class: "btns" },
+          nxt ? h("a", { class: "btn primary big", href: "#" + nxt.num }, `Start chapter ${nxt.num}: ${nxt.title} →`) : h("a", { class: "btn primary big", href: "#review" }, "Go to spaced review →"),
+          ch.world ? h("a", { class: "btn", href: "../#" + ch.world }, "Replay it in 3D") : null));
+      stepsEl.append(finale);
+      finale.scrollIntoView({ behavior: "smooth" });
+    }
+    for (let k = 0; k <= reached; k++) stepsEl.append(renderSection(ch.sections[k]));
+    onProgress = () => { if (gate) drawGate(); drawHead(); };
+    drawHead();
+    if (S.step[ch.id + ":fin"]) showFinale(); else drawGate();
     const i = DATA.chapters.indexOf(ch);
     const prev = DATA.chapters[i - 1], next = DATA.chapters[i + 1];
     col.append(h("div", { class: "pager" },
       prev ? h("a", { class: "btn", href: "#" + prev.num }, "← " + prev.num + ". " + prev.title) : h("span"),
-      next ? h("a", { class: "btn primary", href: "#" + next.num }, next.num + ". " + next.title + " →") : h("a", { class: "btn primary", href: "#review" }, "Go to spaced review →")));
+      next ? h("a", { class: "btn", href: "#" + next.num }, next.num + ". " + next.title + " →") : h("span")));
     m.append(col);
     document.title = `${ch.num}. ${ch.title} · ${CFG.pageTitle}`;
-    if (sectionId) { const t = document.getElementById("s-" + sectionId); if (t) { t.scrollIntoView(); return; } }
+    if (sectionId) { const t = document.getElementById("s-" + sectionId); if (t) { t.scrollIntoView(); Runner.start(); return; } }
     window.scrollTo(0, 0);
     Runner.start();
   }
 
   function pageReview() {
+    onProgress = null;
     sidebar("review");
     const m = main();
     m.textContent = "";
@@ -727,6 +834,7 @@
     window.addEventListener("hashchange", route);
     route();
     updateReviewCount();
+    drawStats();
   }
   boot();
 })();

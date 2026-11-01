@@ -12,11 +12,12 @@ const shots = process.env.SHOTS || ".";
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/fonts.g|Failed to load resource/.test(m.text())) errors.push("console: " + m.text()); });
   await page.goto(`${BASE}/${track}/?runner=local#${chap}`);
-  await page.waitForSelector(".blk");
+  await page.waitForSelector(".stephead");
   const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), track === "code" ? "tc" : "ms");
   const ch = data.chapters.find((c) => String(c.num) === chap);
   let ok = 0, bad = [];
-  for (const s of ch.sections) for (const b of s.blocks) {
+  for (const s of ch.sections) {
+  for (const b of s.blocks) {
     const el = page.locator("#b-" + CSS_escape(b.id));
     if (b.type === "md" || b.type === "bridge") continue;
     if (b.type === "run") {
@@ -57,6 +58,11 @@ const shots = process.env.SHOTS || ".";
       ok++;
     }
   }
+  const gate = page.locator(".gate button.primary");
+  if (await gate.isDisabled()) bad.push("gate still locked after step: " + s.title);
+  await gate.click();
+  }
+  await page.locator(".finale").waitFor({ timeout: 5000 }).catch(() => bad.push("no chapter-complete screen"));
   await page.screenshot({ path: `${shots}/${track}-ch${chap}.png`, fullPage: false });
   const prog = await page.locator(".meta .pill").nth(1).innerText();
   console.log(`${track} ch${chap}: ${ok} blocks worked, ${bad.length} failed; header after reload would show progress; pill=${prog}`);
