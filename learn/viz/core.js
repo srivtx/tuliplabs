@@ -129,7 +129,8 @@
       /* Create or update a voxel. Moving an existing key glides it to the new spot. */
       box(key, o = {}) {
         let it = items.get(key);
-        const sx = o.sx ?? o.s ?? 1, sy = o.sy ?? o.s ?? 1, sz = o.sz ?? o.s ?? 1;
+        // An update that doesn't mention size keeps the box's current size.
+        const sx = o.sx ?? o.s ?? it?.scale.x ?? 1, sy = o.sy ?? o.s ?? it?.scale.y ?? 1, sz = o.sz ?? o.s ?? it?.scale.z ?? 1;
         const color = o.color || "c2", opacity = o.opacity ?? 1;
         if (!it) {
           const mesh = new T.Mesh(geo, mat(color, opacity, o.glow));
