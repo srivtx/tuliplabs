@@ -177,6 +177,8 @@ pre.code .hl{background:color-mix(in srgb,var(--c4) 35%,transparent);display:inl
 .mini{display:inline-grid;gap:2px;vertical-align:middle;margin-left:4px}.mini i{width:12px;height:12px;background:var(--line);border-radius:1px}.mini i.on{background:var(--c2)}
 .g-opt.right{border-color:var(--c3);background:color-mix(in srgb,var(--c3) 14%,var(--card))}
 .g-opt.wrong{border-color:var(--c1);background:color-mix(in srgb,var(--c1) 12%,var(--card))}
+.code-link{text-decoration:none}
+#code-btn{background:var(--c2);border-color:var(--c2);color:#fff}
 .nb-btn{font:600 12.5px var(--f-body);display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
 .nb-btn b{font:600 11.5px var(--f-mono);background:var(--c3);color:#fff;border-radius:3px;padding:1px 5px}
 .nb{position:fixed;z-index:20;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--panel);border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(10,20,40,.18);overflow:auto;
@@ -265,7 +267,7 @@ table.pay{border-collapse:collapse;font-size:13px;width:100%}table.pay th,table.
     <button role="tab" data-tab="ch11" aria-selected="false"><i>11</i>Evolution</button>
     <button role="tab" data-tab="ch12" aria-selected="false"><i>12</i>Cooperate</button>
   </nav>
-  <div class="hdr-tools"><button class="nb-btn" id="map-btn">Map of ideas</button><button class="nb-btn" id="nb-btn" aria-label="Open notebook">Notebook <b id="nb-count">0</b></button></div>
+  <div class="hdr-tools"><a class="nb-btn code-link" id="code-btn" href="code/#1" title="Learn this chapter's Python, step by step">&lt;/&gt; Code</a><button class="nb-btn" id="map-btn">Map</button><button class="nb-btn" id="nb-btn" aria-label="Open notebook">Notebook <b id="nb-count">0</b></button></div>
 </header>
 
 <main class="lab">
@@ -2343,7 +2345,7 @@ TOURS.ch8.steps.splice(6,0,{enter(){sandPour()},btns:[{t:'Start pouring again',f
 const tabs={ch1:tab1,ch2:tab2,ch3:tab3,ch4:tab4,ch5:tab5,ch6:tab6,ch7:tab7,ch8:tab8,ch9:tab9,ch10:tab10,ch11:tab11,ch12:tab12};
 const DRAW={ch1:()=>drawCh1(),ch2:()=>drawCh2(),ch3:()=>drawCh3(),ch4:()=>drawCh4(),ch6:()=>drawLife(),ch7:()=>drawPhTrial(),ch8:()=>{drawSandSizes();drawSandAvg()},ch9:()=>{drawSugPop();drawSugWealth()},ch10:()=>drawTrExp(),ch11:()=>{drawEv();drawEvOcc()},ch12:()=>drawPd()};
 function drawAll(){Object.values(DRAW).forEach(f=>f())}
-function show(t){if(!tabs[t])return;cur=t;document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
+function show(t){if(!tabs[t])return;cur=t;{const cb=document.getElementById('code-btn');if(cb)cb.href='code/#'+t.replace('ch','');}document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
   document.querySelectorAll('.station').forEach(s=>s.hidden=s.dataset.station!==t);$('#panel').scrollTop=0;$('#tip').hidden=true;
   whyClose();if(typeof TIME!=='undefined')TIME.paused=false;if(typeof tbSync==='function')setTimeout(tbSync,0);V.n=0;V.tile.fill(0);V.tcf.fill(0);V.sp.fill(0);V.mk.fill(-1);V.lift.fill(0);orbit.noAuto=false;_lg='';clearEdges();tabs[t].enter();if(G.tab&&G.tab!==t)gEnd();if(!G.visited.has(t))gStart(t);requestAnimationFrame(()=>{if(DRAW[t])DRAW[t]()})}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>show(b.dataset.tab));

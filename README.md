@@ -1,8 +1,8 @@
 # Voxel Network Lab
 
-**Learn complexity science by playing with it.** All 12 chapters of Allen B. Downey's *[Think Complexity](https://greenteapress.com/wp/think-complexity-2e/)* (2nd edition), rebuilt as interactive 3D voxel worlds. You move the households, host the party, drill the rock and drop the sand yourself, and only then does the computer run the model.
+**Learn complexity science by playing with it, then by coding it.** All 12 chapters of Allen B. Downey's *[Think Complexity](https://greenteapress.com/wp/think-complexity-2e/)* (2nd edition), rebuilt as interactive 3D voxel worlds. You move the households, host the party, drill the rock and drop the sand yourself, and only then does the computer run the model.
 
-**Live:** https://voxel-network-lab.vercel.app
+**Live:** https://voxel-network-lab.vercel.app · **Code tracks:** [/code](https://voxel-network-lab.vercel.app/code/) (Think Complexity) and [/modsim](https://voxel-network-lab.vercel.app/modsim/) (Modeling and Simulation in Python)
 
 ![Schelling's city in the lab: red and blue households form clusters as the model runs](docs/screenshot.png)
 
@@ -58,6 +58,45 @@ This lab is built around a different loop:
 
 ---
 
+## Learn it in code
+
+Playing a world shows you *what* happens. The code tracks teach you to *build* it. There are two courses on one engine, with real Python running in the browser (Pyodide: numpy, networkx, matplotlib, scipy, pandas, sympy) and nothing to install:
+
+| Track | Chapters | What you build |
+|---|---|---|
+| **[Think Complexity in code](https://voxel-network-lab.vercel.app/code/)** | 12 | `all_pairs` → Erdős–Rényi graphs, Watts–Strogatz and BFS, Barabási–Albert, rule tables and Rule 30, Life, percolation and Turing patterns, the sand pile, Schelling and Sugarscape, traffic and boids, evolution, the prisoner's dilemma |
+| **[Modeling & Simulation in Python](https://voxel-network-lab.vercel.app/modsim/)** | 26 | bike share, world population, SIR epidemics and interventions, coffee cooling, the glucose minimal model, falling pennies with drag, baseballs, toilet paper, turntables, bungee jumps |
+
+### How a chapter teaches
+
+Every chapter is a **step-by-step path**. A step opens with the idea in plain words, then gives you a task; the next step unlocks when you finish it (or choose "skip for now"). The tasks climb a ladder designed so the material sticks:
+
+1. **Run** the book's code and change it.
+2. **Predict** the output: type your guess, then run it and compare.
+3. **Reorder** scrambled lines (Parsons puzzles), sometimes with a decoy line.
+4. **Fill the blanks** in a working skeleton.
+5. **Bug hunt:** code that runs but is wrong, usually a mistake people really make.
+6. **Write it** from a blank function, graded by tests that tell you which check failed and why.
+7. **Rebuild from memory, then explain** the idea in your own words and compare with a model answer.
+
+Then, **your code, running:** when an exercise passes, its reveal uses *your* function to drive an animation or plot. The glider gun fires on your `life_step`, water seeps through rock with your `percolates`, a jam drives backward on your traffic `step`, and the bungee cord is designed by your `lowest_point`. Grids animate as flipbooks with play, pause and a scrubber.
+
+Everything you finish joins a **spaced-review** deck (Leitner boxes: back after 1, 3, 7, 16 and 35 days), and exercises come back with a blank starter, not your old answer. XP, a daily streak and a chapter-complete screen show your progress. Each Think Complexity chapter links to its 3D world and back.
+
+### Verified, not just written
+
+`python3 tools/build.py --verify` runs every block of every chapter in CPython before it ships:
+- every example runs;
+- every prediction is deterministic;
+- every reference solution passes its tests, and every starter fails them;
+- every Parsons answer and every "your code, running" reveal works.
+
+Numbers quoted in lessons were checked against the run: the sand pile settles at an average height of about 2.08, Sugarscape keeps about 225 of 400 agents, cooperation evolves from all-defectors to about 0.56 niceness, a penny with drag lands at 18 m/s after about 22 s, and the Green Monster needs about 41 m/s. `tools/e2e.js` then walks every chapter in a real browser, step by step, solving every task.
+
+Honest notes: the ModSim library is reimplemented as a short, readable [`learn/modsim.py`](learn/modsim.py) with the book's function names but no Pint units. The glucose chapters use **synthetic** data generated from the minimal model, because the original dataset isn't bundled. The world population data are rounded Census estimates. Chapter 9's SymPy example runs in the browser but is skipped by the CPython verifier when SymPy isn't installed.
+
+---
+
 ## Is it faithful to the book?
 
 The simulations follow the models as the book describes them. Key numbers were checked by running the models headless before the stories were written:
@@ -88,15 +127,22 @@ Where the stories quote a result, it is computed live from your own run. One hon
 
 ## Run it locally
 
-It's a single self-contained HTML file with no build step.
+The 3D lab is a single self-contained HTML file. The code tracks are static too; lessons are prebuilt into `content/*.json`.
 
 ```bash
 git clone https://github.com/srivtx/voxel-network-lab.git
 cd voxel-network-lab
-npx serve .        # or: python3 -m http.server
+python3 -m http.server          # then open /, /code/ or /modsim/
 ```
 
-Then open the printed address. Opening `index.html` directly also works.
+To edit lessons, change `content/tc/chNN.md` or `content/ms/chNN.md` (format: [`content/FORMAT.md`](content/FORMAT.md)) and rebuild:
+
+```bash
+python3 tools/build.py --verify            # build + check every block (needs numpy, scipy, networkx, pandas, matplotlib)
+python3 tools/devserver.py 8000            # serve with a local CPython runner
+open "http://localhost:8000/code/?runner=local"
+node tools/e2e.js code 6                   # walk a chapter in a real browser (Playwright)
+```
 
 ---
 
@@ -106,21 +152,32 @@ Then open the printed address. Opening `index.html` directly also works.
 - **3D:** [Three.js r128](https://threejs.org/), loaded from cdnjs. Every world draws through a single `InstancedMesh` of cubes, so tens of thousands of voxels stay smooth.
 - **Charts:** a small hand-written canvas chart routine (linear and log-log axes).
 - **No backend:** progress and the notebook live in `localStorage`; nothing is sent anywhere.
+- **Code tracks:** Python via [Pyodide 0.26](https://pyodide.org/) in a Web Worker (with a Stop button for runaway loops), a small hand-written Python editor with highlighting and auto-indent.
 - **Themes:** follows your system's light or dark mode.
 
 ```
 voxel-network-lab/
-├── index.html      # the whole app
-├── docs/           # README screenshots
-├── vercel.json     # static hosting config
-└── LICENSE
+├── index.html          # the 3D lab
+├── code/ modsim/       # the two code-track pages
+├── learn/
+│   ├── engine.js/.css  # lesson renderer: editor, exercises, steps, review, flipbooks
+│   ├── py-worker.js    # Pyodide in a Web Worker
+│   ├── harness.py      # runs code, captures output/plots/animations, grades tests
+│   ├── modsim.py       # readable ModSim library (book API)
+│   └── complexity.py   # small helpers for Think Complexity
+├── content/
+│   ├── tc/ ms/         # lessons, one Markdown file per chapter
+│   └── tc.json ms.json # built lessons
+├── tools/              # build + verify, dev server, browser end-to-end test
+├── docs/               # README screenshots
+└── vercel.json
 ```
 
 ---
 
 ## Credits
 
-- Models and chapter structure from **Allen B. Downey, *Think Complexity*, 2nd edition** (Green Tea Press / O'Reilly). The book is free to read at [greenteapress.com](https://greenteapress.com/wp/think-complexity-2e/). This project is an independent study companion, not affiliated with the author or publisher.
+- Models and chapter structure from **Allen B. Downey, *Think Complexity*, 2nd edition** (Green Tea Press / O'Reilly) and **Allen B. Downey, *Modeling and Simulation in Python*** (Green Tea Press). Both books are free to read at [greenteapress.com](https://greenteapress.com/). This project is an independent study companion, not affiliated with the author or publisher.
 - Original models by Schelling; Erdős and Rényi; Watts and Strogatz; Barabási and Albert; Wolfram; Conway; Bak, Tang and Wiesenfeld; Epstein and Axtell; Resnick; Reynolds; Kauffman; and Axelrod.
 - Built by [Sribatsha Dash (@srivtx)](https://github.com/srivtx).
 

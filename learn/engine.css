@@ -224,6 +224,10 @@ th{background:var(--soft)}
   .side{position:fixed;inset:53px 0 0 0;height:auto;background:var(--panel);z-index:15;border-right:0;display:none}
   body.menu .side{display:block}
   .menu-btn{display:inline-block}
+  .top{position:static}
+  .stephead{top:0}
+  .side{inset:0;padding-top:60px}
+  body.menu .menu-btn{position:fixed;top:12px;left:12px;z-index:30}
   main{padding:18px 16px 100px}
   .pz,.cmp{grid-template-columns:1fr}
   .tracks a{padding:5px 7px}
