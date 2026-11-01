@@ -281,3 +281,9 @@ th{background:var(--soft)}
 .miles li:has(input:checked){border-color:color-mix(in srgb,var(--ok) 50%,var(--line));background:color-mix(in srgb,var(--ok) 7%,var(--card))}
 .pbar.big{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:8px}.pbar.big i{display:block;height:100%;width:0;background:var(--c4);transition:width .3s}
 .stretch{margin-top:12px;font-size:14px}.stretch summary{cursor:pointer;font-weight:600}
+/* Run button while Python downloads or code runs */
+.btn.loading{display:inline-flex;align-items:center;gap:8px;cursor:progress}
+.btn.loading::before{content:"";width:13px;height:13px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite;flex:none}
+.load-note{font:500 12px var(--f-mono);color:var(--muted);margin:8px 2px 0}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.btn.loading::before{animation-duration:2.4s}}
