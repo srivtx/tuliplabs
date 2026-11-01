@@ -72,6 +72,7 @@ const shots = process.env.SHOTS || ".";
     }
   }
   const gate = page.locator(".gate button.primary");
+  await page.waitForFunction(() => { const g = document.querySelector(".gate button.primary"); return g && !g.disabled; }, null, { timeout: 15000 }).catch(() => {});
   if (await gate.isDisabled()) bad.push("gate still locked after step: " + s.title);
   await gate.click();
   }
