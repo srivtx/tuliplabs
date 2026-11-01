@@ -67,7 +67,7 @@ VIZ.register("ps-permute", async (api) => {
     const ext = diffs.filter((d) => Math.abs(d) >= OBS - 1e-9).length;
     const p = diffs.length ? ext / diffs.length : NaN;
     api.hud(`real gap ${OBS.toFixed(1)} · ${diffs.length} shuffles${diffs.length ? " · p ≈ " + p.toFixed(3) : ""}`);
-    return `real gap (new − old): ${OBS.toFixed(2)} sign-ups/day\nshuffles so far:      ${diffs.length}\nat least as extreme:  ${ext}\np-value ≈ ${diffs.length ? ext + "/" + diffs.length + " = " + p.toFixed(3) : "(shuffle first)"}` + (diffs.length < 1000 ? `\n\nWith ${diffs.length} shuffles the estimate is still rough.\nGet to 1000+.` : "\n\nNow try the p-hacking mode.");
+    return `real gap (new − old): ${OBS.toFixed(2)} sign-ups/day\nshuffles so far:      ${diffs.length}\nas extreme, either way: ${ext}\ntwo-sided p ≈ ${diffs.length ? ext + "/" + diffs.length + " = " + p.toFixed(3) : "(shuffle first)"}` + (diffs.length < 1000 ? `\n\nWith ${diffs.length} shuffles the estimate is still rough.\nGet to 1000+.` : "\n\nNow try the p-hacking mode.");
   }
   async function shuffleOnce(animate) {
     labels = shuffle(labels.slice(), r);
@@ -142,6 +142,6 @@ VIZ.register("ps-permute", async (api) => {
     if (!api.wasDone && didPhack && diffs.length >= 1000) api.done("p-value estimated, and you've seen how 20 tests on noise produce fake wins");
   }
   function build() { controls(); phackRuns = 0; phackAny = 0; if (mode === "one") buildOne(); else buildHack(); }
-  api.explain("How to read this", "<p><b>Front:</b> 20 days of sign-ups, blue = old design, red = new design. The plates are group averages.</p><p><b>Back:</b> each time you press <b>Shuffle labels</b>, the days get random labels and the new gap drops into the histogram. Red bins are as extreme as the real gap: their share is the <b>p-value</b>.</p>");
+  api.explain("How to read this", "<p><b>Front:</b> 16 days of sign-ups, blue = old design, red = new design. The plates are group averages.</p><p><b>Back:</b> each time you press <b>Shuffle labels</b>, the days get random labels and the new gap drops into the histogram. Red bins are as extreme as the real gap: their share is the <b>p-value</b>.</p>");
   build();
 });
