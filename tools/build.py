@@ -301,6 +301,7 @@ def _verify_chapter(ch):
     import random
     problems, count = [], 0
     outputs = []
+    skipped = []
     for rep in range(2):
         harness.reset(ch["id"])
         # Seed so we can tell deterministic predict blocks from random ones.
@@ -314,6 +315,10 @@ def _verify_chapter(ch):
         for sec in ch["sections"]:
             for b in sec["blocks"]:
                 if b["type"] in ("run", "predict"):
+                    if "sympy" in b["code"] and not _has("sympy"):
+                        if rep == 0:
+                            skipped.append(b["id"])
+                        continue
                     nsid = ch["id"]
                     if b["type"] == "predict":
                         # The page runs predictions in their own namespace, so each
@@ -355,7 +360,14 @@ def _verify_chapter(ch):
                 if len(b["lines"]) < 3:
                     problems.append(f"{b['id']}: parsons needs at least 3 lines")
                 count += 1
+    if skipped:
+        print(f"  {ch['id']}: SKIPPED (sympy not installed here; runs in the browser): {', '.join(skipped)}")
     return ch["id"], count, problems
+
+
+def _has(module):
+    import importlib.util
+    return importlib.util.find_spec(module) is not None
 
 
 def verify(built, only):
