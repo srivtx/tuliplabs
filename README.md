@@ -2,7 +2,7 @@
 
 **Learn complexity science by playing with it, then by coding it.** All 12 chapters of Allen B. Downey's *[Think Complexity](https://greenteapress.com/wp/think-complexity-2e/)* (2nd edition), rebuilt as interactive 3D voxel worlds. You move the households, host the party, drill the rock and drop the sand yourself, and only then does the computer run the model.
 
-**Live:** https://voxel-network-lab.vercel.app · **Code tracks:** [/code](https://voxel-network-lab.vercel.app/code/) (Think Complexity) and [/modsim](https://voxel-network-lab.vercel.app/modsim/) (Modeling and Simulation in Python)
+**Live:** https://voxel-network-lab.vercel.app · **Code tracks:** [/code](https://voxel-network-lab.vercel.app/code/) (Think Complexity), [/modsim](https://voxel-network-lab.vercel.app/modsim/) (Modeling and Simulation in Python), [/build](https://voxel-network-lab.vercel.app/build/) (Build your own X) and [/stats](https://voxel-network-lab.vercel.app/stats/) (Probability & Stats)
 
 ![Schelling's city in the lab: red and blue households form clusters as the model runs](docs/screenshot.png)
 
@@ -60,12 +60,16 @@ This lab is built around a different loop:
 
 ## Learn it in code
 
-Playing a world shows you *what* happens. The code tracks teach you to *build* it. There are two courses on one engine, with real Python running in the browser (Pyodide: numpy, networkx, matplotlib, scipy, pandas, sympy) and nothing to install:
+Playing a world shows you *what* happens. The code tracks teach you to *build* it. There are four courses on one engine, with real Python running in the browser (Pyodide: numpy, networkx, matplotlib, scipy, pandas, sympy) and nothing to install:
 
 | Track | Chapters | What you build |
 |---|---|---|
 | **[Think Complexity in code](https://voxel-network-lab.vercel.app/code/)** | 12 | `all_pairs` → Erdős–Rényi graphs, Watts–Strogatz and BFS, Barabási–Albert, rule tables and Rule 30, Life, percolation and Turing patterns, the sand pile, Schelling and Sugarscape, traffic and boids, evolution, the prisoner's dilemma |
 | **[Modeling & Simulation in Python](https://voxel-network-lab.vercel.app/modsim/)** | 26 | bike share, world population, SIR epidemics and interventions, coffee cooling, the glucose minimal model, falling pennies with drag, baseballs, toilet paper, turntables, bungee jumps |
+| **[Build your own X](https://voxel-network-lab.vercel.app/build/)** | 13 | object modeling (an elevator), a calculator, a math engine, a programming language and bytecode VM, a regex engine, a key-value database, a tiny SQL database on a B-tree, git, a vim-style editor, a web framework, a 3D graphics engine, a physics engine, a neural-network framework |
+| **[Probability & Stats](https://voxel-network-lab.vercel.app/stats/)** | 13 | chance and counting, conditional probability and Bayes, random variables, binomial and Poisson, the normal and the CLT, sampling bias, confidence intervals, hypothesis tests, regression, Bayesian inference, Markov chains and MCMC, an honest A/B test |
+
+Every chapter opens with an **interactive 3D simulation** where each part explains *why* it was designed that way (click any block), and has a **real-world project** step: a brief, why it matters, milestones you tick off, and a graded exercise.
 
 ### How a chapter teaches
 
@@ -132,10 +136,10 @@ The 3D lab is a single self-contained HTML file. The code tracks are static too;
 ```bash
 git clone https://github.com/srivtx/voxel-network-lab.git
 cd voxel-network-lab
-python3 -m http.server          # then open /, /code/ or /modsim/
+python3 -m http.server          # then open /, /code/, /modsim/, /build/ or /stats/
 ```
 
-To edit lessons, change `content/tc/chNN.md` or `content/ms/chNN.md` (format: [`content/FORMAT.md`](content/FORMAT.md)) and rebuild:
+To edit lessons, change `content/<track>/chNN.md` (`tc`, `ms`, `bx` or `ps`) (format: [`content/FORMAT.md`](content/FORMAT.md)) and rebuild:
 
 ```bash
 python3 tools/build.py --verify            # build + check every block (needs numpy, scipy, networkx, pandas, matplotlib)
@@ -158,16 +162,17 @@ node tools/e2e.js code 6                   # walk a chapter in a real browser (P
 ```
 voxel-network-lab/
 ├── index.html          # the 3D lab
-├── code/ modsim/       # the two code-track pages
+├── code/ modsim/ build/ stats/  # the four code-track pages
 ├── learn/
-│   ├── engine.js/.css  # lesson renderer: editor, exercises, steps, review, flipbooks
+│   ├── engine.js/.css  # lesson renderer: editor, exercises, steps, review, flipbooks, sims, projects
+│   ├── viz/            # one 3D simulation per chapter (core.js is the shared API)
 │   ├── py-worker.js    # Pyodide in a Web Worker
 │   ├── harness.py      # runs code, captures output/plots/animations, grades tests
 │   ├── modsim.py       # readable ModSim library (book API)
 │   └── complexity.py   # small helpers for Think Complexity
 ├── content/
-│   ├── tc/ ms/         # lessons, one Markdown file per chapter
-│   └── tc.json ms.json # built lessons
+│   ├── tc/ ms/ bx/ ps/ # lessons, one Markdown file per chapter
+│   └── *.json          # built lessons
 ├── tools/              # build + verify, dev server, browser end-to-end test
 ├── docs/               # README screenshots
 └── vercel.json
