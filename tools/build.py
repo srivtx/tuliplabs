@@ -19,6 +19,8 @@ CONTENT = os.path.join(ROOT, "content")
 TRACKS = {
     "tc": "Think Complexity",
     "ms": "Modeling and Simulation in Python",
+    "bx": "Build your own X",
+    "ps": "Probability and Statistics",
 }
 
 
@@ -264,6 +266,25 @@ def parse_chapter(path, track):
                 add({"type": "recall", **parse_recall(raw)})
             elif kind == "bridge":
                 add({"type": "bridge", "html": md(raw)})
+            elif kind == "viz":
+                f, intro = header_fields(raw)
+                assert "name" in f, f"{path}:{i+1}: viz needs a name: line"
+                assert os.path.exists(os.path.join(ROOT, "learn", "viz", f["name"] + ".js")), f"{path}: learn/viz/{f['name']}.js is missing"
+                blk = {"type": "viz", "name": f["name"], "title": f.get("title", ""), "goal": inline(f.get("goal", "")),
+                       "height": int(f.get("height", 380)), "intro": md(intro) if intro.strip() else ""}
+                blk["id"] = f"{ch['id']}-viz-{f.get('id', f['name'])}"
+                add(blk)
+            elif kind == "project":
+                f, rest = header_fields(raw)
+                parts = split_parts(rest, "brief")
+                items = lambda k: [inline(re.sub(r"^\s*[-*]\s+", "", x)) for x in "\n".join(parts.get(k, [""])).split("\n") if x.strip()]
+                blk = {"type": "project", "title": f.get("title", "Project"), "client": inline(f.get("client", "")),
+                       "brief": md(parts.get("brief", [""])[0]), "why": md(parts.get("why", [""])[0]),
+                       "skills": [inline(x.strip()) for x in f.get("skills", "").split(",") if x.strip()],
+                       "milestones": items("milestones"), "stretch": items("stretch")}
+                assert blk["milestones"], f"{path}: project '{blk['title']}' has no ---milestones"
+                blk["id"] = f"{ch['id']}-proj-{slug(blk['title'])}"
+                add(blk)
             else:
                 raise AssertionError(f"{path}:{i+1}: unknown block {kind}")
         else:
