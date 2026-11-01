@@ -181,6 +181,14 @@ class TimeFrame(pd.DataFrame):
         """frame.row[t] = state stores a State as one row."""
         return _RowSetter(self)
 
+    @property
+    def T(self):
+        """The book names temperature T, so results.T means that column when it exists
+        (plain pandas would give the transpose)."""
+        if "T" in self.columns:
+            return self["T"]
+        return self.transpose()
+
 
 class SweepFrame(TimeFrame):
     """Rows and columns are two swept parameters."""
