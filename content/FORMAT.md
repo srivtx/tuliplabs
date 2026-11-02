@@ -5,7 +5,7 @@ Each chapter is one Markdown file in `content/tc/` (Think Complexity) or `conten
 every block works in CPython: examples run, predictions are deterministic, every reference
 solution passes its tests and every starter fails them.
 
-Tracks: `tc` Think Complexity, `ms` ModSim, `bx` Build your own X, `ps` Probability & Stats.
+Tracks: `tc` Think Complexity, `ms` ModSim, `bx` Build your own X, `ps` Probability & Stats, `ds` DSA, `od` Open Data Structures.
 
 Front matter: `id`, `num`, `title`, `tagline`, `world` (3D world id, optional), `part` (optional),
 `minutes`, and a `goals:` list. `## Heading` starts a section. Plain Markdown between blocks is prose.

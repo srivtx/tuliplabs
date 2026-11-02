@@ -13,7 +13,7 @@ const shots = process.env.SHOTS || ".";
   page.on("console", (m) => { if (m.type() === "error" && !/fonts.g|Failed to load resource/.test(m.text())) errors.push("console: " + m.text()); });
   await page.goto(`${BASE}/${track}/?runner=local#${chap}`);
   await page.waitForSelector(".stephead");
-  const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), ({ code: "tc", modsim: "ms", build: "bx", stats: "ps" })[track]);
+  const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), ({ code: "tc", modsim: "ms", build: "bx", stats: "ps", dsa: "ds", ods: "od" })[track]);
   const ch = data.chapters.find((c) => String(c.num) === chap);
   let ok = 0, bad = [];
   for (const s of ch.sections) {

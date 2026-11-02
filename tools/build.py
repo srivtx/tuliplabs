@@ -21,6 +21,8 @@ TRACKS = {
     "ms": "Modeling and Simulation in Python",
     "bx": "Build your own X",
     "ps": "Probability and Statistics",
+    "ds": "Data Structures & Algorithms",
+    "od": "Open Data Structures",
 }
 
 
