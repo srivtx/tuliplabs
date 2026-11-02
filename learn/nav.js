@@ -121,10 +121,14 @@ window.TLMARK = (() => {
     b.innerHTML = KINDS[kind]() + (kind === "runner" ? `<span class="wm-phone">${mono()}</span>` : "");
   }, { KINDS: Object.keys(KINDS) });
 })();
+// Runner is the chosen idea (2026-11-03); brand/ can still try the others in this browser.
+// The studio mark sits beside the name as its own quiet piece, not part of the hover.
 (() => {
-  let kind = "spill";
+  let kind = "runner";
   try { kind = localStorage.getItem("tl-wm") || kind; } catch (e) {}
-  TLMARK(document.querySelector(".top .brand"), kind);
+  const brand = document.querySelector(".top .brand");
+  TLMARK(brand, kind);
+  if (brand) brand.insertAdjacentHTML("afterend", `<span class="by-svx" title="Tulip Labs is a product by svx">by ${SVX}</span>`);
 })();
 
 /* The footer is your whole garden: one flower per track, grown as far as your progress in it,

@@ -26,6 +26,9 @@
 @keyframes thop{to{translate:0 -9px}}
 @keyframes tlight{35%{color:var(--pink);transform:translateY(-2px)}}
 .wm-phone{display:none;height:20px}
+/* "by svx": its own small mark after the name, split off by a hairline */
+.by-svx{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--f-mono);color:var(--muted);white-space:nowrap;padding-left:10px;margin-left:-2px;border-left:1px solid var(--line);height:16px}
+@media (max-width:640px){.by-svx{display:none}}
 /* typed: TL on a pink keycap; pressing it types the rest after a blinking caret */
 .tl-typed{display:inline-flex;align-items:center;gap:7px}
 .tl-typed kbd{display:grid;place-items:center;width:26px;height:24px;border-radius:5px;background:var(--pink);color:#1a0d14;

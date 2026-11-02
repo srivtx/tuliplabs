@@ -82,7 +82,7 @@ addEventListener("DOMContentLoaded", () => {
     s.innerHTML = MONO.flatMap((r, y) => [...r].map((c, x) => c === "#" ? `<rect x="${x}" y="${y}" width="1" height="1"${x === 4 ? ' fill="#ff6fb5"' : ""}/>` : "")).join("");
   });
   document.querySelector(".mono-show .k svg rect[fill]").setAttribute("fill", "#fff6fb");
-  let cur = "spill"; try { cur = localStorage.getItem("tl-wm") || cur; } catch (e) {}
+  let cur = "runner"; try { cur = localStorage.getItem("tl-wm") || cur; } catch (e) {}
   const all = [];
   document.querySelectorAll(".pick").forEach((p) => {
     const kind = p.dataset.kind, btn = p.querySelector(".use");
