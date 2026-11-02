@@ -938,10 +938,52 @@
     let gate = null, finale = null;
     // On wide screens a rail on the right lists every step as a branch, with where you are.
     const railList = h("ol", { class: "rail-steps" });
+    // Words you met: every bold term in the lesson text, with the sentence that explains it.
+    // They line up in the rail as you read, and come back as a glossary when you finish.
+    const words = new Map();
+    const railWords = h("div", { class: "rail-words" });
+    function collectWords(el) {
+      el.querySelectorAll(".prose strong, .prose b").forEach((s) => {
+        const t = s.textContent.trim(), k = t.toLowerCase();
+        if (t.length < 3 || t.length > 40 || /[=()[\]{}<>]/.test(t) || words.has(k)) return;
+        const p = s.closest("p, li");
+        if (!p) return;
+        const txt = p.textContent.replace(/\s+/g, " "), at = txt.indexOf(t);
+        const from = txt.slice(0, at).search(/[.!?:] [^.!?:]*$/);
+        let to = txt.slice(at + t.length).search(/[.!?](\s|$)/);
+        to = to < 0 ? txt.length : at + t.length + to + 1;
+        s.classList.add("term");
+        words.set(k, { t, def: txt.slice(from < 0 ? 0 : from + 2, to).trim(), el: s });
+      });
+    }
+    const flash = (el) => { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); };
+    function drawWords() {
+      railWords.textContent = "";
+      if (!words.size) return;
+      railWords.append(h("div", { class: "rail-h" }, `Words you met · ${words.size}`),
+        h("div", { class: "chips" }, [...words.values()].map((w) => h("button", { class: "word", title: w.def, onclick: () => flash(w.el) }, w.t))));
+    }
+    // Say it in your own words: one note per step. Writing it is how you find the part you don't get yet.
+    S.notes = S.notes || {};
+    function noteBox(sec) {
+      const k = ch.id + ":" + sec.id;
+      const ta = h("textarea", { rows: 2, placeholder: "One or two sentences, as if you were explaining it to a friend…", "aria-label": "This step in your own words" });
+      ta.value = S.notes[k] || "";
+      const said = h("span", { class: "own-s" }, ta.value ? "saved · it goes in your build log" : "");
+      ta.addEventListener("input", () => {
+        const v = ta.value.trim();
+        if (v) S.notes[k] = v; else delete S.notes[k];
+        if (v.length > 30 && !S.notes[k + "#xp"]) { S.notes[k + "#xp"] = 1; award(5, "said it in your own words"); }
+        said.textContent = v ? "saved · it goes in your build log" : "";
+        save();
+      });
+      return h("details", { class: "own", open: ta.value ? true : null },
+        h("summary", {}, h("code", {}, "└──"), h("b", {}, "Say it in your own words"), h("small", {}, "+5 XP")), ta, said);
+    }
     const railNote = h("p", { class: "rail-note" });
     const rail = h("aside", { class: "rail", "aria-label": "Steps in this chapter" },
       h("div", { class: "rail-fl" }, flower(ch.id, "rail-flower")),
-      h("div", { class: "rail-h" }, `Chapter ${ch.num} · steps`), railList, railNote);
+      h("div", { class: "rail-h" }, `Chapter ${ch.num} · steps`), railList, railNote, railWords);
     function drawRail() {
       railList.textContent = "";
       ch.sections.forEach((sec, i) => {
@@ -953,6 +995,7 @@
       });
       const pr = chProgress(ch);
       railNote.textContent = `${pr.d} of ${pr.n} tasks · your flower is ${STAGE_NAMES[window.GARDEN ? GARDEN.stage(pr.pct) : 0]}`;
+      drawWords();
     }
     function drawHead() {
       drawRail();
@@ -996,7 +1039,29 @@
       const i = ch.sections.indexOf(sec);
       const el = h("section", { class: "sec", id: "s-" + sec.id }, h("h2", {}, h("span", { class: "stepno" }, "Step " + (i + 1)), sec.title));
       for (const b of sec.blocks) el.append(renderBlock(b, ctx));
+      collectWords(el);
+      el.append(noteBox(sec));
       return el;
+    }
+    // The build log: every step as a branch with your own note under it, then the words you met.
+    // One button copies it all as Markdown, ready for your own notes app.
+    function buildLog() {
+      const rows = ch.sections.map((sec, i) => {
+        const note = S.notes[ch.id + ":" + sec.id];
+        return h("li", {}, h("code", {}, i === N - 1 ? "└──" : "├──"), h("b", {}, sec.title),
+          note ? h("q", {}, note) : h("span", { class: "nope" }, "no note yet: open “Say it in your own words” in this step"));
+      });
+      const list = [...words.values()];
+      const md = () => [`# ${ch.num}. ${ch.title}`, "", ...ch.sections.map((sec) => `- **${sec.title}**` + (S.notes[ch.id + ":" + sec.id] ? `: ${S.notes[ch.id + ":" + sec.id]}` : "")),
+        ...(list.length ? ["", "## Words", "", ...list.map((w) => `- **${w.t}**: ${w.def}`)] : [])].join("\n");
+      const copy = h("button", { class: "btn" }, "Copy as Markdown");
+      copy.onclick = () => navigator.clipboard?.writeText(md()).then(() => { copy.textContent = "Copied ✓"; }, () => toast("Couldn't copy. Select the log and copy it by hand."));
+      return h("div", { class: "log" },
+        h("div", { class: "log-h" }, h("span", {}, `build log · ${ch.id}`), h("span", {}, new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))),
+        h("ol", { class: "log-steps" }, rows),
+        list.length ? h("details", { class: "log-words" }, h("summary", {}, `Words you met · ${list.length}`),
+          h("dl", {}, list.map((w) => [h("dt", {}, w.t), h("dd", {}, w.def)]))) : null,
+        h("div", { class: "btns" }, copy));
     }
     function showFinale() {
       if (finale) finale.remove();
@@ -1009,6 +1074,7 @@
         h("div", { class: "eyebrow" }, "Chapter " + ch.num + " complete · in full bloom"),
         h("h2", {}, "You can now…"),
         h("ul", { class: "wins" }, ch.goals.map((g) => h("li", { html: g }))),
+        buildLog(),
         h("p", {}, `${pr.d} of ${pr.n} tasks done. ${Object.keys(S.rev).filter((k) => k.startsWith(ch.id)).length} items from this chapter are in your review deck; they'll come back tomorrow, then in 3, 7, 16 and 35 days.`),
         h("div", { class: "btns" },
           nxt ? h("a", { class: "btn primary big", href: "#" + nxt.num }, `Start chapter ${nxt.num}: ${nxt.title} →`) : h("a", { class: "btn primary big", href: "#review" }, "Go to spaced review →"),
