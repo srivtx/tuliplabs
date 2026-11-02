@@ -974,7 +974,37 @@
     const bar = h("div", { class: "stepbar" }, h("div", { class: "stepfill" }));
     const label = h("div", { class: "steplabel" });
     const head = h("div", { class: "stephead" }, label, dots, bar);
-    col.append(head, stepsEl);
+    // Build X: a blueprint of this build. Each step is one voxel part, and the parts stack into the
+    // machine as you finish steps. The builds it reuses and the ones it unlocks hang off either side.
+    const bp = CFG.wires ? h("div", { class: "bp" }) : null;
+    col.append(...[bp, head, stepsEl].filter(Boolean));
+    const bpName = ((CFG.short_names || [])[ch.num - 1] || ch.id).toLowerCase().replace(/\s+/g, "-");
+    function drawBlueprint() {
+      if (!bp) return;
+      const built = ch.sections.filter((sec, i) => i < reached || (i === reached && !left(sec))).length, fin = !!S.step[ch.id + ":fin"];
+      const sz = 20, cx = 34, cy = 22 + 3 * sz, k = 0.866 * sz;
+      let cubes = "";
+      ch.sections.forEach((sec, i) => {
+        const gx = Math.floor(i / 3), gz = i % 3, x = cx + gx * k, y = cy + gx * sz * 0.5 - gz * sz;
+        const st = i < built ? "done" : i === built && !fin ? "now" : "todo";
+        cubes += `<g class="bp-c ${st}"><title>${i + 1}. ${esc(sec.title)}</title>`
+          + `<path class="t" d="M${x} ${y - sz / 2}l${k} ${-sz / 2}l${k} ${sz / 2}l${-k} ${sz / 2}z"/>`
+          + `<path class="l" d="M${x} ${y - sz / 2}l${k} ${sz / 2}v${sz}l${-k} ${-sz / 2}z"/>`
+          + `<path class="r" d="M${x + k} ${y}l${k} ${-sz / 2}v${sz}l${-k} ${sz / 2}z"/></g>`;
+      });
+      const cols = Math.ceil(N / 3), w = cx + (cols + 1) * k + 10, hh = cy + cols * sz * 0.5 + sz + 6;
+      const chip = (n, dir) => { const c = DATA.chapters.find((x) => x.num === n); return c ? h("a", { class: "bp-chip", href: "#" + n, title: c.title }, dir === "in" ? "← " : "→ ", h("b", {}, String(n).padStart(2, "0")), " " + ((CFG.short_names || [])[n - 1] || c.title)) : null; };
+      const ins = CFG.wires.filter((e) => e[1] === ch.num).map((e) => chip(e[0], "in")), outs = CFG.wires.filter((e) => e[0] === ch.num).map((e) => chip(e[1], "out"));
+      bp.textContent = "";
+      bp.append(
+        h("div", { class: "bp-art", html: `<svg viewBox="0 0 ${w} ${hh}" width="${w}" height="${hh}" aria-hidden="true">${cubes}</svg>` }),
+        h("div", { class: "bp-txt" },
+          h("div", { class: "bp-eye" }, `blueprint · ${ch.id}`),
+          h("div", { class: "bp-name", html: `${esc(bpName)} <i>${fin ? "v1.0 · shipped" : "v0." + built}</i>` }),
+          h("p", { class: "bp-sub" }, fin ? `All ${N} parts built. It runs.` : `${built} of ${N} parts built. Every step you finish adds one.`),
+          ins.length ? h("div", { class: "bp-row" }, h("span", {}, "reuses"), ins) : null,
+          outs.length ? h("div", { class: "bp-row" }, h("span", {}, "unlocks"), outs) : null));
+    }
     const req = (sec) => sec.blocks.filter((b) => COUNTABLE.has(b.type));
     const left = (sec) => req(sec).filter((b) => !S.done[b.id]).length;
     let gate = null, finale = null;
@@ -1041,6 +1071,7 @@
     }
     function drawHead() {
       drawRail();
+      drawBlueprint();
       const doneSteps = ch.sections.filter((sec, i) => i < reached || (i === reached && !left(sec) && S.step[ch.id + ":fin"])).length;
       label.innerHTML = `<b>Step ${reached + 1} of ${N}</b> · ${esc(ch.sections[reached].title)}`;
       bar.firstChild.style.width = Math.round(100 * (reached + (left(ch.sections[reached]) ? 0 : 1)) / N) + "%";
@@ -1099,6 +1130,7 @@
       const copy = h("button", { class: "btn" }, "Copy as Markdown");
       copy.onclick = () => navigator.clipboard?.writeText(md()).then(() => { copy.textContent = "Copied ✓"; }, () => toast("Couldn't copy. Select the log and copy it by hand."));
       return h("div", { class: "log" },
+        CFG.wires ? h("div", { class: "shipped", "aria-hidden": "true" }, "shipped", h("small", {}, `${bpName} v1.0`)) : null,
         h("div", { class: "log-h" }, h("span", {}, `build log · ${ch.id}`), h("span", {}, new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))),
         h("ol", { class: "log-steps" }, rows),
         list.length ? h("details", { class: "log-words" }, h("summary", {}, `Words you met · ${list.length}`),

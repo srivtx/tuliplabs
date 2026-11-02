@@ -531,3 +531,31 @@ tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--soft) 45%,transpa
 .wnode.s2 .wn,.wnode.s2 .wl{fill:#1b1a12}
 .wnode:hover .cap{stroke:var(--kc,#e6a21a);stroke-width:2.5}
 .wnode{transition:transform .15s}.wnode:hover{transform:translateY(-2px)}
+
+/* Build X blueprint: one voxel part per step stacks into the machine; reuses / unlocks on the side */
+.bp{display:flex;gap:18px;align-items:center;margin:14px 0 18px;padding:14px 18px;border:1px solid var(--line);border-radius:10px;
+  background:linear-gradient(color-mix(in srgb,var(--kc,#e6a21a) 10%,transparent) 1px,transparent 1px) 0 0/14px 14px,
+  linear-gradient(90deg,color-mix(in srgb,var(--kc,#e6a21a) 10%,transparent) 1px,transparent 1px) 0 0/14px 14px,var(--card)}
+.bp-art{flex:none}.bp-art svg{display:block;max-width:150px;height:auto}
+.bp-c path{stroke:var(--card);stroke-width:1}
+.bp-c.todo path{fill:none;stroke:var(--line);stroke-dasharray:2 2}
+.bp-c.done .t{fill:color-mix(in srgb,var(--kc,#e6a21a) 55%,#fff)}.bp-c.done .l{fill:var(--kc,#e6a21a)}.bp-c.done .r{fill:color-mix(in srgb,var(--kc,#e6a21a) 68%,#000)}
+.bp-c.now .t{fill:#ffc4e1}.bp-c.now .l{fill:#ff6fb5}.bp-c.now .r{fill:#c2407f}
+@media (prefers-reduced-motion:no-preference){.bp-c.now{animation:bpnow 1.4s ease-in-out infinite}}
+@keyframes bpnow{50%{opacity:.45}}
+.bp-txt{min-width:0}
+.bp-eye{font:11px var(--f-mono);color:var(--muted)}
+.bp-name{font:400 26px/1.1 "Instrument Serif",Georgia,serif;margin:2px 0}
+.bp-name i{font:600 12px var(--f-mono);font-style:normal;color:var(--kc,#e6a21a);margin-left:6px;vertical-align:middle}
+.bp-sub{margin:0 0 6px;font-size:13.5px;color:var(--muted)}
+.bp-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.bp-row>span{font:11px var(--f-mono);color:var(--faint,var(--muted));width:56px}
+.bp-chip{font:12px var(--f-body);text-decoration:none;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 8px;box-shadow:inset 0 -2px 0 var(--line)}
+.bp-chip b{font:700 12px var(--f-display);color:var(--kc,#e6a21a)}
+.bp-chip:hover{border-color:var(--kc,#e6a21a)}
+@media (max-width:560px){.bp{flex-direction:column;align-items:flex-start}}
+/* the shipped stamp on the build log */
+.log{position:relative}
+.shipped{position:absolute;right:14px;top:-14px;transform:rotate(-6deg);font:700 15px var(--f-display);letter-spacing:.12em;text-transform:uppercase;
+  color:#2fb34a;border:2.5px solid #2fb34a;border-radius:6px;padding:3px 10px;background:var(--card);text-align:center;line-height:1.1}
+.shipped small{display:block;font:600 10px var(--f-mono);letter-spacing:0;text-transform:none}
