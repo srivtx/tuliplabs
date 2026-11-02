@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>try{var t=localStorage.getItem("vnl-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Voxel Network Lab</title>
 <meta name="description" content="Learn by playing: complexity science as 3D voxel worlds, then the code, modeling, statistics, data structures and algorithms, all as step-by-step simulations.">
@@ -30,6 +31,15 @@
   color-scheme:dark;
 }
 html,body{margin:0}
+/* Light, picked in the section menu: the page turns to warm paper, while the hero and the globe
+   stay as black-paper posters (the "isle" sections), like the covers on the lesson pages. */
+:root[data-theme="light"]{--bg:#efebe2; --panel:#f6f3ec; --card:#fffdf8; --line:#dcd5c6; --ink:#1d1b17; --muted:#6a655a; --faint:#8a8475; --soft:#ece7dc; color-scheme:light}
+:root[data-theme="light"] .isle{--bg:#0b0c0a; --panel:#121410; --card:#171a15; --line:#2a2e26; --ink:#f2efe6; --muted:#a3a497; --faint:#6b6d62; --soft:#1d211b; background:var(--bg); color:var(--ink); color-scheme:dark}
+:root[data-theme="light"] .sec:not(.isle) a:not([class]){color:#c2357a}
+:root[data-theme="light"] .xp-chip b{color:#b07a00}
+:root[data-theme="light"] .h2 i{color:#d23f87}
+:root[data-theme="light"] .isle .h2 i{color:var(--pink-soft)}
+:root[data-theme="light"] .card .go{color:var(--ink)}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:var(--pink-soft)}
 :focus-visible{outline:2px solid var(--pink);outline-offset:2px}
@@ -164,18 +174,9 @@ a{color:var(--pink-soft)}
 .how b{display:block;font-size:16px;margin:4px 0}
 .how span{color:var(--muted);font-size:14px}
 
-/* ---------------- footer ---------------- */
-.foot{border-top:1px solid var(--line);background:linear-gradient(180deg,#0e100d,#0b0c0a);padding:0 0 calc(22px + env(safe-area-inset-bottom,0px))}
-#strip{display:block;width:100%;height:26px}
-.foot-in{display:flex;flex-wrap:wrap;gap:14px 30px;justify-content:space-between;align-items:flex-start;padding-top:18px;font-size:12.5px;color:var(--muted)}
-.foot-key{display:flex;flex-wrap:wrap;gap:6px 16px;font:12px var(--f-mono)}
-.foot-key a{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none}
-.foot-key a:hover{color:var(--ink)}
-.foot-key i{width:9px;height:9px;border-radius:2px;background:var(--kc);box-shadow:2px 2px 0 color-mix(in srgb,var(--kc) 35%,transparent)}
-.credits{max-width:520px;line-height:1.6}
-.credits a{color:var(--muted)}
 </style>
 <link rel="stylesheet" href="learn/nav.css">
+<script src="learn/garden.js" defer></script>
 <script src="learn/nav.js" defer></script>
 </head>
 <body>
@@ -188,7 +189,7 @@ a{color:var(--pink-soft)}
 </header>
 
 <main>
-<section class="hero grain">
+<section class="hero grain isle">
   <svg class="steps" style="left:6%;top:120px" viewBox="0 0 3 3"><rect x="0" y="0" width="1" height="1"/><rect x="1" y="1" width="1" height="1"/><rect x="2" y="1" width="1" height="1"/></svg>
   <svg class="steps" style="left:47%;top:60px" viewBox="0 0 3 3"><rect x="0" y="0" width="1" height="1"/><rect x="0" y="1" width="1" height="1"/><rect x="1" y="2" width="1" height="1"/></svg>
   <svg class="steps" style="right:4%;top:420px" viewBox="0 0 3 3"><rect x="1" y="0" width="1" height="1"/><rect x="1" y="1" width="1" height="1"/><rect x="0" y="2" width="1" height="1"/><rect x="2" y="2" width="1" height="1"/></svg>
@@ -263,7 +264,7 @@ a{color:var(--pink-soft)}
   </div>
 </section>
 
-<section class="sec grain" aria-labelledby="map-h">
+<section class="sec grain isle" aria-labelledby="map-h">
   <div class="wrap globe-grid">
     <canvas id="globe" width="520" height="520" aria-label="A turning globe drawn with glyphs. Pink marks are chapters you have finished."></canvas>
     <div>
@@ -295,13 +296,6 @@ a{color:var(--pink-soft)}
 </section>
 </main>
 
-<footer class="foot">
-  <canvas id="strip" aria-label="One small square per chapter in the lab, lit when you finish it"></canvas>
-  <div class="wrap foot-in">
-    <div class="foot-key" id="foot-key"></div>
-    <p class="credits">Built on open books: <a href="https://greenteapress.com/wp/think-complexity-2e/">Think Complexity</a> and <a href="https://greenteapress.com/wp/modsimpy/">ModSim</a> by Allen B. Downey, <a href="https://opendatastructures.org">Open Data Structures</a> by Pat Morin. Simulations run in your browser with three.js and Pyodide.</p>
-  </div>
-</footer>
 
 <script>
 /* old links pointed at the 3D worlds on this page (/#ch3); send them to their new home */
@@ -852,31 +846,9 @@ function globe() {
   addEventListener("resize", draw);
 }
 
-/* ================================================================
-   7. Footer: section colour key, and a strip with one square per chapter.
-   ================================================================ */
-function footer() {
-  $("#foot-key").innerHTML = TRACKS.map((t) => `<a class="k-${t.k}" href="${t.href}"><i></i>${t.name}</a>`).join("");
-  const cv = $("#strip"), x = cv.getContext("2d");
-  function draw() {
-    const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth, h = 26;
-    cv.width = w * dpr; cv.height = h * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const all = [];
-    for (const t of TRACKS) { if (!t.data) { for (let i = 0; i < t.count; i++) all.push([KC[t.k], 0]); continue; } for (const [id, , n] of SUM[t.data] || []) all.push([KC[t.k], chState(id, n)]); }
-    const cell = 9, gap = 3, per = Math.floor(w / (cell + gap));
-    for (let i = 0; i < per; i++) {
-      const [c, s] = all[i % all.length];
-      x.globalAlpha = s === 2 ? 1 : s === 1 ? 0.55 : 0.2;
-      x.fillStyle = c; x.fillRect(i * (cell + gap) + 2, (i % 3 === 0 ? 4 : 13), cell, cell);
-    }
-    x.globalAlpha = 1;
-  }
-  draw(); addEventListener("resize", draw);
-}
-
 fetch("content/summary.json", { cache: "no-cache" }).then((r) => r.json()).catch(() => ({})).then((s) => {
   SUM = s || {};
-  cards(); caps(); globe(); footer();
+  cards(); caps(); globe();
 });
 })();
 </script>
