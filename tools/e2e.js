@@ -13,6 +13,7 @@ const shots = process.env.SHOTS || ".";
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/fonts.g|Failed to load resource/.test(m.text())) errors.push("console: " + m.text()); });
+  if (track === "design") return studio(page, browser, errors);
   await page.goto(`${BASE}/${track}/?runner=local#${chap}`);
   await page.waitForSelector(".stephead");
   const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), ({ code: "tc", modsim: "ms", build: "bx", stats: "ps", dsa: "ds", ods: "od" })[track]);
@@ -90,4 +91,31 @@ const shots = process.env.SHOTS || ".";
   await browser.close();
   process.exit(bad.length || errors.length ? 1 : 0);
 })();
+// The design studio: every level's start must miss the target and its answer must match it.
+//   node tools/e2e.js design
+async function studio(page, browser, errors) {
+  await page.goto(`${BASE}/design/#1`);
+  await page.waitForSelector(".meter");
+  const n = await page.locator("#map a").count();
+  const bad = [];
+  for (let i = 1; i <= n; i++) {
+    await page.evaluate((k) => { location.hash = "#" + k; }, i);
+    await page.waitForFunction((k) => document.querySelector(`#map a[href="#${k}"].cur`), i);
+    const title = await page.locator(".brief h1").innerText();
+    const won = async (css) => {
+      await page.evaluate((c) => document.querySelector("#table").dzSet(c), css);
+      await page.waitForTimeout(700);
+      return page.evaluate(() => [document.querySelector(".meter").classList.contains("won"), document.querySelector(".pct").textContent]);
+    };
+    const [startWon, s0] = await won(await page.evaluate(() => document.querySelector("#table").dzStart()));
+    const [answerWon, s1] = await won(await page.evaluate(() => document.querySelector("#table").dzAnswer()));
+    if (startWon) bad.push(`${i} ${title}: the start already matches (${s0})`);
+    if (!answerWon) bad.push(`${i} ${title}: the answer doesn't match (${s1})`);
+  }
+  console.log(`design: ${n} levels checked, ${bad.length} failed`);
+  bad.forEach((b) => console.log("  FAIL " + b));
+  errors.forEach((e) => console.log("  " + e));
+  await browser.close();
+  process.exit(bad.length || errors.length ? 1 : 0);
+}
 function CSS_escape(s) { return s.replace(/([^a-zA-Z0-9_-])/g, "\\$1"); }
