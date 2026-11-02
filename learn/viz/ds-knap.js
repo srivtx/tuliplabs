@@ -83,7 +83,7 @@ VIZ.register("ds-knap", async (api) => {
   api.button("Reset", () => { if (!running) reset(); });
   api.seg([{ label: "greedy: best £ per kg", value: "greedy" }, { label: "DP table", value: "table" }], mode, (m) => { if (running) return; mode = m; reset(); });
   W.camera({ target: [0, -0.1, 0], dist: 18, theta: 0, phi: 1.5, instant: true });
-  api.hud("table: rows = items allowed so far, columns = capacity in kg, number = best value · red = filling now · blue = the cells it reads · bottom: the bag");
+  api.hud("table: rows = items allowed so far, columns = capacity in kg, number = best value · red = filling now · amber = the cells it reads · bottom: the bag");
   reset();
   api.explain("How to read this", `<p>Fill a ${CAP} kg bag with the most value. Each item is taken whole or not at all. <b>Run all</b> with <b>greedy</b>, then with <b>DP table</b>.</p>`);
 });
