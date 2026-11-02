@@ -45,38 +45,59 @@
 .sw-theme button:hover{border-color:var(--muted)}
 .sw-theme button[aria-pressed="true"]{background:#ff6fb5;border-color:#ff6fb5;color:#2a0b1b;box-shadow:inset 0 -2px 0 #c2407f}
 
-/* footer: your whole garden on black paper, standing in voxel grass. Same in light and dark. */
-.gfoot{--f-ink:#f0ede4;--f-muted:#a3a497;--f-line:#2b2e27;margin-top:40px;color:var(--f-muted);font-size:12.5px;position:relative;isolation:isolate;
-  background:radial-gradient(60% 80% at 75% 100%,rgba(255,111,181,.16),transparent 70%),#0c0d0b}
+/* footer: your whole garden standing in voxel grass. Black paper in dark, warm paper in light. */
+.gfoot{--f-ink:#f0ede4;--f-muted:#a3a497;--f-accent:#f7b6d7;margin-top:40px;color:var(--f-muted);font-size:12.5px;position:relative;isolation:isolate;
+  background:radial-gradient(60% 80% at 72% 100%,rgba(255,111,181,.16),transparent 70%),#0c0d0b}
 .gfoot::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.55;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85 .12' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-.gf-in{max-width:1240px;margin:0 auto;padding:46px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);gap:20px 40px;align-items:end}
-.gf-eye{margin:0;font:11.5px var(--f-mono);color:var(--f-muted)}
-.gf-title{margin:6px 0 4px;font:400 clamp(40px,5vw,64px)/.95 "Instrument Serif",Georgia,serif;color:var(--f-ink)}
-.gf-title i{color:#f7b6d7}
-.gf-code{font:13px var(--f-mono);color:#ffd21f;background:none;padding:0}
-.gf-sub{margin:12px 0 22px;max-width:300px;line-height:1.5}
-.gf-beds{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end}
+:root[data-theme="light"] .gfoot{--f-ink:#1d1b17;--f-muted:#6a655a;--f-accent:#d23f87;background:radial-gradient(60% 80% at 72% 100%,rgba(255,111,181,.14),transparent 70%),#efebe2}
+:root[data-theme="light"] .gfoot::before{display:none}
+.gf-in{max-width:1240px;margin:0 auto;padding:56px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:20px 40px;align-items:end}
+.gf-title{margin:0;font:400 clamp(44px,5.4vw,70px)/.92 "Instrument Serif",Georgia,serif;color:var(--f-ink)}
+.gf-title i{color:var(--f-accent)}
+.gf-sub{margin:12px 0 26px;max-width:260px;line-height:1.5;font-size:13.5px}
+.gf-beds{position:relative;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end}
 .gf-bed{display:flex;flex-direction:column;align-items:center;text-align:center;text-decoration:none;color:var(--f-ink);padding:0 2px;border-radius:8px;transition:transform .2s}
 .gf-pot{position:relative;width:100%;max-width:110px;height:130px;display:block}
 .gf-pot canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .gf-ghost{opacity:.2}
+:root[data-theme="light"] .gf-ghost{opacity:.28}
 .gf-bed b{font:600 12.5px/1.2 var(--f-body);margin-top:2px;display:flex;gap:6px;align-items:center;white-space:nowrap}
 .gf-bed b::before{content:"";width:8px;height:8px;border-radius:2px;flex:none;background:var(--kc)}
 .gf-bed small{font:11px var(--f-mono);color:var(--f-muted);margin:1px 0 8px;opacity:.8}
 .gf-bed:hover{transform:translateY(-4px)}
 .gf-bed:hover .gf-pot{animation:gfsway 1.6s ease-in-out infinite;transform-origin:50% 100%}
 @keyframes gfsway{0%,100%{transform:rotate(0)}50%{transform:rotate(-2.5deg)}}
+/* the bee: drifts from flower to flower, turns round at each end, wings flicker */
+.gf-bee{position:absolute;width:27px;height:21px;left:4%;top:8px;z-index:2;pointer-events:none;image-rendering:pixelated}
+@media (prefers-reduced-motion:no-preference){
+  .gf-bee{animation:gfbee 34s ease-in-out infinite}
+  .gf-bee .w{animation:gfwing .18s steps(2) infinite}
+}
+@keyframes gfbee{
+  0%{left:4%;top:8px;transform:scaleX(-1)} 12%{left:18%;top:46px;transform:scaleX(-1)} 24%{left:33%;top:14px;transform:scaleX(-1)}
+  36%{left:50%;top:40px;transform:scaleX(-1)} 47%{left:90%;top:10px;transform:scaleX(-1)} 50%{left:90%;top:12px;transform:scaleX(1)}
+  64%{left:66%;top:44px;transform:scaleX(1)} 78%{left:40%;top:6px;transform:scaleX(1)} 97%{left:4%;top:10px;transform:scaleX(1)} 100%{left:4%;top:8px;transform:scaleX(-1)}}
+@keyframes gfwing{50%{opacity:.25}}
 .gf-grass{display:block;width:100%;height:34px;margin-top:-6px}
-.gf-base{background:#1a3d22;color:#cfe6c9;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 24px;font:11.5px/1.5 var(--f-mono);
+.gf-base{background:#1a3d22;color:#cfe6c9;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;font:11.5px/1.5 var(--f-mono);
   padding:12px max(16px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
-.gf-base a{color:#fff}
+.gf-brand{display:flex;align-items:center;gap:9px;margin-right:auto}
+.gf-brand .logo{width:15px;height:15px;display:grid;grid-template-columns:repeat(3,1fr);gap:1px}
+.gf-brand .logo i{background:#ff6fb5;border-radius:1px}.gf-brand .logo i:nth-child(2),.gf-brand .logo i:nth-child(6){background:#f3ecd7}
+.gf-brand .logo i:nth-child(4){background:#7cc742}.gf-brand .logo i:nth-child(8){background:#ffd21f}.gf-brand .logo i:nth-child(1),.gf-brand .logo i:nth-child(9){opacity:.25}
+.gf-brand b{font:700 13px "Pixelify Sans",ui-monospace,monospace;color:#fff;letter-spacing:.02em}
+.gf-brand em{font-style:normal;opacity:.75}
+.gf-keep{opacity:.75}
+.gf-top{color:#10260f;background:#a3d65f;text-decoration:none;font:600 11.5px var(--f-mono);padding:3px 9px 4px;border-radius:5px;box-shadow:inset 0 -2px 0 #6f9f3a}
+.gf-top:hover{background:#c0e889}
 @media (max-width:900px){
   .gf-in{grid-template-columns:1fr}
   .gf-beds{grid-template-columns:repeat(4,minmax(0,1fr));row-gap:2px}
   .gf-pot{height:100px}
 }
+@media (max-width:560px){.gf-brand em,.gf-keep{display:none}}
 @media (prefers-reduced-motion:reduce){.gf-bed:hover .gf-pot{animation:none}}
 .sfoot{margin-top:40px}
-.sfoot .gf-grass{height:22px;margin-top:0}
+.sfoot .gf-grass{height:28px;margin-top:0}
 .sfoot .gf-base{padding-top:9px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}

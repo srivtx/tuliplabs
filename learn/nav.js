@@ -72,38 +72,48 @@
   const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
   const T = [["worlds", "worlds/", "Worlds", "#ff5fa8"], ["tc", "code/", "Complexity", "#2fb38f"], ["ms", "modsim/", "ModSim", "#3d8fe0"],
     ["bx", "build/", "Build X", "#e6a21a"], ["ps", "stats/", "Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "ODS", "#ee6a4c"]];
-  const credits = `Built on open books by Allen B. Downey (<a href="https://greenteapress.com/wp/think-complexity-2e/">Think Complexity</a>, <a href="https://greenteapress.com/wp/modsimpy/">ModSim</a>) and Pat Morin (<a href="https://opendatastructures.org">Open Data Structures</a>).`;
   const f = document.createElement("footer");
+  const logo = `<span class="logo" aria-hidden="true">${"<i></i>".repeat(9)}</span>`;
+  const base = `<div class="gf-base"><span class="gf-brand">${logo}<b>Voxel Network Lab</b><em>· made to be poked at</em></span>
+    <span class="gf-keep">your progress lives in this browser</span><a class="gf-top" href="#">↑ top</a></div>`;
   // Lesson pages keep it quiet: one line of grass and one line of text. The garden lives on the home page.
   if (document.querySelector("#side")) {
     f.className = "foot sfoot";
-    f.innerHTML = `<canvas class="gf-grass" aria-hidden="true"></canvas><div class="gf-base"><span>${credits}</span><span>Progress stays in this browser</span></div>`;
+    f.innerHTML = `<canvas class="gf-grass" aria-hidden="true"></canvas>${base}`;
     document.body.append(f);
     requestAnimationFrame(() => grass());
     addEventListener("resize", () => grass());
+    top();
     return;
   }
   f.className = "foot gfoot";
+  // a pixel bee drifts over the beds, 9×7 cells: y yellow, k black, w wing
+  const bee = ["..ww.ww..", "..ww.ww..", ".yykyykk.", "kyykyykyk", ".yykyykk.", "...k.k...", "........."];
+  const beeSvg = `<svg class="gf-bee" viewBox="0 0 9 7" aria-hidden="true" shape-rendering="crispEdges">${bee.map((r, y) => [...r].map((c, x) => c === "." ? "" :
+    `<rect x="${x}" y="${y}" width="1" height="1" fill="${{ y: "#ffd21f", k: "#1b1a12", w: "#e8f4ff" }[c]}"${c === "w" ? ' class="w"' : ""}/>`).join("")).join("")}</svg>`;
   f.innerHTML = `<div class="gf-in">
-    <div class="gf-head"><p class="gf-eye">voxel network lab / your whole garden</p>
-      <p class="gf-title">Keep <i>growing.</i></p><code class="gf-code">└── { comeBackTomorrow(); }</code>
-      <p class="gf-sub">One flower for every track. Each grows as you finish its chapters.</p></div>
-    <div class="gf-beds">${T.map(([k, h, n]) => `<a class="gf-bed k-${k}" href="${root}${h}" data-k="${k}"><span class="gf-pot"><canvas class="gf-ghost" aria-hidden="true"></canvas><canvas aria-hidden="true"></canvas></span><b>${n}</b><small>&nbsp;</small></a>`).join("")}</div>
+    <div class="gf-head"><p class="gf-title">Keep <i>growing.</i></p>
+      <p class="gf-sub">One flower for every track. Finish chapters and it blooms.</p></div>
+    <div class="gf-beds">${beeSvg}${T.map(([k, h, n]) => `<a class="gf-bed k-${k}" href="${root}${h}" data-k="${k}"><span class="gf-pot"><canvas class="gf-ghost" aria-hidden="true"></canvas><canvas aria-hidden="true"></canvas></span><b>${n}</b><small>&nbsp;</small></a>`).join("")}</div>
   </div>
-  <canvas class="gf-grass" aria-hidden="true"></canvas>
-  <div class="gf-base"><span>${credits} Simulations run in your browser with three.js and Pyodide.</span><span>No sign-up · progress stays in this browser</span></div>`;
+  <canvas class="gf-grass" aria-hidden="true"></canvas>${base}`;
   document.body.append(f);
+  top();
 
+  function top() {
+    f.querySelector(".gf-top").addEventListener("click", (e) => { e.preventDefault(); scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); });
+  }
   function grass() {
     const cv = f.querySelector(".gf-grass"), x = cv.getContext("2d");
     const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth, h = cv.clientHeight;
     cv.width = w * dpr; cv.height = h * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
     let s = 7;
     const r = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-    const G = ["#24803c", "#3faa52", "#58bb4a", "#7cc742", "#a3d65f"];
+    const G = ["#24803c", "#3faa52", "#58bb4a", "#7cc742", "#a3d65f"], B = ["#ff6fb5", "#fff6fb", "#f7b6d7", "#8095ff"];
     for (let c = 0; c * 7 < w; c++) {
       const top = 4 + Math.floor(r() * 4) * 6, tone = Math.floor(r() * 3);
       for (let y = top; y < h; y += 6) { x.fillStyle = G[Math.min(4, tone + (y === top ? 2 : y < top + 7 ? 1 : 0))]; x.fillRect(c * 7, y, 6, 5); }
+      if (top >= 10 && r() < 0.07) { x.fillStyle = B[(r() * B.length) | 0]; x.fillRect(c * 7 + 1, top - 5, 4, 4); x.fillStyle = "#ffd21f"; x.fillRect(c * 7 + 2, top - 4, 2, 2); }
     }
   }
   let S = {}, P = {}, SUM = null;
