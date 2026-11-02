@@ -1,7 +1,13 @@
 [
   {
-    "date": "2026-11-03", "kind": "Design", "glyph": "tulip", "a": "#ff6fb5", "b": "#6e1d45",
-    "card": "Meet the tulip", "title": "A new mark, and a look inside the lab",
+    "date": "2026-11-03", "kind": "Company", "glyph": "tulip", "a": "#ff6fb5", "b": "#3a0f25",
+    "card": "Tulip Labs", "title": "Voxel Network Lab is now Tulip Labs",
+    "body": "Same lab, same tracks, same progress in your browser, with a new name to match the pixel tulip. Tulip Labs is a product by svx.",
+    "href": "./"
+  },
+  {
+    "date": "2026-11-03", "kind": "Design", "glyph": "grid", "a": "#5b1cff", "b": "#22105a",
+    "card": "A look inside", "title": "A new mark, and a look inside the lab",
     "body": "The lab has a new face: a pixel tulip, because everything here grows a chapter at a time. The home page now shows what learning here is actually like, with four small windows that play real moments from the tracks.",
     "href": "./#look"
   },

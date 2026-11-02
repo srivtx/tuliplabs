@@ -4,6 +4,10 @@ Order: finish the visual pass first, then sign-in and sync, then hosting and pri
 
 ## 1. A name
 
+**Decided 2026-11-03: Tulip Labs, a product by svx** (domain to buy: `tuliplabs.dev`; `tuliplabs.io` as a backup,
+`tuliplabs.com` is for sale). The site is renamed; the notes below are how we got there. Plain "Tulip" was
+set aside because a known software company uses it and the short domains are taken.
+
 **What the reference pictures share:** a grid of squares that grows into something alive. A bloom made of pixels
 (the Bloom poster, Hiraku's `RenderFlowers()`, the pixel tulip), woven squares (the textile posters, the plant bag),
 a path drawn through a grid (the tile puzzle), and things built from keys and blocks (the keycap cat, the paper grove).
@@ -16,13 +20,12 @@ That is what the lab does too: you poke a grid of voxels, and your garden blooms
 | Tessel | One tile in a mosaic: every chapter is a tile. Crafty, but a bit cold. | `tessel.dev` is taken |
 | Voxel Network Lab (keep) | Says exactly what it is; becomes the subtitle if we rename. | `voxelnetworklab.com` shows no DNS |
 
-**Pick: Voxbloom, a product by svx.** It's "Grok by xAI"-shaped: the product name up front, the studio after it.
+First pick was Voxbloom, a product by svx. It's "Grok by xAI"-shaped: the product name up front, the studio after it.
 
 - Wordmark: `vox` in Pixelify Sans (the voxel voice) plus *bloom* in Instrument Serif italic (the poster voice).
   Both type voices are already on the site.
 - Mark: the pixel tulip stays.
 - Tagline: *Watch it grow. Then build it.*
-- Domain: buy `voxbloom.dev` (or `.app`) now, and ask what the parked `.com` costs before deciding.
 - Keep "Voxel Network Lab" for a while as the hero subtitle so returning people recognise it.
 
 Nothing is renamed yet: renaming touches every page title, the logo text and the domain, so it waits for a yes.
@@ -88,7 +91,7 @@ or that save them time.
 
 1. **Visual pass.** Done today: the showcase rows on home, the svx mark, product news.
 2. **Sign-in sheet and Supabase sync.** Built behind a flag, then switched on.
-3. **Move to Cloudflare Pages and the new domain** (once the name is picked).
+3. **Move to Cloudflare Pages on tuliplabs.dev.**
 4. **Pricing page**, styled as three keycaps, plus checkout and a Pro flag on the account.
 5. **AI hints** through the Worker.
 6. **Back to chapters:**

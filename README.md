@@ -1,4 +1,6 @@
-# Voxel Network Lab
+# Tulip Labs
+
+*Formerly Voxel Network Lab. A product by svx.*
 
 **Learn complexity science by playing with it, then by coding it.** All 12 chapters of Allen B. Downey's *[Think Complexity](https://greenteapress.com/wp/think-complexity-2e/)* (2nd edition), rebuilt as interactive 3D voxel worlds. You move the households, host the party, drill the rock and drop the sand yourself, and only then does the computer run the model.
 
