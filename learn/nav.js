@@ -57,9 +57,14 @@
     if (!b) return;
     const t = b.dataset.t;
     try { if (t === "auto") localStorage.removeItem(KEY); else localStorage.setItem(KEY, t); } catch (err) { /* private mode: still switch for this page */ }
-    if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t;
+    apply();
     sync();
   });
+  // Auto follows the system, live: the page always carries a resolved light or dark, so pages
+  // that are dark by design (home) still turn light when the laptop is in light mode.
+  const sys = matchMedia("(prefers-color-scheme: light)");
+  const apply = () => { const t = get(); document.documentElement.dataset.theme = t === "auto" ? (sys.matches ? "light" : "dark") : t; dispatchEvent(new Event("vnl-theme")); };
+  sys.addEventListener?.("change", () => { if (get() === "auto") apply(); });
   sync();
   menu.append(row);
 })();

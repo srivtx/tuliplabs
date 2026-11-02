@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>try{var t=localStorage.getItem("vnl-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Learn complexity science by playing: all 12 chapters of Think Complexity as interactive 3D voxel worlds with guided stories.">
 <meta property="og:title" content="Voxel Network Lab">
