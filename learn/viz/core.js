@@ -1,4 +1,4 @@
-/* Voxel Network Lab: live simulations for the code tracks.
+/* Tulip Labs: live simulations for the code tracks.
    A lesson's ```viz block names a file in this folder (learn/viz/<name>.js). That file calls
    VIZ.register(name, setup) and setup(api) builds the simulation. See learn/viz/README.md. */
 (function () {

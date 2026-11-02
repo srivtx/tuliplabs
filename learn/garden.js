@@ -1,4 +1,4 @@
-/* Voxel Network Lab: the garden.
+/* Tulip Labs: the garden.
    Every chapter is a pixel flower that grows as you finish its tasks: a seed in its cube pot,
    a sprout, a bud, half open, then full bloom. The kind of flower and its colour come from the
    chapter id, so a chapter always grows the same flower. Everything is drawn in code.

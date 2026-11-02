@@ -1,4 +1,4 @@
-"""Runs learner code for the Voxel Network Lab code tracks.
+"""Runs learner code for the Tulip Labs code tracks.
 
 The same file runs in two places:
   * in the browser, inside Pyodide (a Web Worker), and

@@ -1,4 +1,4 @@
-/* Code tracks for Voxel Network Lab. Same palette and type as the 3D lab. */
+/* Code tracks for Tulip Labs. Same palette and type as the 3D lab. */
 *,*::before,*::after{box-sizing:border-box}
 :root{
   --bg:#efebe2; --panel:#f6f3ec; --card:#fffdf8; --ink:#1d1b17; --muted:#6a655a; --line:#dcd5c6; --soft:#ece7dc;

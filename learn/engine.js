@@ -1,4 +1,4 @@
-/* Voxel Network Lab: code tracks.
+/* Tulip Labs: code tracks.
    One engine renders every chapter of both books from content/<track>.json.
    Python runs in the browser through Pyodide (learn/py-worker.js), or through
    tools/devserver.py when the page is opened with ?runner=local. */
@@ -854,7 +854,7 @@
     // A poster: corner notes, a big serif title, and the track's own flower, with its full bloom
     // drawn faintly behind it as the shape you're growing towards.
     const poster = h("section", { class: "poster dark" },
-      h("div", { class: "p-corner tl" }, "Voxel Network Lab", h("br"), "Track · " + (CFG.short || "")),
+      h("div", { class: "p-corner tl" }, "Tulip Labs", h("br"), "Track · " + (CFG.short || "")),
       h("div", { class: "p-corner tr", html: `<b>${fin}</b> / ${N}<br>chapters in bloom` }),
       h("div", { class: "p-body" },
         h("h1", {}, CFG.heroTitle),

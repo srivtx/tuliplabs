@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Voxel Network Lab</title>
+<title>Tulip Labs · learn it by playing</title>
 <meta name="description" content="Learn by playing: complexity science as 3D voxel worlds, then the code, modeling, statistics, data structures and algorithms, all as step-by-step simulations.">
-<meta property="og:title" content="Voxel Network Lab">
+<meta property="og:title" content="Tulip Labs">
 <meta property="og:description" content="Seven tracks of simulations you can poke, from the ground floor to Codeforces level.">
 <meta property="og:image" content="docs/screenshot.png">
 <meta name="theme-color" content="#0b0c0a">
@@ -273,7 +273,7 @@ a{color:var(--pink-soft)}
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="./" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Voxel Network Lab</b></a>
+  <a class="brand" href="./" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Tulip Labs</b></a>
   <details class="sw k-home"></details>
   <span class="grow"></span>
   <span class="xp-chip" id="xp-chip"></span>
@@ -287,13 +287,13 @@ a{color:var(--pink-soft)}
   <svg class="steps" style="right:4%;top:420px" viewBox="0 0 3 3"><rect x="1" y="0" width="1" height="1"/><rect x="1" y="1" width="1" height="1"/><rect x="0" y="2" width="1" height="1"/><rect x="2" y="2" width="1" height="1"/></svg>
   <svg class="steps" style="left:38%;bottom:30px" viewBox="0 0 3 3"><rect x="0" y="2" width="1" height="1"/><rect x="1" y="2" width="1" height="1"/><rect x="2" y="1" width="1" height="1"/></svg>
   <div class="wrap">
-    <div class="meta"><span id="meta-l">voxel network lab · <b>7</b> tracks · learn it by playing</span><span>no sign-up · progress stays in your browser</span></div>
+    <div class="meta"><span id="meta-l">tulip labs · <b>7</b> tracks · learn it by playing</span><span>formerly voxel network lab · no sign-up · progress stays in your browser</span></div>
     <div class="hero-grid">
       <div>
-        <h1 class="sr">Voxel Network Lab: learn complexity, code, statistics and algorithms by playing with simulations</h1>
+        <h1 class="sr">Tulip Labs: learn complexity, code, statistics and algorithms by playing with simulations</h1>
         <div class="title-box" aria-hidden="true">
           <canvas id="title" width="640" height="200"></canvas>
-          <div class="serif-title">Network <i>Lab</i></div>
+          <div class="serif-title"><i>Labs,</i> by svx</div>
         </div>
         <div class="ticker" id="ticker" aria-live="off"><span class="dot"></span><span id="tick-t">inside the letters: loading a tiny world…</span></div>
         <div class="tags"><span class="tag">See it move first —</span><span class="tag">then write it yourself.</span></div>
@@ -541,7 +541,7 @@ function chState(id, blocks) {
 })();
 
 /* ================================================================
-   1. The title: "VOXEL" sampled from the pixel font into a grid of cells.
+   1. The title: "TULIP" sampled from the pixel font into a grid of cells.
    The grid is a tiny world, and three of the lab's own simulations take
    turns running inside it: a breadth-first search flooding out from one
    cell, Conway's Game of Life living in the letters, and a sandpile.
@@ -559,10 +559,10 @@ const TITLE = (() => {
     try { await document.fonts.load('700 120px "Pixelify Sans"'); } catch (e) { /* fallback font is fine */ }
     const F = 160, c = document.createElement("canvas"), x = c.getContext("2d", { willReadFrequently: true });
     x.font = `700 ${F}px "Pixelify Sans", monospace`;
-    const m = x.measureText("VOXEL");
+    const m = x.measureText("TULIP");
     const w = Math.ceil(m.width) + 8, h = Math.ceil(F * 1.3);
     c.width = w; c.height = h;
-    x.font = `700 ${F}px "Pixelify Sans", monospace`; x.textBaseline = "top"; x.fillText("VOXEL", 4, 4);
+    x.font = `700 ${F}px "Pixelify Sans", monospace`; x.textBaseline = "top"; x.fillText("TULIP", 4, 4);
     const d = x.getImageData(0, 0, w, h).data;
     let top = h, bot = 0, lef = w, rig = 0;
     for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) if (d[(y * w + i) * 4 + 3] > 128) { top = Math.min(top, y); bot = Math.max(bot, y); lef = Math.min(lef, i); rig = Math.max(rig, i); }
@@ -893,7 +893,7 @@ function cards() {
       <span class="go">${fin ? `<b>${fin}</b> finished · ` : ""}open <b>→</b></span></div></a>`;
   }).join("");
   $("#tot-side").textContent = `${total} chapters so far · more every week`;
-  $("#meta-l").innerHTML = `voxel network lab · <b>${TRACKS.length}</b> tracks · <b>${total}</b> chapters`;
+  $("#meta-l").innerHTML = `tulip labs · <b>${TRACKS.length}</b> tracks · <b>${total}</b> chapters`;
   const paint = () => box.querySelectorAll("canvas").forEach((c) => drawArt(c, c.dataset.art, KC[TRACKS[c.dataset.i].k], 7 + +c.dataset.i * 97));
   paint(); let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(paint, 150); });
 }
