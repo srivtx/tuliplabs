@@ -1,0 +1,44 @@
+[
+  {
+    "date": "2026-11-03", "kind": "Design", "glyph": "tulip", "a": "#ff6fb5", "b": "#6e1d45",
+    "card": "Meet the tulip", "title": "A new mark, and a look inside the lab",
+    "body": "The lab has a new face: a pixel tulip, because everything here grows a chapter at a time. The home page now shows what learning here is actually like, with four small windows that play real moments from the tracks.",
+    "href": "./#look"
+  },
+  {
+    "date": "2026-11-02", "kind": "Feature", "glyph": "stairs", "a": "#e6a21a", "b": "#563702",
+    "card": "Blueprints", "title": "Every chapter now has a blueprint and a map",
+    "body": "Each chapter shows its parts as voxel blocks that stack as you finish steps, with what it builds on and what it leads to. Every course page draws a map of how its chapters wire together.",
+    "href": "build/"
+  },
+  {
+    "date": "2026-11-02", "kind": "Track", "glyph": "bars", "a": "#3caa4c", "b": "#123f1a",
+    "card": "DSA, 44 chapters", "title": "Data structures and algorithms, from the ground floor to Codeforces",
+    "body": "Forty-four chapters from Big-O to lazy segment trees. Every pattern starts as a simulation that counts the work, and every question has a big hidden test, so slow code fails like it would in an interview.",
+    "href": "dsa/"
+  },
+  {
+    "date": "2026-11-02", "kind": "Feature", "glyph": "sun", "a": "#ffd21f", "b": "#4d3c00", "c": "#fff4c2", "g": "#4d3c00",
+    "card": "Light and dark", "title": "Light mode everywhere, and Auto that follows your laptop",
+    "body": "Every page, home included, now has a warm paper light mode. Auto switches live when your laptop does.",
+    "href": "./"
+  },
+  {
+    "date": "2026-11-01", "kind": "Track", "glyph": "stairs", "a": "#9a6be0", "b": "#2f1a52",
+    "card": "Two new courses", "title": "Build your own X, and Probability & Stats",
+    "body": "Build a calculator, a programming language, a regex engine and a database one real part at a time. Or simulate probability first and prove it after.",
+    "href": "stats/"
+  },
+  {
+    "date": "2026-11-01", "kind": "Feature", "glyph": "prompt", "a": "#2fb38f", "b": "#0d4135",
+    "card": "Python, in the page", "title": "Real Python in your browser, with nothing to install",
+    "body": "The code tracks run real Python right in the page. Each chapter climbs a ladder: predict, fix the bug, order the lines, write it, rebuild it from memory. Wrong answers come back later for review.",
+    "href": "code/"
+  },
+  {
+    "date": "2026-10-28", "kind": "Launch", "glyph": "grid", "a": "#3d8fe0", "b": "#0f2c4f",
+    "card": "12 worlds", "title": "The lab opens with twelve 3D worlds you can poke",
+    "body": "Cities, sandpiles, flocks and forest fires as voxel worlds, each with a guided story, a notebook of ideas and a quiz.",
+    "href": "worlds/"
+  }
+]

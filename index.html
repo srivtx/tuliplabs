@@ -137,6 +137,7 @@ a{color:var(--pink-soft)}
 .sub{color:var(--muted);max-width:620px;margin:12px 0 0}
 .head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 30px;margin-bottom:26px}
 .head .side{font:12px var(--f-mono);color:var(--faint)}
+.head a.side{color:var(--ink);text-decoration:none;font-weight:600}.head a.side:hover{text-decoration:underline;text-underline-offset:3px}
 
 /* ---------------- track cards ---------------- */
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
@@ -256,20 +257,6 @@ a{color:var(--pink-soft)}
 .w-cap2 b{display:block;font:700 22px/1.1 var(--f-display);color:#fff}
 .w-cap2.g{background:#2f8f3e;box-shadow:inset 0 -5px 0 #1a5a26}
 
-/* ---------------- product news ---------------- */
-.news{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:22px}
-.nw{display:flex;flex-direction:column;text-decoration:none;color:inherit}
-.nw-art{display:flex;aspect-ratio:1.9;border-radius:6px;overflow:hidden;transition:transform .25s cubic-bezier(.2,.8,.3,1)}
-.nw:hover .nw-art{transform:translateY(-3px)}
-.nw-art>span{flex:0 0 42%;display:grid;place-items:center;background:var(--a)}
-.nw-art>span svg{width:46%;height:auto;image-rendering:pixelated}
-.nw-art>b{flex:1;display:flex;align-items:center;padding:0 16px;background:var(--b);color:var(--c,#fff);font:400 21px/1.08 var(--f-serif)}
-.nw-meta{font:12px var(--f-mono);color:var(--muted);margin-top:12px}
-.nw-meta em{font-style:normal;color:var(--ink)}
-.nw-t{font:500 16px/1.35 var(--f-body);margin-top:4px}
-.nw-t::after{content:" ›";color:var(--muted)}
-.nw:hover .nw-t{text-decoration:underline;text-underline-offset:3px}
-
 /* ---------------- how it works ---------------- */
 .how{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;counter-reset:s;margin:0;padding:0;list-style:none}
 .how li{border-top:2px solid var(--line);padding-top:14px;counter-increment:s}
@@ -282,6 +269,7 @@ a{color:var(--pink-soft)}
 <script src="learn/garden.js" defer></script>
 <script src="learn/nav.js" defer></script>
 <script src="learn/look.js" defer></script>
+<script src="learn/news.js" defer></script>
 </head>
 <body>
 <header class="top">
@@ -484,6 +472,14 @@ a{color:var(--pink-soft)}
       <li><b>Climb the ladder</b><span>Fix a bug, order the lines, write it, then take on LeetCode, Codeforces and big-company questions.</span></li>
       <li><b>Lock it in</b><span>Quick-fire quizzes, a real-world project, and one rebuild from memory with nothing to copy.</span></li>
     </ol>
+  </div>
+</section>
+
+<section class="sec" id="news" aria-labelledby="news-h" style="padding-top:20px">
+  <div class="wrap">
+    <div class="head"><div><p class="eyebrow">what's new</p><h2 class="h2" id="news-h">Latest <i>news.</i></h2></div>
+      <a class="side" href="news/">All news ›</a></div>
+    <div class="news" data-news="4"></div>
   </div>
 </section>
 </main>
