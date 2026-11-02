@@ -162,12 +162,16 @@
       for (const pre of warmed) this.start(pre);
     },
   };
+  // The header wraps on narrower screens; sticky things below it follow its real height.
+  const topBar = document.querySelector("header.top");
+  if (topBar) new ResizeObserver(() => document.documentElement.style.setProperty("--top-h", topBar.offsetHeight + "px")).observe(topBar);
   const ranCells = new Set();
   function setChip(cls, text) {
     const c = $("#py-chip");
     if (!c) return;
     c.className = "chip " + cls;
     c.lastChild.textContent = text;
+    c.title = text;
   }
 
   // Run a request with a Run button that turns into Stop while it waits.
