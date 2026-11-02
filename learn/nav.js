@@ -69,6 +69,19 @@
   menu.append(row);
 })();
 
+/* "by svx": the studio mark, three letters on a 3 × 5 pixel grid with a pink x.
+   It sits after the name in the top bar (wide screens) and in the footer line. */
+window.SVX = (() => {
+  const L = { s: ["###", "#..", "###", "..#", "###"], v: ["#.#", "#.#", "#.#", "#.#", ".#."], x: ["#.#", "#.#", ".#.", "#.#", "#.#"] };
+  const cells = [..."svx"].map((ch, i) => L[ch].map((row, y) => [...row].map((c, x) => c === "#" ?
+    `<rect x="${i * 4 + x}" y="${y}" width="1" height="1"${ch === "x" ? ' fill="#ff6fb5"' : ""}/>` : "").join("")).join("")).join("");
+  return `<svg class="svx" viewBox="0 0 11 5" shape-rendering="crispEdges" fill="currentColor" role="img" aria-label="svx">${cells}</svg>`;
+})();
+(() => {
+  const b = document.querySelector(".top .brand b");
+  if (b) b.insertAdjacentHTML("afterend", `<span class="by" title="A product by svx">by ${SVX}</span>`);
+})();
+
 /* The footer is your whole garden: one flower per track, grown as far as your progress in it,
    standing in a strip of voxel grass. It fills in only when it scrolls near, so it costs nothing
    up front. The 3D worlds fill the whole window, so they get none. */
@@ -79,8 +92,8 @@
     ["bx", "build/", "Build X", "#e6a21a"], ["ps", "stats/", "Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "ODS", "#ee6a4c"]];
   const f = document.createElement("footer");
   const logo = `<span class="logo" aria-hidden="true">${"<i></i>".repeat(9)}</span>`;
-  const base = `<div class="gf-base"><span class="gf-brand">${logo}<b>Voxel Network Lab</b><em>· made to be poked at</em></span>
-    <span class="gf-keep">your progress lives in this browser</span><a class="gf-top" href="#">↑ top</a></div>`;
+  const base = `<div class="gf-base"><span class="gf-brand">${logo}<b>Voxel Network Lab</b><em>· a product by ${SVX}</em></span>
+    <a class="gf-news" href="${root}news/">news</a><span class="gf-keep">your progress lives in this browser</span><a class="gf-top" href="#">↑ top</a></div>`;
   // Lesson pages keep it quiet: one line of grass and one line of text. The garden lives on the home page.
   if (document.querySelector("#side")) {
     f.className = "foot sfoot";

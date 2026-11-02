@@ -4,6 +4,11 @@
 .top .brand b{font:700 18px/1 var(--f-display);white-space:nowrap}
 .top .brand small,.top .brand p{display:none}
 .top .logo{width:24px;height:24px}
+/* "by svx", a quiet tag after the name; lesson pages have more in the bar, so it shows only when there's room */
+.top .brand .by{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--f-mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:2px 6px 2px 5px;white-space:nowrap}
+.svx{height:10px;width:auto;display:block}
+@media (max-width:760px){.top .brand .by{display:none}}
+@media (max-width:1240px){.top:has(.menu-btn) .brand .by{display:none}}
 .top .grow{flex:1}
 
 .sw{position:relative}
@@ -87,7 +92,9 @@
 .gf-brand .logo i{background:#ff6fb5;border-radius:1px}.gf-brand .logo i:nth-child(2),.gf-brand .logo i:nth-child(6){background:#f3ecd7}
 .gf-brand .logo i:nth-child(4){background:#7cc742}.gf-brand .logo i:nth-child(8){background:#ffd21f}.gf-brand .logo i:nth-child(1),.gf-brand .logo i:nth-child(9){opacity:.25}
 .gf-brand b{font:700 13px "Pixelify Sans",ui-monospace,monospace;color:#fff;letter-spacing:.02em}
-.gf-brand em{font-style:normal;opacity:.75}
+.gf-brand em{font-style:normal;opacity:.8;display:inline-flex;align-items:center;gap:6px}
+.gf-brand .svx{height:9px;color:#fff}
+.gf-news{color:inherit;opacity:.75;text-underline-offset:3px}.gf-news:hover{opacity:1}
 .gf-keep{opacity:.75}
 .gf-top{color:#10260f;background:#a3d65f;text-decoration:none;font:600 11.5px var(--f-mono);padding:3px 9px 4px;border-radius:5px;box-shadow:inset 0 -2px 0 #6f9f3a}
 .gf-top:hover{background:#c0e889}
@@ -96,7 +103,7 @@
   .gf-beds{grid-template-columns:repeat(4,minmax(0,1fr));row-gap:2px}
   .gf-pot{height:100px}
 }
-@media (max-width:560px){.gf-brand em,.gf-keep{display:none}}
+@media (max-width:560px){.gf-keep{display:none}}
 @media (prefers-reduced-motion:reduce){.gf-bed:hover .gf-pot{animation:none}}
 .sfoot{margin-top:40px}
 .sfoot .gf-grass{height:28px;margin-top:0}
