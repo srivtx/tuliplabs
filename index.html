@@ -34,7 +34,7 @@ html,body{margin:0}
 /* Light, picked in the section menu: the whole page turns to warm paper, hero and globe included.
    The pictures drawn in code read the same choice (see INK below), so the letters and the globe go dark-on-paper. */
 :root[data-theme="light"]{--bg:#efebe2; --panel:#f6f3ec; --card:#fffdf8; --line:#dcd5c6; --ink:#1d1b17; --muted:#6a655a; --faint:#8a8475; --soft:#ece7dc; --cream:#1d1b17; color-scheme:light}
-:root[data-theme="light"] .fig figcaption b,:root[data-theme="light"] .serif-title i,:root[data-theme="light"] .mosaic h2 i{color:#d23f87}
+:root[data-theme="light"] .fig figcaption b,:root[data-theme="light"] .headline i,:root[data-theme="light"] .mosaic h2 i{color:#d23f87}
 :root[data-theme="light"] #dash{stroke:#1d1b17}
 :root[data-theme="light"] .hero{background:radial-gradient(50% 60% at 78% 45%,rgba(255,111,181,.13),transparent 70%)}
 :root[data-theme="light"] .sec a:not([class]){color:#c2357a}
@@ -75,8 +75,13 @@ a{color:var(--pink-soft)}
 .hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);gap:24px 40px;align-items:center;margin-top:26px}
 .title-box{position:relative}
 #title{display:block;width:100%;height:auto;max-width:640px}
-.serif-title{font:400 clamp(46px,8.4vw,104px)/.9 var(--f-serif);letter-spacing:-.01em;margin:10px 0 0;color:var(--cream)}
-.serif-title i{color:var(--pink-soft)}
+/* "labs" is a pink keycap stuck to the corner of the living TULIP, tilted like a sticker; press it and it clicks */
+.labs-key{border:0;cursor:pointer;position:absolute;right:calc(100% - min(100%,640px) - 6px);bottom:-4px;transform:rotate(-7deg);
+  font:700 clamp(17px,2.6vw,30px)/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:#1a0d14;
+  background:var(--pink);padding:.28em .5em .38em;border-radius:.3em;box-shadow:inset 0 -.2em 0 #c2357a,0 .25em 0 rgba(0,0,0,.25);transition:transform .15s}
+.labs-key:hover{transform:rotate(-7deg) translateY(2px);box-shadow:inset 0 -.08em 0 #c2357a,0 .12em 0 rgba(0,0,0,.25)}
+.headline{font:400 clamp(40px,5.6vw,72px)/.98 var(--f-serif);letter-spacing:-.015em;margin:22px 0 0;color:var(--ink)}
+.headline i{color:var(--pink-soft)}
 .ticker{margin-top:14px;font:12px var(--f-mono);color:var(--muted);display:flex;align-items:center;gap:8px;min-height:20px;flex-wrap:wrap}
 .ticker .dot{width:8px;height:8px;background:var(--pink);border-radius:1px}
 @media (prefers-reduced-motion:no-preference){.ticker .dot{animation:blink 1.1s steps(2) infinite}}
@@ -287,17 +292,17 @@ a{color:var(--pink-soft)}
   <svg class="steps" style="right:4%;top:420px" viewBox="0 0 3 3"><rect x="1" y="0" width="1" height="1"/><rect x="1" y="1" width="1" height="1"/><rect x="0" y="2" width="1" height="1"/><rect x="2" y="2" width="1" height="1"/></svg>
   <svg class="steps" style="left:38%;bottom:30px" viewBox="0 0 3 3"><rect x="0" y="2" width="1" height="1"/><rect x="1" y="2" width="1" height="1"/><rect x="2" y="1" width="1" height="1"/></svg>
   <div class="wrap">
-    <div class="meta"><span id="meta-l">tulip labs · <b>7</b> tracks · learn it by playing</span><span>formerly voxel network lab · no sign-up · progress stays in your browser</span></div>
+    <div class="meta"><span id="meta-l"><b>136</b> chapters · <b>7</b> tracks · one garden</span><span>free to learn · runs in your browser · no sign-up</span></div>
     <div class="hero-grid">
       <div>
-        <h1 class="sr">Tulip Labs: learn complexity, code, statistics and algorithms by playing with simulations</h1>
+        <h1 class="sr">Tulip Labs: hard ideas in computer science, maths and modelling, learnt by playing with simulations</h1>
         <div class="title-box" aria-hidden="true">
           <canvas id="title" width="640" height="200"></canvas>
-          <div class="serif-title"><i>Labs.</i></div>
+          <button class="labs-key" type="button" tabindex="-1" title="Press for the next simulation">labs</button>
         </div>
+        <p class="headline">Hard ideas you can <i>poke.</i></p>
         <div class="ticker" id="ticker" aria-live="off"><span class="dot"></span><span id="tick-t">inside the letters: loading a tiny world…</span></div>
-        <div class="tags"><span class="tag">See it move first —</span><span class="tag">then write it yourself.</span></div>
-        <p class="lede">Every idea here starts as a simulation you can poke: a city of voxels, a sandpile, a segment tree filling up block by block. Once you've watched it work, you write the code, solve the questions, and lock it in with quick quizzes.</p>
+        <p class="lede">Computer science, maths and modelling, taught as simulations: a city of voxels, a sandpile, a segment tree filling up block by block. Watch it move first, then write the code yourself, beat the hidden tests, and watch your garden bloom.</p>
         <div class="cta"><a class="btn go" href="#tracks">Pick a track ↓</a><a class="btn ghost" href="worlds/">Jump into the 3D worlds →</a></div>
       </div>
       <figure class="fig" id="fig">
@@ -707,6 +712,8 @@ const TITLE = (() => {
   let visible = true;
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(cv);
   addEventListener("resize", size);
+  // the LABS keycap is a button: press it to skip to the next simulation in the letters
+  $(".labs-key").addEventListener("click", () => { if (on && !REDUCED) { next(); draw(); } });
   sample().then(() => {
     if (REDUCED) { st = null; draw(); $("#tick-t").textContent = "a grid world: three of the lab's simulations live inside these letters (paused, reduced motion)"; return; }
     next(); requestAnimationFrame(frame);
@@ -893,7 +900,7 @@ function cards() {
       <span class="go">${fin ? `<b>${fin}</b> finished · ` : ""}open <b>→</b></span></div></a>`;
   }).join("");
   $("#tot-side").textContent = `${total} chapters so far · more every week`;
-  $("#meta-l").innerHTML = `tulip labs · <b>${TRACKS.length}</b> tracks · <b>${total}</b> chapters`;
+  $("#meta-l").innerHTML = `<b>${total}</b> chapters · <b>${TRACKS.length}</b> tracks · one garden`;
   const paint = () => box.querySelectorAll("canvas").forEach((c) => drawArt(c, c.dataset.art, KC[TRACKS[c.dataset.i].k], 7 + +c.dataset.i * 97));
   paint(); let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(paint, 150); });
 }
