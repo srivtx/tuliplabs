@@ -1,6 +1,7 @@
 /* Product news cards: a bright block with a pixel glyph, a deep block with a few words, then the date and title.
-   <div class="news" data-news="4"></div> shows the newest 4, each linking to its story on the news page.
-   data-news="all" shows every entry; pressing one opens its full story in a reading sheet, and news/#id opens it on arrival. */
+   Every card links to its story's own page, news/<id>/ (written by tools/news.py).
+   <div class="news" data-news="4"></div> shows the newest 4; data-skip="id" leaves one out; data-news="all" shows
+   every entry with its summary. */
 (() => {
   "use strict";
   const G = {
@@ -21,61 +22,11 @@
   document.querySelectorAll("[data-news]").forEach((box) => {
     const all = box.dataset.news === "all", base = box.dataset.base || "";
     fetch(base + "content/news.json").then((r) => r.json()).then((list) => {
-      if (!all) {
-        box.innerHTML = list.slice(0, +box.dataset.news || 4).map((n) => `<a class="nw" href="${base}news/#${esc(n.id)}">${art(n)}${meta(n)}</a>`).join("");
-        return;
-      }
-      // the page keeps its grid still; a story opens in a reading sheet over it, with the next and previous stories a key away
-      box.innerHTML = list.map((n, i) => `<a class="nw" href="#${esc(n.id)}" data-i="${i}">${art(n)}${meta(n)}<span class="nw-body">${esc(n.body)}</span></a>`).join("");
-      const sheet = document.createElement("dialog");
-      sheet.className = "nw-sheet";
-      sheet.setAttribute("aria-label", "News story");
-      document.body.append(sheet);
-      let cur = -1;
-      const show = (i) => {
-        cur = i;
-        const n = list[i];
-        sheet.innerHTML = `<div class="sh-in"><button class="sh-x" type="button" aria-label="Close">×</button>${art(n)}
-          <div class="sh-text">${meta(n).replace('class="nw-t"', 'class="nw-t sh-t"')}
-            ${(n.more || [n.body]).map((p) => `<p>${esc(p)}</p>`).join("")}
-            ${n.list ? `<ul>${n.list.map((li) => `<li>${esc(li)}</li>`).join("")}</ul>` : ""}
-            <a class="nw-go" href="${base}${esc(n.href)}">${esc(n.cta || "Go see it")} →</a></div>
-          <nav class="sh-nav"><button type="button" data-go="-1"${i ? "" : " disabled"}>← newer</button><span>${i + 1} / ${list.length}</span><button type="button" data-go="1"${i < list.length - 1 ? "" : " disabled"}>older →</button></nav></div>`;
-        sheet.scrollTop = 0;
-        history.replaceState(null, "", "#" + n.id);
-      };
-      const open = (i) => {
-        show(i);
-        if (!sheet.open) { sheet.showModal(); document.documentElement.classList.add("sheet-open"); }
-        sheet.querySelector(".sh-x").focus();
-      };
-      const close = () => {
-        if (!sheet.open) return;
-        sheet.classList.add("closing");
-        setTimeout(() => { sheet.classList.remove("closing"); sheet.close(); }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
-      };
-      sheet.addEventListener("close", () => {
-        document.documentElement.classList.remove("sheet-open");
-        history.replaceState(null, "", location.pathname);
-        box.querySelector(`[data-i="${cur}"]`)?.focus();
-      });
-      sheet.addEventListener("cancel", (e) => { e.preventDefault(); close(); });
-      sheet.addEventListener("click", (e) => {
-        if (e.target === sheet || e.target.closest(".sh-x")) return close();
-        const go = e.target.closest("[data-go]");
-        if (go) show(cur + +go.dataset.go);
-      });
-      sheet.addEventListener("keydown", (e) => {
-        if (e.key === "ArrowRight" && cur < list.length - 1) show(cur + 1);
-        if (e.key === "ArrowLeft" && cur > 0) show(cur - 1);
-      });
-      box.addEventListener("click", (e) => {
-        const a = e.target.closest(".nw");
-        if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
-        e.preventDefault(); open(+a.dataset.i);
-      });
-      const fromHash = () => { const i = list.findIndex((n) => "#" + n.id === location.hash); if (i > -1) open(i); };
-      fromHash(); addEventListener("hashchange", fromHash);
+      // an old news/#id link goes on to that story's own page
+      const old = all && list.find((n) => "#" + n.id === location.hash);
+      if (old) return location.replace(old.id + "/");
+      const skip = box.dataset.skip, shown = list.filter((n) => n.id !== skip).slice(0, all ? list.length : +box.dataset.news || 4);
+      box.innerHTML = shown.map((n) => `<a class="nw" href="${base}news/${esc(n.id)}/">${art(n)}${meta(n)}${all ? `<span class="nw-body">${esc(n.body)}</span>` : ""}</a>`).join("");
     }).catch(() => { box.hidden = true; });
   });
 })();

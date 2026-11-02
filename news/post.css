@@ -1,0 +1,57 @@
+/* One news story (news/<id>/, written by tools/news.py): a reading column with a wide banner that breaks out of it. */
+main.post{max-width:760px;padding-top:40px}
+.back{display:inline-block;font:500 13px var(--f-mono);color:var(--muted);text-decoration:none;margin-bottom:34px}
+.back:hover{color:var(--pink)}
+.p-meta{font:12.5px var(--f-mono);color:var(--muted);margin:0}
+.p-meta em{font-style:normal;color:var(--ink);font-weight:600}
+.post h1{font:400 clamp(38px,5.6vw,64px)/1.02 var(--f-serif);letter-spacing:-.015em;margin:12px 0 0;text-wrap:balance}
+.p-lede{font-size:19px;line-height:1.55;color:var(--muted);margin:18px 0 0;text-wrap:pretty}
+
+/* the banner: the story's two colour blocks, wider than the text */
+.p-art{--w:min(1040px,calc(100vw - 32px));width:var(--w);margin:40px 0 46px calc(50% - var(--w) / 2);display:flex;aspect-ratio:2.5;border-radius:12px;overflow:hidden}
+.p-art>span{flex:0 0 36%;display:grid;place-items:center;background:var(--a)}
+.p-art>span svg{width:34%;height:auto;image-rendering:pixelated}
+.p-art>b{position:relative;flex:1;display:flex;align-items:center;padding:0 clamp(20px,4vw,48px);background:var(--b);color:var(--c,#fff);font:400 clamp(30px,4.6vw,58px)/1.02 var(--f-serif);letter-spacing:-.01em}
+.p-art>b span{position:relative}
+.p-art .dust{position:absolute;inset:0;width:100%;height:100%}
+
+.p-body{font-size:17.5px;line-height:1.75;text-wrap:pretty}
+.p-body p{margin:0 0 20px}
+.p-body p:first-child::first-letter{font:400 3.4em/.78 var(--f-serif);float:left;margin:.1em .12em 0 0;color:var(--pink)}
+.p-body h2{font:400 30px/1.1 var(--f-serif);margin:40px 0 14px}
+.p-body ul{list-style:none;margin:0;padding:18px 20px;border-radius:10px;background:var(--soft);display:grid;gap:9px;font:14px/1.55 var(--f-mono)}
+.p-body li{display:flex;gap:12px}
+.p-body li::before{content:"";flex:none;width:9px;height:9px;margin-top:.42em;background:var(--pink);border-radius:1px}
+.p-cta{margin:34px 0 0}
+.nw-go{display:inline-block;font:600 15px var(--f-body);text-decoration:none;color:#1a0d14;background:var(--pink);border-radius:8px;padding:11px 18px;box-shadow:inset 0 -3px 0 #c2357a}
+.nw-go:hover{filter:brightness(1.05)}
+.nw-go:active{transform:translateY(2px);box-shadow:inset 0 -1px 0 #c2357a}
+
+/* newer and older stories */
+.p-nav{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:64px 0 0;padding-top:24px;border-top:1px solid var(--line)}
+.p-nav a{display:flex;flex-direction:column;gap:4px;text-decoration:none;color:var(--ink);font:400 21px/1.2 var(--f-serif);padding:14px 16px;border:1px solid var(--line);border-radius:9px;background:var(--card);transition:border-color .2s,transform .2s}
+.p-nav a:hover{border-color:var(--pink);transform:translateY(-2px)}
+.p-nav .older{text-align:right}
+.p-nav small{font:600 11.5px var(--f-mono);color:var(--pink);letter-spacing:.04em}
+.p-more{margin-top:72px}
+.p-more h2{font:400 clamp(30px,4vw,44px)/1 var(--f-serif);margin:0 0 22px}
+.p-more h2 i{color:var(--pink-soft)}
+:root[data-theme="light"] .p-more h2 i{color:#d23f87}
+/* the reading column is narrow, so More news is a row of three that breaks out like the banner */
+.p-more .news{--w:min(1040px,calc(100vw - 32px));width:var(--w);margin-left:calc(50% - var(--w) / 2);grid-template-columns:repeat(3,minmax(0,1fr))}
+.p-more{--w:min(1040px,calc(100vw - 32px))}
+.p-more h2{width:var(--w);margin-left:calc(50% - var(--w) / 2)}
+
+@media (prefers-reduced-motion:no-preference){
+  .p-head,.p-art,.p-body{animation:pin .6s cubic-bezier(.2,.8,.3,1) both}
+  .p-art{animation-delay:.08s}.p-body{animation-delay:.16s}
+}
+@keyframes pin{from{opacity:0;transform:translateY(14px)}}
+@media (max-width:700px){
+  main.post{padding-top:24px}
+  .back{margin-bottom:22px}
+  .p-art{aspect-ratio:1.5;border-radius:10px;margin:30px 0 34px calc(50% - var(--w) / 2)}
+  .p-body{font-size:16.5px}
+  .p-nav{grid-template-columns:1fr}.p-nav .older{text-align:left}
+  .p-more .news{grid-template-columns:1fr}
+}
