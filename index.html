@@ -304,6 +304,8 @@ a{color:var(--pink-soft)}
 </footer>
 
 <script>
+/* old links pointed at the 3D worlds on this page (/#ch3); send them to their new home */
+if (/^#ch\d+$/.test(location.hash)) location.replace("worlds/" + location.hash);
 (() => {
 "use strict";
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
