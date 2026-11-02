@@ -4,11 +4,21 @@
 .top .brand b{font:700 18px/1 var(--f-display);white-space:nowrap}
 .top .brand small,.top .brand p{display:none}
 .top .logo{width:24px;height:24px}
-/* "by svx", a quiet tag after the name; lesson pages have more in the bar, so it shows only when there's room */
-.top .brand .by{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--f-mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:2px 6px 2px 5px;white-space:nowrap}
+/* the name: "TL" at rest, "Tulip Labs by svx" on hover or focus (letters are built by nav.js) */
+.wm{display:inline-flex;align-items:baseline}
+.wm-x{display:inline-block;max-width:0;opacity:0;overflow:hidden;transform:translateY(.4em);color:var(--pink);
+  transition:max-width .26s cubic-bezier(.2,.8,.3,1),opacity .18s,transform .32s cubic-bezier(.2,.8,.3,1.5),color .4s;transition-delay:calc((4 - var(--i)) * 18ms)}
+.wm-gap{display:inline-block;width:.12em;transition:width .26s}
+.top .brand .by{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--f-mono);color:var(--muted);white-space:nowrap;
+  max-width:0;opacity:0;overflow:hidden;border:1px solid transparent;border-radius:4px;padding:2px 0;margin-left:-6px;transition:max-width .3s,opacity .2s,padding .3s,border-color .3s,margin .3s}
 .svx{height:10px;width:auto;display:block}
-@media (max-width:760px){.top .brand .by{display:none}}
-@media (max-width:1240px){.top:has(.menu-btn) .brand .by{display:none}}
+.top .brand:is(:hover,:focus-visible) .wm-x{max-width:1em;opacity:1;transform:none;color:inherit;
+  transition-delay:calc(var(--i) * 40ms),calc(var(--i) * 40ms),calc(var(--i) * 40ms),calc(var(--i) * 40ms + 260ms)}
+.top .brand:is(:hover,:focus-visible) .wm-gap{width:.32em}
+.top .brand:is(:hover,:focus-visible) .by{max-width:90px;opacity:1;padding:2px 6px 2px 5px;margin-left:0;border-color:var(--line);transition-delay:.18s}
+.top .brand:is(:hover,:focus-visible) .logo{animation:tnod .6s cubic-bezier(.3,.7,.3,1.4)}
+@keyframes tnod{30%{transform:rotate(-12deg) scale(1.15)}60%{transform:rotate(6deg) scale(.96)}}
+@media (prefers-reduced-motion:reduce){.wm-x,.wm-gap,.top .brand .by{transition:none}.top .brand:is(:hover,:focus-visible) .logo{animation:none}}
 .top .grow{flex:1}
 
 .sw{position:relative}

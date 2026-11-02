@@ -77,9 +77,17 @@ window.SVX = (() => {
     `<rect x="${i * 4 + x}" y="${y}" width="1" height="1"${ch === "x" ? ' fill="#ff6fb5"' : ""}/>` : "").join("")).join("")).join("");
   return `<svg class="svx" viewBox="0 0 11 5" shape-rendering="crispEdges" fill="currentColor" role="img" aria-label="svx">${cells}</svg>`;
 })();
+/* The name in the top bar rests as two letters, TL. Point at it (or tab to it) and it blooms:
+   the missing letters slide in one by one in pink and settle to ink, the tulip nods, and "by svx" follows. */
 (() => {
-  const b = document.querySelector(".top .brand b");
-  if (b) b.insertAdjacentHTML("afterend", `<span class="by" title="A product by svx">by ${SVX}</span>`);
+  const brand = document.querySelector(".top .brand"), b = brand && brand.querySelector("b");
+  if (!b) return;
+  const word = (w) => `<span class="wm-c">${w[0]}</span>` + [...w.slice(1)].map((ch, i) => `<span class="wm-x" style="--i:${i}">${ch}</span>`).join("");
+  brand.setAttribute("aria-label", "Tulip Labs, home");
+  b.className = "wm";
+  b.setAttribute("aria-hidden", "true");
+  b.innerHTML = word("Tulip") + '<span class="wm-gap"></span>' + word("Labs");
+  b.insertAdjacentHTML("afterend", `<span class="by" aria-hidden="true">by ${SVX}</span>`);
 })();
 
 /* The footer is your whole garden: one flower per track, grown as far as your progress in it,
