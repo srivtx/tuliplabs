@@ -755,13 +755,48 @@
       document.querySelectorAll(`[data-prog="${ch.id}"]`).forEach((el) => { el.style.width = p.pct + "%"; });
       document.querySelectorAll(`[data-count="${ch.id}"]`).forEach((el) => { el.textContent = `${p.d} / ${p.n} done`; });
       const a = document.querySelector(`.side a[data-ch="${ch.id}"]`);
-      if (a) a.classList.toggle("done", p.n > 0 && p.d === p.n);
+      if (a) { a.classList.toggle("done", p.n > 0 && p.d === p.n); a.querySelector(".g")?.replaceWith(glyph(p)); }
     }
+    bloomAll();
   }
   function findBlock(id) {
     for (const ch of DATA.chapters) for (const s of ch.sections) for (const b of s.blocks) if (b.id === id) return { ch, b };
     return null;
   }
+  // ------------------------------------------------------------- garden --
+  // Each chapter grows a pixel flower (learn/garden.js) as its tasks get done.
+  const STAGE_NAMES = ["a seed", "a sprout", "a bud", "half open", "in full bloom"];
+  let HUES = ["#ff6fb5"];
+  function setHues() {
+    const kc = getComputedStyle(document.body).getPropertyValue("--kc").trim() || "#ff6fb5";
+    // a green track would vanish into the leaves, so it blooms in pinks and sky blue instead
+    HUES = TRACK === "ds" ? ["#ff6fb5", "#4a9cf0", "#ff8a5c"] : [kc, "#ff6fb5", kc];
+  }
+  const inkFor = (el) => (el.closest(".dark") ? "rgba(255,255,255,.7)" : getComputedStyle(document.body).getPropertyValue("--muted").trim() || "#777");
+  function flower(id, cls, extra) { return h("canvas", Object.assign({ class: "fl " + (cls || ""), "data-fl": id, "aria-hidden": "true" }, extra || {})); }
+  function trackPct() {
+    let n = 0, d = 0;
+    for (const ch of DATA.chapters) { const p = chProgress(ch); n += p.n; d += p.d; }
+    return n ? Math.round((100 * d) / n) : 0;
+  }
+  // Draw every flower on the page whose stage changed (or all of them, after a resize).
+  function bloomAll(force) {
+    if (!window.GARDEN) return;
+    document.querySelectorAll("canvas[data-fl]").forEach((cv) => {
+      if (!cv.isConnected || !cv.clientWidth) return;
+      const id = cv.dataset.fl;
+      const ch = DATA.chapters.find((c) => c.id === id);
+      const st = cv.dataset.stage != null ? +cv.dataset.stage : GARDEN.stage(ch ? chProgress(ch).pct : trackPct());
+      const key = st + ":" + cv.clientWidth + "x" + cv.clientHeight;
+      if (!force && cv.dataset.drawn === key) return;
+      cv.dataset.drawn = key;
+      GARDEN.draw(cv, { id: TRACK + ":" + id, stage: st, hues: HUES, ink: inkFor(cv) });
+    });
+  }
+  let bloomT = 0;
+  addEventListener("resize", () => { clearTimeout(bloomT); bloomT = setTimeout(() => DATA && bloomAll(true), 200); });
+  const glyph = (p) => h("i", { class: "g " + (p.n && p.d === p.n ? "g2" : p.d ? "g1" : "g0"), title: `${p.d} / ${p.n} done` });
+
   function dueItems() {
     const now = Date.now();
     return Object.entries(S.rev).filter(([id, r]) => r.due <= now && findBlock(id)).sort((a, b) => a[1].due - b[1].due).map(([id]) => id);
@@ -779,16 +814,22 @@
   function sidebar(current) {
     const side = $("#side");
     side.textContent = "";
-    side.append(h("h2", {}, CFG.short || "Chapters"));
-    side.append(h("a", { href: "#", "aria-current": current === "home" ? "page" : null }, h("span", { class: "n" }, "★"), "How this works"));
-    side.append(h("a", { href: "#review", "aria-current": current === "review" ? "page" : null }, h("span", { class: "n" }, "↻"), "Spaced review"));
-    let part = null;
+    side.append(h("h2", {}, h("i", { class: "sq" }), CFG.short || "Chapters"));
+    side.append(h("a", { class: "top-link", href: "#", "aria-current": current === "home" ? "page" : null }, h("span", { class: "n" }, "✿"), "Your garden"));
+    side.append(h("a", { class: "top-link", href: "#review", "aria-current": current === "review" ? "page" : null }, h("span", { class: "n" }, "↻"), "Spaced review"));
+    // Parts are branches; chapters hang off them like └── lines in a file tree.
+    let part = null, branch = null;
     for (const ch of DATA.chapters) {
-      if (ch.part && ch.part !== part) { part = ch.part; side.append(h("div", { class: "part" }, part)); }
+      if (!branch || (ch.part && ch.part !== part)) {
+        part = ch.part;
+        branch = h("div", { class: "branch" });
+        side.append(h("div", { class: "part" }, part || "Chapters"), branch);
+      }
       const p = chProgress(ch);
-      side.append(h("a", { href: "#" + ch.num, "data-ch": ch.id, class: p.n && p.d === p.n ? "done" : null, "aria-current": current === ch.id ? "page" : null },
-        h("span", { class: "n" }, ch.num), h("span", {}, ch.title), h("span", { class: "pbar" }, h("i", { "data-prog": ch.id, style: `width:${p.pct}%` }))));
+      branch.append(h("a", { href: "#" + ch.num, "data-ch": ch.id, class: p.n && p.d === p.n ? "done" : null, "aria-current": current === ch.id ? "page" : null },
+        h("span", { class: "n" }, ch.num), h("span", { class: "t" }, ch.title), glyph(p)));
     }
+    side.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
   }
 
   function pageHome() {
@@ -796,28 +837,62 @@
     sidebar("home");
     const m = main();
     m.textContent = "";
-    const col = h("div", { class: "col hero" },
-      h("h1", {}, CFG.heroTitle),
-      h("p", { class: "lede", html: CFG.heroLede }),
-      h("h3", {}, "Every chapter climbs the same ladder"),
-      h("ol", { class: "ladder" },
-        h("li", {}, h("b", {}, "Read & run"), "The book's code, live. Change a number and run it again."),
-        h("li", {}, h("b", {}, "Predict"), "Type what a program prints before you run it."),
-        h("li", {}, h("b", {}, "Reorder"), "Scrambled lines, sometimes with decoys. Rebuild the program."),
-        h("li", {}, h("b", {}, "Fill the blanks"), "The skeleton is there; you write the heart of it."),
-        h("li", {}, h("b", {}, "Bug hunt"), "It runs, but it's wrong. Find out why."),
-        h("li", {}, h("b", {}, "Write it"), "A blank function and a set of checks."),
-        h("li", {}, h("b", {}, "Rebuild & explain"), "The chapter's core idea from memory, then in your own words.")),
+    const chs = DATA.chapters, N = chs.length;
+    const fin = chs.filter((c) => { const p = chProgress(c); return p.n && p.d === p.n; }).length;
+    const pct = trackPct(), st = window.GARDEN ? GARDEN.stage(pct) : 0;
+    // the chapter to carry on with: the furthest one started but not finished, else the first untouched
+    const started = chs.filter((c) => { const p = chProgress(c); return p.d && p.d < p.n; });
+    const nextCh = started[started.length - 1] || chs.find((c) => !chProgress(c).d) || chs[0];
+    const parts = [...new Set(chs.map((c) => c.part || ""))];
+
+    // A poster: corner notes, a big serif title, and the track's own flower, with its full bloom
+    // drawn faintly behind it as the shape you're growing towards.
+    const poster = h("section", { class: "poster dark" },
+      h("div", { class: "p-corner tl" }, "Voxel Network Lab", h("br"), "Track · " + (CFG.short || "")),
+      h("div", { class: "p-corner tr", html: `<b>${fin}</b> / ${N}<br>chapters in bloom` }),
+      h("div", { class: "p-body" },
+        h("h1", {}, CFG.heroTitle),
+        h("div", { class: "p-code", html: `└── { growGarden(<i>${N}</i>); }` }),
+        h("p", { class: "lede", html: CFG.heroLede }),
+        h("div", { class: "p-cta" },
+          h("a", { class: "key primary", href: "#" + nextCh.num }, (chProgress(nextCh).d ? "Carry on · " : "Start · ") + nextCh.num + ". " + nextCh.title + " →"),
+          h("a", { class: "key", href: "#review" }, "Spaced review"))),
+      h("div", { class: "p-art" }, h("i", { class: "p-glow" }), flower("track", "p-ghost", { "data-stage": 4 }), flower("track", "p-fl")),
+      h("div", { class: "p-corner bl" }, `${N} chapters` + (parts.length > 1 ? ` · ${parts.length} parts` : "") + " · Python in your browser"),
+      h("div", { class: "p-corner br" }, `fig. 1 — your flower, ${STAGE_NAMES[st]}`));
+
+    const ladder = [["Read & run", "The book's code, live. Change a number and run it again."], ["Predict", "Type what a program prints before you run it."],
+      ["Reorder", "Scrambled lines, sometimes with decoys. Rebuild the program."], ["Fill the blanks", "The skeleton is there; you write the heart of it."],
+      ["Bug hunt", "It runs, but it's wrong. Find out why."], ["Write it", "A blank function and a set of checks."],
+      ["Rebuild & explain", "The chapter's core idea from memory, then in your own words."]];
+
+    const beds = parts.map((pt) => {
+      const list = chs.filter((c) => (c.part || "") === pt);
+      const bloomed = list.filter((c) => { const p = chProgress(c); return p.n && p.d === p.n; }).length;
+      return h("div", { class: "bed" },
+        h("h3", { class: "bed-h" }, h("span", { class: "tree" }, "└──"), pt || "Chapters", h("small", {}, `${bloomed} / ${list.length} in bloom`)),
+        h("div", { class: "plots" }, list.map((ch) => {
+          const p = chProgress(ch);
+          return h("a", { class: "plot" + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : ""), href: "#" + ch.num },
+            h("div", { class: "soil" }, flower(ch.id)),
+            h("span", { class: "num" }, String(ch.num).padStart(2, "0")),
+            h("b", {}, ch.title), h("small", {}, ch.tagline),
+            h("span", { class: "pbar" }, h("i", { "data-prog": ch.id, style: `width:${p.pct}%` })));
+        })));
+    });
+
+    const col = h("div", { class: "col wide hero" },
+      poster,
+      h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), "Every chapter climbs the same ladder"),
+      h("ol", { class: "ladder" }, ladder.map(([b, t]) => h("li", {}, h("b", {}, b), t))),
       h("p", { html: "Anything you get right (or wrong) joins your <a href=\"#review\">spaced review</a> deck and comes back after 1, 3, 7, 16 and 35 days. Coming back is what makes it stick." }),
       CFG.homeNote ? h("div", { class: "note", html: CFG.homeNote }) : null,
-      h("h3", {}, "Chapters"),
-      h("div", { class: "grid" }, DATA.chapters.map((ch) => {
-        const p = chProgress(ch);
-        return h("a", { class: "card", href: "#" + ch.num }, h("span", { class: "num" }, "Chapter " + ch.num), h("h3", {}, ch.title), h("p", {}, ch.tagline), h("div", { class: "pbar" }, h("i", { "data-prog": ch.id, style: `width:${p.pct}%` })));
-      })));
+      h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), "Your garden", h("small", {}, "every chapter grows a flower: seed, sprout, bud, half open, full bloom")),
+      beds);
     m.append(col);
     document.title = CFG.pageTitle;
     window.scrollTo(0, 0);
+    requestAnimationFrame(() => bloomAll(true));
   }
 
   function pageChapter(ch, sectionId) {
@@ -836,13 +911,17 @@
     const p = chProgress(ch);
     const pills = [h("span", { class: "pill" }, `≈ ${ch.minutes} min`), h("span", { class: "pill", "data-count": ch.id }, `${p.d} / ${p.n} done`)];
     if (ch.world) pills.push(h("a", { class: "pill", href: "../worlds/#" + ch.world }, "Play this chapter in 3D →"));
+    // The cover: a stepped wash of the track's colour that glows pink at its heart, the title in
+    // serif, and this chapter's flower on the right, growing as the tasks below get done.
     const col = h("div", { class: "col" },
-      h("header", { class: "ch-head" },
-        h("div", { class: "eyebrow" }, `Chapter ${ch.num} · ${CFG.short}`),
-        h("h1", {}, ch.title),
-        h("p", { class: "tag" }, ch.tagline),
-        h("div", { class: "meta" }, pills),
-        ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"), h("ul", {}, ch.goals.map((g) => h("li", { html: g })))) : null),
+      h("header", { class: "ch-head cover dark" },
+        h("div", { class: "cv-text" },
+          h("div", { class: "eyebrow" }, `Chapter ${ch.num} · ${CFG.short}`),
+          h("h1", {}, ch.title),
+          h("p", { class: "tag" }, ch.tagline),
+          h("div", { class: "meta" }, pills)),
+        h("div", { class: "cv-art" }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), flower(ch.id, "cv-fl"))),
+      ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"), h("ul", {}, ch.goals.map((g) => h("li", { html: g })))) : null,
     );
     // ---- step-by-step: one section at a time, the next unlocks when this one is done
     S.step = S.step || {};
@@ -857,7 +936,26 @@
     const req = (sec) => sec.blocks.filter((b) => COUNTABLE.has(b.type));
     const left = (sec) => req(sec).filter((b) => !S.done[b.id]).length;
     let gate = null, finale = null;
+    // On wide screens a rail on the right lists every step as a branch, with where you are.
+    const railList = h("ol", { class: "rail-steps" });
+    const railNote = h("p", { class: "rail-note" });
+    const rail = h("aside", { class: "rail", "aria-label": "Steps in this chapter" },
+      h("div", { class: "rail-fl" }, flower(ch.id, "rail-flower")),
+      h("div", { class: "rail-h" }, `Chapter ${ch.num} · steps`), railList, railNote);
+    function drawRail() {
+      railList.textContent = "";
+      ch.sections.forEach((sec, i) => {
+        const done = i < reached || (i === reached && !left(sec));
+        const state = done ? "done" : i === reached ? "now" : "locked";
+        railList.append(h("li", { class: state },
+          h("button", { disabled: i > reached, onclick: () => document.getElementById("s-" + sec.id)?.scrollIntoView({ behavior: "smooth" }) },
+            h("i", { class: "g " + (done ? "g2" : i === reached ? "g1" : "g0") }), h("span", {}, sec.title))));
+      });
+      const pr = chProgress(ch);
+      railNote.textContent = `${pr.d} of ${pr.n} tasks · your flower is ${STAGE_NAMES[window.GARDEN ? GARDEN.stage(pr.pct) : 0]}`;
+    }
     function drawHead() {
+      drawRail();
       const doneSteps = ch.sections.filter((sec, i) => i < reached || (i === reached && !left(sec) && S.step[ch.id + ":fin"])).length;
       label.innerHTML = `<b>Step ${reached + 1} of ${N}</b> · ${esc(ch.sections[reached].title)}`;
       bar.firstChild.style.width = Math.round(100 * (reached + (left(ch.sections[reached]) ? 0 : 1)) / N) + "%";
@@ -905,8 +1003,10 @@
       const pr = chProgress(ch);
       const i = DATA.chapters.indexOf(ch);
       const nxt = DATA.chapters[i + 1];
+      const grown = flower(ch.id, "fin-fl", { "data-stage": 4 });
       finale = h("div", { class: "finale" },
-        h("div", { class: "eyebrow" }, "Chapter " + ch.num + " complete"),
+        h("div", { class: "fin-art dark" }, grown),
+        h("div", { class: "eyebrow" }, "Chapter " + ch.num + " complete · in full bloom"),
         h("h2", {}, "You can now…"),
         h("ul", { class: "wins" }, ch.goals.map((g) => h("li", { html: g }))),
         h("p", {}, `${pr.d} of ${pr.n} tasks done. ${Object.keys(S.rev).filter((k) => k.startsWith(ch.id)).length} items from this chapter are in your review deck; they'll come back tomorrow, then in 3, 7, 16 and 35 days.`),
@@ -914,10 +1014,18 @@
           nxt ? h("a", { class: "btn primary big", href: "#" + nxt.num }, `Start chapter ${nxt.num}: ${nxt.title} →`) : h("a", { class: "btn primary big", href: "#review" }, "Go to spaced review →"),
           ch.world ? h("a", { class: "btn", href: "../worlds/#" + ch.world }, "Replay it in 3D") : null));
       stepsEl.append(finale);
+      // grow it from seed in front of you, the first time; after that, just show it
+      requestAnimationFrame(() => {
+        if (!window.GARDEN || !grown.clientWidth) return;
+        grown.dataset.drawn = "4:" + grown.clientWidth + "x" + grown.clientHeight;
+        const o = { id: TRACK + ":" + ch.id, stage: 4, hues: HUES, ink: "rgba(255,255,255,.7)" };
+        if (S.step[ch.id + ":bloomed"]) GARDEN.draw(grown, o);
+        else { S.step[ch.id + ":bloomed"] = 1; save(); GARDEN.grow(grown, o); }
+      });
       finale.scrollIntoView({ behavior: "smooth" });
     }
     for (let k = 0; k <= reached; k++) stepsEl.append(renderSection(ch.sections[k]));
-    onProgress = () => { if (gate) drawGate(); drawHead(); };
+    onProgress = () => { if (gate) drawGate(); drawHead(); bloomAll(); };
     drawHead();
     if (S.step[ch.id + ":fin"]) showFinale(); else drawGate();
     const i = DATA.chapters.indexOf(ch);
@@ -925,7 +1033,8 @@
     col.append(h("div", { class: "pager" },
       prev ? h("a", { class: "btn", href: "#" + prev.num }, "← " + prev.num + ". " + prev.title) : h("span"),
       next ? h("a", { class: "btn", href: "#" + next.num }, next.num + ". " + next.title + " →") : h("span")));
-    m.append(col);
+    m.append(h("div", { class: "chgrid" }, col, rail));
+    requestAnimationFrame(() => bloomAll(true));
     document.title = `${ch.num}. ${ch.title} · ${CFG.pageTitle}`;
     if (sectionId) { const t = document.getElementById("s-" + sectionId); if (t) t.scrollIntoView(); else window.scrollTo(0, 0); }
     else window.scrollTo(0, 0);
@@ -1003,6 +1112,8 @@
 
   // ---------------------------------------------------------------- boot --
   async function boot() {
+    if (TRACK) document.body.classList.add("k-" + TRACK);
+    setHues();
     document.querySelector(".menu-btn")?.addEventListener("click", () => document.body.classList.toggle("menu"));
     // Lessons are one JSON file. Try it a few times before giving up, then offer a retry button.
     for (let i = 0; i < 4 && !DATA; i++) {
