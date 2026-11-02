@@ -1,6 +1,6 @@
 /* Product news cards: a bright block with a pixel glyph, a deep block with a few words, then the date and title.
    <div class="news" data-news="4"></div> shows the newest 4, each linking to its story on the news page.
-   data-news="all" shows every entry; pressing one opens its full story across the row, and news/#id opens it on arrival. */
+   data-news="all" shows every entry; pressing one opens its full story in a reading sheet, and news/#id opens it on arrival. */
 (() => {
   "use strict";
   const G = {
@@ -25,32 +25,57 @@
         box.innerHTML = list.slice(0, +box.dataset.news || 4).map((n) => `<a class="nw" href="${base}news/#${esc(n.id)}">${art(n)}${meta(n)}</a>`).join("");
         return;
       }
-      box.innerHTML = list.map((n) => `<article class="nw" id="${esc(n.id)}">
-        <button class="nw-head" type="button" aria-expanded="false" aria-controls="${esc(n.id)}-more">${art(n)}${meta(n)}<span class="nw-body">${esc(n.body)}</span></button>
-        <div class="nw-more" id="${esc(n.id)}-more" hidden>${(n.more || []).map((p) => `<p>${esc(p)}</p>`).join("")}
-          ${n.list ? `<ul>${n.list.map((li) => `<li>${esc(li)}</li>`).join("")}</ul>` : ""}
-          <div class="nw-acts"><a class="nw-go" href="${base}${esc(n.href)}">${esc(n.cta || "Go see it")} →</a><button class="nw-x" type="button">close</button></div></div></article>`).join("");
-      const open = (el, scroll) => {
-        box.querySelectorAll(".nw.open").forEach((o) => o !== el && shut(o));
-        el.classList.add("open");
-        el.querySelector(".nw-head").setAttribute("aria-expanded", "true");
-        el.querySelector(".nw-more").hidden = false;
-        history.replaceState(null, "", "#" + el.id);
-        if (scroll) requestAnimationFrame(() => el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+      // the page keeps its grid still; a story opens in a reading sheet over it, with the next and previous stories a key away
+      box.innerHTML = list.map((n, i) => `<a class="nw" href="#${esc(n.id)}" data-i="${i}">${art(n)}${meta(n)}<span class="nw-body">${esc(n.body)}</span></a>`).join("");
+      const sheet = document.createElement("dialog");
+      sheet.className = "nw-sheet";
+      sheet.setAttribute("aria-label", "News story");
+      document.body.append(sheet);
+      let cur = -1;
+      const show = (i) => {
+        cur = i;
+        const n = list[i];
+        sheet.innerHTML = `<div class="sh-in"><button class="sh-x" type="button" aria-label="Close">×</button>${art(n)}
+          <div class="sh-text">${meta(n).replace('class="nw-t"', 'class="nw-t sh-t"')}
+            ${(n.more || [n.body]).map((p) => `<p>${esc(p)}</p>`).join("")}
+            ${n.list ? `<ul>${n.list.map((li) => `<li>${esc(li)}</li>`).join("")}</ul>` : ""}
+            <a class="nw-go" href="${base}${esc(n.href)}">${esc(n.cta || "Go see it")} →</a></div>
+          <nav class="sh-nav"><button type="button" data-go="-1"${i ? "" : " disabled"}>← newer</button><span>${i + 1} / ${list.length}</span><button type="button" data-go="1"${i < list.length - 1 ? "" : " disabled"}>older →</button></nav></div>`;
+        sheet.scrollTop = 0;
+        history.replaceState(null, "", "#" + n.id);
       };
-      const shut = (el) => {
-        el.classList.remove("open");
-        el.querySelector(".nw-head").setAttribute("aria-expanded", "false");
-        el.querySelector(".nw-more").hidden = true;
+      const open = (i) => {
+        show(i);
+        if (!sheet.open) { sheet.showModal(); document.documentElement.classList.add("sheet-open"); }
+        sheet.querySelector(".sh-x").focus();
       };
-      box.addEventListener("click", (e) => {
-        const el = e.target.closest(".nw");
-        if (!el) return;
-        if (e.target.closest(".nw-x")) { shut(el); history.replaceState(null, "", location.pathname); el.querySelector(".nw-head").focus(); return; }
-        if (e.target.closest(".nw-head")) el.classList.contains("open") ? shut(el) : open(el, true);
+      const close = () => {
+        if (!sheet.open) return;
+        sheet.classList.add("closing");
+        setTimeout(() => { sheet.classList.remove("closing"); sheet.close(); }, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
+      };
+      sheet.addEventListener("close", () => {
+        document.documentElement.classList.remove("sheet-open");
+        history.replaceState(null, "", location.pathname);
+        box.querySelector(`[data-i="${cur}"]`)?.focus();
       });
-      const want = location.hash && box.querySelector(`.nw[id="${CSS.escape(location.hash.slice(1))}"]`);
-      if (want) open(want, true);
+      sheet.addEventListener("cancel", (e) => { e.preventDefault(); close(); });
+      sheet.addEventListener("click", (e) => {
+        if (e.target === sheet || e.target.closest(".sh-x")) return close();
+        const go = e.target.closest("[data-go]");
+        if (go) show(cur + +go.dataset.go);
+      });
+      sheet.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight" && cur < list.length - 1) show(cur + 1);
+        if (e.key === "ArrowLeft" && cur > 0) show(cur - 1);
+      });
+      box.addEventListener("click", (e) => {
+        const a = e.target.closest(".nw");
+        if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+        e.preventDefault(); open(+a.dataset.i);
+      });
+      const fromHash = () => { const i = list.findIndex((n) => "#" + n.id === location.hash); if (i > -1) open(i); };
+      fromHash(); addEventListener("hashchange", fromHash);
     }).catch(() => { box.hidden = true; });
   });
 })();
