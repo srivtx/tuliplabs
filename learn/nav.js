@@ -25,14 +25,14 @@
     const key = Object.keys(DATA).find((k) => url.pathname.endsWith("/" + k));
     if (key) get(url.pathname.slice(0, -key.length) + "content/" + DATA[key] + ".json");
   };
-  const pick = (e) => { const a = e.target.closest && e.target.closest(".sw-menu a, .foot-key a, .cards a.card"); if (a) warm(a); };
+  const pick = (e) => { const a = e.target.closest && e.target.closest(".sw-menu a, .foot-key a, .cards a.hit"); if (a) warm(a); };
   document.addEventListener("pointerover", pick, { passive: true });
   document.addEventListener("focusin", pick);
   // Chrome can go further and prerender the page itself on hover.
   if (HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")) {
     const s = document.createElement("script");
     s.type = "speculationrules";
-    s.textContent = JSON.stringify({ prefetch: [{ source: "document", where: { selector_matches: ".sw-menu a, .foot-key a, .cards a.card" }, eagerness: "moderate" }] });
+    s.textContent = JSON.stringify({ prefetch: [{ source: "document", where: { selector_matches: ".sw-menu a, .foot-key a, .cards a.hit" }, eagerness: "moderate" }] });
     document.head.append(s);
   }
 })();

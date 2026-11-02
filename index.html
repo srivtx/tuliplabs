@@ -40,7 +40,6 @@ html,body{margin:0}
 :root[data-theme="light"] .sec a:not([class]){color:#c2357a}
 :root[data-theme="light"] .xp-chip b{color:#b07a00}
 :root[data-theme="light"] .h2 i{color:#d23f87}
-:root[data-theme="light"] .card .go{color:var(--ink)}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:var(--pink-soft)}
 :focus-visible{outline:2px solid var(--pink);outline-offset:2px}
@@ -151,23 +150,41 @@ a{color:var(--pink-soft)}
 .head .side{font:12px var(--f-mono);color:var(--faint)}
 .head a.side{color:var(--ink);text-decoration:none;font-weight:600}.head a.side:hover{text-decoration:underline;text-underline-offset:3px}
 
-/* ---------------- track cards ---------------- */
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-.card{display:flex;flex-direction:column;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:4px;overflow:hidden;transition:transform .2s,border-color .2s}
-.card:hover{transform:translateY(-3px);border-color:var(--kc)}
-.card canvas{display:block;width:100%;height:150px;background:color-mix(in srgb,var(--kc) 70%,#000)}
-.card .lbl{align-self:flex-start;margin:-13px 0 0 14px;position:relative;font:500 12px var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:#1a0d14;background:var(--pink-soft);padding:2px 8px;box-shadow:2px 2px 0 var(--pink)}
-.card .body{padding:12px 16px 16px;display:flex;flex-direction:column;gap:6px;flex:1}
-.card h3{margin:0;font:600 18px var(--f-body);display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-.card h3 small{font:12px var(--f-mono);color:var(--muted);font-weight:400;white-space:nowrap}
+/* ---------------- track cards: doors ----------------
+   A bento of small posters. Worlds and DSA are the big doors; a track still being written sits as a wide strip. */
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.card{position:relative;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden;
+  transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s,border-color .25s}
+.card:hover{transform:translateY(-4px);border-color:var(--kc);box-shadow:0 18px 40px -22px color-mix(in srgb,var(--kc) 70%,transparent)}
+.card .hit{position:absolute;inset:0;z-index:1;border-radius:6px}
+.card .hit:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+.card.k-worlds,.card.k-ds{grid-column:span 2}
+.card.soon{grid-column:1/-1;flex-direction:row}
+.poster{position:relative;height:170px;background:var(--kc);color:#fff6fb}
+.card.k-worlds .poster,.card.k-ds .poster{height:210px}
+.card.soon .poster{height:auto;min-height:130px;flex:0 0 46%}
+.poster canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transition:transform .5s cubic-bezier(.2,.8,.3,1)}
+.card:hover .poster canvas{transform:scale(1.04)}
+.poster h3{position:absolute;left:16px;bottom:12px;right:45%;margin:0;font:400 clamp(26px,2.4vw,32px)/1 var(--f-serif);letter-spacing:-.01em;text-shadow:0 1px 14px rgba(0,0,0,.18)}
+.p-tag,.p-n{position:absolute;top:12px;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.p-tag{left:16px;color:#1a0d14;background:#fff6fb;padding:2px 7px;border-radius:3px}
+.p-n{right:16px;opacity:.9}
+.card .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;flex:1}
 .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.55;flex:1}
-.prog{display:flex;gap:2px;flex-wrap:wrap;margin-top:6px}
+.first{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:5px;align-items:center;font:11.5px var(--f-mono)}
+.first span{color:var(--faint);margin-right:2px}
+.first a{color:var(--ink);text-decoration:none;padding:3px 7px 4px;border-radius:4px;background:color-mix(in srgb,var(--kc) 14%,var(--card));box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--kc) 40%,transparent)}
+.first a:hover{background:color-mix(in srgb,var(--kc) 28%,var(--card))}
+.prog{display:flex;gap:2px;flex-wrap:wrap}
 .prog i{width:8px;height:8px;border-radius:1px;background:color-mix(in srgb,var(--kc) 22%,var(--soft))}
 .prog i.half{background:color-mix(in srgb,var(--kc) 55%,var(--soft))}
 .prog i.full{background:var(--kc)}
-.card .go{font:600 12.5px var(--f-mono);color:var(--ink);margin-top:8px}
+.card .go{font:600 12.5px var(--f-mono);color:var(--ink);display:flex;align-items:center;gap:6px}
 .card .go b{color:var(--kc)}
-.card.soon{opacity:.85}
+.card .go em{font-style:normal;display:inline-grid;place-items:center;width:24px;height:22px;border-radius:5px;background:var(--kc);color:#fff6fb;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);transition:transform .2s}
+.card:hover .go em{transform:translateX(4px)}
+@media (max-width:1000px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-ds{grid-column:auto}.card.soon{flex-direction:column}.card.soon .poster{min-height:150px}}
 
 /* ---------------- keycap section ---------------- */
 .keys{background:var(--sun);color:#1b1a12}
@@ -940,34 +957,29 @@ const ART = {
   tree: [".....aa.....", ".....aa.....", "...a....a...", "..a......a..", ".aa......aa.", ".aa......aa.", "a..a....a..a", "aa.aa..aa.aa", "aa.aa..aa.aa"],
   list: ["aaaa....aaaa....aaaa", "a..a....a..a....a..a", "a..aaaaaa..aaaaaa..a", "a..a...ba..a...ba..a", "aaaa....aaaa....aaaa"],
 };
+// A door is a small poster: the track's colour, a few loose squares like a woven print, and the emblem in crisp cream pixels.
 function drawArt(cv, art, col, seed) {
   const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth || 300, h = cv.clientHeight || 150;
   cv.width = w * dpr; cv.height = h * dpr;
   const x = cv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0);
   let s = seed; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-  const bg = x.createLinearGradient(0, 0, w, h); bg.addColorStop(0, col); bg.addColorStop(1, "rgba(0,0,0,.35)");
-  x.fillStyle = bg; x.fillRect(0, 0, w, h);
-  const A = ART[art], R = A.length, Cc = A[0].length, px = Math.min((h * 0.62) / R, (w * 0.5) / Cc), ox = (w - Cc * px) / 2, oy = (h - R * px) / 2;
+  x.fillStyle = col; x.fillRect(0, 0, w, h);
+  const A = ART[art], R = A.length, Cc = A[0].length, px = Math.floor(Math.min((h * 0.56) / R, (w * 0.4) / Cc));
+  const ox = Math.round(w - Cc * px - Math.max(18, w * 0.07)), oy = Math.round((h - R * px) / 2 + h * 0.06);
+  // loose squares on a grid of the emblem's own pixel size, so everything lines up
+  for (let k = 0; k < 22; k++) {
+    const gx = Math.floor(r() * (w / px)) * px, gy = Math.floor(r() * (h / px)) * px;
+    if (gx > ox - px * 2 && gy > oy - px * 2 && gy < oy + (R + 1) * px) continue;
+    x.fillStyle = r() < 0.5 ? "rgba(255,255,255,.16)" : "rgba(0,0,0,.12)";
+    x.fillRect(gx, gy, px, px);
+  }
   const shade = { a: "#fff6fb", b: "rgba(255,246,251,.72)", c: "rgba(255,246,251,.45)" };
-  // halftone: each emblem pixel is a 3x3 cluster of tiny marks
-  const sub = px / 3;
   for (let i = 0; i < R; i++) for (let j = 0; j < Cc; j++) {
     const ch = A[i][j]; if (ch === ".") continue;
-    x.fillStyle = shade[ch] || shade.a;
-    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) {
-      const gx = ox + j * px + b * sub, gy = oy + i * px + a * sub;
-      if ((a + b) % 2 === 0) x.fillRect(gx + sub * 0.12, gy + sub * 0.12, sub * 0.76, sub * 0.76);
-      else { x.fillRect(gx + sub * 0.4, gy + sub * 0.1, sub * 0.2, sub * 0.8); x.fillRect(gx + sub * 0.1, gy + sub * 0.4, sub * 0.8, sub * 0.2); }
-    }
+    x.fillStyle = shade[ch] || shade.a; x.fillRect(ox + j * px, oy + i * px, px - 1, px - 1);
   }
-  // dust: small squares thinning out away from the emblem
-  for (let k = 0; k < 340; k++) {
-    const ang = r() * Math.PI * 2, rad = (0.35 + Math.pow(r(), 0.7) * 0.9) * Math.max(Cc, R) * px * 0.75;
-    const dx = w / 2 + Math.cos(ang) * rad * 1.5, dy = h / 2 + Math.sin(ang) * rad * 0.8, z = sub * (r() < 0.2 ? 1.6 : 0.9);
-    x.globalAlpha = Math.max(0, 0.75 - rad / (Math.max(Cc, R) * px * 1.1)) + 0.08;
-    x.fillStyle = r() < 0.18 ? "#ff6fb5" : "#fff6fb"; x.fillRect(Math.round(dx), Math.round(dy), z, z);
-  }
-  x.globalAlpha = 1;
+  // one pink pixel, the lab's signature, tucked by the emblem
+  x.fillStyle = "#ff6fb5"; x.fillRect(ox - px * 2, oy + R * px - px, px - 1, px - 1);
 }
 function cards() {
   const box = $("#cards");
@@ -978,10 +990,17 @@ function cards() {
     const cells = t.data ? chs.map(([id, , n]) => `<i class="${["", "half", "full"][chState(id, n)]}"></i>`).join("") : "";
     const fin = chs.filter(([id, , n]) => chState(id, n) === 2).length;
     const soon = t.data && !count;
-    return `<a class="card k-${t.k}${soon ? " soon" : ""}" href="${t.href}"><canvas data-art="${t.art}" data-i="${i}"></canvas><span class="lbl">${t.tag}</span>
-      <div class="body"><h3>${t.name}<small>${soon ? "in progress" : count + " ch"}</small></h3><p>${t.desc}</p>
-      ${cells ? `<div class="prog" aria-label="${fin} of ${count} chapters finished">${cells}</div>` : ""}
-      <span class="go">${fin ? `<b>${fin}</b> finished · ` : ""}open <b>→</b></span></div></a>`;
+    // the first chapters, so you can see where a door leads before you open it
+    const first = chs.slice(0, 3).map(([, title], k) => `<a href="${t.href}#${k + 1}">${title.replace(/\s*\(.*$/, "").replace(/^(.{26}).+$/, "$1…")}</a>`).join("");
+    return `<article class="card k-${t.k}${soon ? " soon" : ""}" style="--kc:${KC[t.k]}">
+      <a class="hit" href="${t.href}" aria-label="Open ${t.name}"></a>
+      <div class="poster"><canvas data-art="${t.art}" data-i="${i}" aria-hidden="true"></canvas>
+        <span class="p-tag">${t.tag}</span><span class="p-n">${soon ? "being written" : count + (t.k === "worlds" ? " worlds" : " chapters")}</span>
+        <h3>${t.name}</h3></div>
+      <div class="body"><p>${t.desc}</p>
+        ${first ? `<div class="first"><span>starts with</span>${first}</div>` : ""}
+        ${cells ? `<div class="prog" aria-label="${fin} of ${count} chapters finished">${cells}</div>` : ""}
+        <span class="go">${fin ? `<b>${fin}</b> finished · ` : ""}${soon ? "follow along" : "open"} <em>→</em></span></div></article>`;
   }).join("");
   $("#tot-side").textContent = `${total} chapters so far · more every week`;
   $("#meta-l").innerHTML = `<b>${total}</b> chapters · <b>${TRACKS.length}</b> tracks · one garden`;
