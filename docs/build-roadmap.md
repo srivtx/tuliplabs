@@ -7,7 +7,7 @@ recall question.
 
 | Part | Chapters | What you build |
 |---|---|---|
-| **9 · Tools devs live in** | 26–29 | a diff tool (longest common subsequence, how `git diff` finds changes) · a build system (like make: rebuild only what's stale) · a package manager (resolving versions and conflicts, like npm and pip) · a test framework (like pytest: discovery, assertions, fixtures) |
+| **9 · Tools devs live in** ✅ live | 26–29 | a diff tool (longest common subsequence, how `git diff` finds changes) · a build system (like make: rebuild only what's stale) · a package manager (resolving versions and conflicts, like npm and pip) · a test framework (like pytest: discovery, assertions, fixtures) |
 | **10 · Runtimes and CLIs** | 30–33 | a command-line tool kit (flags, subcommands, help, exit codes) · a shell (parsing, pipes, redirects, jobs) · an async runtime (the event loop, timers and promises behind Node and asyncio) · a container runtime (isolated processes, layered filesystems, resource limits, like Docker) |
 | **11 · Real-world systems** | 34–37 | a ride-share matcher (drivers to riders) · a stock-exchange order book (matching buys and sells) · collaborative editing with offline sync (CRDTs) · a job scheduler (cron, queues, retries) |
 | **12 · Money and markets** | 38–41 | a bank ledger (double-entry bookkeeping) · a payments system (idempotency: never charge twice) · an auction engine · a fraud detector |
