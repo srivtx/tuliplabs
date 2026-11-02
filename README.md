@@ -136,7 +136,7 @@ The 3D lab is a single self-contained HTML file. The code tracks are static too;
 ```bash
 git clone https://github.com/srivtx/voxel-network-lab.git
 cd voxel-network-lab
-python3 -m http.server          # then open /, /code/, /modsim/, /build/ or /stats/
+python3 -m http.server          # then open / (home), /worlds/, /code/, /modsim/, /build/, /stats/, /dsa/ or /ods/
 ```
 
 To edit lessons, change `content/<track>/chNN.md` (`tc`, `ms`, `bx` or `ps`) (format: [`content/FORMAT.md`](content/FORMAT.md)) and rebuild:
@@ -152,7 +152,9 @@ node tools/e2e.js code 6                   # walk a chapter in a real browser (P
 
 ## How it's built
 
-- **One file:** `index.html` holds all the markup, styles and JavaScript (~270 KB).
+- **Home page:** `index.html` draws everything in code (no image files): the title letters run BFS, Life and a sandpile, the figure is watercolour isometric voxels, and your progress lands on a glyph globe.
+- **3D worlds in one file:** `worlds/index.html` holds all the markup, styles and JavaScript (~270 KB).
+- **One top bar:** `learn/nav.css` and `learn/nav.js` give every page the same section switcher and footer.
 - **3D:** [Three.js r128](https://threejs.org/), loaded from cdnjs. Every world draws through a single `InstancedMesh` of cubes, so tens of thousands of voxels stay smooth.
 - **Charts:** a small hand-written canvas chart routine (linear and log-log axes).
 - **No backend:** progress and the notebook live in `localStorage`; nothing is sent anywhere.
@@ -161,9 +163,11 @@ node tools/e2e.js code 6                   # walk a chapter in a real browser (P
 
 ```
 voxel-network-lab/
-├── index.html          # the 3D lab
-├── code/ modsim/ build/ stats/  # the four code-track pages
+├── index.html          # home page
+├── worlds/             # the 3D lab
+├── code/ modsim/ build/ stats/ dsa/ ods/  # the code-track pages
 ├── learn/
+│   ├── nav.js/.css     # shared top bar switcher and footer
 │   ├── engine.js/.css  # lesson renderer: editor, exercises, steps, review, flipbooks, sims, projects
 │   ├── viz/            # one 3D simulation per chapter (core.js is the shared API)
 │   ├── py-worker.js    # Pyodide in a Web Worker
