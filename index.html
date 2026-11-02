@@ -38,7 +38,7 @@ img{max-width:100%}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
 .app{height:100%;display:flex;flex-direction:column}
-.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 20px;
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;
   padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
   border-bottom:1px solid var(--line);background:var(--panel)}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
@@ -46,6 +46,13 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
 .logo i{background:var(--c2);border-radius:1px}.logo i:nth-child(2),.logo i:nth-child(6){background:var(--c1)}.logo i:nth-child(4){background:var(--c3)}.logo i:nth-child(8){background:var(--c4)}.logo i:nth-child(1),.logo i:nth-child(9){opacity:.25}
 h1{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1;margin:0;letter-spacing:.01em}
 .brand p{margin:3px 0 0;color:var(--muted);font-size:12.5px}
+.tracks{display:flex;gap:3px;flex-wrap:wrap}
+.tracks a{font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:6px;border:1px solid transparent}
+.tracks a:hover{color:var(--ink)}
+.tracks a[aria-current="page"]{color:var(--ink);background:var(--card);border-color:var(--line)}
+.top .grow{flex:1}
+@media (max-width:900px){.tracks{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none}.tracks::-webkit-scrollbar{display:none}.tracks a{white-space:nowrap}.top .grow{display:none}}
+.top .tabs{flex-basis:100%;border-top:1px solid var(--line);padding-top:8px;margin-top:-2px}
 .tabs{display:flex;gap:3px;flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:thin}
 .tabs button{font:500 13px var(--f-body);color:var(--muted);background:transparent;border:1px solid transparent;border-radius:6px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:7px}
 .tabs button i{font:700 13px var(--f-display);font-style:normal;width:20px;height:20px;display:grid;place-items:center;border-radius:3px;background:var(--line);color:var(--ink)}
@@ -191,7 +198,7 @@ pre.code .hl{background:color-mix(in srgb,var(--c4) 35%,transparent);display:inl
 .toast{position:absolute;top:12px;right:max(12px,env(safe-area-inset-right,0px));z-index:6;background:var(--c3);color:#fff;font:600 12.5px var(--f-body);padding:8px 12px;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.18);pointer-events:none;max-width:calc(100% - 24px)}
 .toast[hidden]{display:none}
 
-.hdr-tools{display:flex;gap:6px}
+.hdr-tools{display:flex;gap:6px;margin-left:auto}
 .tabs button.done i{background:var(--c3);color:#fff}
 .tabs button[aria-selected="true"].done i{background:var(--c3)}
 .g-dots .gd{width:16px;height:6px;border-radius:1px;border:0;padding:0;cursor:pointer;background:var(--c3)}.g-dots .gd.ahead{background:color-mix(in srgb,var(--c2) 45%,var(--line))}
@@ -253,6 +260,17 @@ table.pay{border-collapse:collapse;font-size:13px;width:100%}table.pay th,table.
     <div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div><h1>Voxel Network Lab</h1><p>Think Complexity, all 12 chapters, built to be played</p></div>
   </div>
+  <nav class="tracks" aria-label="Sections">
+    <a href="./" aria-current="page">3D worlds</a>
+    <a href="code/">Code: Think Complexity</a>
+    <a href="modsim/">Code: ModSim</a>
+    <a href="build/">Build your own X</a>
+    <a href="stats/">Probability &amp; Stats</a>
+    <a href="dsa/">DSA</a>
+    <a href="ods/">Open Data Structures</a>
+  </nav>
+  <span class="grow"></span>
+  <div class="hdr-tools"><a class="nb-btn code-link" id="code-btn" href="code/#1" title="Learn this chapter's Python, step by step">&lt;/&gt; Code</a><button class="nb-btn" id="map-btn">Map</button><button class="nb-btn" id="nb-btn" aria-label="Open notebook">Notebook <b id="nb-count">0</b></button></div>
   <nav class="tabs" role="tablist" aria-label="Chapters">
     <button role="tab" data-tab="ch1" aria-selected="true"><i>1</i>City</button>
     <button role="tab" data-tab="ch2" aria-selected="false"><i>2</i>Party</button>
@@ -267,7 +285,6 @@ table.pay{border-collapse:collapse;font-size:13px;width:100%}table.pay th,table.
     <button role="tab" data-tab="ch11" aria-selected="false"><i>11</i>Evolution</button>
     <button role="tab" data-tab="ch12" aria-selected="false"><i>12</i>Cooperate</button>
   </nav>
-  <div class="hdr-tools"><a class="nb-btn code-link" href="build/" title="Build your own calculator, database, git, editor, renderer, neural net… with 3D simulations">Build X</a><a class="nb-btn code-link" href="stats/" title="Probability and statistics, simulated first">Stats</a><a class="nb-btn code-link" href="dsa/" title="Data structures and algorithms, from the ground floor to Codeforces">DSA</a><a class="nb-btn code-link" href="ods/" title="Open Data Structures, the book, chapter by chapter">Book</a><a class="nb-btn code-link" id="code-btn" href="code/#1" title="Learn this chapter's Python, step by step">&lt;/&gt; Code</a><button class="nb-btn" id="map-btn">Map</button><button class="nb-btn" id="nb-btn" aria-label="Open notebook">Notebook <b id="nb-count">0</b></button></div>
 </header>
 
 <main class="lab">
