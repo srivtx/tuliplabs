@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
+<script>try{document.documentElement.dataset.chips=localStorage.getItem("tl-chips")||"index";document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tulip Labs · learn it by playing</title>
 <meta name="description" content="Learn by playing: complexity science as 3D voxel worlds, then the code, modeling, statistics, data structures and algorithms, all as step-by-step simulations.">
@@ -37,7 +37,7 @@ html,body{margin:0}
 :root[data-theme="light"] .fig figcaption b,:root[data-theme="light"] .headline i,:root[data-theme="light"] .mosaic h2 i{color:#d23f87}
 :root[data-theme="light"] #dash{stroke:#1d1b17}
 :root[data-theme="light"] .hero{background:radial-gradient(50% 60% at 78% 45%,rgba(255,111,181,.13),transparent 70%)}
-:root[data-theme="light"] .sec a:not([class]){color:#c2357a}
+:root[data-theme="light"] .sec a:not([class],.chips a,.first a){color:#c2357a}
 :root[data-theme="light"] .xp-chip b{color:#b07a00}
 :root[data-theme="light"] .h2 i{color:#d23f87}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -171,18 +171,21 @@ a{color:var(--pink-soft)}
 .p-n{right:16px;opacity:.9}
 .card .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;flex:1}
 .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.55;flex:1}
-.first{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:5px;align-items:center;font:11.5px var(--f-mono)}
-.first span{color:var(--faint);margin-right:2px}
-.first a{color:var(--ink);text-decoration:none;padding:3px 7px 4px;border-radius:4px;background:color-mix(in srgb,var(--kc) 14%,var(--card));box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--kc) 40%,transparent)}
-.first a:hover{background:color-mix(in srgb,var(--kc) 28%,var(--card))}
-.prog{display:flex;gap:2px;flex-wrap:wrap}
-.prog i{width:8px;height:8px;border-radius:1px;background:color-mix(in srgb,var(--kc) 22%,var(--soft))}
+.first{position:relative;z-index:2}
+.first span{font:11px var(--f-mono);color:var(--faint);margin-right:4px}
+/* one bar of chapters, one segment each, so 12 and 44 chapters both sit on a single line */
+.prog{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:2px;height:5px;margin-top:2px}
+.prog i{border-radius:1px;background:color-mix(in srgb,var(--kc) 20%,var(--soft))}
 .prog i.half{background:color-mix(in srgb,var(--kc) 55%,var(--soft))}
 .prog i.full{background:var(--kc)}
-.card .go{font:600 12.5px var(--f-mono);color:var(--ink);display:flex;align-items:center;gap:6px}
+.card .go{font:600 13.5px var(--f-body);color:var(--ink);display:flex;align-items:center;gap:10px}
 .card .go b{color:var(--kc)}
-.card .go em{font-style:normal;display:inline-grid;place-items:center;width:24px;height:22px;border-radius:5px;background:var(--kc);color:#fff6fb;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22);transition:transform .2s}
-.card:hover .go em{transform:translateX(4px)}
+.card .go small{font:12px var(--f-mono);color:var(--faint);margin-left:auto}
+/* a drawn arrow that stretches when you point at the card, instead of a button */
+.arw{position:relative;display:inline-block;width:18px;height:2px;border-radius:1px;background:var(--kc);transition:width .35s cubic-bezier(.2,.8,.3,1)}
+.arw::after{content:"";position:absolute;right:0;top:50%;width:7px;height:7px;border:solid var(--kc);border-width:2px 2px 0 0;transform:translate(-.5px,-50%) rotate(45deg)}
+.card:hover .arw,a:hover>.arw{width:34px}
+.arw.down{transform:rotate(90deg) translateX(-2px);width:14px}a:hover>.arw.down{width:20px}
 @media (max-width:1000px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-ds{grid-column:auto}.card.soon{flex-direction:column}.card.soon .poster{min-height:150px}}
 
@@ -248,13 +251,54 @@ a{color:var(--pink-soft)}
 .tab.on .more{grid-template-rows:1fr}
 .more p{margin:0 0 12px;color:var(--muted);font-size:15px;line-height:1.6}
 .more .cnt{font:600 11.5px var(--f-mono);color:var(--ink);margin-bottom:8px;letter-spacing:.02em}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
-.chips a{font:500 12px var(--f-mono);text-decoration:none;color:var(--ink);padding:4px 9px 5px;border-radius:5px;
-  background:color-mix(in srgb,var(--kc) 16%,var(--card));box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--kc) 45%,transparent);transition:transform .1s,background .2s}
-.chips a:hover{background:color-mix(in srgb,var(--kc) 30%,var(--card));transform:translateY(-1px)}
-.more .open{display:inline-block;margin-bottom:20px;font:600 13.5px var(--f-mono);color:var(--pink);text-decoration:none}
-.more .open:hover{text-decoration:underline;text-underline-offset:4px}
-:root[data-theme="light"] .more .open{color:#c2357a}
+.chips{margin-bottom:18px}
+.more .open{display:inline-flex;align-items:center;gap:12px;margin-bottom:22px;font:600 14.5px var(--f-body);color:var(--ink);text-decoration:none}
+
+/* Chapter links, in the showcase and on the cards. Four styles to try (?try on this page shows a switcher);
+   the html element's data-chips picks one, and pills is what shows if nothing is picked. */
+.chips,.first{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+:is(.chips,.first) a{font:500 13px/1 var(--f-body);color:var(--ink);text-decoration:none;padding:6px 11px 7px;border-radius:99px;
+  border:1px solid color-mix(in srgb,var(--kc) 45%,var(--line));transition:background .2s,border-color .2s,color .2s}
+:is(.chips,.first) a:hover{background:var(--kc);border-color:var(--kc);color:#fff}
+.first a{font-size:12.5px;padding:5px 10px 6px}
+/* index: a contents page, each chapter with its number, an arrow slides in when you point */
+:root[data-chips="index"] .chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
+:root[data-chips="index"] .first{display:flex;flex-direction:column;align-items:stretch;gap:0}
+:root[data-chips="index"] .first span{margin:0 0 4px}
+:root[data-chips="index"] :is(.chips,.first) a{display:flex;align-items:baseline;gap:10px;padding:9px 0 10px;border:0;border-bottom:1px solid var(--line);border-radius:0;font:500 14.5px/1.25 var(--f-body);background:none;color:var(--ink)}
+:root[data-chips="index"] .chips a:nth-child(-n+2),:root[data-chips="index"] .first span+a{border-top:1px solid var(--line)}
+:root[data-chips="index"] .first a{font-size:13.5px;padding:7px 0 8px}
+:root[data-chips="index"] :is(.chips,.first) a::before{content:attr(data-n);flex:none;min-width:20px;font:600 11px var(--f-mono);color:var(--kc)}
+:root[data-chips="index"] :is(.chips,.first) a:not([data-n])::before{content:"";min-width:0;width:7px;height:7px;margin:0 13px 0 0;background:var(--kc);align-self:center}
+:root[data-chips="index"] :is(.chips,.first) a::after{content:"→";margin-left:auto;color:var(--kc);opacity:0;transform:translateX(-8px);transition:opacity .2s,transform .25s}
+:root[data-chips="index"] :is(.chips,.first) a:hover{background:none;color:var(--ink);border-bottom-color:var(--kc)}
+:root[data-chips="index"] :is(.chips,.first) a:hover::after{opacity:1;transform:none}
+/* prose: one sentence, the chapters underlined in the track's colour */
+:root[data-chips="prose"] :is(.chips,.first){display:block;font:15px/1.75 var(--f-body);color:var(--muted)}
+:root[data-chips="prose"] .first{font-size:13.5px;line-height:1.65}
+:root[data-chips="prose"] .chips::before{content:"Jump in at "}
+:root[data-chips="prose"] :is(.chips,.first) a{display:inline;padding:0 1px;border:0;border-radius:2px;font:inherit;color:var(--ink);background:none;
+  text-decoration:underline 2px color-mix(in srgb,var(--kc) 55%,transparent);text-underline-offset:5px;transition:background .2s,text-decoration-color .2s}
+:root[data-chips="prose"] :is(.chips,.first) a:hover{color:var(--ink);text-decoration-color:var(--kc);background:color-mix(in srgb,var(--kc) 20%,transparent)}
+:root[data-chips="prose"] :is(.chips,.first) a::after{content:",";display:inline-block;color:var(--muted);margin-right:.28em}
+:root[data-chips="prose"] .chips a:nth-last-child(2)::after{content:"\00a0or"}
+:root[data-chips="prose"] .first a:nth-last-child(2)::after{content:"\00a0and"}
+:root[data-chips="prose"] :is(.chips,.first) a:last-child::after{content:".";margin:0}
+/* dots: plain words, each with a square of the track's colour that turns when you point */
+:root[data-chips="dots"] :is(.chips,.first){gap:8px 18px}
+:root[data-chips="dots"] :is(.chips,.first) a{display:inline-flex;align-items:center;gap:8px;padding:3px 0;border:0;border-radius:0;font:500 14px/1.2 var(--f-body);background:none;color:var(--ink)}
+:root[data-chips="dots"] .first a{font-size:13px}
+:root[data-chips="dots"] :is(.chips,.first) a::before{content:"";width:7px;height:7px;background:var(--kc);transition:transform .25s cubic-bezier(.2,.8,.3,1)}
+:root[data-chips="dots"] :is(.chips,.first) a:hover{background:none;color:var(--ink)}
+:root[data-chips="dots"] :is(.chips,.first) a:hover::before{transform:rotate(45deg) scale(1.35)}
+/* the switcher that ?try shows */
+.try{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;display:flex;gap:4px;align-items:center;padding:6px;border-radius:99px;
+  background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);box-shadow:0 14px 40px -12px rgba(0,0,0,.45);backdrop-filter:blur(10px);font:12px var(--f-mono);max-width:calc(100vw - 24px);overflow-x:auto}
+.try span{color:var(--faint);padding:0 8px 0 10px;white-space:nowrap}
+.try button{all:unset;cursor:pointer;padding:7px 13px;border-radius:99px;color:var(--muted);white-space:nowrap}
+.try button:hover{color:var(--ink)}
+.try button[aria-pressed="true"]{background:var(--pink);color:#1a0d14;font-weight:600}
+@media (max-width:480px){.try span{display:none}.try button{padding:7px 11px}}
 .bar{position:absolute;left:0;top:-1px;height:2px;width:100%;background:var(--kc);transform:scaleX(0);transform-origin:0 50%}
 .tab.on.run .bar{animation:tabbar var(--dur,9s) linear forwards}
 @keyframes tabbar{to{transform:scaleX(1)}}
@@ -365,7 +409,7 @@ a{color:var(--pink-soft)}
         <p class="headline">Hard ideas you can <i>poke.</i></p>
         <div class="ticker" id="ticker" aria-live="off"><span class="dot"></span><span id="tick-t">inside the letters: loading a tiny world…</span></div>
         <p class="lede">Computer science, maths and modelling, taught as simulations: a city of voxels, a sandpile, a segment tree filling up block by block. Watch it move first, then write the code yourself, beat the hidden tests, and watch your garden bloom.</p>
-        <div class="cta"><a class="btn go" href="#tracks">Pick a track ↓</a><a class="btn ghost" href="worlds/">Jump into the 3D worlds →</a></div>
+        <div class="cta"><a class="btn go" href="#tracks">Pick a track <i class="arw down" aria-hidden="true"></i></a><a class="btn ghost" href="worlds/">Jump into the 3D worlds →</a></div>
       </div>
       <figure class="fig" id="fig">
         <svg viewBox="-230 -170 460 330" role="img" aria-label="A watercolour voxel drawing: a pink cube on a cross of four pink tiles, beside a green L-shaped slab and a small green tile">
@@ -410,29 +454,29 @@ a{color:var(--pink-soft)}
       <div class="tab on" style="--kc:#2fb38f">
         <button type="button" role="tab" id="tab-0" aria-controls="pan-0" aria-selected="true"><span class="n">01</span><b>Watch it move, then write it.</b></button>
         <div class="more"><div><p>Every idea opens as a simulation you can step and poke. Then you write the Python yourself, right in the page, and checks tell you what works.</p>
-          <p class="cnt">12 chapters</p><div class="chips"><a href="code/#2">Graphs</a><a href="code/#3">Small worlds</a><a href="code/#6">Game of Life</a><a href="code/#8">Sandpiles</a><a href="code/#11">Evolution</a></div>
-          <a class="open" href="code/">Open Complexity →</a></div></div>
+          <p class="cnt">12 chapters</p><div class="chips"><a href="code/#2" data-n="02">Graphs</a><a href="code/#3" data-n="03">Small worlds</a><a href="code/#6" data-n="06">Game of Life</a><a href="code/#8" data-n="08">Sandpiles</a><a href="code/#11" data-n="11">Evolution</a></div>
+          <a class="open" href="code/">Open Complexity <i class="arw" aria-hidden="true"></i></a></div></div>
         <i class="bar" aria-hidden="true"></i>
       </div>
       <div class="tab" style="--kc:#e6a21a">
         <button type="button" role="tab" id="tab-1" aria-controls="pan-1" aria-selected="false"><span class="n">02</span><b>Every chapter is a build.</b></button>
         <div class="more"><div><p>Each step adds one real part, and the blueprint stacks it into place. Pass the last test and it ships.</p>
-          <p class="cnt">29 chapters</p><div class="chips"><a href="build/#2">A calculator</a><a href="build/#4">A language</a><a href="build/#5">A regex engine</a><a href="build/#8">Git</a><a href="build/#11">A 3D engine</a></div>
-          <a class="open" href="build/">Open Build your own X →</a></div></div>
+          <p class="cnt">29 chapters</p><div class="chips"><a href="build/#2" data-n="02">A calculator</a><a href="build/#4" data-n="04">A language</a><a href="build/#5" data-n="05">A regex engine</a><a href="build/#8" data-n="08">Git</a><a href="build/#11" data-n="11">A 3D engine</a></div>
+          <a class="open" href="build/">Open Build your own X <i class="arw" aria-hidden="true"></i></a></div></div>
         <i class="bar" aria-hidden="true"></i>
       </div>
       <div class="tab" style="--kc:#3caa4c">
         <button type="button" role="tab" id="tab-2" aria-controls="pan-2" aria-selected="false"><span class="n">03</span><b>Slow code doesn't pass.</b></button>
         <div class="more"><div><p>Every question has a big hidden test, like LeetCode and Codeforces, so you feel why the clever way exists.</p>
-          <p class="cnt">44 chapters</p><div class="chips"><a href="dsa/#3">Hash maps</a><a href="dsa/#7">Two pointers</a><a href="dsa/#8">Sliding window</a><a href="dsa/#19">BFS</a><a href="dsa/#28">Dynamic programming</a><a href="dsa/#43">Segment trees</a></div>
-          <a class="open" href="dsa/">Open DSA →</a></div></div>
+          <p class="cnt">44 chapters</p><div class="chips"><a href="dsa/#3" data-n="03">Hash maps</a><a href="dsa/#7" data-n="07">Two pointers</a><a href="dsa/#8" data-n="08">Sliding window</a><a href="dsa/#19" data-n="19">BFS</a><a href="dsa/#28" data-n="28">Dynamic programming</a><a href="dsa/#43" data-n="43">Segment trees</a></div>
+          <a class="open" href="dsa/">Open DSA <i class="arw" aria-hidden="true"></i></a></div></div>
         <i class="bar" aria-hidden="true"></i>
       </div>
       <div class="tab" style="--kc:#ff5fa8">
         <button type="button" role="tab" id="tab-3" aria-controls="pan-3" aria-selected="false"><span class="n">04</span><b>A garden that grows with you.</b></button>
         <div class="more"><div><p>Every track is a flower. Chapters make it bloom, and wrong answers come back later for review, so nothing slips.</p>
           <p class="cnt">136 chapters, one garden</p><div class="chips"><a href="worlds/">3D worlds</a><a href="modsim/">ModSim</a><a href="stats/">Probability & Stats</a><a href="ods/">Open Data Structures</a></div>
-          <a class="open" href="#tracks">Pick a track ↓</a></div></div>
+          <a class="open" href="#tracks">Pick a track <i class="arw down" aria-hidden="true"></i></a></div></div>
         <i class="bar" aria-hidden="true"></i>
       </div>
     </div>
@@ -1018,7 +1062,7 @@ function cards() {
     const fin = chs.filter(([id, , n]) => chState(id, n) === 2).length;
     const soon = t.data && !count;
     // the first chapters, so you can see where a door leads before you open it
-    const first = chs.slice(0, 3).map(([, title], k) => `<a href="${t.href}#${k + 1}">${title.replace(/\s*\(.*$/, "").replace(/^(.{26}).+$/, "$1…")}</a>`).join("");
+    const first = chs.slice(0, 3).map(([, title], k) => `<a href="${t.href}#${k + 1}" data-n="${String(k + 1).padStart(2, "0")}">${title.replace(/\s*\(.*$/, "").replace(/^(.{32}).+$/, "$1…")}</a>`).join("");
     return `<article class="card k-${t.k}${soon ? " soon" : ""}" style="--kc:${KC[t.k]}">
       <a class="hit" href="${t.href}" aria-label="Open ${t.name}"></a>
       <div class="poster"><canvas data-art="${t.art}" data-i="${i}" aria-hidden="true"></canvas>
@@ -1026,8 +1070,8 @@ function cards() {
         <h3>${t.name}</h3></div>
       <div class="body"><p>${t.desc}</p>
         ${first ? `<div class="first"><span>starts with</span>${first}</div>` : ""}
-        ${cells ? `<div class="prog" aria-label="${fin} of ${count} chapters finished">${cells}</div>` : ""}
-        <span class="go">${fin ? `<b>${fin}</b> finished · ` : ""}${soon ? "follow along" : "open"} <em>→</em></span></div></article>`;
+        ${cells ? `<div class="prog" style="--n:${count}" aria-label="${fin} of ${count} chapters finished">${cells}</div>` : ""}
+        <span class="go">${soon ? "Follow along" : fin ? "Carry on" : "Open"} <i class="arw" aria-hidden="true"></i>${cells ? `<small>${fin ? `<b>${fin}</b>` : 0} / ${count}</small>` : ""}</span></div></article>`;
   }).join("");
   $("#tot-side").textContent = `${total} chapters so far · more every week`;
   $("#meta-l").innerHTML = `<b>${total}</b> chapters · <b>${TRACKS.length}</b> tracks · one garden`;
@@ -1204,6 +1248,18 @@ fetch("content/summary.json", { cache: "no-cache" }).then((r) => r.json()).catch
   SUM = s || {};
   cards(); caps(); globe();
 });
+})();
+</script>
+<script>
+/* ?try: a switcher for the chapter-link styles, so they can be compared on the real page. The pick is remembered. */
+(() => {
+  if (!/[?&]try\b/.test(location.search)) return;
+  const html = document.documentElement, V = [["index", "Index"], ["prose", "Sentence"], ["dots", "Dots"], ["pills", "Pills"]];
+  const bar = document.createElement("div"); bar.className = "try"; bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Chapter link style");
+  bar.innerHTML = "<span>chapter links</span>" + V.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join("");
+  const set = (v) => { html.dataset.chips = v; try { localStorage.setItem("tl-chips", v); } catch (e) {} bar.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
+  bar.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) set(b.dataset.v); });
+  document.body.append(bar); set(html.dataset.chips || "index");
 })();
 </script>
 </body>
