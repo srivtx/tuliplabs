@@ -6,5 +6,21 @@
   const close = () => { sw.open = false; };
   document.addEventListener("click", (e) => { if (sw.open && !sw.contains(e.target)) close(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sw.open) { close(); sw.querySelector("summary").focus(); } });
-  sw.addEventListener("toggle", () => { if (sw.open) (sw.querySelector('.sw-menu a[aria-current="page"]') || sw.querySelector(".sw-menu a")).focus({ preventScroll: true }); });
+  sw.querySelector(".sw-menu")?.addEventListener("click", (e) => { if (e.target.closest("a")) close(); });
+  addEventListener("hashchange", close);
+  sw.addEventListener("toggle",() => { if (sw.open) (sw.querySelector('.sw-menu a[aria-current="page"]') || sw.querySelector(".sw-menu a")).focus({ preventScroll: true }); });
+})();
+
+/* Quiet footer on the course pages: the section colours as links, and the books we build on.
+   The home page has its own; the 3D worlds fill the whole window, so they get none. */
+(() => {
+  if (document.querySelector(".foot") || !document.querySelector(".wrap")) return;
+  const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
+  const S = [["worlds", "worlds/", "3D worlds"], ["tc", "code/", "Think Complexity"], ["ms", "modsim/", "ModSim"], ["bx", "build/", "Build your own X"],
+    ["ps", "stats/", "Probability & Stats"], ["ds", "dsa/", "DSA"], ["od", "ods/", "Open Data Structures"]];
+  const f = document.createElement("footer");
+  f.className = "foot";
+  f.innerHTML = `<div class="foot-in"><div class="foot-key">${S.map(([k, h, n]) => `<a class="k-${k}" href="${root}${h}"><i></i>${n}</a>`).join("")}</div>`
+    + `<span>Built on open books by Allen B. Downey and <a href="https://opendatastructures.org">Pat Morin</a>. Progress stays in this browser.</span></div>`;
+  document.body.append(f);
 })();
