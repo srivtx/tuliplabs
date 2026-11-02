@@ -1,0 +1,46 @@
+/* Shared top bar: brand on the left, one "section switcher" next to it, page tools on the right.
+   Every page loads this after its own styles, so the header looks and behaves the same everywhere. */
+.top .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;min-width:0}
+.top .brand b{font:700 18px/1 var(--f-display);white-space:nowrap}
+.top .brand small,.top .brand p{display:none}
+.top .logo{width:24px;height:24px}
+.top .grow{flex:1}
+
+.sw{position:relative}
+.sw>summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;
+  font:600 13px var(--f-body);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 10px 6px 8px}
+.sw>summary::-webkit-details-marker{display:none}
+.sw>summary:hover{border-color:var(--muted)}
+.sw>summary em{font-style:normal;color:var(--muted);font-size:10px;transition:transform .15s}
+.sw[open]>summary em{transform:rotate(180deg)}
+.sw>summary .sl{color:var(--muted);font-weight:500}
+.sq{width:10px;height:10px;flex:none;border-radius:2px;background:var(--kc,var(--c2));box-shadow:3px 3px 0 color-mix(in srgb,var(--kc,var(--c2)) 35%,transparent)}
+.sw-menu{position:absolute;z-index:40;top:calc(100% + 8px);left:0;width:min(560px,calc(100vw - 24px));
+  background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 18px 44px rgba(10,16,28,.22);
+  padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:2px 10px}
+.sw-menu h6{grid-column:1/-1;margin:8px 8px 2px;font:600 10.5px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.sw-menu h6:first-child{margin-top:2px}
+.sw-menu a{display:grid;grid-template-columns:14px 1fr;gap:2px 10px;align-items:center;padding:8px;border-radius:7px;text-decoration:none;color:var(--ink)}
+.sw-menu a:hover,.sw-menu a:focus-visible{background:color-mix(in srgb,var(--kc) 12%,transparent)}
+.sw-menu a[aria-current="page"]{background:color-mix(in srgb,var(--kc) 16%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--kc) 45%,transparent)}
+.sw-menu a b{font-size:13.5px;font-weight:600}
+.sw-menu a small{grid-column:2;font-size:12px;color:var(--muted);line-height:1.35}
+.sw-menu a.home{grid-column:1/-1}
+
+/* one colour per section, used by the switcher, the home page and the footer */
+.k-home{--kc:#ff5fa8}.k-worlds{--kc:#ff5fa8}.k-tc{--kc:#2fb38f}.k-ms{--kc:#3d8fe0}.k-bx{--kc:#e6a21a}.k-ps{--kc:#9a6be0}.k-ds{--kc:#3caa4c}.k-od{--kc:#ee6a4c}
+
+@media (max-width:640px){
+  .top .brand b{font-size:16px}
+  .sw-menu{grid-template-columns:1fr;position:fixed;left:12px;right:12px;width:auto;top:56px;max-height:calc(100vh - 72px);overflow:auto}
+  .sw>summary .sl{display:none}
+}
+
+/* footer: a quiet colour key plus credits */
+.foot{border-top:1px solid var(--line);background:color-mix(in srgb,var(--panel) 92%,#ff5fa8 3%);color:var(--muted);font-size:12.5px;
+  padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.foot-in{max-width:1240px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 26px;align-items:center;justify-content:space-between}
+.foot-key{display:flex;flex-wrap:wrap;gap:6px 16px;font:12px var(--f-mono)}
+.foot-key span{display:inline-flex;align-items:center;gap:6px}
+.foot-key i{width:9px;height:9px;border-radius:2px;background:var(--kc)}
+.foot a{color:inherit}
