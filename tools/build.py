@@ -318,7 +318,10 @@ def build(only=None):
     summary = {t: [[c["id"], c["title"], sum(len(s["blocks"]) for s in c["sections"])] for c in chs] for t, chs in built.items()}
     # the design studio keeps its levels in design/levels.js; each level is one thing to finish
     with open(os.path.join(ROOT, "design", "levels.js"), encoding="utf-8") as fh:
-        summary["dz"] = [[i, t, 1] for i, t in re.findall(r'id: "(dz\d+)", title: "([^"]+)"', fh.read())]
+        src = fh.read()
+    titles = dict(re.findall(r'id: "(dz\d+)", title: "([^"]+)"', src))
+    order = re.findall(r'"(dz\d+)"', src[src.index("courses:"):src.index("levels:")])  # course order, as the studio shows them
+    summary["dz"] = [[i, titles[i], 1] for i in order]
     with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))
     return built

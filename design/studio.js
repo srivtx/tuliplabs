@@ -3,7 +3,18 @@
    of inked pixels that match. Progress lives in the same store as the code tracks (vnl-code-v1). */
 (() => {
   "use strict";
-  const { w: W, h: H, base: BASE, levels: LV } = window.DZ;
+  const { base: BASE, courses: COURSES } = window.DZ;
+  const BY = Object.fromEntries(window.DZ.levels.map((l) => [l.id, l]));
+  // Levels in course order. A level written as one css with "+" lines gets its start (without them) and answer (with them).
+  const LV = COURSES.flatMap((c, ci) => c.ids.map((id, k) => {
+    const lv = BY[id];
+    if (lv.css) {
+      const lines = lv.css.split("\n");
+      lv.start = lines.filter((l) => !l.startsWith("+")).join("\n").replace(/\{\n\}/g, "{\n\n}").replace(/\n{3,}/g, "\n\n");
+      lv.answer = lines.map((l) => (l.startsWith("+") ? l.slice(1) : l)).join("\n");
+    }
+    return Object.assign(lv, { w: lv.w || 360, h: lv.h || 240, course: c, ci, k });
+  }));
   const PASS = 96;
   const $ = (s, r = document) => r.querySelector(s);
   const h = (tag, attrs, ...kids) => {
@@ -51,11 +62,12 @@
   }
 
   // ------------------------------------------------------------- pixels --
-  const page = (html, css) => `<!doctype html><html><head><style>${BASE}${css}</style></head><body>${html}</body></html>`;
+  const page = (lv, css) => `<!doctype html><html><head><style>${BASE(lv.w, lv.h)}${css}</style></head><body>${lv.html}</body></html>`;
   let tainted = false;
   // Draws the HTML and CSS to an ImageData the size of the board. null when the browser won't let us read pixels.
-  async function raster(html, css) {
-    const doc = new DOMParser().parseFromString(page(html, css), "text/html");
+  async function raster(lv, css) {
+    const W = lv.w, H = lv.h;
+    const doc = new DOMParser().parseFromString(page(lv, css), "text/html");
     const xml = new XMLSerializer().serializeToString(doc.documentElement);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject x="0" y="0" width="${W}" height="${H}">${xml}</foreignObject></svg>`;
     const img = new Image();
@@ -67,7 +79,9 @@
     try { return { data: x.getImageData(0, 0, W, H), canvas: cv }; } catch (e) { tainted = true; return null; }
   }
   // Share of "inked" pixels (anything that isn't the target's background) where yours and the target agree.
-  function compare(mine, target, out) {
+  // Both boards come from the same renderer, so the same CSS gives the same pixels; tol only forgives near-identical colours.
+  function compare(lv, mine, target, out) {
+    const W = lv.w, H = lv.h, tol = lv.tol || 30;
     const a = mine.data.data, b = target.data.data, n = W * H;
     const bg = [b[0], b[1], b[2]];
     const far = (d, i, c) => Math.abs(d[i] - c[0]) + Math.abs(d[i + 1] - c[1]) + Math.abs(d[i + 2] - c[2]);
@@ -76,8 +90,8 @@
     const img = o && o.createImageData(W, H);
     for (let p = 0, i = 0; p < n; p++, i += 4) {
       const inT = far(b, i, bg) > 24, inM = far(a, i, bg) > 24;
-      const bad = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 60;
-      if (inT || inM) ink++;
+      const bad = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > tol;
+      if (inT || inM || bad) ink++;
       if (bad) off++;
       if (img) {
         // the heat map: your board in grey, every pixel that's off in pink
@@ -153,15 +167,12 @@
   }
 
   // -------------------------------------------------------------- board --
-  function board(cls) {
-    const f = h("iframe", { class: "bd", sandbox: "", title: cls === "ghost" ? "Target" : "Your board", tabindex: "-1", width: W, height: H });
-    return f;
-  }
-  const show = (frame, html, css) => { frame.srcdoc = page(html, css); };
+  const board = (lv, cls) => h("iframe", { class: "bd", sandbox: "", title: cls === "ghost" ? "Target" : "Your board", tabindex: "-1", width: lv.w, height: lv.h });
+  const show = (frame, lv, css) => { frame.srcdoc = page(lv, css); };
 
   // ------------------------------------------------------------- studio --
   const TARGETS = {};
-  const target = (lv) => (TARGETS[lv.id] = TARGETS[lv.id] || raster(lv.html, lv.answer));
+  const target = (lv) => (TARGETS[lv.id] = TARGETS[lv.id] || raster(lv, lv.answer));
   const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
   const ruleOk = ([, test, not], css) => (typeof test === "function" ? test(css) : test.test(css) !== !!not);
 
@@ -171,12 +182,16 @@
   const map = $("#map"), desk = $("#desk"), table = $("#table");
 
   function drawMap(cur) {
-    map.replaceChildren(...LV.map((lv, i) => {
+    // one heading per course, then its levels
+    map.replaceChildren(...LV.flatMap((lv, i) => {
       const best = S.dz[lv.id] || 0;
-      return h("li", {}, h("a", { href: "#" + (i + 1), class: (S.done[lv.id] ? "done " : "") + (lv === cur ? "cur" : ""), "aria-current": lv === cur ? "step" : null },
+      const item = h("li", {}, h("a", { href: "#" + (i + 1), class: (S.done[lv.id] ? "done " : "") + (lv === cur ? "cur" : ""), "aria-current": lv === cur ? "step" : null },
         h("span", { class: "th", "data-th": lv.id }),
-        h("span", { class: "nm" }, h("small", {}, String(i + 1).padStart(2, "0")), lv.title),
+        h("span", { class: "nm" }, h("small", {}, `${lv.ci + 1}.${lv.k + 1}`), lv.title),
         h("span", { class: "st" }, S.done[lv.id] ? "✓" : best ? best + "%" : "")));
+      if (lv.k) return [item];
+      const got = lv.course.ids.filter((id) => S.done[id]).length;
+      return [h("li", { class: "course" + (lv.course === cur.course ? " here" : "") }, h("b", {}, lv.course.title), h("span", {}, `${got} / ${lv.course.ids.length}`)), item];
     }));
     const n = LV.filter((l) => S.done[l.id]).length;
     $("#map-n").textContent = `${n} / ${LV.length}`;
@@ -218,7 +233,7 @@
     });
     desk.replaceChildren(
       h("header", { class: "brief" },
-        h("p", { class: "lvl" }, `Level ${String(i + 1).padStart(2, "0")} of ${LV.length}`),
+        h("p", { class: "lvl" }, h("span", {}, `Course ${lv.ci + 1} · ${lv.course.title}`), h("span", {}, `Level ${lv.k + 1} of ${lv.course.ids.length}`)),
         h("h1", {}, lv.title),
         h("p", { class: "ask", html: lv.brief }),
         h("p", { class: "idea", html: lv.idea })),
@@ -228,9 +243,9 @@
       h("details", { class: "markup" }, h("summary", {}, "The HTML (fixed)"), h("pre", {}, lv.html.replace(/></g, ">\n<"))));
 
     // the table: view switch, the boards on a cutting mat, and the meter
-    const mine = board("mine"), ghost = board("ghost"), mine2 = board("mine"), tgt2 = board("ghost");
-    show(ghost, lv.html, lv.answer); show(tgt2, lv.html, lv.answer);
-    const heat = h("canvas", { class: "bd heat", width: W, height: H, "aria-label": "Where your board is off: pink pixels" });
+    const mine = board(lv, "mine"), ghost = board(lv, "ghost"), mine2 = board(lv, "mine"), tgt2 = board(lv, "ghost");
+    show(ghost, lv, lv.answer); show(tgt2, lv, lv.answer);
+    const heat = h("canvas", { class: "bd heat", width: lv.w, height: lv.h, "aria-label": "Where your board is off: pink pixels" });
     const slider = h("input", { type: "range", min: 0, max: 100, step: 1, value: GHOST, "aria-label": "How strongly the target shows through" });
     const ghostWrap = h("div", { class: "art" }, mine, ghost);
     const views = {
@@ -243,13 +258,14 @@
       h("button", { role: "tab", "data-v": k, "aria-selected": String(VIEW === k), onclick: () => setView(k) }, label)));
     const ghostCtl = h("label", { class: "gctl" }, h("span", {}, "Target"), slider, h("b", {}, GHOST + "%"));
     const pct = h("b", { class: "pct" }, "–");
-    const bar = h("span", { class: "mbar" }, h("i"), h("em", { style: `left:${PASS}%`, title: `${PASS}% passes` }));
+    const bar = h("span", { class: "mbar" }, h("i"), h("em", { style: `left:${lv.pass || PASS}%`, title: `${lv.pass || PASS}% passes` }));
     const status = h("span", { class: "mst" }, "Measuring…");
     const next = h("a", { class: "nextbtn", href: "#" + (i + 2), hidden: true }, i + 1 < LV.length ? "Next level" : "Back to level 1", h("i", { class: "arw", "aria-hidden": "true" }));
     if (i + 1 >= LV.length) next.href = "#1";
     const meter = h("div", { class: "meter" }, h("div", { class: "mtop" }, pct, h("span", {}, "match"), status), bar, next);
-    const mat = h("div", { class: "mat" }, views.ghost, views.side, views.diff);
-    table.replaceChildren(h("div", { class: "tbar" }, tabs, ghostCtl), mat, meter);
+    const mat = h("div", { class: "mat", style: `--w:${lv.w};--h:${lv.h}` }, views.ghost, views.side, views.diff);
+    const tbar = h("div", { class: "tbar" }, tabs, ghostCtl);
+    table.replaceChildren(tbar, mat, meter);
 
     function setView(k) {
       VIEW = k;
@@ -268,12 +284,13 @@
     ghost.style.opacity = GHOST / 100;
     ghost.classList.add("ghost");
 
-    // scale the 360×240 boards to fill the mat
+    // scale the boards to fill the mat, as wide as it is and no taller than the window leaves room for
     function fit() {
       const pane = views[VIEW];
-      const cols = VIEW === "side" ? 2 : 1;
+      const cols = VIEW === "side" && innerWidth > 760 ? 2 : 1;
       const room = (mat.clientWidth - 40 - (cols - 1) * 20) / cols;
-      const s = Math.max(.5, Math.min(VIEW === "side" ? 1.4 : 2.2, room / W));
+      const tall = innerHeight - 57 - tbar.offsetHeight - meter.offsetHeight - 120 - (VIEW === "side" ? 24 : 0);
+      const s = Math.max(.5, Math.min(VIEW === "side" ? 1.4 : 2.2, room / lv.w, Math.max(260, tall) / lv.h));
       pane.style.setProperty("--s", s.toFixed(3));
     }
     new ResizeObserver(fit).observe(mat);
@@ -282,15 +299,15 @@
     function queue() { clearTimeout(t); t = setTimeout(check, 160); }
     async function check() {
       const me = ++run;
-      show(mine, lv.html, css); show(mine2, lv.html, css);
+      show(mine, lv, css); show(mine2, lv, css);
       const c = strip(css);
       const okRules = lv.rules.map((r) => ruleOk(r, c));
       [...rules.children].forEach((li, k) => li.classList.toggle("ok", okRules[k]));
       let score = null;
       try {
-        const [a, b] = await Promise.all([raster(lv.html, css), target(lv)]);
+        const [a, b] = await Promise.all([raster(lv, css), target(lv)]);
         if (me !== run) return;
-        if (a && b) score = compare(a, b, heat);
+        if (a && b) score = compare(lv, a, b, heat);
       } catch (e) { /* bad markup in the svg: count it as no match */ score = 0; }
       if (me !== run) return;
       if (score == null) {
@@ -302,9 +319,9 @@
         S.dz[lv.id] = Math.max(S.dz[lv.id] || 0, score);
       }
       const rulesOk = okRules.every(Boolean);
-      const matched = (score == null ? tainted : score >= PASS) && rulesOk;
+      const matched = (score == null ? tainted : score >= (lv.pass || PASS)) && rulesOk;
       meter.classList.toggle("won", matched);
-      if (score != null) status.textContent = matched ? "Matched. That's the target." : score >= PASS ? "The pixels match. Now follow the house rules." : score >= 80 ? "Close. Switch to Where it's off to see the last bits." : "Keep going: the ghost shows where to aim.";
+      if (score != null) status.textContent = matched ? "Matched. That's the target." : score >= (lv.pass || PASS) ? "The pixels match. Now follow the house rules." : score >= 80 ? "Close. Switch to Where it's off to see the last bits." : "Keep going: the ghost shows where to aim.";
       next.hidden = !matched && !S.done[lv.id];
       if (matched && finish(lv)) {
         burst(pct);
@@ -321,6 +338,8 @@
     // lets tools/e2e.js type into the board
     table.dzSet = (v) => ed.set(v);
     table.dzScore = () => pct.textContent;
+    table.dzStart = () => lv.start;
+    table.dzAnswer = () => lv.answer;
   }
 
   function burst(anchor) {

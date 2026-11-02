@@ -6,11 +6,16 @@
 .map-h{display:flex;justify-content:space-between;margin:0 6px 12px;font:600 11px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .map-h span{color:var(--kc);letter-spacing:0}
 .map ol{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.map .course{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:14px 6px 4px;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.map .course:first-child{margin-top:0}
+.map .course b{font-weight:600;color:var(--ink)}
+.map .course.here b{color:var(--kc)}
+.map .course span{letter-spacing:0}
 .map a{display:grid;grid-template-columns:66px minmax(0,1fr) auto;align-items:center;gap:10px;padding:7px 6px;border-radius:8px;text-decoration:none;color:var(--ink);transition:background .2s}
 .map a:hover{background:var(--soft)}
 .map a.cur{background:color-mix(in srgb,var(--kc) 14%,var(--card))}
 .map .th{width:66px;aspect-ratio:3/2;border-radius:4px;overflow:hidden;background:var(--soft);box-shadow:0 0 0 1px var(--line)}
-.map .th img{display:block;width:100%;height:100%}
+.map .th img{display:block;width:100%;height:100%;object-fit:cover}
 .map a.cur .th{box-shadow:0 0 0 2px var(--kc)}
 .map .nm{font:500 13.5px/1.25 var(--f-body)}
 .map .nm small{display:block;font:600 10.5px var(--f-mono);color:var(--kc);margin-bottom:2px}
@@ -19,7 +24,7 @@
 
 /* the desk */
 .desk{padding:26px 24px 40px;border-right:1px solid var(--line);min-width:0}
-.brief .lvl{margin:0;font:600 11px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--kc)}
+.brief .lvl{display:flex;justify-content:space-between;gap:12px;margin:0;font:600 11px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--kc)}
 .brief h1{margin:6px 0 10px;font:400 40px/1 var(--f-serif);letter-spacing:-.01em}
 .brief .ask{margin:0 0 12px;font-size:15.5px;line-height:1.55;text-wrap:pretty}
 .brief .idea{position:relative;margin:0 0 20px;padding-left:17px;font-size:13.5px;line-height:1.55;color:var(--muted)}
@@ -75,8 +80,8 @@
 .pane figure{margin:0;display:grid;gap:8px;justify-items:center}
 .pane figcaption{font:600 11px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .frame{padding:0;border-radius:4px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 18px 40px -18px rgba(0,0,0,.45)}
-.art{position:relative;width:calc(360px * var(--s));height:calc(240px * var(--s));overflow:hidden;border-radius:4px}
-.art .bd{position:absolute;left:0;top:0;width:360px;height:240px;border:0;transform:scale(var(--s));transform-origin:0 0;background:#fff}
+.art{position:relative;width:calc(var(--w) * 1px * var(--s));height:calc(var(--h) * 1px * var(--s));overflow:hidden;border-radius:4px}
+.art .bd{position:absolute;left:0;top:0;width:calc(var(--w) * 1px);height:calc(var(--h) * 1px);border:0;transform:scale(var(--s));transform-origin:0 0;background:#fff}
 .art .ghost{pointer-events:none;mix-blend-mode:normal;transition:opacity .15s}
 .heat{image-rendering:pixelated}
 
