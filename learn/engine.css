@@ -246,7 +246,14 @@ th{background:var(--soft)}
 .vstage{padding:12px 14px 14px}
 .vfail{padding:18px;border:1px dashed var(--line,#ccc);border-radius:10px;text-align:center}.vfail p{margin:0 0 10px}
 .vz{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:12px}
-.vz-view{position:relative;min-height:320px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--code-bg);touch-action:none;cursor:grab}
+.vz-view{position:relative;min-height:320px;border:1px solid var(--line);border-radius:8px;overflow:hidden;touch-action:none;cursor:grab;
+  /* a soft studio backdrop: light from above, a faint dot grid like graph paper, a warm floor glow */
+  background:radial-gradient(120% 80% at 50% -10%,color-mix(in srgb,var(--c2) 9%,transparent),transparent 62%),
+    radial-gradient(90% 50% at 50% 110%,color-mix(in srgb,var(--c4) 8%,transparent),transparent 70%),
+    radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--ink) 10%,transparent) 1px,transparent 1.5px) 0 0/18px 18px,
+    var(--code-bg)}
+.vz-view::after{content:"";position:absolute;bottom:10px;left:10px;width:15px;height:15px;pointer-events:none;opacity:.75;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 3'%3E%3Cpath fill='%23ff6fb5' d='M0 0h1v1H0zM1 1h2v1H1zM2 2h1v1H2z'/%3E%3C/svg%3E") 0 0/100% 100%}
 .vz-view:active{cursor:grabbing}
 .vz-view canvas{display:block;width:100%;height:100%}
 .vz-hud{position:absolute;left:8px;top:8px;right:8px;pointer-events:none;font:12px/1.45 var(--f-mono);color:var(--ink);text-shadow:0 1px 0 var(--card)}
