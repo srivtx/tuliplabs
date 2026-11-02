@@ -66,7 +66,7 @@
 .sw-menu a.home{grid-column:1/-1}
 
 /* one colour per section, used by the switcher, the home page and the footer */
-.k-home{--kc:#ff5fa8}.k-worlds{--kc:#ff5fa8}.k-tc{--kc:#2fb38f}.k-ms{--kc:#3d8fe0}.k-bx{--kc:#e6a21a}.k-ps{--kc:#9a6be0}.k-ds{--kc:#3caa4c}.k-od{--kc:#ee6a4c}
+.k-home{--kc:#ff5fa8}.k-worlds{--kc:#ff5fa8}.k-tc{--kc:#2fb38f}.k-ms{--kc:#3d8fe0}.k-bx{--kc:#e6a21a}.k-ps{--kc:#9a6be0}.k-ds{--kc:#3caa4c}.k-od{--kc:#ee6a4c}.k-dz{--kc:#1fa8c9}
 
 @media (max-width:640px){
   .top .brand b{font-size:16px}
