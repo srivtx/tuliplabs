@@ -241,6 +241,7 @@ th{background:var(--soft)}
 .vgoal{margin:10px 14px 0;font-size:14px;background:color-mix(in srgb,var(--c4) 14%,var(--card));border:1px solid color-mix(in srgb,var(--c4) 45%,var(--line));border-radius:7px;padding:7px 11px}
 .vizblk.done .vgoal{background:color-mix(in srgb,var(--ok) 12%,var(--card));border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
 .vstage{padding:12px 14px 14px}
+.vfail{padding:18px;border:1px dashed var(--line,#ccc);border-radius:10px;text-align:center}.vfail p{margin:0 0 10px}
 .vz{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:12px}
 .vz-view{position:relative;min-height:320px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--code-bg);touch-action:none;cursor:grab}
 .vz-view:active{cursor:grabbing}

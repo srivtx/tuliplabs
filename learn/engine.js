@@ -662,8 +662,14 @@
     };
     stage.vizDone = finish; // lets tools/e2e.js complete a goal
     if (!window.VIZ) { stage.textContent = "The simulation library did not load."; return sh.el; }
-    window.VIZ.mount(b.name, stage, { done: finish, height: b.height, wasDone: !!S.done[b.id], key: b.id })
-      .catch((e) => { stage.textContent = "This simulation failed to start: " + (e && e.message || e); });
+    const start = () => window.VIZ.mount(b.name, stage, { done: finish, height: b.height, wasDone: !!S.done[b.id], key: b.id })
+      .catch((e) => {
+        console.error(e);
+        stage.replaceChildren(h("div", { class: "vfail" },
+          h("p", {}, "The simulation didn't load (", (e && e.message) || String(e), "). This is usually a network hiccup."),
+          h("button", { class: "btn", onclick: () => { stage.replaceChildren(h("p", { class: "kbd" }, "Loading the simulation…")); start(); } }, "Try again")));
+      });
+    start();
     return sh.el;
   }
 

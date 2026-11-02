@@ -9,15 +9,24 @@
   const loading = {};
   const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // Load a script once. A flaky network or a deploy in progress can fail a load, so try a
+  // few times (with a cache-busting query after the first) before giving up, and forget a
+  // failure so a later mount can try again.
   function script(src) {
     if (!loading[src]) {
-      loading[src] = new Promise((res, rej) => {
+      const once = (url) => new Promise((res, rej) => {
         const s = document.createElement("script");
-        s.src = src;
+        s.src = url;
         s.onload = res;
-        s.onerror = () => rej(new Error("could not load " + src));
+        s.onerror = () => { s.remove(); rej(new Error("could not load " + src)); };
         document.head.append(s);
       });
+      loading[src] = (async () => {
+        for (let i = 0; ; i++) {
+          try { return await once(i ? src + (src.includes("?") ? "&" : "?") + "retry=" + Date.now() : src); }
+          catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 600 * (i + 1))); }
+        }
+      })().catch((e) => { delete loading[src]; throw e; });
     }
     return loading[src];
   }
