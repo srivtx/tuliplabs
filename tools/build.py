@@ -313,6 +313,11 @@ def build(only=None):
         built[track] = chapters
         nblocks = sum(len(s["blocks"]) for c in chapters for s in c["sections"])
         print(f"built {track}.json: {len(chapters)} chapters, {nblocks} blocks")
+    # A tiny index for the home page: chapter ids, titles and block counts per track, so it can show
+    # live counts and the reader's progress without downloading every lesson.
+    summary = {t: [[c["id"], c["title"], sum(len(s["blocks"]) for s in c["sections"])] for c in chs] for t, chs in built.items()}
+    with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
+        json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))
     return built
 
 
