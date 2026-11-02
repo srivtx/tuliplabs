@@ -10,7 +10,7 @@
 <meta property="og:description" content="Seven tracks of simulations you can poke, from the ground floor to Codeforces level.">
 <meta property="og:image" content="docs/screenshot.png">
 <meta name="theme-color" content="#0b0c0a">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='2' width='8' height='8' fill='%23e2532c'/><rect x='22' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='2' y='12' width='8' height='8' fill='%2318977f'/><rect x='12' y='12' width='8' height='8' fill='%233a4fa3'/><rect x='22' y='12' width='8' height='8' fill='%23e2532c'/><rect x='2' y='22' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='22' width='8' height='8' fill='%23d99a12'/><rect x='22' y='22' width='8' height='8' fill='%233a4fa3'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges'><rect x='1' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='1' width='1' height='1' fill='%23d23f87'/><rect x='3' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='4' y='1' width='1' height='1' fill='%23d23f87'/><rect x='5' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='3' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='5' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='3' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='4' width='1' height='1' fill='%233faa52'/><rect x='3' y='4' width='1' height='1' fill='%2324803c'/><rect x='6' y='4' width='1' height='1' fill='%233faa52'/><rect x='0' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='5' width='1' height='1' fill='%233faa52'/><rect x='3' y='5' width='1' height='1' fill='%2324803c'/><rect x='5' y='5' width='1' height='1' fill='%233faa52'/><rect x='6' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='6' width='1' height='1' fill='%233faa52'/><rect x='2' y='6' width='1' height='1' fill='%233faa52'/><rect x='3' y='6' width='1' height='1' fill='%2324803c'/><rect x='4' y='6' width='1' height='1' fill='%233faa52'/><rect x='5' y='6' width='1' height='1' fill='%233faa52'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Pixelify+Sans:wght@500;700&display=swap">
 <style>
@@ -105,6 +105,21 @@ a{color:var(--pink-soft)}
 @keyframes bob{0%,100%{transform:none}50%{transform:translateY(-6px)}}
 .fig:hover .bob{animation-duration:1.6s}
 @media (max-width:900px){.hero-grid{grid-template-columns:1fr}.fig{max-width:420px;margin:0 auto}}
+
+
+/* what's inside: one stripe per track, like a striped sign; the bar's length is how many chapters it has */
+.ribbon{margin-top:46px;display:flex;flex-direction:column;gap:3px}
+.rib-h{display:flex;justify-content:space-between;font:11.5px var(--f-mono);color:var(--muted);margin-bottom:8px}
+.rib{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:center;text-decoration:none;color:var(--ink)}
+.rib-track{display:block;background:color-mix(in srgb,var(--kc) 10%,transparent)}
+.rib-bar{display:flex;justify-content:space-between;align-items:center;width:calc(120px + (100% - 120px) * var(--w));height:30px;padding:0 10px;
+  background:linear-gradient(90deg,var(--kc) calc(100% - 22px),#f3ecd7 0);color:#141310;transition:width .45s cubic-bezier(.2,.8,.3,1)}
+.rib-bar b{font:700 13px var(--f-display);letter-spacing:.03em}
+.rib-bar em{font:600 11px var(--f-mono);font-style:normal;margin-right:18px}
+.rib-t{font-size:13.5px;color:var(--muted);transition:color .2s}
+.rib:hover .rib-bar{width:calc(140px + (100% - 120px) * var(--w))}
+.rib:hover .rib-t{color:var(--ink)}
+@media (max-width:700px){.rib{grid-template-columns:1fr;gap:2px;margin-bottom:6px}}
 
 /* ---------------- mosaic band ---------------- */
 .mosaic{position:relative;height:clamp(300px,46vw,520px);background:#0e2a63;overflow:hidden}
@@ -226,6 +241,10 @@ a{color:var(--pink-soft)}
         </svg>
         <figcaption>fig. 1 · <b>one node, four neighbours</b>, and two other components</figcaption>
       </figure>
+    </div>
+    <div class="ribbon" aria-label="What's inside">
+      <div class="rib-h"><span>what's inside</span><span>bar length = chapters</span></div>
+      <a class="rib" href="worlds/" data-k="worlds" style="--kc:#ff5fa8;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Worlds</b><em>12</em></span></span><span class="rib-t">Poke 12 voxel worlds: cities, sandpiles, flocks, forest fires</span></a><a class="rib" href="code/" data-k="tc" style="--kc:#2fb38f;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Complexity</b><em>12</em></span></span><span class="rib-t">The Python behind every world, step by step</span></a><a class="rib" href="modsim/" data-k="ms" style="--kc:#3d8fe0;--w:0.591"><span class="rib-track"><span class="rib-bar"><b>ModSim</b><em>26</em></span></span><span class="rib-t">Model the real world: growth, epidemics, things that fall</span></a><a class="rib" href="build/" data-k="bx" style="--kc:#e6a21a;--w:0.659"><span class="rib-track"><span class="rib-bar"><b>Build X</b><em>29</em></span></span><span class="rib-t">Rebuild SQL, git, a CPU, an OS and a tiny GPT from scratch</span></a><a class="rib" href="stats/" data-k="ps" style="--kc:#9a6be0;--w:0.295"><span class="rib-track"><span class="rib-bar"><b>Stats</b><em>13</em></span></span><span class="rib-t">Simulate chance first, then prove it</span></a><a class="rib" href="dsa/" data-k="ds" style="--kc:#3caa4c;--w:1.000"><span class="rib-track"><span class="rib-bar"><b>DSA</b><em>44</em></span></span><span class="rib-t">From Big-O to Codeforces, one pattern at a time</span></a><a class="rib" href="ods/" data-k="od" style="--kc:#ee6a4c;--w:0.091"><span class="rib-track"><span class="rib-bar"><b>ODS</b><em>soon</em></span></span><span class="rib-t">Open Data Structures, chapter by chapter</span></a>
     </div>
   </div>
 </section>
