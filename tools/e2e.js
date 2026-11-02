@@ -6,7 +6,9 @@ const track = process.argv[2] || "code";
 const chap = process.argv[3] || "1";
 const shots = process.env.SHOTS || ".";
 (async () => {
-  const browser = await chromium.launch(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {});
+  // Software WebGL, so the 3D simulations still render on machines (and CI) with no GPU for the browser.
+  const args = ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"];
+  const browser = await chromium.launch(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL, args } : { args });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
