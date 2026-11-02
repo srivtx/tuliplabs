@@ -200,6 +200,21 @@ a{color:var(--pink-soft)}
 #cat{display:block;width:100%;height:auto;cursor:pointer;overflow:visible}
 #cat .k{transition:transform .12s}
 #cat .k:hover{transform:translateY(1px)}
+#cat .iris,#cat .pupil,#cat .squint,#mrrp,#prr{opacity:0;transition:opacity .15s}
+#cat:is(.peek,.awake) :is(.iris,.pupil){opacity:1}#cat:is(.peek,.awake) .lid{opacity:0}
+#cat.peek:not(.awake):not(.purr) .squint{opacity:1}
+#cat:is(.awake,.purr) #zz{opacity:0}#cat.awake #mrrp{opacity:1}#cat.purr #prr{opacity:1}
+#cat.purr :is(.iris,.pupil){opacity:0}#cat.purr .lid{opacity:1}
+#cat .pupil{transition:transform .12s,opacity .15s}
+@media (prefers-reduced-motion:no-preference){
+  #cat.wave .body{animation:kwave .5s calc(var(--x) * 18ms) both}
+  #cat.purr .body{animation:kpurr .16s steps(2) infinite}
+  #cat .heart{animation:hrise 1.4s ease-out forwards}
+}
+@keyframes kwave{40%{transform:translateY(-6px)}}
+@keyframes kpurr{50%{transform:translateY(.7px)}}
+@keyframes hrise{from{transform:translateY(0) scale(.6);opacity:1}to{transform:translateY(-46px) scale(1);opacity:0}}
+#cat .heart{transform-box:fill-box;transform-origin:50% 100%}
 .keys figcaption{font:12px var(--f-mono);color:#4a4630;text-align:center;margin-top:8px}
 @media (max-width:900px){.keys-grid{grid-template-columns:1fr}}
 
@@ -504,8 +519,8 @@ a{color:var(--pink-soft)}
       <a class="btn dark" id="resume" href="dsa/">Carry on where you stopped →</a>
     </div>
     <figure style="margin:0">
-      <svg id="cat" viewBox="20 0 520 260" role="img" aria-label="A black cat made of keycaps, asleep on a wall of green keycap bricks. Click it to wake it."></svg>
-      <figcaption>fig. 2 · the cat sleeps on the stack. Tap it.</figcaption>
+      <svg id="cat" viewBox="20 0 520 260" role="img" aria-label="A black cat made of keycaps, asleep on a wall of green keycap bricks. Tap it to wake it, or stroke it to make it purr."></svg>
+      <figcaption>fig. 2 · the cat sleeps on the stack. Tap to wake it, or stroke its back to make it purr.</figcaption>
     </figure>
   </div>
 </section>
@@ -1077,29 +1092,55 @@ function caps() {
   CAT.forEach((line, y) => [...line].forEach((ch, x) => {
     if (ch === ".") return;
     const px = OX + x * K, py = OY + y * K;
-    if (ch === "e") out += `<g class="eye"><rect x="${px}" y="${py}" width="${K - G}" height="${K - G}" rx="3" fill="#1c1d1a"/><rect class="lid" x="${px + 2}" y="${py + 6}" width="${K - G - 4}" height="2" fill=INK()/><rect class="iris" x="${px + 2}" y="${py + 2}" width="${K - G - 4}" height="${K - G - 4}" rx="2" fill="#bfe34a" opacity="0"/></g>`;
-    else if (ch === "n") out += key(px, py, "#ff6fb5", "", "", "");
+    if (ch === "e") out += `<g class="eye" data-cx="${px + (K - G) / 2}" data-cy="${py + (K - G) / 2}"><rect x="${px}" y="${py}" width="${K - G}" height="${K - G}" rx="3" fill="#1c1d1a"/><rect class="lid" x="${px + 2}" y="${py + 6}" width="${K - G - 4}" height="2" fill="#9a9a90"/><rect class="iris" x="${px + 2}" y="${py + 2}" width="${K - G - 4}" height="${K - G - 4}" rx="2" fill="#bfe34a"/><rect class="pupil" x="${px + 5}" y="${py + 2.5}" width="3" height="${K - G - 5}" rx="1" fill="#1c1d1a"/><rect class="squint" x="${px + 1.5}" y="${py + 1.5}" width="${K - G - 3}" height="${(K - G) / 2 - 1}" fill="#1c1d1a"/></g>`;
+    else if (ch === "n") out += key(px, py, "#ff6fb5", "", "body", `style="--x:${x}"`);
     else if (ch === "t") out += key(px, py, "#1c1d1a", glyphs[gi++ % glyphs.length], "tail");
-    else out += key(px, py, ch === "w" ? "#2b2c28" : "#1c1d1a", glyphs[gi++ % glyphs.length]);
+    else out += key(px, py, ch === "w" ? "#2b2c28" : "#1c1d1a", glyphs[gi++ % glyphs.length], "body", `style="--x:${x}"`);
   }));
+  const say = (id, x, y, txt, op = 0) => `<text id="${id}" x="${x}" y="${y}" font-family="Pixelify Sans, monospace" font-size="16" fill="#1c1d1a" opacity="${op}">${txt}</text>`;
   out += `<g id="zz" font-family="Pixelify Sans, monospace" font-size="16" fill="#1c1d1a"><text x="${OX - 30}" y="${OY + 8}">z</text><text x="${OX - 48}" y="${OY - 8}" font-size="12">z</text></g>`;
-  out += `<text id="mrrp" x="${OX - 60}" y="${OY + 20}" font-family="Pixelify Sans, monospace" font-size="16" fill="#1c1d1a" opacity="0">mrrp?</text>`;
+  out += say("mrrp", OX - 60, OY + 20, "mrrp?") + say("prr", OX + 170, OY + 10, "prrrr…") + `<g id="hearts"></g>`;
   svg.innerHTML = out;
-  let awake = 0;
-  svg.addEventListener("click", () => {
-    clearTimeout(awake);
-    svg.querySelectorAll(".iris").forEach((e) => e.setAttribute("opacity", "1"));
-    svg.querySelectorAll(".lid").forEach((e) => e.setAttribute("opacity", "0"));
-    $("#zz").setAttribute("opacity", "0"); $("#mrrp").setAttribute("opacity", "1");
-    awake = setTimeout(() => {
-      svg.querySelectorAll(".iris").forEach((e) => e.setAttribute("opacity", "0"));
-      svg.querySelectorAll(".lid").forEach((e) => e.setAttribute("opacity", "1"));
-      $("#zz").setAttribute("opacity", "1"); $("#mrrp").setAttribute("opacity", "0");
-    }, 2600);
+  // Three moods: asleep; peeking with one eye on your pointer when it comes near; awake when tapped (it stretches
+  // with a wave down its keys). Stroke it back and forth along its back and it purrs, with pink pixel hearts.
+  const eyes = [...svg.querySelectorAll(".eye")], hearts = $("#hearts");
+  const HEART = [".#.#.", "#####", "#####", ".###.", "..#.."];
+  const pt = (e) => { const m = svg.getScreenCTM(); return m ? new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()) : { x: 0, y: 0 }; };
+  let awake = 0, purrT = 0, lastX = null, dir = 0, run = 0, strokes = 0, strokeT = 0;
+  const look = (p) => eyes.forEach((g) => {
+    const dx = Math.max(-2.5, Math.min(2.5, (p.x - g.dataset.cx) / 40)), dy = Math.max(-1.5, Math.min(1.5, (p.y - g.dataset.cy) / 50));
+    g.querySelector(".pupil").setAttribute("transform", `translate(${dx},${dy})`);
+  });
+  const heart = (x, y) => {
+    const h = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    h.setAttribute("transform", `translate(${x - 7},${y - 20})`);
+    h.innerHTML = `<g class="heart">${HEART.map((r, j) => [...r].map((c, i) => c === "#" ? `<rect x="${i * 3}" y="${j * 3}" width="3" height="3" fill="#ff6fb5"/>` : "").join("")).join("")}</g>`;
+    hearts.append(h); setTimeout(() => h.remove(), 1500);
+  };
+  svg.addEventListener("pointerenter", () => svg.classList.add("peek"));
+  svg.addEventListener("pointerleave", () => { svg.classList.remove("peek"); lastX = null; });
+  svg.addEventListener("pointermove", (e) => {
+    const p = pt(e); look(p);
+    // a stroke is a sweep of the pointer along the back that turns round; three in a row starts the purr
+    if (p.y > OY + 2 * K && p.y < OY + 8 * K && lastX !== null) {
+      const d = Math.sign(p.x - lastX);
+      if (d && d !== dir) { if (run > 30) { strokes = performance.now() - strokeT < 900 ? strokes + 1 : 1; strokeT = performance.now(); } dir = d; run = 0; if (strokes >= 3) purr(p); }
+      run += Math.abs(p.x - lastX);
+    }
+    lastX = p.x;
+  });
+  function purr(p) {
+    svg.classList.add("purr"); heart(p.x, p.y);
+    clearTimeout(purrT); purrT = setTimeout(() => svg.classList.remove("purr"), 1600);
+  }
+  svg.addEventListener("click", (e) => {
+    clearTimeout(awake); look(pt(e));
+    svg.classList.remove("wave"); void svg.getBoundingClientRect(); svg.classList.add("awake", "wave");
+    awake = setTimeout(() => svg.classList.remove("awake", "wave"), 3000);
   });
   if (!REDUCED) {
     let t = 0; const tail = [...svg.querySelectorAll(".tail")], zz = $("#zz");
-    setInterval(() => { t++; tail.forEach((e, i) => e.setAttribute("transform", `translate(${Math.round(Math.sin(t * 0.6 + i * 0.5) * 2)},0)`)); zz.setAttribute("transform", `translate(0,${-(t % 8)})`); }, 260);
+    setInterval(() => { t++; const f = svg.classList.contains("purr") ? 1.6 : 0.6; tail.forEach((e, i) => e.setAttribute("transform", `translate(${Math.round(Math.sin(t * f + i * 0.5) * 2)},0)`)); zz.setAttribute("transform", `translate(0,${-(t % 8)})`); }, 260);
   }
 })();
 
