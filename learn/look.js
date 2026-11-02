@@ -27,13 +27,14 @@
       for (let i = 0; i < 14; i++) out.push([((rnd() * 25) | 0) * 2, ((rnd() * 20) | 0) * 2, 1.2, 1.2, "#ffd21f"]);
       return rects(out);
     },
-    // the striped sign: bands that stop short, with cream ends
+    // the striped sign: bands that stop short, with cream ends. Its viewBox is exactly ten bands tall,
+    // so cropping the panel never leaves a thin sliver of a band along an edge.
     sign() {
-      const C = ["#2c7a4d", "#e9cdb4", "#6b95dd", "#e2b22b"], out = [[0, 0, 50, 40, "#2c7a4d"]];
-      for (let i = 0, y = 0; y < 40; i++, y += 3.4) {
-        const c = C[i % 4], left = i % 2 ? 7 : 0, right = i % 2 ? 0 : 8;
-        out.push([0, y, 50, 3.4, "#f1ecd9"], [left, y, 50 - left - right, 3.4, c]);
-        if (i % 4 === 2) out.push([0, y, 0.9, 3.4, "#1d3b9a"]);
+      const C = ["#e9cdb4", "#6b95dd", "#e2b22b", "#2c7a4d"], h = 33.34 / 10, out = [[0, 0, 50, 40, "#f1ecd9"]];
+      for (let i = 0; i < 10; i++) {
+        const y = i * h, c = C[i % 4], left = i % 2 ? 7 : 0, right = i % 2 ? 0 : 8;
+        out.push([left, y, 50 - left - right, h, c]);
+        if (i % 4 === 1) out.push([0, y, 0.9, h, "#ff6fb5"]);
       }
       return rects(out);
     },
@@ -74,7 +75,7 @@
   if (!arts.length) return;
   for (const art of arts) {
     seed = 11;
-    art.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 50 40" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ART[art.dataset.art]()}${GRAIN}</svg>`);
+    art.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 50 ${art.dataset.art === "sign" ? 33.34 : 40}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ART[art.dataset.art]()}${GRAIN}</svg>`);
   }
   // the window is drawn at 600 × 360 and scaled to the panel
   const fit = (art) => {
