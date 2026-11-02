@@ -137,14 +137,14 @@ window.TLMARK = (() => {
 (() => {
   if (document.querySelector(".foot") || !document.querySelector("main")) return;
   const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
-  const T = [["worlds", "worlds/", "Worlds", "#ff5fa8"], ["tc", "code/", "Complexity", "#2fb38f"], ["ms", "modsim/", "ModSim", "#3d8fe0"],
+  const T = [["worlds", "worlds/", "Worlds", "#ff5fa8"], ["dz", "design/", "Design", "#1fa8c9"], ["tc", "code/", "Complexity", "#2fb38f"], ["ms", "modsim/", "ModSim", "#3d8fe0"],
     ["bx", "build/", "Build X", "#e6a21a"], ["ps", "stats/", "Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "ODS", "#ee6a4c"]];
   const f = document.createElement("footer");
   const logo = `<span class="logo" aria-hidden="true">${"<i></i>".repeat(9)}</span>`;
   const base = `<div class="gf-base"><span class="gf-brand">${logo}<b>Tulip Labs</b><em>· a product by ${SVX}</em></span>
     <a class="gf-news" href="${root}news/">news</a><span class="gf-keep">your progress lives in this browser</span><a class="gf-top" href="#">↑ top</a></div>`;
   // Lesson pages keep it quiet: one line of grass and one line of text. The garden lives on the home page.
-  if (document.querySelector("#side")) {
+  if (document.querySelector("#side, .studio")) {
     f.className = "foot sfoot";
     f.innerHTML = `<canvas class="gf-grass" aria-hidden="true"></canvas>${base}`;
     document.body.append(f);

@@ -402,7 +402,7 @@ a{color:var(--pink-soft)}
     </div>
     <div class="ribbon" aria-label="What's inside">
       <div class="rib-h"><span>what's inside</span><span>bar length = chapters</span></div>
-      <a class="rib" href="worlds/" data-k="worlds" style="--kc:#ff5fa8;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Worlds</b><em>12</em></span></span><span class="rib-t">Poke 12 voxel worlds: cities, sandpiles, flocks, forest fires</span></a><a class="rib" href="code/" data-k="tc" style="--kc:#2fb38f;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Complexity</b><em>12</em></span></span><span class="rib-t">The Python behind every world, step by step</span></a><a class="rib" href="modsim/" data-k="ms" style="--kc:#3d8fe0;--w:0.591"><span class="rib-track"><span class="rib-bar"><b>ModSim</b><em>26</em></span></span><span class="rib-t">Model the real world: growth, epidemics, things that fall</span></a><a class="rib" href="build/" data-k="bx" style="--kc:#e6a21a;--w:0.659"><span class="rib-track"><span class="rib-bar"><b>Build X</b><em>29</em></span></span><span class="rib-t">Rebuild SQL, git, a CPU, an OS and a tiny GPT from scratch</span></a><a class="rib" href="stats/" data-k="ps" style="--kc:#9a6be0;--w:0.295"><span class="rib-track"><span class="rib-bar"><b>Stats</b><em>13</em></span></span><span class="rib-t">Simulate chance first, then prove it</span></a><a class="rib" href="dsa/" data-k="ds" style="--kc:#3caa4c;--w:1.000"><span class="rib-track"><span class="rib-bar"><b>DSA</b><em>44</em></span></span><span class="rib-t">From Big-O to Codeforces, one pattern at a time</span></a><a class="rib" href="ods/" data-k="od" style="--kc:#ee6a4c;--w:0.091"><span class="rib-track"><span class="rib-bar"><b>ODS</b><em>soon</em></span></span><span class="rib-t">Open Data Structures, chapter by chapter</span></a>
+      <a class="rib" href="worlds/" data-k="worlds" style="--kc:#ff5fa8;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Worlds</b><em>12</em></span></span><span class="rib-t">Poke 12 voxel worlds: cities, sandpiles, flocks, forest fires</span></a><a class="rib" href="design/" data-k="dz" style="--kc:#1fa8c9;--w:0.182"><span class="rib-track"><span class="rib-bar"><b>Design</b><em>8</em></span></span><span class="rib-t">Match a target poster, card or layout in CSS</span></a><a class="rib" href="code/" data-k="tc" style="--kc:#2fb38f;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Complexity</b><em>12</em></span></span><span class="rib-t">The Python behind every world, step by step</span></a><a class="rib" href="modsim/" data-k="ms" style="--kc:#3d8fe0;--w:0.591"><span class="rib-track"><span class="rib-bar"><b>ModSim</b><em>26</em></span></span><span class="rib-t">Model the real world: growth, epidemics, things that fall</span></a><a class="rib" href="build/" data-k="bx" style="--kc:#e6a21a;--w:0.659"><span class="rib-track"><span class="rib-bar"><b>Build X</b><em>29</em></span></span><span class="rib-t">Rebuild SQL, git, a CPU, an OS and a tiny GPT from scratch</span></a><a class="rib" href="stats/" data-k="ps" style="--kc:#9a6be0;--w:0.295"><span class="rib-track"><span class="rib-bar"><b>Stats</b><em>13</em></span></span><span class="rib-t">Simulate chance first, then prove it</span></a><a class="rib" href="dsa/" data-k="ds" style="--kc:#3caa4c;--w:1.000"><span class="rib-track"><span class="rib-bar"><b>DSA</b><em>44</em></span></span><span class="rib-t">From Big-O to Codeforces, one pattern at a time</span></a><a class="rib" href="ods/" data-k="od" style="--kc:#ee6a4c;--w:0.091"><span class="rib-track"><span class="rib-bar"><b>ODS</b><em>soon</em></span></span><span class="rib-t">Open Data Structures, chapter by chapter</span></a>
     </div>
   </div>
 </section>
@@ -595,6 +595,8 @@ const $ = (s) => document.querySelector(s);
 const TRACKS = [
   { k: "worlds", data: null, href: "worlds/", name: "3D worlds", tag: "play", count: 12,
     desc: "Think Complexity as voxel worlds: a city, a party, a sandpile, traffic. Drag, poke, and follow a guided story.", art: "cube" },
+  { k: "dz", data: "dz", href: "design/", name: "Design studio", tag: "play", unit: " levels",
+    desc: "Match a target in CSS: your board and the target overlap, and a meter shows how many pixels agree.", art: "frame" },
   { k: "tc", data: "tc", href: "code/", name: "Think Complexity", tag: "code along",
     desc: "The Python behind every world: graphs, small worlds, cellular automata, agents and evolution.", art: "glider" },
   { k: "ms", data: "ms", href: "modsim/", name: "ModSim", tag: "code along",
@@ -608,7 +610,7 @@ const TRACKS = [
   { k: "od", data: "od", href: "ods/", name: "Open Data Structures", tag: "book",
     desc: "Pat Morin's book chapter by chapter: array stacks, linked lists, skiplists, hash tables, heaps, B-trees.", art: "list" },
 ];
-const KC = { worlds: "#ff5fa8", tc: "#2fb38f", ms: "#3d8fe0", bx: "#e6a21a", ps: "#9a6be0", ds: "#3caa4c", od: "#ee6a4c" };
+const KC = { worlds: "#ff5fa8", dz: "#1fa8c9", tc: "#2fb38f", ms: "#3d8fe0", bx: "#e6a21a", ps: "#9a6be0", ds: "#3caa4c", od: "#ee6a4c" };
 
 /* ---------- the reader's progress (the code tracks share one store) ---------- */
 let S = {};
@@ -625,8 +627,8 @@ function chState(id, blocks) {
 
 /* ---------- top bar switcher: same markup as every other page ---------- */
 (function nav() {
-  const G = [["Play", ["worlds"]], ["Code along", ["tc", "ms"]], ["Courses", ["bx", "ps", "ds", "od"]]];
-  const sub = { worlds: "Think Complexity as 12 voxel worlds you can poke", tc: "The Python behind every world, step by step", ms: "Modeling and simulation, learnt in code",
+  const G = [["Play", ["worlds", "dz"]], ["Code along", ["tc", "ms"]], ["Courses", ["bx", "ps", "ds", "od"]]];
+  const sub = { worlds: "Think Complexity as 12 voxel worlds you can poke", dz: "Match a target in CSS, pixel by pixel", tc: "The Python behind every world, step by step", ms: "Modeling and simulation, learnt in code",
     bx: "See every part of a real tool, then write it", ps: "Simulate it, then prove it", ds: "From the ground floor to Codeforces", od: "Pat Morin's book, chapter by chapter" };
   const by = Object.fromEntries(TRACKS.map((t) => [t.k, t]));
   let h = '<summary aria-label="Switch section"><i class="sq"></i><span>Home</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections">';
@@ -996,6 +998,7 @@ const ART = {
   gear: ["....aa....", ".a.aaaa.a.", "..aaaaaa..", ".aaa..aaa.", "aaa....aaa", "aaa....aaa", ".aaa..aaa.", "..aaaaaa..", ".a.aaaa.a.", "....aa...."],
   bell: [".....aa.....", "....aaaa....", "....aaaa....", "...aaaaaa...", "...aaaaaa...", "..aaaaaaaa..", ".aaaaaaaaaa.", "aaaaaaaaaaaa"],
   tree: [".....aa.....", ".....aa.....", "...a....a...", "..a......a..", ".aa......aa.", ".aa......aa.", "a..a....a..a", "aa.aa..aa.aa", "aa.aa..aa.aa"],
+  frame: ["aaaaaaaaaaaa", "a..........a", "a.bbb..aa..a", "a.....aaaa.a", "a.bb..aaaa.a", "a......aa..a", "a.bbbbb....a", "a..........a", "aaaaaaaaaaaa"],
   list: ["aaaa....aaaa....aaaa", "a..a....a..a....a..a", "a..aaaaaa..aaaaaa..a", "a..a...ba..a...ba..a", "aaaa....aaaa....aaaa"],
 };
 // A door is a small poster: the track's colour, a few loose squares like a woven print, and the emblem in crisp cream pixels.
@@ -1036,7 +1039,7 @@ function cards() {
     return `<article class="card k-${t.k}${soon ? " soon" : ""}" style="--kc:${KC[t.k]}">
       <a class="hit" href="${t.href}" aria-label="Open ${t.name}"></a>
       <div class="poster"><canvas data-art="${t.art}" data-i="${i}" aria-hidden="true"></canvas>
-        <span class="p-tag">${t.tag}</span><span class="p-n">${soon ? "being written" : count + (t.k === "worlds" ? " worlds" : " chapters")}</span>
+        <span class="p-tag">${t.tag}</span><span class="p-n">${soon ? "being written" : count + (t.k === "worlds" ? " worlds" : t.unit || " chapters")}</span>
         <h3>${t.name}</h3></div>
       <div class="body"><p>${t.desc}</p>
         ${first ? `<div class="first"><span>starts with</span>${first}</div>` : ""}
