@@ -33,7 +33,10 @@
 <script>
 window.TRACK = {
   id: "tc", data: "../content/tc.json", short: "Think Complexity", pageTitle: "Think Complexity in code · Voxel Network Lab",
-  heroTitle: 'Think Complexity, in code', heroLede: "You have played the 12 worlds. Now write them. Every chapter of Allen Downey's <i>Think Complexity</i> turned into runnable Python: graphs, cellular automata, sand piles, Sugarscape and evolving strategies, built up one function at a time, right here in the browser.", homeNote: 'Python runs on this page (numpy, networkx, matplotlib, scipy) with nothing to install. The first run downloads about 15 MB, then it is cached. Your code and progress stay in this browser.'
+  heroTitle: 'Think Complexity, in code', heroLede: "You have played the 12 worlds. Now write them. Every chapter of Allen Downey's <i>Think Complexity</i> turned into runnable Python: graphs, cellular automata, sand piles, Sugarscape and evolving strategies, built up one function at a time, right here in the browser.", homeNote: 'Python runs on this page (numpy, networkx, matplotlib, scipy) with nothing to install. The first run downloads about 15 MB, then it is cached. Your code and progress stay in this browser.',
+  wires: [[1,2],[1,5],[2,3],[2,4],[3,4],[5,6],[5,7],[5,8],[7,8],[5,9],[9,10],[9,11],[11,12]],
+  short_names: ["Complexity", "Graphs", "Small world", "Scale-free", "Automata", "Life", "Physics", "Sandpile", "Agents", "Flocks", "Evolution", "Cooperation"],
+  wireTitle: "How the ideas grow from each other", bpUnit: "piece", shipWord: "understood"
 };
 </script>
 <script src="../learn/garden.js"></script>

@@ -33,7 +33,10 @@
 <script>
 window.TRACK = {
   id: "ps", data: "../content/ps.json", short: "Probability & Stats", pageTitle: "Probability & Statistics · Voxel Network Lab",
-  heroTitle: "Probability & Statistics, simulated first", heroLede: "Every idea starts as something you can watch: thousands of dice, a Galton board, a city of voters, a medical test on 1,000 people. You predict, you run it, you see the shape appear, and only then do we name it and write the formula. From counting outcomes to Bayes, the central limit theorem, confidence intervals, hypothesis tests, regression, Bayesian inference and Markov chain Monte Carlo, with a real-world project in every chapter.", homeNote: "Each chapter is a chain of small questions: answer one, unlock the next. Simulations use real randomness, so your numbers will differ a little from a friend's. That is the point. Python (numpy, scipy, matplotlib) runs on this page with nothing to install."
+  heroTitle: "Probability & Statistics, simulated first", heroLede: "Every idea starts as something you can watch: thousands of dice, a Galton board, a city of voters, a medical test on 1,000 people. You predict, you run it, you see the shape appear, and only then do we name it and write the formula. From counting outcomes to Bayes, the central limit theorem, confidence intervals, hypothesis tests, regression, Bayesian inference and Markov chain Monte Carlo, with a real-world project in every chapter.", homeNote: "Each chapter is a chain of small questions: answer one, unlock the next. Simulations use real randomness, so your numbers will differ a little from a friend's. That is the point. Python (numpy, scipy, matplotlib) runs on this page with nothing to install.",
+  wires: [[1,2],[2,3],[1,4],[4,5],[5,6],[6,7],[7,8],[8,9],[7,10],[3,11],[11,12],[9,13],[8,13],[11,13]],
+  short_names: ["Chance", "Rules", "Bayes", "Variables", "Averages", "Normal", "Sampling", "Intervals", "Tests", "Regression", "Bayesian", "MCMC", "A/B test"],
+  wireTitle: "How the ideas lean on each other", bpUnit: "piece", shipWord: "understood"
 };
 </script>
 <script src="../learn/garden.js"></script>

@@ -939,7 +939,7 @@
       a.append(num, lbl); svg.append(a);
     }
     return h("div", { class: "wiremap" },
-      h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), "How the builds wire together", h("small", {}, "each build reuses parts of the one above it · finish both ends and the wire lights up")),
+      h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), CFG.wireTitle || "How the builds wire together", h("small", {}, "each one reuses what sits above it · finish both ends and the wire lights up")),
       h("div", { class: "wm-scroll" }, svg));
   }
 
@@ -984,7 +984,7 @@
     // machine as you finish steps. The builds it reuses and the ones it unlocks hang off either side.
     const bp = CFG.wires ? h("div", { class: "bp" }) : null;
     col.append(...[bp, head, stepsEl].filter(Boolean));
-    const bpName = ((CFG.short_names || [])[ch.num - 1] || ch.id).toLowerCase().replace(/\s+/g, "-");
+    const unit = CFG.bpUnit || "part", bpName = ((CFG.short_names || [])[ch.num - 1] || ch.id).toLowerCase().replace(/\s+/g, "-");
     function drawBlueprint() {
       if (!bp) return;
       const built = ch.sections.filter((sec, i) => i < reached || (i === reached && !left(sec))).length, fin = !!S.step[ch.id + ":fin"];
@@ -1006,10 +1006,10 @@
         h("div", { class: "bp-art", html: `<svg viewBox="0 0 ${w} ${hh}" width="${w}" height="${hh}" aria-hidden="true">${cubes}</svg>` }),
         h("div", { class: "bp-txt" },
           h("div", { class: "bp-eye" }, `blueprint · ${ch.id}`),
-          h("div", { class: "bp-name", html: `${esc(bpName)} <i>${fin ? "v1.0 · shipped" : "v0." + built}</i>` }),
-          h("p", { class: "bp-sub" }, fin ? `All ${N} parts built. It runs.` : `${built} of ${N} parts built. Every step you finish adds one.`),
-          ins.length ? h("div", { class: "bp-row" }, h("span", {}, "reuses"), ins) : null,
-          outs.length ? h("div", { class: "bp-row" }, h("span", {}, "unlocks"), outs) : null));
+          h("div", { class: "bp-name", html: `${esc(bpName)} <i>${fin ? "v1.0 · " + (CFG.shipWord || "shipped") : "v0." + built}</i>` }),
+          h("p", { class: "bp-sub" }, fin ? `All ${N} ${unit}s in place. It works.` : `${built} of ${N} ${unit}s in place. Every step you finish adds one.`),
+          ins.length ? h("div", { class: "bp-row" }, h("span", {}, "builds on"), ins) : null,
+          outs.length ? h("div", { class: "bp-row" }, h("span", {}, "leads to"), outs) : null));
     }
     const req = (sec) => sec.blocks.filter((b) => COUNTABLE.has(b.type));
     const left = (sec) => req(sec).filter((b) => !S.done[b.id]).length;
@@ -1136,7 +1136,7 @@
       const copy = h("button", { class: "btn" }, "Copy as Markdown");
       copy.onclick = () => navigator.clipboard?.writeText(md()).then(() => { copy.textContent = "Copied ✓"; }, () => toast("Couldn't copy. Select the log and copy it by hand."));
       return h("div", { class: "log" },
-        CFG.wires ? h("div", { class: "shipped", "aria-hidden": "true" }, "shipped", h("small", {}, `${bpName} v1.0`)) : null,
+        CFG.wires ? h("div", { class: "shipped", "aria-hidden": "true" }, CFG.shipWord || "shipped", h("small", {}, `${bpName} v1.0`)) : null,
         h("div", { class: "log-h" }, h("span", {}, `build log · ${ch.id}`), h("span", {}, new Date().toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }))),
         h("ol", { class: "log-steps" }, rows),
         list.length ? h("details", { class: "log-words" }, h("summary", {}, `Words you met · ${list.length}`),
