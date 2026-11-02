@@ -320,8 +320,9 @@ def build(only=None):
     with open(os.path.join(ROOT, "design", "levels.js"), encoding="utf-8") as fh:
         src = fh.read()
     titles = dict(re.findall(r'id: "(dz\d+)", title: "([^"]+)"', src))
-    order = re.findall(r'"(dz\d+)"', src[src.index("courses:"):src.index("levels:")])  # course order, as the studio shows them
-    summary["dz"] = [[i, titles[i], 1] for i in order]
+    # course order, as the studio shows them; the fourth field is the course each level sits in
+    lines = [l for l in src[src.index("courses:"):src.index("levels:")].splitlines() if "ids:" in l]
+    summary["dz"] = [[i, titles[i], 1, ci] for ci, l in enumerate(lines) for i in re.findall(r'"(dz\d+)"', l)]
     with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))
     return built

@@ -158,12 +158,29 @@ a{color:var(--pink-soft)}
 .card:hover{transform:translateY(-3px) rotate(-.4deg);border-color:var(--kc);box-shadow:0 18px 40px -22px color-mix(in srgb,var(--kc) 70%,transparent)}
 .card .hit{position:absolute;inset:0;z-index:1;border-radius:12px}
 .card .hit:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
-.card.k-worlds,.card.k-ds{grid-column:span 2}
-.card.soon{grid-column:1/-1;flex-direction:row}
+.card.k-worlds,.card.k-dz,.card.k-ds,.card.soon{grid-column:span 2}
 /* each card mats its poster like a print on paper; the tag is plain words with a square */
 .poster{position:relative;height:170px;border-radius:7px;overflow:hidden;background:var(--kc);color:#fff6fb}
-.card.k-worlds .poster,.card.k-ds .poster{height:210px}
-.card.soon .poster{height:auto;min-height:130px;flex:0 0 46%}
+.card.k-worlds .poster,.card.k-dz .poster,.card.k-ds .poster,.card.soon .poster{height:210px}
+/* the design studio's door is a printed poster of its own: a mosaic in five inks, and a pink proof of it laid on top a little off.
+   Point at the card and the proof slides into register while the match counts up to 100%. */
+@property --dzm{syntax:"<integer>";inherits:true;initial-value:71}
+.card.k-dz .poster{background:#1497c4;color:#fff4dc;--dzm:71;transition:--dzm .9s cubic-bezier(.2,.8,.3,1)}
+.card.k-dz:hover .poster,.card.k-dz:focus-within .poster{--dzm:100}
+.card.k-dz .poster h3{top:14px;bottom:auto;right:auto;font-size:clamp(28px,2.6vw,36px);line-height:.95;text-shadow:none}
+.card .dzp-n{color:inherit;flex:none;position:absolute;left:16px;top:92px;margin:0;font:400 clamp(16px,1.4vw,19px)/1.1 var(--f-serif);opacity:.92}
+.card .dzp-fine{color:inherit;flex:none;position:absolute;left:16px;bottom:14px;display:grid;gap:1px;margin:0;font:600 9.5px/1.45 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;opacity:.85}
+.dzp-m{position:absolute;right:14px;bottom:12px;display:flex;align-items:center;gap:8px;padding:5px 9px 5px 7px;border-radius:999px;background:#fff4dc;color:#10313d;font:600 11px var(--f-mono);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.dzp-m i{width:46px;height:5px;border-radius:3px;background:linear-gradient(90deg,#ff6fb5 calc(var(--dzm) * 1%),#cfe6ee 0)}
+.dzp-m b::after{counter-reset:m var(--dzm);content:counter(m) "%"}
+.dzp-art{position:absolute;left:62%;top:50%;width:min(30%,164px);aspect-ratio:1;translate:-50% -50%}
+.dzp-mo,.dzp-gh{position:absolute;inset:0;display:grid;grid-template-columns:repeat(13,1fr)}
+.dzp-mo i{background:var(--c,transparent)}
+.dzp-gh{transform:translate(11px,-8px) rotate(3deg);opacity:.95;transition:transform .9s cubic-bezier(.2,.8,.3,1),opacity .9s}
+.dzp-gh i{box-shadow:inset 0 0 0 1.5px var(--g,transparent)}
+.card.k-dz:hover .dzp-gh,.card.k-dz:focus-within .dzp-gh{transform:none;opacity:0}
+@media (prefers-reduced-motion:reduce){.card.k-dz .poster,.dzp-gh{transition:none}}
+@media (max-width:760px){.card .dzp-fine{display:none}.dzp-art{left:auto;right:16px;translate:0 -50%;width:42%}.dzp-m{left:16px;right:auto}}
 .poster canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transition:transform .5s cubic-bezier(.2,.8,.3,1)}
 .card:hover .poster canvas{transform:scale(1.04)}
 .poster h3{position:absolute;left:16px;bottom:12px;right:45%;margin:0;font:400 clamp(26px,2.4vw,32px)/1 var(--f-serif);letter-spacing:-.01em;text-shadow:0 1px 14px rgba(0,0,0,.18)}
@@ -189,7 +206,7 @@ a{color:var(--pink-soft)}
 .card:hover .arw,a:hover>.arw{width:34px}
 .arw.down{transform:rotate(90deg) translateX(-2px);width:14px}a:hover>.arw.down{width:20px}
 @media (max-width:1000px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-ds{grid-column:auto}.card.soon{flex-direction:column}.card.soon .poster{min-height:150px}}
+@media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-dz,.card.k-ds,.card.soon{grid-column:auto}}
 
 /* ---------------- keycap section ---------------- */
 .keys{background:var(--sun);color:#1b1a12}
@@ -1025,6 +1042,25 @@ function drawArt(cv, art, col, seed) {
   // one pink pixel, the lab's signature, tucked by the emblem
   x.fillStyle = "#ff6fb5"; x.fillRect(ox - px * 2, oy + R * px - px, px - 1, px - 1);
 }
+// The studio's poster: a mosaic worked out from distance to the centre, so it is symmetric in both directions.
+// Cells: g green, p pink, y yellow, o orange, b blue, c cream. The ghost is the same mosaic as pink outlines.
+function dzPoster(count, chs) {
+  const C = { g: "#0f9a4e", p: "#ff6fb5", y: "#ffd21f", o: "#ff8a1a", b: "#173fd6", c: "#fff4dc" };
+  let mo = "", gh = "";
+  for (let r = 0; r < 13; r++) for (let c = 0; c < 13; c++) {
+    const dx = Math.abs(c - 6), dy = Math.abs(r - 6), m = Math.max(dx, dy), n = Math.min(dx, dy);
+    const k = !m ? "g" : m === 1 ? "p" : m === 2 && n === 2 ? "y" : m === 2 && !n ? "o"
+      : m >= 3 && m <= 5 && !n && m === 4 ? "c" : m >= 3 && m <= 5 && n <= 1 ? "b"
+      : dx === dy && m <= 4 ? "y" : dx === dy && m === 5 ? "o" : m === 6 && n === 6 ? "y" : m === 6 && n === 4 ? "p" : "";
+    mo += `<i${k ? ` style="--c:${C[k]}"` : ""}></i>`;
+    gh += `<i${k ? ' style="--g:#ff6fb5"' : ""}></i>`;
+  }
+  const courses = new Set(chs.map((c) => c[3])).size;
+  return `<div class="poster"><div class="dzp-art" aria-hidden="true"><div class="dzp-mo">${mo}</div><div class="dzp-gh">${gh}</div></div>
+    <h3>Design<br>studio</h3><p class="dzp-n">${count} levels<br>in ${["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"][courses] || courses} courses</p>
+    <p class="dzp-fine"><span>Match the target</span><span>in plain CSS</span><span>pixel by pixel</span></p>
+    <span class="dzp-m" aria-hidden="true"><i></i><b></b></span></div>`;
+}
 function cards() {
   const box = $("#cards");
   let total = 0;
@@ -1038,9 +1074,9 @@ function cards() {
     const first = chs.slice(0, 3).map(([, title], k) => `<a href="${t.href}#${k + 1}" data-n="${String(k + 1).padStart(2, "0")}">${title.replace(/\s*\(.*$/, "").replace(/^(.{32}).+$/, "$1…")}</a>`).join("");
     return `<article class="card k-${t.k}${soon ? " soon" : ""}" style="--kc:${KC[t.k]}">
       <a class="hit" href="${t.href}" aria-label="Open ${t.name}"></a>
-      <div class="poster"><canvas data-art="${t.art}" data-i="${i}" aria-hidden="true"></canvas>
+      ${t.k === "dz" ? dzPoster(count, chs) : `<div class="poster"><canvas data-art="${t.art}" data-i="${i}" aria-hidden="true"></canvas>
         <span class="p-tag">${t.tag}</span><span class="p-n">${soon ? "being written" : count + (t.k === "worlds" ? " worlds" : t.unit || " chapters")}</span>
-        <h3>${t.name}</h3></div>
+        <h3>${t.name}</h3></div>`}
       <div class="body"><p>${t.desc}</p>
         ${first ? `<div class="first"><span>starts with</span>${first}</div>` : ""}
         ${cells ? `<div class="prog" style="--n:${count}" aria-label="${fin} of ${count} chapters finished">${cells}</div>` : ""}
