@@ -199,9 +199,37 @@ a{color:var(--pink-soft)}
 /* ---------------- a look inside ----------------
    Each row is a painted panel (a textile poster, a striped sign, a tile puzzle, a paper-cut grove)
    with a small working window on top that plays one real moment from the lab. Text sits to the right. */
-.shows{display:flex;flex-direction:column;gap:clamp(56px,8vw,110px);margin-top:44px}
-.show{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px clamp(28px,5vw,72px);align-items:center}
-.art{position:relative;aspect-ratio:3/2;overflow:hidden;border-radius:4px;background:#0a9a4a}
+/* one stage: the list of moments on the left, one painted panel on the right. The open tab shows its words,
+   a few chapters you can jump straight into, and a thin bar that fills until the next moment takes over. */
+.stage{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.5fr);gap:28px clamp(28px,4.5vw,64px);align-items:center;margin-top:40px}
+.tabs{display:flex;flex-direction:column}
+.tab{position:relative;border-top:1px solid var(--line)}
+.tab:last-child{border-bottom:1px solid var(--line)}
+.tab>button{all:unset;box-sizing:border-box;display:flex;gap:14px;align-items:baseline;width:100%;padding:18px 0 16px;cursor:pointer}
+.tab>button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+.tab .n{font:700 12px var(--f-display);color:var(--faint);transition:color .3s}
+.tab b{font:400 clamp(23px,2.3vw,30px)/1.1 var(--f-serif);color:var(--muted);transition:color .3s}
+.tab>button:hover b{color:var(--ink)}
+.tab.on .n{color:var(--kc)}.tab.on b{color:var(--ink)}
+.more{display:grid;grid-template-rows:0fr;transition:grid-template-rows .45s cubic-bezier(.2,.8,.3,1)}
+.more>div{overflow:hidden;padding-left:32px}
+.tab.on .more{grid-template-rows:1fr}
+.more p{margin:0 0 12px;color:var(--muted);font-size:15px;line-height:1.6}
+.more .cnt{font:600 11.5px var(--f-mono);color:var(--ink);margin-bottom:8px;letter-spacing:.02em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.chips a{font:500 12px var(--f-mono);text-decoration:none;color:var(--ink);padding:4px 9px 5px;border-radius:5px;
+  background:color-mix(in srgb,var(--kc) 16%,var(--card));box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--kc) 45%,transparent);transition:transform .1s,background .2s}
+.chips a:hover{background:color-mix(in srgb,var(--kc) 30%,var(--card));transform:translateY(-1px)}
+.more .open{display:inline-block;margin-bottom:20px;font:600 13.5px var(--f-mono);color:var(--pink);text-decoration:none}
+.more .open:hover{text-decoration:underline;text-underline-offset:4px}
+:root[data-theme="light"] .more .open{color:#c2357a}
+.bar{position:absolute;left:0;top:-1px;height:2px;width:100%;background:var(--kc);transform:scaleX(0);transform-origin:0 50%}
+.tab.on.run .bar{animation:tabbar var(--dur,9s) linear forwards}
+@keyframes tabbar{to{transform:scaleX(1)}}
+.panels{position:relative;aspect-ratio:3/2}
+.panels .art{position:absolute;inset:0;opacity:0;visibility:hidden;transform:scale(.985);transition:opacity .45s,transform .6s cubic-bezier(.2,.8,.3,1),visibility 0s .45s}
+.panels .art.on{opacity:1;visibility:visible;transform:none;transition:opacity .45s,transform .6s cubic-bezier(.2,.8,.3,1),visibility 0s}
+.art{overflow:hidden;border-radius:6px;background:#0a9a4a}
 .art>svg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .win{position:absolute;left:7%;top:9%;width:600px;height:360px;transform:scale(var(--s,1));transform-origin:0 0;
   background:var(--card);color:var(--ink);border-radius:10px;overflow:hidden;
@@ -210,13 +238,8 @@ a{color:var(--pink-soft)}
 .win-bar i{width:9px;height:9px;border-radius:1px;background:var(--pink)}.win-bar i+i{background:var(--sun)}.win-bar i+i+i{background:var(--leaf)}
 .win-bar span{flex:1;text-align:center;margin-right:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .win-in{padding:16px 18px;height:calc(100% - 34px);font-size:13px}
-.say p{font:400 clamp(26px,2.7vw,34px)/1.12 var(--f-serif);margin:0;color:var(--muted);letter-spacing:-.005em}
-.say p b{font-weight:400;color:var(--ink);display:block}
-.say a{display:inline-block;margin-top:20px;font:600 14px var(--f-mono);color:var(--pink);text-decoration:none}
-.say a:hover{text-decoration:underline;text-underline-offset:4px}
-:root[data-theme="light"] .say a{color:#c2357a}
-@media (max-width:860px){.show{grid-template-columns:1fr}}
-@media (max-width:600px){.art{aspect-ratio:4/3}.win{left:4%;top:5%}}
+@media (max-width:860px){.stage{grid-template-columns:1fr}.panels{order:-1}}
+@media (max-width:600px){.panels{aspect-ratio:4/3}.win{left:4%;top:5%}.more>div{padding-left:0}}
 /* shared bits inside the windows */
 .w-k{font:600 12px var(--f-mono);border:0;border-radius:6px;padding:6px 12px;background:var(--pink);color:#1a0d14;box-shadow:inset 0 -3px 0 #c2357a;transition:transform .1s,box-shadow .1s}
 .w-k.press{transform:translateY(2px);box-shadow:inset 0 -1px 0 #c2357a}
@@ -350,9 +373,39 @@ a{color:var(--pink-soft)}
   <div class="wrap">
     <p class="eyebrow">a look inside</p>
     <h2 class="h2" id="look-h">What it's <i>actually like.</i></h2>
-    <div class="shows">
-      <article class="show" data-show="sim">
-        <div class="art" data-art="tex">
+    <div class="stage">
+    <div class="tabs" role="tablist" aria-label="What learning here is like">
+      <div class="tab on" style="--kc:#2fb38f">
+        <button type="button" role="tab" id="tab-0" aria-controls="pan-0" aria-selected="true"><span class="n">01</span><b>Watch it move, then write it.</b></button>
+        <div class="more"><div><p>Every idea opens as a simulation you can step and poke. Then you write the Python yourself, right in the page, and checks tell you what works.</p>
+          <p class="cnt">12 chapters</p><div class="chips"><a href="code/#2">Graphs</a><a href="code/#3">Small worlds</a><a href="code/#6">Game of Life</a><a href="code/#8">Sandpiles</a><a href="code/#11">Evolution</a></div>
+          <a class="open" href="code/">Open Complexity →</a></div></div>
+        <i class="bar" aria-hidden="true"></i>
+      </div>
+      <div class="tab" style="--kc:#e6a21a">
+        <button type="button" role="tab" id="tab-1" aria-controls="pan-1" aria-selected="false"><span class="n">02</span><b>Every chapter is a build.</b></button>
+        <div class="more"><div><p>Each step adds one real part, and the blueprint stacks it into place. Pass the last test and it ships.</p>
+          <p class="cnt">29 chapters</p><div class="chips"><a href="build/#2">A calculator</a><a href="build/#4">A language</a><a href="build/#5">A regex engine</a><a href="build/#8">Git</a><a href="build/#11">A 3D engine</a></div>
+          <a class="open" href="build/">Open Build your own X →</a></div></div>
+        <i class="bar" aria-hidden="true"></i>
+      </div>
+      <div class="tab" style="--kc:#3caa4c">
+        <button type="button" role="tab" id="tab-2" aria-controls="pan-2" aria-selected="false"><span class="n">03</span><b>Slow code doesn't pass.</b></button>
+        <div class="more"><div><p>Every question has a big hidden test, like LeetCode and Codeforces, so you feel why the clever way exists.</p>
+          <p class="cnt">44 chapters</p><div class="chips"><a href="dsa/#3">Hash maps</a><a href="dsa/#7">Two pointers</a><a href="dsa/#8">Sliding window</a><a href="dsa/#19">BFS</a><a href="dsa/#28">Dynamic programming</a><a href="dsa/#43">Segment trees</a></div>
+          <a class="open" href="dsa/">Open DSA →</a></div></div>
+        <i class="bar" aria-hidden="true"></i>
+      </div>
+      <div class="tab" style="--kc:#ff5fa8">
+        <button type="button" role="tab" id="tab-3" aria-controls="pan-3" aria-selected="false"><span class="n">04</span><b>A garden that grows with you.</b></button>
+        <div class="more"><div><p>Every track is a flower. Chapters make it bloom, and wrong answers come back later for review, so nothing slips.</p>
+          <p class="cnt">136 chapters, one garden</p><div class="chips"><a href="worlds/">3D worlds</a><a href="modsim/">ModSim</a><a href="stats/">Probability & Stats</a><a href="ods/">Open Data Structures</a></div>
+          <a class="open" href="#tracks">Pick a track ↓</a></div></div>
+        <i class="bar" aria-hidden="true"></i>
+      </div>
+    </div>
+    <div class="panels">
+      <div class="art on" data-show="sim" role="tabpanel" id="pan-0" aria-labelledby="tab-0" data-art="tex">
           <div class="win" aria-hidden="true">
             <div class="win-bar"><i></i><i></i><i></i><span>complexity / ch 6 · game of life</span></div>
             <div class="win-in w-sim">
@@ -369,12 +422,7 @@ a{color:var(--pink-soft)}
             </div>
           </div>
         </div>
-        <div class="say"><p><b>Watch it move, then write it.</b> Every idea opens as a simulation you can step and poke. Then you write the Python yourself, and checks tell you what works.</p>
-          <a href="code/">Open Complexity →</a></div>
-      </article>
-
-      <article class="show" data-show="bp">
-        <div class="art" data-art="sign">
+      <div class="art" data-show="bp" role="tabpanel" id="pan-1" aria-labelledby="tab-1" data-art="sign">
           <div class="win" aria-hidden="true">
             <div class="win-bar"><i></i><i></i><i></i><span>build your own x / ch 4 · a programming language</span></div>
             <div class="win-in w-bp">
@@ -385,36 +433,26 @@ a{color:var(--pink-soft)}
             <span class="w-stamp">shipped</span>
           </div>
         </div>
-        <div class="say"><p><b>Every chapter is a build.</b> Each step adds one real part, and the blueprint stacks it into place. Pass the last test and it ships.</p>
-          <a href="build/">Open Build your own X →</a></div>
-      </article>
-
-      <article class="show" data-show="test">
-        <div class="art" data-art="tiles">
+      <div class="art" data-show="test" role="tabpanel" id="pan-2" aria-labelledby="tab-2" data-art="tiles">
           <div class="win" aria-hidden="true">
             <div class="win-bar"><i></i><i></i><i></i><span>dsa / ch 7 · two pointers</span></div>
             <div class="win-in">
               <div class="w-q"><b>Q4 · Pair with a target sum</b><small>n ≤ 200,000 · 1 s limit</small></div>
-              <div class="w-try w-line">
+              <div class="w-try">
 <pre class="w-code"><span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(n):
     <span class="kw">for</span> j <span class="kw">in</span> <span class="fn">range</span>(i + <span class="nu">1</span>, n): <span class="cm">…</span></pre>
-                <div class="w-res"><span class="w-no">✗ too slow · 3.2 s</span><br><span class="w-cap">20,000,000,000 steps</span><div class="w-bar slow" data-w="100%"></div></div>
+                <div class="w-res w-line"><span class="w-no">✗ too slow · 3.2 s</span><br><span class="w-cap">20,000,000,000 steps</span><div class="w-bar slow" data-w="100%"></div></div>
               </div>
-              <div class="w-try w-line">
+              <div class="w-try">
 <pre class="w-code">i, j = <span class="nu">0</span>, n - <span class="nu">1</span>
 <span class="kw">while</span> i &lt; j: <span class="cm">… move the side that's off</span></pre>
-                <div class="w-res"><span class="w-ok">✓ 40 / 40 hidden tests</span><br><span class="w-cap">200,000 steps · 0.04 s</span><div class="w-bar fast" data-w="3%"></div></div>
+                <div class="w-res w-line"><span class="w-ok">✓ 40 / 40 hidden tests</span><br><span class="w-cap">200,000 steps · 0.04 s</span><div class="w-bar fast" data-w="3%"></div></div>
               </div>
               <div class="w-next"><span class="w-xp">+40 XP</span><span class="w-cap w-line">next · Q5 · three numbers that sum to zero →</span></div>
             </div>
           </div>
         </div>
-        <div class="say"><p><b>Slow code doesn't pass.</b> Every question has a big hidden test, like LeetCode and Codeforces, so you feel why the clever way exists.</p>
-          <a href="dsa/">Open DSA →</a></div>
-      </article>
-
-      <article class="show" data-show="garden">
-        <div class="art" data-art="grove">
+      <div class="art" data-show="garden" role="tabpanel" id="pan-3" aria-labelledby="tab-3" data-art="grove">
           <div class="win" aria-hidden="true">
             <div class="win-bar"><i></i><i></i><i></i><span>home · your garden</span></div>
             <div class="win-in">
@@ -423,9 +461,7 @@ a{color:var(--pink-soft)}
             </div>
           </div>
         </div>
-        <div class="say"><p><b>A garden that grows with you.</b> Every track is a flower. Chapters make it bloom, and wrong answers come back later for review.</p>
-          <a href="#map">See your map ↓</a></div>
-      </article>
+    </div>
     </div>
   </div>
 </section>

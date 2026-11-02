@@ -70,20 +70,19 @@
     },
   };
 
-  const shows = [...document.querySelectorAll(".show")];
-  if (!shows.length) return;
-  for (const s of shows) {
-    const art = s.querySelector(".art");
+  const arts = [...document.querySelectorAll(".panels .art")], tabs = [...document.querySelectorAll(".stage .tab")];
+  if (!arts.length) return;
+  for (const art of arts) {
     seed = 11;
     art.insertAdjacentHTML("afterbegin", `<svg viewBox="0 0 50 40" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ART[art.dataset.art]()}${GRAIN}</svg>`);
   }
-  // the window is drawn at 600 × 410 and scaled to the panel
+  // the window is drawn at 600 × 360 and scaled to the panel
   const fit = (art) => {
     const narrow = art.clientWidth < 520;
     art.querySelector(".win").style.setProperty("--s", ((art.clientWidth * (narrow ? 0.92 : 0.86)) / 600).toFixed(4));
   };
   const ro = new ResizeObserver((es) => es.forEach((e) => fit(e.target)));
-  shows.forEach((s) => ro.observe(s.querySelector(".art")));
+  arts.forEach((a) => ro.observe(a));
 
   // each scene: setup() once, play() returns a stop function; final() draws the end state for reduced motion
   const wait = (ms, list) => new Promise((ok) => list.push(setTimeout(ok, ms)));
@@ -182,7 +181,7 @@
     test(root) {
       const tries = [...root.querySelectorAll(".w-try")], xp = root.querySelector(".w-xp");
       const bar = (el, on) => { const b = el.querySelector(".w-bar"); b.style.width = on ? b.dataset.w : "0"; };
-      const set = (k) => { tries.forEach((el, i) => { el.classList.toggle("on", i < k); bar(el, i < k); }); xp.classList.toggle("on", k >= 3); root.querySelector(".w-next .w-line").classList.toggle("on", k >= 3); };
+      const set = (k) => { tries.forEach((el, i) => { el.querySelector(".w-res").classList.toggle("on", i < k); bar(el, i < k); }); xp.classList.toggle("on", k >= 3); root.querySelector(".w-next .w-line").classList.toggle("on", k >= 3); };
       return {
         final() { set(3); },
         play() {
@@ -221,15 +220,37 @@
     },
   };
 
-  const io = new IntersectionObserver((es) => es.forEach((e) => {
-    const s = e.target;
-    if (e.isIntersecting && !s._stop) s._stop = s._scene.play();
-    else if (!e.isIntersecting && s._stop) { s._stop(); s._stop = null; }
-  }), { threshold: 0.3 });
-  const start = () => shows.forEach((s) => {
-    s._scene = SCENES[s.dataset.show](s.querySelector(".win-in"));
-    if (REDUCED) s._scene.final(); else io.observe(s);
-  });
+  /* The stage: one moment plays at a time. It moves on by itself every DUR ms while the stage is on screen,
+     until you pick a tab yourself; then it stays where you put it. */
+  const DUR = 9000;
+  const scenes = arts.map((a) => SCENES[a.dataset.show](a.querySelector(".win-in")));
+  let cur = 0, stop = null, seen = false, auto = !REDUCED, timer = 0;
+  const run = () => {
+    if (stop) { stop(); stop = null; }
+    clearTimeout(timer);
+    tabs.forEach((t) => t.classList.remove("run"));
+    if (!seen) return;
+    if (REDUCED) { scenes[cur].final(); return; }
+    stop = scenes[cur].play();
+    if (auto) {
+      const t = tabs[cur];
+      void t.offsetWidth; // restart the bar's fill
+      t.style.setProperty("--dur", DUR + "ms");
+      t.classList.add("run");
+      timer = setTimeout(() => pick((cur + 1) % arts.length), DUR);
+    }
+  };
+  function pick(i) {
+    cur = i;
+    tabs.forEach((t, k) => { t.classList.toggle("on", k === i); t.querySelector("button").setAttribute("aria-selected", k === i); });
+    arts.forEach((a, k) => a.classList.toggle("on", k === i));
+    run();
+  }
+  tabs.forEach((t, k) => t.querySelector("button").addEventListener("click", () => { auto = false; if (k !== cur) pick(k); else run(); }));
+  scenes.forEach((sc, k) => k !== cur && sc.final());
+  const start = () => {
+    new IntersectionObserver(([e]) => { seen = e.isIntersecting; run(); }, { threshold: 0.25 }).observe(document.querySelector(".stage"));
+  };
   // the garden scene draws with GARDEN, which loads alongside this file
   if (document.readyState === "loading") addEventListener("DOMContentLoaded", start); else start();
 })();
