@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>try{document.documentElement.dataset.chips=localStorage.getItem("tl-chips")||"index";document.documentElement.dataset.cards=localStorage.getItem("tl-cards")||"print";document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tulip Labs · learn it by playing</title>
 <meta name="description" content="Learn by playing: complexity science as 3D voxel worlds, then the code, modeling, statistics, data structures and algorithms, all as step-by-step simulations.">
@@ -153,23 +153,25 @@ a{color:var(--pink-soft)}
 /* ---------------- track cards: doors ----------------
    A bento of small posters. Worlds and DSA are the big doors; a track still being written sits as a wide strip. */
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-.card{position:relative;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden;
+.card{position:relative;display:flex;flex-direction:column;padding:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
   transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s,border-color .25s}
-.card:hover{transform:translateY(-4px);border-color:var(--kc);box-shadow:0 18px 40px -22px color-mix(in srgb,var(--kc) 70%,transparent)}
-.card .hit{position:absolute;inset:0;z-index:1;border-radius:6px}
+.card:hover{transform:translateY(-3px) rotate(-.4deg);border-color:var(--kc);box-shadow:0 18px 40px -22px color-mix(in srgb,var(--kc) 70%,transparent)}
+.card .hit{position:absolute;inset:0;z-index:1;border-radius:12px}
 .card .hit:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
 .card.k-worlds,.card.k-ds{grid-column:span 2}
 .card.soon{grid-column:1/-1;flex-direction:row}
-.poster{position:relative;height:170px;background:var(--kc);color:#fff6fb}
+/* each card mats its poster like a print on paper; the tag is plain words with a square */
+.poster{position:relative;height:170px;border-radius:7px;overflow:hidden;background:var(--kc);color:#fff6fb}
 .card.k-worlds .poster,.card.k-ds .poster{height:210px}
 .card.soon .poster{height:auto;min-height:130px;flex:0 0 46%}
 .poster canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transition:transform .5s cubic-bezier(.2,.8,.3,1)}
 .card:hover .poster canvas{transform:scale(1.04)}
 .poster h3{position:absolute;left:16px;bottom:12px;right:45%;margin:0;font:400 clamp(26px,2.4vw,32px)/1 var(--f-serif);letter-spacing:-.01em;text-shadow:0 1px 14px rgba(0,0,0,.18)}
 .p-tag,.p-n{position:absolute;top:12px;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
-.p-tag{left:16px;color:#1a0d14;background:#fff6fb;padding:3px 9px;border-radius:99px}
+.p-tag{left:16px;display:flex;align-items:center;gap:7px}
+.p-tag::before{content:"";width:7px;height:7px;background:currentColor}
 .p-n{right:16px;opacity:.9}
-.card .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;flex:1}
+.card .body{padding:14px 8px 8px;display:flex;flex-direction:column;gap:10px;flex:1}
 .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.55;flex:1}
 .first{position:relative;z-index:2}
 .first span{font:11px var(--f-mono);color:var(--faint);margin-right:4px}
@@ -188,30 +190,6 @@ a{color:var(--pink-soft)}
 .arw.down{transform:rotate(90deg) translateX(-2px);width:14px}a:hover>.arw.down{width:20px}
 @media (max-width:1000px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-ds{grid-column:auto}.card.soon{flex-direction:column}.card.soon .poster{min-height:150px}}
-/* Three card looks to try (?try): poster is the base above, print is the default. cover pours the track's colour over the whole card;
-   print mats the poster inside the card like a print on paper, with the tag as plain words. */
-:root[data-cards="cover"] .card{--on:#fff6fb;--on2:rgba(255,246,251,.72);--rule:rgba(255,246,251,.22);background:color-mix(in srgb,var(--kc) 86%,#000);border-color:transparent;color:var(--on)}
-:root[data-cards="cover"] .card .poster{background:var(--kc)}
-:root[data-cards="cover"] .card p,:root[data-cards="cover"] .first span,:root[data-cards="cover"] .card .go small{color:var(--on2)}
-:root[data-cards="cover"] .card :is(.first a,.go){color:var(--on)}
-:root[data-cards="cover"] .card .go b{color:var(--on)}
-:root[data-cards="cover"] .card .arw{background:var(--on)}
-:root[data-cards="cover"] .card .arw::after{border-color:var(--on)}
-:root[data-cards="cover"] .card .prog i{background:var(--rule)}
-:root[data-cards="cover"] .card .prog i.half{background:var(--on2)}:root[data-cards="cover"] .card .prog i.full{background:var(--on)}
-:root[data-cards="cover"] .card .first a{border-color:var(--rule)}
-:root[data-cards="cover"] .card .first a::before{color:var(--on2)}
-:root[data-cards="cover"][data-chips="pills"] .card .first a:hover{background:var(--on);color:var(--kc)}
-:root[data-cards="cover"][data-chips="dots"] .card .first a::before{background:var(--on)}
-:root[data-cards="cover"][data-chips="prose"] .card .first a{text-decoration-color:var(--on2)}
-:root[data-cards="cover"] .card:hover{box-shadow:0 22px 44px -20px color-mix(in srgb,var(--kc) 85%,transparent)}
-:root[data-cards="print"] .card{padding:8px;border-radius:12px}
-:root[data-cards="print"] .card .poster{border-radius:7px;overflow:hidden}
-:root[data-cards="print"] .card .hit{border-radius:12px}
-:root[data-cards="print"] .card .body{padding:14px 8px 8px}
-:root[data-cards="print"] .p-tag{background:none;color:#fff6fb;padding:0;border-radius:0;display:flex;align-items:center;gap:7px}
-:root[data-cards="print"] .p-tag::before{content:"";width:7px;height:7px;background:#fff6fb}
-:root[data-cards="print"] .card:hover{transform:translateY(-3px) rotate(-.4deg)}
 
 /* ---------------- keycap section ---------------- */
 .keys{background:var(--sun);color:#1b1a12}
@@ -278,52 +256,19 @@ a{color:var(--pink-soft)}
 .chips{margin-bottom:18px}
 .more .open{display:inline-flex;align-items:center;gap:12px;margin-bottom:22px;font:600 14.5px var(--f-body);color:var(--ink);text-decoration:none}
 
-/* Chapter links, in the showcase and on the cards. Four styles to try (?try on this page shows a switcher);
-   the html element's data-chips picks one, and pills is what shows if nothing is picked. */
-.chips,.first{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-:is(.chips,.first) a{font:500 13px/1 var(--f-body);color:var(--ink);text-decoration:none;padding:6px 11px 7px;border-radius:99px;
-  border:1px solid color-mix(in srgb,var(--kc) 45%,var(--line));transition:background .2s,border-color .2s,color .2s}
-:is(.chips,.first) a:hover{background:var(--kc);border-color:var(--kc);color:#fff}
-.first a{font-size:12.5px;padding:5px 10px 6px}
-/* index: a contents page, each chapter with its number, an arrow slides in when you point */
-:root[data-chips="index"] .chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
-:root[data-chips="index"] .first{display:flex;flex-direction:column;align-items:stretch;gap:0}
-:root[data-chips="index"] .first span{margin:0 0 4px}
-:root[data-chips="index"] :is(.chips,.first) a{display:flex;align-items:baseline;gap:10px;padding:9px 0 10px;border:0;border-bottom:1px solid var(--line);border-radius:0;font:500 14.5px/1.25 var(--f-body);background:none;color:var(--ink)}
-:root[data-chips="index"] .chips a:nth-child(-n+2),:root[data-chips="index"] .first span+a{border-top:1px solid var(--line)}
-:root[data-chips="index"] .first a{font-size:13.5px;padding:7px 0 8px}
-:root[data-chips="index"] :is(.chips,.first) a::before{content:attr(data-n);flex:none;min-width:20px;font:600 11px var(--f-mono);color:var(--kc)}
-:root[data-chips="index"] :is(.chips,.first) a:not([data-n])::before{content:"";min-width:0;width:7px;height:7px;margin:0 13px 0 0;background:var(--kc);align-self:center}
-:root[data-chips="index"] :is(.chips,.first) a::after{content:"→";margin-left:auto;color:var(--kc);opacity:0;transform:translateX(-8px);transition:opacity .2s,transform .25s}
-:root[data-chips="index"] :is(.chips,.first) a:hover{background:none;color:var(--ink);border-bottom-color:var(--kc)}
-:root[data-chips="index"] :is(.chips,.first) a:hover::after{opacity:1;transform:none}
-/* prose: one sentence, the chapters underlined in the track's colour */
-:root[data-chips="prose"] :is(.chips,.first){display:block;font:15px/1.75 var(--f-body);color:var(--muted)}
-:root[data-chips="prose"] .first{font-size:13.5px;line-height:1.65}
-:root[data-chips="prose"] .chips::before{content:"Jump in at "}
-:root[data-chips="prose"] :is(.chips,.first) a{display:inline;padding:0 1px;border:0;border-radius:2px;font:inherit;color:var(--ink);background:none;
-  text-decoration:underline 2px color-mix(in srgb,var(--kc) 55%,transparent);text-underline-offset:5px;transition:background .2s,text-decoration-color .2s}
-:root[data-chips="prose"] :is(.chips,.first) a:hover{color:var(--ink);text-decoration-color:var(--kc);background:color-mix(in srgb,var(--kc) 20%,transparent)}
-:root[data-chips="prose"] :is(.chips,.first) a::after{content:",";display:inline-block;color:var(--muted);margin-right:.28em}
-:root[data-chips="prose"] .chips a:nth-last-child(2)::after{content:"\00a0or"}
-:root[data-chips="prose"] .first a:nth-last-child(2)::after{content:"\00a0and"}
-:root[data-chips="prose"] :is(.chips,.first) a:last-child::after{content:".";margin:0}
-/* dots: plain words, each with a square of the track's colour that turns when you point */
-:root[data-chips="dots"] :is(.chips,.first){gap:8px 18px}
-:root[data-chips="dots"] :is(.chips,.first) a{display:inline-flex;align-items:center;gap:8px;padding:3px 0;border:0;border-radius:0;font:500 14px/1.2 var(--f-body);background:none;color:var(--ink)}
-:root[data-chips="dots"] .first a{font-size:13px}
-:root[data-chips="dots"] :is(.chips,.first) a::before{content:"";width:7px;height:7px;background:var(--kc);transition:transform .25s cubic-bezier(.2,.8,.3,1)}
-:root[data-chips="dots"] :is(.chips,.first) a:hover{background:none;color:var(--ink)}
-:root[data-chips="dots"] :is(.chips,.first) a:hover::before{transform:rotate(45deg) scale(1.35)}
-/* the switcher that ?try shows */
-.try-box{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;align-items:center;gap:6px;max-width:calc(100vw - 24px)}
-.try{display:flex;gap:4px;align-items:center;padding:6px;border-radius:99px;
-  background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);box-shadow:0 14px 40px -12px rgba(0,0,0,.45);backdrop-filter:blur(10px);font:12px var(--f-mono);max-width:100%;overflow-x:auto}
-.try span{color:var(--faint);padding:0 8px 0 10px;white-space:nowrap}
-.try button{all:unset;cursor:pointer;padding:7px 13px;border-radius:99px;color:var(--muted);white-space:nowrap}
-.try button:hover{color:var(--ink)}
-.try button[aria-pressed="true"]{background:var(--pink);color:#1a0d14;font-weight:600}
-@media (max-width:480px){.try span{display:none}.try button{padding:7px 11px}}
+/* Chapter links, in the showcase and on the cards: a contents page, each chapter with its number in the
+   track colour; an arrow slides in when you point. A link without a number gets a square instead. */
+.chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
+.first{display:flex;flex-direction:column}
+.first span{margin:0 0 4px}
+:is(.chips,.first) a{display:flex;align-items:baseline;gap:10px;padding:9px 0 10px;border-bottom:1px solid var(--line);font:500 14.5px/1.25 var(--f-body);color:var(--ink);text-decoration:none;transition:border-color .2s}
+.chips a:nth-child(-n+2),.first span+a{border-top:1px solid var(--line)}
+.first a{font-size:13.5px;padding:7px 0 8px}
+:is(.chips,.first) a::before{content:attr(data-n);flex:none;min-width:20px;font:600 11px var(--f-mono);color:var(--kc)}
+:is(.chips,.first) a:not([data-n])::before{content:"";min-width:0;width:7px;height:7px;margin:0 13px 0 0;background:var(--kc);align-self:center}
+:is(.chips,.first) a::after{content:"→";margin-left:auto;color:var(--kc);opacity:0;transform:translateX(-8px);transition:opacity .2s,transform .25s}
+:is(.chips,.first) a:hover{border-bottom-color:var(--kc)}
+:is(.chips,.first) a:hover::after{opacity:1;transform:none}
 .bar{position:absolute;left:0;top:-1px;height:2px;width:100%;background:var(--kc);transform:scaleX(0);transform-origin:0 50%}
 .tab.on.run .bar{animation:tabbar var(--dur,9s) linear forwards}
 @keyframes tabbar{to{transform:scaleX(1)}}
@@ -1273,20 +1218,6 @@ fetch("content/summary.json", { cache: "no-cache" }).then((r) => r.json()).catch
   SUM = s || {};
   cards(); caps(); globe();
 });
-})();
-</script>
-<script>
-/* ?try: switchers for the chapter-link styles and the card looks, so they can be compared on the real page. Picks are remembered. */
-(() => {
-  if (!/[?&]try\b/.test(location.search)) return;
-  const html = document.documentElement;
-  const G = [["chips", "links", [["index", "Index"], ["prose", "Sentence"], ["dots", "Dots"], ["pills", "Pills"]]],
-             ["cards", "cards", [["poster", "Poster"], ["cover", "Cover"], ["print", "Print"]]]];
-  const box = document.createElement("div"); box.className = "try-box";
-  box.innerHTML = G.map(([k, label, V]) => `<div class="try" role="group" aria-label="${label}" data-k="${k}"><span>${label}</span>${V.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join("")}</div>`).join("");
-  const set = (k, v) => { html.dataset[k] = v; try { localStorage.setItem("tl-" + k, v); } catch (e) {} box.querySelectorAll(`[data-k="${k}"] button`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
-  box.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) set(b.closest(".try").dataset.k, b.dataset.v); });
-  document.body.append(box); G.forEach(([k, , V]) => set(k, html.dataset[k] || V[0][0]));
 })();
 </script>
 </body>
