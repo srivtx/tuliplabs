@@ -11,6 +11,32 @@
   sw.addEventListener("toggle",() => { if (sw.open) (sw.querySelector('.sw-menu a[aria-current="page"]') || sw.querySelector(".sw-menu a")).focus({ preventScroll: true }); });
 })();
 
+/* Switching sections is a full page load. Make it feel instant: while a pointer rests on (or keyboard
+   focus lands on) a section link, fetch that page and its lessons file into the cache ahead of the click. */
+(() => {
+  const DATA = { "code/": "tc", "modsim/": "ms", "build/": "bx", "stats/": "ps", "dsa/": "ds", "ods/": "od" };
+  const seen = new Set();
+  const warm = (a) => {
+    const url = new URL(a.href, location.href);
+    if (url.origin !== location.origin || seen.has(url.pathname)) return;
+    seen.add(url.pathname);
+    const get = (u) => fetch(u, { credentials: "same-origin" }).catch(() => seen.delete(url.pathname));
+    get(url.pathname);
+    const key = Object.keys(DATA).find((k) => url.pathname.endsWith("/" + k));
+    if (key) get(url.pathname.slice(0, -key.length) + "content/" + DATA[key] + ".json");
+  };
+  const pick = (e) => { const a = e.target.closest && e.target.closest(".sw-menu a, .foot-key a, .cards a.card"); if (a) warm(a); };
+  document.addEventListener("pointerover", pick, { passive: true });
+  document.addEventListener("focusin", pick);
+  // Chrome can go further and prerender the page itself on hover.
+  if (HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")) {
+    const s = document.createElement("script");
+    s.type = "speculationrules";
+    s.textContent = JSON.stringify({ prefetch: [{ source: "document", where: { selector_matches: ".sw-menu a, .foot-key a, .cards a.card" }, eagerness: "moderate" }] });
+    document.head.append(s);
+  }
+})();
+
 /* Quiet footer on the course pages: the section colours as links, and the books we build on.
    The home page has its own; the 3D worlds fill the whole window, so they get none. */
 (() => {
