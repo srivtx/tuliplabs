@@ -169,16 +169,16 @@ a:hover>.arw,.cc:hover .arw{width:34px}
 .a-devices .c3{left:4cqw;bottom:5cqh}.a-devices .c3::after{left:6cqmin;bottom:6cqmin}
 .a-devices .c4{right:4cqw;bottom:5cqh}.a-devices .c4::after{right:6cqmin;bottom:6cqmin}
 .a-devices .dv{position:absolute;display:block;background:#f4efe6;border:1.4cqmin solid #2c2f37;box-shadow:0 3cqmin 6cqmin -2cqmin rgba(0,0,0,.6)}
-.a-devices .desk{left:30cqw;top:12cqh;width:56cqw;height:58cqh;border-radius:1.6cqmin;border-top-width:5cqmin}
+.a-devices .desk{left:44cqw;top:12cqh;width:48cqw;height:56cqh;border-radius:1.6cqmin;border-top-width:5cqmin}
 .a-devices .desk>b{position:absolute;left:1cqmin;top:-3.4cqmin;width:7cqmin;height:1.4cqmin;background:radial-gradient(circle,#ff6fb5 40%,transparent 45%) 0 0/2.4cqmin 100% repeat-x}
-.a-devices .tab{left:20cqw;top:34cqh;width:26cqw;height:52cqh;border-radius:2.4cqmin}
-.a-devices .phone{left:47cqw;top:44cqh;width:14cqw;height:46cqh;border-radius:3cqmin}
+.a-devices .tab{left:35cqw;top:38cqh;width:21cqw;height:50cqh;border-radius:2.4cqmin}
+.a-devices .phone{left:60cqw;top:50cqh;width:11cqw;height:40cqh;border-radius:3cqmin}
 .a-devices .lay{position:absolute;inset:6%;display:grid;grid-template-columns:repeat(var(--n),1fr);grid-auto-rows:1fr;gap:6%}
 .a-devices .lay i{border-radius:.8cqmin;background:#5b1cff}
 .a-devices .lay i:nth-child(3n+2){background:#ff6fb5}
 .a-devices .lay i:nth-child(3n){background:#ffd21f}
-.a-devices .ttl{position:absolute;left:7cqw;top:11cqh;font:400 min(9cqw,17cqh)/.92 var(--f-serif);letter-spacing:-.02em;max-width:22cqw}
-.a-devices .sm{position:absolute;right:7cqw;top:13cqh;text-align:right;font:600 min(2.2cqw,3.8cqh)/1.4 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;opacity:.7}
+.a-devices .ttl{position:absolute;left:7cqw;top:12cqh;font:400 min(7cqw,14cqh)/.92 var(--f-serif);letter-spacing:-.02em}
+.a-devices .sm{position:absolute;left:7cqw;bottom:13cqh;font:600 min(2.2cqw,3.8cqh)/1.4 var(--f-mono);text-transform:uppercase;letter-spacing:.08em;opacity:.7}
 
 /* ---------------- smaller screens ---------------- */
 @media (max-width:1000px){
@@ -199,7 +199,7 @@ a:hover>.arw,.cc:hover .arw{width:34px}
   .a-devices .tab{left:8cqw;top:58cqh;width:40cqw;height:34cqh}
   .a-devices .phone{left:60cqw;top:56cqh;width:24cqw;height:36cqh}
   .a-devices .ttl{max-width:none;font-size:13cqw}
-  .a-devices .sm{top:auto;bottom:4cqh;right:14cqw}
+  .a-devices .sm{bottom:auto;top:24cqh}
   .cc h3{font-size:30px}
 }
 @media (prefers-reduced-motion:reduce){.cc-poster,.cc-poster::after{transition:none}}

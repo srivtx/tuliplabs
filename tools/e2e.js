@@ -104,7 +104,7 @@ async function studio(page, browser, errors) {
     const title = await page.locator(".brief h1").innerText();
     const won = async (css) => {
       await page.evaluate((c) => document.querySelector("#table").dzSet(c), css);
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(1100);
       return page.evaluate(() => [document.querySelector(".meter").classList.contains("won"), document.querySelector(".pct").textContent]);
     };
     const [startWon, s0] = await won(await page.evaluate(() => document.querySelector("#table").dzStart()));

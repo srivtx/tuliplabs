@@ -5,13 +5,14 @@
   "use strict";
   const { base: BASE, courses: COURSES } = window.DZ;
   const BY = Object.fromEntries(window.DZ.levels.map((l) => [l.id, l]));
-  // Levels in course order. A level written as one css with "+" lines gets its start (without them) and answer (with them).
+  // Levels in course order. A level written as one css with "+" lines gets its start (without them) and answer (with them);
+  // a "-" line is in the start only, the thing the answer replaces.
   const LV = COURSES.flatMap((c, ci) => c.ids.map((id, k) => {
     const lv = BY[id];
     if (lv.css) {
       const lines = lv.css.split("\n");
-      lv.start = lines.filter((l) => !l.startsWith("+")).join("\n").replace(/\{\n\}/g, "{\n\n}").replace(/\n{3,}/g, "\n\n");
-      lv.answer = lines.map((l) => (l.startsWith("+") ? l.slice(1) : l)).join("\n");
+      lv.start = lines.filter((l) => !l.startsWith("+")).map((l) => (l.startsWith("-") ? l.slice(1) : l)).join("\n").replace(/\{\n\}/g, "{\n\n}").replace(/\n{3,}/g, "\n\n");
+      lv.answer = lines.filter((l) => !l.startsWith("-")).map((l) => (l.startsWith("+") ? l.slice(1) : l)).join("\n");
     }
     const [w, h] = lv.devices ? lv.devices.desktop : [lv.w || 360, lv.h || 240];
     return Object.assign(lv, { w, h, course: c, ci, k });

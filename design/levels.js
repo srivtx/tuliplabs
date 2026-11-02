@@ -4,7 +4,9 @@
    The match meter compares your pixels with the target's.
    rules: [label, regex on your CSS (or a function that returns true when it's right), true when the regex must NOT match] */
 (() => {
-const SANS = '"Helvetica Neue", Helvetica, Arial, sans-serif', SERIF = "Georgia, serif", MONO = "ui-monospace, Menlo, monospace", UI = "system-ui, sans-serif";
+// the three screens a responsive level is drawn and scored on
+  const SCREENS = { desktop: [600, 340], tablet: [420, 440], phone: [260, 460] };
+  const SANS = '"Helvetica Neue", Helvetica, Arial, sans-serif', SERIF = "Georgia, serif", MONO = "ui-monospace, Menlo, monospace", UI = "system-ui, sans-serif";
 // the Tulip Labs mark, one class per cell: p pink, d deep pink, y yellow, g green, k dark green
 const TULIP = [".p.p.p.", "ppdpdpp", "ppyyypp", ".ppypp.", "g..k..g", "gg.k.gg", ".ggkgg."]
   .map((r) => [...r].map((c) => (c === "." ? "<i></i>" : `<i class="${c}"></i>`)).join("")).join("");
@@ -17,6 +19,7 @@ window.DZ = {
     { title: "Layout systems", art: "tiles", learn: ["CSS grid", "bento", "app shells", "twelve columns", "text overflow"], blurb: "Grids that hold a whole page: tiles, bento, app shells, twelve columns.", ids: ["dz05", "dz19", "dz20", "dz21", "dz22"] },
     { title: "Posters and patterns", art: "mosaic", learn: ["Swiss grids", "stripes", "Bauhaus shapes", "op art", "pixel art"], blurb: "Swiss, Bauhaus and op art, drawn with nothing but CSS.", ids: ["dz06", "dz08", "dz23", "dz24", "dz25", "dz26"] },
     { title: "Real interfaces", art: "stickers", learn: ["pricing", "a command menu", "toasts", "a player", "stat tiles", "chat"], blurb: "The parts of today's best apps: pricing, a command menu, toasts, a player, stats, chat.", ids: ["dz27", "dz28", "dz29", "dz30", "dz31", "dz32"] },
+    { title: "Responsive", art: "devices", isNew: true, learn: ["auto-fit grids", "clamp() and cqi", "flex-wrap", "container queries", "grid areas", "a phone tab bar"], blurb: "One stylesheet, three screens: layouts that reflow from a desktop to a phone, scored on all three.", ids: ["dz33", "dz34", "dz35", "dz36", "dz37", "dz38"] },
   ],
   levels: [
     {
@@ -1778,6 +1781,340 @@ p {
       hints: ["<code>p { max-width: 72%; border-radius: 18px; }</code>, then <code>align-self: flex-start</code> for theirs and <code>flex-end</code> for yours.",
         "Tails: <code>border-bottom-left-radius: 5px</code> (theirs) and <code>border-bottom-right-radius: 5px</code> (yours).",
         "Turns: <code>.me + .me { margin-top: -2px; }</code> and <code>.them + .me, .me + .them { margin-top: 10px; }</code>"],
+    },
+    // ------------------------------------------------------------ responsive --
+    {
+      id: "dz33", title: "Auto-fit gallery", devices: SCREENS,
+      brief: "Eight tiles, <b>10px</b> apart. Four across on desktop, three on a tablet, one on a phone, from <b>one rule</b> and no media query. Each tile is at least <b>110px</b> wide.",
+      idea: "<code>repeat(auto-fill, minmax(110px, 1fr))</code> asks the grid to fit as many columns as it can, then share what's left. The layout decides for itself.",
+      html: `<div class="g"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>`,
+      css: `body {
+  background: #f4efe6;
+  padding: 16px;
+}
+
+.g {
+  display: grid;
+  gap: 10px;
+-  grid-template-columns: repeat(4, 1fr);
++  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+
+i {
+  height: 64px;
+  border-radius: 10px;
+  background: #5b1cff;
+}
+
+i:nth-child(3n+2) {
+  background: #ff6fb5;
+}
+
+i:nth-child(3n) {
+  background: #ffd21f;
+}
+`,
+      rules: [["Columns that fit themselves", /repeat\(\s*auto-(fill|fit)\s*,\s*minmax\(/], ["No media query", (c) => !/@media/.test(c)]],
+      hints: ["Desktop already looks right. Switch to tablet and phone: four fixed columns get squeezed.", "Swap the columns for <code>repeat(auto-fill, minmax(110px, 1fr))</code>."],
+    },
+    {
+      id: "dz34", title: "Fluid headline", devices: SCREENS,
+      brief: "Make the body a size container, then set the headline to <b>9% of its width</b>, never under <b>24px</b> or over <b>56px</b>.",
+      idea: "<code>clamp(min, preferred, max)</code> with container units (<code>cqi</code>) scales type smoothly with the space it sits in, instead of jumping at breakpoints.",
+      html: `<p class="k">Field notes · No. 7</p><h1>Tulips open wider with the morning light</h1><p class="d">A slow guide to watching a garden wake up.</p>`,
+      css: `body {
++  container-type: inline-size;
+  background: #14121f;
+  color: #f6efe0;
+  padding: 28px;
+  font-family: ${SERIF};
+}
+
+.k {
+  margin: 0 0 10px;
+  font: 600 11px/1 ${MONO};
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #ff6fb5;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -.02em;
+-  font-size: 49px;
++  font-size: clamp(24px, 9cqi, 56px);
+}
+
+.d {
+  margin: 0;
+  font-size: 15px;
+  color: #b9b2c9;
+}
+`,
+      rules: [["The body is a size container", /container-type\s*:\s*inline-size/], ["Fluid, with clamp()", /clamp\(/], ["Sized by its container", /\dcq(i|w)\b/]],
+      hints: ["On a phone 49px is far too big. Give <code>body</code> <code>container-type: inline-size</code> so its children can measure it.", "<code>font-size: clamp(24px, 9cqi, 56px)</code>: 9% of the container's width, held between 24 and 56."],
+    },
+    {
+      id: "dz35", title: "Wrap, don't squeeze", devices: SCREENS,
+      brief: "Picture and words sit side by side while there's room for both, then the words drop below. Let the row <b>wrap</b>; the picture starts at <b>240px</b>, the words at <b>220px</b>, and the words take the spare room.",
+      idea: "The flexbox \"sidebar\": <code>flex-wrap: wrap</code>, a basis for each side, and a huge <code>flex-grow</code> on the side that should stretch. No breakpoint to guess.",
+      html: `<div class="c"><div class="pic"></div><div class="tx"><p class="k">New in</p><h2>Night garden lamp</h2><p>Warm light for late reading. Dims to a glow you can sleep by.</p><b>$64</b></div></div>`,
+      css: `body {
+  background: #f1eadb;
+  padding: 24px;
+  font-family: ${SANS};
+  color: #1b1814;
+}
+
+.c {
+  display: flex;
+  gap: 18px;
++  flex-wrap: wrap;
+}
+
+.pic {
+-  flex: 0 0 240px;
++  flex: 1 1 240px;
+  height: 150px;
+  border-radius: 14px;
+  background: radial-gradient(circle at 50% 42%, #ffd21f 0 22px, #ff6fb566 23px 34px, transparent 35px), linear-gradient(160deg, #2a2440, #14121f);
+}
+
+.tx {
+-  flex: 1;
++  flex: 999 1 220px;
+}
+
+.k {
+  margin: 0 0 6px;
+  font: 600 11px/1 ${MONO};
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #c2407f;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font: 400 30px/1 ${SERIF};
+}
+
+.tx p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+b {
+  font-size: 18px;
+}
+`,
+      rules: [["The row wraps", /flex-wrap\s*:\s*wrap/], ["Words take the spare room", /flex\s*:\s*\d{3,}/], ["No media query", (c) => !/@media/.test(c)]],
+      hints: ["Look at the phone: the words are crushed into a sliver. Let the row wrap.", "<code>.pic { flex: 1 1 240px }</code> and <code>.tx { flex: 999 1 220px }</code>: when both bases fit, the words take nearly all the spare room; when they don't, each gets its own line."],
+    },
+    {
+      id: "dz36", title: "Card that turns", devices: SCREENS,
+      brief: "Stacked by default. When its container is at least <b>380px</b> wide, the card turns: picture <b>180px</b> on the left, words on the right.",
+      idea: "A container query asks how wide the card's box is, not the screen. The same card can sit in a sidebar and a main column and be right in both.",
+      html: `<article class="card"><div class="pic"></div><div class="tx"><h2>Studio visit</h2><p>Tulip Labs opens its doors for one evening. Bring a sketchbook and something to draw on.</p><span>Fri · 7 pm</span></div></article>`,
+      css: `body {
+  container-type: inline-size;
+  background: #e9f1ff;
+  padding: 24px;
+  font-family: ${SANS};
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 #d5def0, 0 10px 24px -14px #2f4a8a;
+}
+
+.pic {
+  min-height: 120px;
+  border-radius: 10px;
+  background: repeating-linear-gradient(45deg, #2f6bff 0 14px, #5b8cff 14px 28px);
+}
+
+h2 {
+  margin: 4px 0 6px;
+  font-size: 22px;
+  letter-spacing: -.02em;
+}
+
+p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #4a5568;
+}
+
+span {
+  font: 600 12px ${MONO};
+  color: #2f6bff;
+}
+
++@container (min-width: 380px) {
++  .card {
++    grid-template-columns: 180px 1fr;
++  }
++}
+`,
+      rules: [["A container query", /@container\s*\(\s*min-width\s*:\s*380px\s*\)/], ["No media query", (c) => !/@media/.test(c)]],
+      hints: ["Tablet and phone already match. On desktop the card should turn.", "<code>@container (min-width: 380px) { .card { grid-template-columns: 180px 1fr; } }</code>"],
+    },
+    {
+      id: "dz37", title: "Page that reflows", devices: SCREENS,
+      brief: "One page, three arrangements by named areas. Under <b>520px</b>: nav beside main, the aside below them. Under <b>360px</b>: one column, main first.",
+      idea: "<code>grid-template-areas</code> draws the layout as a little map. A container query swaps the map; the HTML never moves.",
+      html: `<div class="p"><header>Tulip Labs</header><nav>nav</nav><main>main</main><aside>aside</aside><footer>footer</footer></div>`,
+      css: `body {
+  container-type: inline-size;
+  background: #121418;
+  padding: 16px;
+  font: 600 12px ${MONO};
+}
+
+.p {
+  height: 100%;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 110px 1fr 110px;
+  grid-template-rows: 44px 1fr 40px;
+  grid-template-areas:
+    "head head head"
+    "nav  main side"
+    "foot foot foot";
+}
+
+.p > * {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #121418;
+}
+
+header { grid-area: head; background: #ff6fb5; }
+nav    { grid-area: nav;  background: #ffd21f; }
+main   { grid-area: main; background: #f4efe6; }
+aside  { grid-area: side; background: #22c4e8; }
+footer { grid-area: foot; background: #7c4dff; }
+
++@container (max-width: 519px) {
++  .p {
++    grid-template-columns: 110px 1fr;
++    grid-template-rows: 44px 1fr 70px 40px;
++    grid-template-areas:
++      "head head"
++      "nav  main"
++      "side side"
++      "foot foot";
++  }
++}
++
++@container (max-width: 359px) {
++  .p {
++    grid-template-columns: 1fr;
++    grid-template-rows: 44px 1fr 50px 50px 40px;
++    grid-template-areas: "head" "main" "nav" "side" "foot";
++  }
++}
+`,
+      rules: [["Named areas", /grid-template-areas/], ["Two container queries", (c) => (c.match(/@container/g) || []).length >= 2], ["No media query", (c) => !/@media/.test(c)]],
+      hints: ["Write the tablet map first: <code>@container (max-width: 519px)</code> with two columns and four rows; the aside spans both columns.", "Then the phone: <code>@container (max-width: 359px)</code>, one column, rows <code>44px 1fr 50px 50px 40px</code>, areas <code>\"head\" \"main\" \"nav\" \"side\" \"foot\"</code>."],
+    },
+    {
+      id: "dz38", title: "Tab bar on phones", devices: SCREENS,
+      brief: "On a phone (container under <b>360px</b>) the links leave the top bar and become a tab bar along the bottom: four equal cells, white, a <b>1px</b> <code>#e6e2da</code> line on top, the current one in pink.",
+      idea: "On a phone, thumbs live at the bottom of the screen. The same links move there, and the content leaves room so nothing hides under them.",
+      html: `<div class="app"><header><b>Bloom</b><nav><a class="on">Home</a><a>Explore</a><a>Saved</a><a>Profile</a></nav></header><main><i></i><i></i><i></i><i></i></main></div>`,
+      css: `body {
+  container-type: inline-size;
+  background: #f7f4ee;
+  font-family: ${UI};
+}
+
+.app {
+  position: relative;
+  height: 100%;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e6e2da;
+  background: #ffffff;
+}
+
+header b {
+  font-size: 18px;
+  letter-spacing: -.02em;
+}
+
+nav {
+  display: flex;
+  gap: 4px;
+}
+
+nav a {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: #6b6559;
+}
+
+nav a.on {
+  background: #14121f;
+  color: #ffffff;
+}
+
+main {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+main i {
+  height: 110px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, #ff6fb5, #7c4dff);
+}
+
++@container (max-width: 359px) {
++  nav {
++    position: absolute;
++    left: 0;
++    right: 0;
++    bottom: 0;
++    display: grid;
++    grid-template-columns: repeat(4, 1fr);
++    gap: 0;
++    background: #ffffff;
++    border-top: 1px solid #e6e2da;
++  }
++
++  nav a {
++    padding: 14px 0;
++    border-radius: 0;
++    text-align: center;
++    font-size: 12px;
++  }
++
++  nav a.on {
++    background: none;
++    color: #ff6fb5;
++  }
++}
+`,
+      rules: [["A container query", /@container/], ["The bar sits on the bottom edge", /bottom\s*:\s*0/], ["Four equal tabs", /repeat\(\s*4\s*,\s*1fr\s*\)/]],
+      hints: ["Desktop and tablet match already. On the phone, the links don't fit in the top bar.", "Inside <code>@container (max-width: 359px)</code>, pin <code>nav</code> to the bottom (<code>position: absolute; left: 0; right: 0; bottom: 0</code>) and make it a four-column grid."],
     },
   ],
 };
