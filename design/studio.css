@@ -95,6 +95,24 @@
 .views button{padding:4px 0 6px;border:0;background:none;cursor:pointer;font:500 14px var(--f-body);color:var(--muted);box-shadow:inset 0 -2px 0 transparent;transition:color .2s,box-shadow .2s}
 .views button:hover{color:var(--ink)}
 .views button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--kc)}
+.tright{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap;margin-left:auto}
+/* the screen switch: three drawn screens, each with its own score once it has one */
+.devs{display:flex;padding:3px;gap:2px;border-radius:10px;background:var(--soft);box-shadow:inset 0 0 0 1px var(--line)}
+.devs button{display:flex;align-items:center;gap:7px;padding:5px 10px;border:0;border-radius:7px;background:none;cursor:pointer;font:500 12.5px var(--f-body);color:var(--muted);transition:background .2s,color .2s,box-shadow .2s}
+.devs button:hover{color:var(--ink)}
+.devs button[aria-checked="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 0 var(--line),0 2px 8px -4px rgba(0,0,0,.3)}
+.devs .ds{font:600 10.5px var(--f-mono);color:var(--muted)}
+.devs .ds:empty{display:none}
+.devs.scored button.ok .ds{color:var(--ok)}
+.devs.scored button.ok .ds::before{content:"✓ "}
+.ico{position:relative;display:block;flex:none;border:1.6px solid currentColor}
+.ico-desktop{width:16px;height:11px;border-radius:2px;margin-bottom:3px}
+.ico-desktop::after{content:"";position:absolute;left:50%;bottom:-5px;width:8px;height:1.6px;translate:-50% 0;background:currentColor}
+.ico-tablet{width:11px;height:14px;border-radius:2.5px}
+.ico-phone{width:8px;height:14px;border-radius:2.5px}
+.ico-tablet::after,.ico-phone::after{content:"";position:absolute;left:50%;bottom:1px;width:3px;height:1.4px;translate:-50% 0;background:currentColor;border-radius:1px}
+.devs button[aria-checked="true"] .ico{color:var(--kc)}
+@media (max-width:1320px){.devs .dl{display:none}.devs button{padding:6px 9px}}
 .gctl{display:flex;align-items:center;gap:10px;font:12px var(--f-mono);color:var(--muted)}
 .gctl input{width:140px;accent-color:var(--kc)}
 .gctl b{min-width:3.2em;color:var(--ink);font-weight:600}
@@ -108,7 +126,18 @@
 .pane{--s:1;display:flex;gap:20px;align-items:flex-start;justify-content:center}
 .pane figure{margin:0;display:grid;gap:8px;justify-items:center}
 .pane figcaption{font:600 11px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
-.frame{padding:0;border-radius:4px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 18px 40px -18px rgba(0,0,0,.45)}
+.frame{position:relative;padding:0;border-radius:4px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 18px 40px -18px rgba(0,0,0,.45)}
+/* each screen's body: a browser window, a tablet with an even bezel, a phone with a pill cut-out */
+.frame.dev-desktop{padding-top:26px;border-radius:9px;background:#24262b}
+.frame.dev-desktop .art{border-radius:0 0 4px 4px}
+.chrome{position:absolute;left:0;right:0;top:0;height:26px;display:flex;align-items:center;gap:6px;padding:0 10px}
+.chrome i{width:8px;height:8px;border-radius:50%;background:#ff5f57}.chrome i:nth-child(2){background:#febc2e}.chrome i:nth-child(3){background:#28c840}
+.chrome em{margin:0 auto;padding:1px 10px;border-radius:5px;background:#33363d;font:500 10.5px var(--f-mono);font-style:normal;color:#a9adb7;transform:translateX(-14px)}
+.frame.dev-tablet{padding:14px;border-radius:22px;background:#1d1f24;box-shadow:inset 0 0 0 1.5px #3a3d45,0 18px 40px -18px rgba(0,0,0,.55)}
+.frame.dev-tablet .art{border-radius:6px}
+.frame.dev-phone{padding:12px 9px;border-radius:30px;background:#1d1f24;box-shadow:inset 0 0 0 1.5px #3a3d45,0 18px 40px -18px rgba(0,0,0,.55)}
+.frame.dev-phone .art{border-radius:20px}
+.frame.dev-phone::after{content:"";position:absolute;left:50%;top:3px;width:40px;height:6px;translate:-50% 0;border-radius:4px;background:#0c0d10;z-index:2}
 .art{position:relative;width:calc(var(--w) * 1px * var(--s));height:calc(var(--h) * 1px * var(--s));overflow:hidden;border-radius:4px}
 .art .bd{position:absolute;left:0;top:0;width:calc(var(--w) * 1px);height:calc(var(--h) * 1px);border:0;transform:scale(var(--s));transform-origin:0 0;background:#fff}
 .art .ghost{pointer-events:none;mix-blend-mode:normal;transition:opacity .15s}

@@ -13,7 +13,8 @@
       lv.start = lines.filter((l) => !l.startsWith("+")).join("\n").replace(/\{\n\}/g, "{\n\n}").replace(/\n{3,}/g, "\n\n");
       lv.answer = lines.map((l) => (l.startsWith("+") ? l.slice(1) : l)).join("\n");
     }
-    return Object.assign(lv, { w: lv.w || 360, h: lv.h || 240, course: c, ci, k });
+    const [w, h] = lv.devices ? lv.devices.desktop : [lv.w || 360, lv.h || 240];
+    return Object.assign(lv, { w, h, course: c, ci, k });
   }));
   const PASS = 96;
   const $ = (s, r = document) => r.querySelector(s);
@@ -230,12 +231,25 @@
 
   // ------------------------------------------------------------- studio --
   const TARGETS = {};
-  const target = (lv) => (TARGETS[lv.id] = TARGETS[lv.id] || raster(lv, lv.answer));
+  const target = (v) => { const key = `${v.id}:${v.w}x${v.h}`; return (TARGETS[key] = TARGETS[key] || raster(v, v.answer)); };
+
+  // ------------------------------------------------------------ screens --
+  // Every board can be looked at on three screens. A responsive level (lv.devices) is scored on all three;
+  // any other level is scored on desktop, and tablet and phone show how the same CSS reflows when it gets narrow.
+  const DEVICES = [["desktop", "Desktop"], ["tablet", "Tablet"], ["phone", "Phone"]];
+  const NAME = Object.fromEntries(DEVICES);
+  const dims = (lv, d) => (lv.devices ? lv.devices[d]
+    : d === "tablet" ? [Math.round(lv.w * .72), Math.round(lv.h * 1.15)]
+    : d === "phone" ? [Math.max(200, Math.round(lv.w * .56)), Math.round(lv.h * 1.4)] : [lv.w, lv.h]);
+  // a level as seen on one screen: the same level, another board size
+  const view = (lv, d) => { const [w, h] = dims(lv, d); return Object.assign(Object.create(lv), { w, h, dev: d }); };
+  const scoredOn = (lv) => (lv.devices ? DEVICES.map(([d]) => d) : ["desktop"]);
   const strip = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
   const ruleOk = ([, test, not], css) => (typeof test === "function" ? test(css) : test.test(css) !== !!not);
 
-  let VIEW = "ghost", GHOST = 40;
-  try { VIEW = localStorage.getItem("dz-view") || VIEW; GHOST = +(localStorage.getItem("dz-ghost") || GHOST); } catch (e) { /* ignore */ }
+  let VIEW = "ghost", GHOST = 40, DEV = "desktop";
+  try { VIEW = localStorage.getItem("dz-view") || VIEW; GHOST = +(localStorage.getItem("dz-ghost") || GHOST); DEV = localStorage.getItem("dz-dev") || DEV; } catch (e) { /* ignore */ }
+  if (!NAME[DEV]) DEV = "desktop";
 
   const map = $("#map"), desk = $("#desk"), table = $("#table");
 
@@ -301,86 +315,128 @@
       h("div", { class: "help" }, h("p", { class: "rh" }, "House rules"), rules, h("div", { class: "btns" }, hintBtn, peekBtn), hintBox, peekBox),
       h("details", { class: "markup" }, h("summary", {}, "The HTML (fixed)"), h("pre", {}, lv.html.replace(/></g, ">\n<"))));
 
-    // the table: view switch, the boards on a cutting mat, and the meter
-    const mine = board(lv, "mine"), ghost = board(lv, "ghost"), mine2 = board(lv, "mine"), tgt2 = board(lv, "ghost");
-    show(ghost, lv, lv.answer); show(tgt2, lv, lv.answer);
-    const heat = h("canvas", { class: "bd heat", width: lv.w, height: lv.h, "aria-label": "Where your board is off: pink pixels" });
-    const slider = h("input", { type: "range", min: 0, max: 100, step: 1, value: GHOST, "aria-label": "How strongly the target shows through" });
-    const ghostWrap = h("div", { class: "art" }, mine, ghost);
-    const views = {
-      ghost: h("div", { class: "pane one" }, h("div", { class: "frame" }, ghostWrap)),
-      side: h("div", { class: "pane two" }, h("figure", {}, h("div", { class: "frame" }, h("div", { class: "art" }, mine2)), h("figcaption", {}, "Yours")),
-        h("figure", {}, h("div", { class: "frame" }, h("div", { class: "art" }, tgt2)), h("figcaption", {}, "Target"))),
-      diff: h("div", { class: "pane one" }, h("div", { class: "frame" }, h("div", { class: "art" }, heat))),
-    };
+    // the table: screen and view switches, the boards on a cutting mat, and the meter
+    const pass = lv.pass || PASS, V = Object.fromEntries(DEVICES.map(([d]) => [d, view(lv, d)]));
+    const devBtns = DEVICES.map(([d, label]) => h("button", { role: "radio", "data-d": d, "aria-checked": String(DEV === d), title: `${label} · ${V[d].w} × ${V[d].h}`, onclick: () => setDev(d) },
+      h("span", { class: "ico ico-" + d, "aria-hidden": "true" }), h("span", { class: "dl" }, label), h("b", { class: "ds" })));
+    const devs = h("div", { class: "devs" + (lv.devices ? " scored" : ""), role: "radiogroup", "aria-label": "Screen" }, devBtns);
     const tabs = h("div", { class: "views", role: "tablist", "aria-label": "View" }, [["ghost", "Ghost"], ["side", "Side by side"], ["diff", "Where it's off"]].map(([k, label]) =>
       h("button", { role: "tab", "data-v": k, "aria-selected": String(VIEW === k), onclick: () => setView(k) }, label)));
+    const slider = h("input", { type: "range", min: 0, max: 100, step: 1, value: GHOST, "aria-label": "How strongly the target shows through" });
     const ghostCtl = h("label", { class: "gctl" }, h("span", {}, "Target"), slider, h("b", {}, GHOST + "%"));
     const pct = h("b", { class: "pct" }, "–");
-    const bar = h("span", { class: "mbar" }, h("i"), h("em", { style: `left:${lv.pass || PASS}%`, title: `${lv.pass || PASS}% passes` }));
+    const bar = h("span", { class: "mbar" }, h("i"), h("em", { style: `left:${pass}%`, title: `${pass}% passes` }));
     const status = h("span", { class: "mst" }, "Measuring…");
     const next = h("a", { class: "nextbtn", href: "#" + (i + 2), hidden: true }, i + 1 < LV.length ? "Next level" : "Back to level 1", h("i", { class: "arw", "aria-hidden": "true" }));
     if (i + 1 >= LV.length) next.href = "#1";
-    const meter = h("div", { class: "meter" }, h("div", { class: "mtop" }, pct, h("span", {}, "match"), status), bar, next);
-    const mat = h("div", { class: "mat", style: `--w:${lv.w};--h:${lv.h}` }, views.ghost, views.side, views.diff);
-    const tbar = h("div", { class: "tbar" }, tabs, ghostCtl);
+    const unit = h("span", {}, "match");
+    const meter = h("div", { class: "meter" }, h("div", { class: "mtop" }, pct, unit, status), bar, next);
+    const mat = h("div", { class: "mat" });
+    const tbar = h("div", { class: "tbar" }, tabs, h("div", { class: "tright" }, ghostCtl, devs));
     table.replaceChildren(tbar, mat, meter);
 
+    // the boards for the screen on show; switching screens draws them again at that size
+    let B = null;
+    function boards() {
+      const v = V[DEV];
+      const mine = board(v, "mine"), ghost = board(v, "ghost"), mine2 = board(v, "mine"), tgt2 = board(v, "ghost");
+      show(ghost, v, lv.answer); show(tgt2, v, lv.answer);
+      ghost.classList.add("ghost");
+      ghost.style.opacity = GHOST / 100;
+      const heat = h("canvas", { class: "bd heat", width: v.w, height: v.h, "aria-label": "Where your board is off: pink pixels" });
+      // each screen gets its own body: a browser window, a tablet, a phone
+      const body = (art) => h("div", { class: "frame dev-" + DEV }, DEV === "desktop" ? h("span", { class: "chrome", "aria-hidden": "true" }, h("i"), h("i"), h("i"), h("em", {}, `${v.w} × ${v.h}`)) : null, art);
+      const views = {
+        ghost: h("div", { class: "pane one" }, body(h("div", { class: "art" }, mine, ghost))),
+        side: h("div", { class: "pane two" }, h("figure", {}, body(h("div", { class: "art" }, mine2)), h("figcaption", {}, "Yours")),
+          h("figure", {}, body(h("div", { class: "art" }, tgt2)), h("figcaption", {}, "Target"))),
+        diff: h("div", { class: "pane one" }, body(h("div", { class: "art" }, heat))),
+      };
+      mat.style.cssText = `--w:${v.w};--h:${v.h}`;
+      mat.dataset.dev = DEV;
+      mat.replaceChildren(views.ghost, views.side, views.diff);
+      B = { v, mine, ghost, mine2, heat, views };
+      devBtns.forEach((b) => b.setAttribute("aria-checked", String(b.dataset.d === DEV)));
+      setView(VIEW);
+    }
+    function setDev(d) {
+      if (d === DEV && B) return;
+      DEV = d;
+      try { localStorage.setItem("dz-dev", d); } catch (e) { /* ignore */ }
+      boards();
+      check();
+    }
     function setView(k) {
       VIEW = k;
       try { localStorage.setItem("dz-view", k); } catch (e) { /* ignore */ }
-      for (const [v, el] of Object.entries(views)) el.hidden = v !== k;
+      for (const [v, el] of Object.entries(B.views)) el.hidden = v !== k;
       tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.v === k)));
       ghostCtl.hidden = k !== "ghost";
       fit();
     }
     slider.oninput = () => {
       GHOST = +slider.value;
-      ghost.style.opacity = GHOST / 100;
+      B.ghost.style.opacity = GHOST / 100;
       ghostCtl.lastChild.textContent = GHOST + "%";
       try { localStorage.setItem("dz-ghost", GHOST); } catch (e) { /* ignore */ }
     };
-    ghost.style.opacity = GHOST / 100;
-    ghost.classList.add("ghost");
 
     // scale the boards to fill the mat, as wide as it is and no taller than the window leaves room for
     function fit() {
-      const pane = views[VIEW];
+      if (!B) return;
+      const { v } = B, pane = B.views[VIEW];
       const cols = VIEW === "side" && innerWidth > 760 ? 2 : 1;
-      const room = (mat.clientWidth - 40 - (cols - 1) * 20) / cols;
-      const tall = innerHeight - 57 - tbar.offsetHeight - meter.offsetHeight - 120 - (VIEW === "side" ? 24 : 0);
-      const s = Math.max(.5, Math.min(VIEW === "side" ? 1.4 : 2.2, room / lv.w, Math.max(260, tall) / lv.h));
+      const bezel = DEV === "desktop" ? 0 : DEV === "tablet" ? 28 : 24;
+      const room = (mat.clientWidth - 40 - (cols - 1) * 20) / cols - bezel;
+      const tall = innerHeight - 57 - tbar.offsetHeight - meter.offsetHeight - 120 - (VIEW === "side" ? 24 : 0) - (DEV === "desktop" ? 26 : bezel);
+      const s = Math.max(.45, Math.min(VIEW === "side" ? 1.4 : 2.2, room / v.w, Math.max(240, tall) / v.h));
       pane.style.setProperty("--s", s.toFixed(3));
     }
     new ResizeObserver(fit).observe(mat);
 
-    let t = 0, run = 0, wasDone = !!S.done[lv.id];
+    let t = 0, run = 0;
     function queue() { clearTimeout(t); t = setTimeout(check, 160); }
     async function check() {
-      const me = ++run;
-      show(mine, lv, css); show(mine2, lv, css);
+      const me = ++run, b = B;
+      show(b.mine, b.v, css); show(b.mine2, b.v, css);
       const c = strip(css);
       const okRules = lv.rules.map((r) => ruleOk(r, c));
       [...rules.children].forEach((li, k) => li.classList.toggle("ok", okRules[k]));
-      let score = null;
-      try {
-        const [a, b] = await Promise.all([raster(lv, css), target(lv)]);
-        if (me !== run) return;
-        if (a && b) score = compare(lv, a, b, heat);
-      } catch (e) { /* bad markup in the svg: count it as no match */ score = 0; }
+      // score the screen on show, and every screen the level is scored on
+      const need = [...new Set([DEV, ...scoredOn(lv)])], got = {};
+      await Promise.all(need.map(async (d) => {
+        try {
+          const [a, tg] = await Promise.all([raster(V[d], css), target(V[d])]);
+          if (a && tg) got[d] = compare(V[d], a, tg, d === DEV ? b.heat : null);
+        } catch (e) { got[d] = 0; } // bad markup in the svg: count it as no match
+      }));
       if (me !== run) return;
+      const score = got[DEV] ?? null;
+      for (const btn of devBtns) {
+        const d = btn.dataset.d, g = got[d];
+        btn.lastChild.textContent = g == null ? "" : g + "%";
+        btn.classList.toggle("ok", g != null && g >= pass);
+      }
+      const on = scoredOn(lv), low = on.filter((d) => !(got[d] >= pass));
       if (score == null) {
         pct.textContent = "?";
         status.textContent = tainted ? "This browser won't show us pixels, so the meter is off. The rules still count." : "";
       } else {
         pct.textContent = score + "%";
         bar.firstChild.style.width = score + "%";
-        S.dz[lv.id] = Math.max(S.dz[lv.id] || 0, score);
+        // a level's best is its weakest scored screen
+        const lvl = Math.min(...on.map((d) => got[d] ?? 0));
+        S.dz[lv.id] = Math.max(S.dz[lv.id] || 0, lvl);
       }
+      unit.textContent = lv.devices || DEV === "desktop" ? "match" : "match · preview";
       const rulesOk = okRules.every(Boolean);
-      const matched = (score == null ? tainted : score >= (lv.pass || PASS)) && rulesOk;
+      const matched = (score == null ? tainted : !low.length) && rulesOk;
       meter.classList.toggle("won", matched);
-      if (score != null) status.textContent = matched ? "Matched. That's the target." : score >= (lv.pass || PASS) ? "The pixels match. Now follow the house rules." : score >= 80 ? "Close. Switch to Where it's off to see the last bits." : "Keep going: the ghost shows where to aim.";
+      if (score != null) status.textContent = matched ? (lv.devices ? "Matched on all three screens." : "Matched. That's the target.")
+        : !low.length ? "The pixels match. Now follow the house rules."
+        : lv.devices && low.length < 3 && !low.includes(DEV) ? `${NAME[DEV]} is there. Now look at ${low.map((d) => NAME[d].toLowerCase()).join(" and ")}.`
+        : !lv.devices && DEV !== "desktop" ? `How it reflows on a ${DEV}. This level is scored on desktop: ${got.desktop ?? 0}%.`
+        : score >= 80 ? "Close. Switch to Where it's off to see the last bits." : "Keep going: the ghost shows where to aim.";
       next.hidden = !matched && !S.done[lv.id];
       if (matched && finish(lv)) {
         burst(pct);
@@ -390,9 +446,8 @@
         const st = map.querySelector(".cur .st");
         if (st && !S.done[lv.id]) st.textContent = S.dz[lv.id] + "%";
       }
-      if (matched && !wasDone) { wasDone = true; }
     }
-    setView(VIEW);
+    boards();
     queue();
     // lets tools/e2e.js type into the board
     table.dzSet = (v) => ed.set(v);
