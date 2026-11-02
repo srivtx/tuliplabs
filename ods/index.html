@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Data Structures · Voxel Network Lab</title>
+<meta name="description" content="Pat Morin’s Open Data Structures, chapter by chapter: build each structure in Python, watch it in 3D, and solve the book’s exercises.">
+<meta name="theme-color" content="#3a4fa3">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='2' width='8' height='8' fill='%23e2532c'/><rect x='22' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='2' y='12' width='8' height='8' fill='%2318977f'/><rect x='12' y='12' width='8' height='8' fill='%233a4fa3'/><rect x='22' y='12' width='8' height='8' fill='%23e2532c'/><rect x='2' y='22' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='22' width='8' height='8' fill='%23d99a12'/><rect x='22' y='22' width='8' height='8' fill='%233a4fa3'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<link rel="stylesheet" href="../learn/engine.css">
+</head>
+<body>
+<header class="top">
+  <button class="btn menu-btn" aria-label="Chapters">☰</button>
+  <a class="brand" href="../"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span><b>Voxel Network Lab</b><small>Open Data Structures (Python), chapter by chapter</small></span></a>
+  <nav class="tracks" aria-label="Sections">
+    <a href="../">3D worlds</a>
+    <a href="../code/">Code: Think Complexity</a>
+    <a href="../modsim/">Code: ModSim</a>
+    <a href="../build/">Build your own X</a>
+    <a href="../stats/">Probability & Stats</a>
+    <a href="../dsa/">DSA</a>
+    <a href="../ods/" aria-current="page">Open Data Structures</a>
+  </nav>
+  <span class="grow"></span>
+  <span class="stats" id="stats"></span>
+  <a class="rv-btn" href="#review">Review <b id="rv-count" class="zero">0</b></a>
+  <span class="chip" id="py-chip"><i></i><span>Python loads when you open a chapter</span></span>
+</header>
+<div class="wrap">
+  <nav class="side" id="side" aria-label="Chapters"></nav>
+  <main id="main"><p class="empty">Loading lessons…</p></main>
+</div>
+<script>
+window.TRACK = {
+  id: "od", data: "../content/od.json", short: "Open Data Structures", pageTitle: "Open Data Structures · Voxel Network Lab",
+  heroTitle: "Open Data Structures, built and played", heroLede: "This section follows Pat Morin’s book <i>Open Data Structures</i> in its own order: interfaces, array-based lists, linked lists, skiplists, hash tables, binary search trees, treaps, scapegoat and red-black trees, heaps, sorting, graphs, tries and B-trees. You build each structure yourself, watch it work in a simulation next to the naive alternative, and solve the book’s exercises plus more of our own.", homeNote: "Keep the book open beside you: each chapter here matches a chapter there, with the same names (ArrayStack, DLList, Treap…). Book text and code: opendatastructures.org."
+};
+</script>
+<script src="../learn/viz/core.js"></script>
+<script src="../learn/engine.js"></script>
+</body>
+</html>
