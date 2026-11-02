@@ -37,16 +37,94 @@
   }
 })();
 
-/* Quiet footer on the course pages: the section colours as links, and the books we build on.
-   The home page has its own; the 3D worlds fill the whole window, so they get none. */
+/* Light, dark or follow the system. The choice is one key in localStorage, read by a one-line
+   script in every page's <head> so the page never flashes the wrong colours; this adds the switch
+   to the bottom of the section menu. */
 (() => {
-  if (document.querySelector(".foot") || !document.querySelector(".wrap")) return;
+  const menu = document.querySelector(".sw-menu");
+  if (!menu) return;
+  const KEY = "vnl-theme";
+  const get = () => { try { return localStorage.getItem(KEY) || "auto"; } catch (e) { return "auto"; } };
+  const row = document.createElement("div");
+  row.className = "sw-theme";
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", "Colours");
+  row.innerHTML = '<span>Colours</span>' + [["auto", "◐", "Auto"], ["light", "☀", "Light"], ["dark", "☾", "Dark"]]
+    .map(([v, g, n]) => `<button type="button" data-t="${v}"><i>${g}</i>${n}</button>`).join("");
+  const sync = () => row.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.t === get()));
+  row.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    const t = b.dataset.t;
+    try { if (t === "auto") localStorage.removeItem(KEY); else localStorage.setItem(KEY, t); } catch (err) { /* private mode: still switch for this page */ }
+    if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.dataset.theme = t;
+    sync();
+  });
+  sync();
+  menu.append(row);
+})();
+
+/* The footer is your whole garden: one flower per track, grown as far as your progress in it,
+   standing in a strip of voxel grass. It fills in only when it scrolls near, so it costs nothing
+   up front. The 3D worlds fill the whole window, so they get none. */
+(() => {
+  if (document.querySelector(".foot") || !document.querySelector("main")) return;
   const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
-  const S = [["worlds", "worlds/", "3D worlds"], ["tc", "code/", "Think Complexity"], ["ms", "modsim/", "ModSim"], ["bx", "build/", "Build your own X"],
-    ["ps", "stats/", "Probability & Stats"], ["ds", "dsa/", "DSA"], ["od", "ods/", "Open Data Structures"]];
+  const T = [["worlds", "worlds/", "3D worlds", "#ff5fa8"], ["tc", "code/", "Think Complexity", "#2fb38f"], ["ms", "modsim/", "ModSim", "#3d8fe0"],
+    ["bx", "build/", "Build your own X", "#e6a21a"], ["ps", "stats/", "Probability & Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "Open Data Structures", "#ee6a4c"]];
   const f = document.createElement("footer");
-  f.className = "foot";
-  f.innerHTML = `<div class="foot-in"><div class="foot-key">${S.map(([k, h, n]) => `<a class="k-${k}" href="${root}${h}"><i></i>${n}</a>`).join("")}</div>`
-    + `<span>Built on open books by Allen B. Downey and <a href="https://opendatastructures.org">Pat Morin</a>. Progress stays in this browser.</span></div>`;
+  f.className = "foot gfoot";
+  f.innerHTML = `<div class="gf-in">
+    <div class="gf-head"><p class="gf-eye">voxel network lab / your whole garden</p>
+      <p class="gf-title">Keep <i>growing.</i></p><code class="gf-code">└── { comeBackTomorrow(); }</code>
+      <p class="gf-sub">One flower for every track. Each grows as you finish its chapters.</p></div>
+    <div class="gf-beds">${T.map(([k, h, n]) => `<a class="gf-bed k-${k}" href="${root}${h}" data-k="${k}"><span class="gf-pot"><canvas class="gf-ghost" aria-hidden="true"></canvas><canvas aria-hidden="true"></canvas></span><b>${n}</b><small>&nbsp;</small></a>`).join("")}</div>
+  </div>
+  <canvas class="gf-grass" aria-hidden="true"></canvas>
+  <div class="gf-base"><span>Built on open books by Allen B. Downey (<a href="https://greenteapress.com/wp/think-complexity-2e/">Think Complexity</a>, <a href="https://greenteapress.com/wp/modsimpy/">ModSim</a>) and Pat Morin (<a href="https://opendatastructures.org">Open Data Structures</a>). Simulations run in your browser with three.js and Pyodide.</span><span>No sign-up · progress stays in this browser</span></div>`;
   document.body.append(f);
+
+  function grass() {
+    const cv = f.querySelector(".gf-grass"), x = cv.getContext("2d");
+    const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * dpr; cv.height = h * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    let s = 7;
+    const r = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const G = ["#24803c", "#3faa52", "#58bb4a", "#7cc742", "#a3d65f"];
+    for (let c = 0; c * 7 < w; c++) {
+      const top = 4 + Math.floor(r() * 4) * 6, tone = Math.floor(r() * 3);
+      for (let y = top; y < h; y += 6) { x.fillStyle = G[Math.min(4, tone + (y === top ? 2 : y < top + 7 ? 1 : 0))]; x.fillRect(c * 7, y, 6, 5); }
+    }
+  }
+  let S = {}, P = {}, SUM = null;
+  try { S = JSON.parse(localStorage.getItem("vnl-code-v1") || "{}"); P = JSON.parse(localStorage.getItem("vnl-progress") || "{}"); } catch (e) { /* private mode */ }
+  function pct(k) {
+    if (k === "worlds") return [Math.round((100 * ((P.done || []).length)) / 12), (P.done || []).length, 12];
+    const chs = SUM[k] || [];
+    const per = {};
+    for (const id in S.done || {}) { const c = id.split("-")[0]; per[c] = (per[c] || 0) + 1; }
+    let d = 0, n = 0, full = 0;
+    for (const [id, , b] of chs) { const m = Math.min(per[id] || 0, b); d += m; n += b; if (m >= b * 0.9) full++; }
+    return [n ? Math.round((100 * d) / n) : 0, full, chs.length];
+  }
+  function draw() {
+    if (!SUM) return;
+    f.querySelectorAll(".gf-bed").forEach((a) => {
+      const k = a.dataset.k, [p, full, all] = pct(k);
+      a.querySelector("small").textContent = all ? `${full} / ${all} in bloom` : "coming soon";
+      if (!window.GARDEN) return;
+      const o = { id: "foot:" + k, hues: [T.find((t) => t[0] === k)[3]], ink: "rgba(255,255,255,.6)" };
+      const [ghost, now] = a.querySelectorAll("canvas");
+      GARDEN.draw(ghost, Object.assign({ stage: 4 }, o));
+      GARDEN.draw(now, Object.assign({ stage: GARDEN.stage(p) }, o));
+    });
+  }
+  const go = () => {
+    grass();
+    if (SUM) return draw();
+    fetch(root + "content/summary.json").then((r) => r.json()).catch(() => ({})).then((j) => { SUM = j || {}; draw(); });
+  };
+  new IntersectionObserver((es, o) => { if (es.some((e) => e.isIntersecting)) { o.disconnect(); go(); } }, { rootMargin: "400px" }).observe(f);
+  let t = 0;
+  addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => { if (SUM) { grass(); draw(); } }, 200); });
 })();
