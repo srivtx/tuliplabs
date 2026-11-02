@@ -824,7 +824,7 @@
     };
     const p = chProgress(ch);
     const pills = [h("span", { class: "pill" }, `≈ ${ch.minutes} min`), h("span", { class: "pill", "data-count": ch.id }, `${p.d} / ${p.n} done`)];
-    if (ch.world) pills.push(h("a", { class: "pill", href: "../#" + ch.world }, "Play this chapter in 3D →"));
+    if (ch.world) pills.push(h("a", { class: "pill", href: "../worlds/#" + ch.world }, "Play this chapter in 3D →"));
     const col = h("div", { class: "col" },
       h("header", { class: "ch-head" },
         h("div", { class: "eyebrow" }, `Chapter ${ch.num} · ${CFG.short}`),
@@ -901,7 +901,7 @@
         h("p", {}, `${pr.d} of ${pr.n} tasks done. ${Object.keys(S.rev).filter((k) => k.startsWith(ch.id)).length} items from this chapter are in your review deck; they'll come back tomorrow, then in 3, 7, 16 and 35 days.`),
         h("div", { class: "btns" },
           nxt ? h("a", { class: "btn primary big", href: "#" + nxt.num }, `Start chapter ${nxt.num}: ${nxt.title} →`) : h("a", { class: "btn primary big", href: "#review" }, "Go to spaced review →"),
-          ch.world ? h("a", { class: "btn", href: "../#" + ch.world }, "Replay it in 3D") : null));
+          ch.world ? h("a", { class: "btn", href: "../worlds/#" + ch.world }, "Replay it in 3D") : null));
       stepsEl.append(finale);
       finale.scrollIntoView({ behavior: "smooth" });
     }

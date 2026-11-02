@@ -6,7 +6,7 @@
 <meta name="description" content="Learn complexity science by playing: all 12 chapters of Think Complexity as interactive 3D voxel worlds with guided stories.">
 <meta property="og:title" content="Voxel Network Lab">
 <meta property="og:description" content="All 12 chapters of Think Complexity as interactive 3D voxel worlds you can play with.">
-<meta property="og:image" content="docs/screenshot.png">
+<meta property="og:image" content="../docs/screenshot.png">
 <meta name="theme-color" content="#3a4fa3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='2' width='8' height='8' fill='%23e2532c'/><rect x='22' y='2' width='8' height='8' fill='%233a4fa3'/><rect x='2' y='12' width='8' height='8' fill='%2318977f'/><rect x='12' y='12' width='8' height='8' fill='%233a4fa3'/><rect x='22' y='12' width='8' height='8' fill='%23e2532c'/><rect x='2' y='22' width='8' height='8' fill='%233a4fa3'/><rect x='12' y='22' width='8' height='8' fill='%23d99a12'/><rect x='22' y='22' width='8' height='8' fill='%233a4fa3'/></svg>">
 <style>
@@ -250,27 +250,18 @@ table.pay{border-collapse:collapse;font-size:13px;width:100%}table.pay th,table.
 @media (max-width:480px){ .tabs button{padding:5px 7px;font-size:12px} .stats b{font-size:15px} h2{font-size:23px} }
 @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
 </style>
+<link rel="stylesheet" href="../learn/nav.css">
+<script src="../learn/nav.js" defer></script>
 </head>
 <body>
 
 
 <div class="app">
 <header class="top">
-  <div class="brand">
-    <div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-    <div><h1>Voxel Network Lab</h1><p>Think Complexity, all 12 chapters, built to be played</p></div>
-  </div>
-  <nav class="tracks" aria-label="Sections">
-    <a href="./" aria-current="page">3D worlds</a>
-    <a href="code/">Code: Think Complexity</a>
-    <a href="modsim/">Code: ModSim</a>
-    <a href="build/">Build your own X</a>
-    <a href="stats/">Probability &amp; Stats</a>
-    <a href="dsa/">DSA</a>
-    <a href="ods/">Open Data Structures</a>
-  </nav>
+  <a class="brand" href="../" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Voxel Network Lab</b></a>
+  <details class="sw k-worlds"><summary aria-label="Switch section"><i class="sq"></i><span>3D worlds</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections"><a class="home k-home" href="../"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a><h6>Play</h6><a class="k-worlds" href="../worlds/" aria-current="page"><i class="sq"></i><b>3D worlds</b><small>Think Complexity as 12 voxel worlds you can poke</small></a><h6>Code along</h6><a class="k-tc" href="../code/"><i class="sq"></i><b>Think Complexity</b><small>The Python behind every world, step by step</small></a><a class="k-ms" href="../modsim/"><i class="sq"></i><b>ModSim</b><small>Modeling and simulation, learnt in code</small></a><h6>Courses</h6><a class="k-bx" href="../build/"><i class="sq"></i><b>Build your own X</b><small>See every part of a real tool, then write it</small></a><a class="k-ps" href="../stats/"><i class="sq"></i><b>Probability & Stats</b><small>Simulate it, then prove it</small></a><a class="k-ds" href="../dsa/"><i class="sq"></i><b>DSA</b><small>From the ground floor to Codeforces</small></a><a class="k-od" href="../ods/"><i class="sq"></i><b>Open Data Structures</b><small>Pat Morin's book, chapter by chapter</small></a></nav></details>
   <span class="grow"></span>
-  <div class="hdr-tools"><a class="nb-btn code-link" id="code-btn" href="code/#1" title="Learn this chapter's Python, step by step">&lt;/&gt; Code</a><button class="nb-btn" id="map-btn">Map</button><button class="nb-btn" id="nb-btn" aria-label="Open notebook">Notebook <b id="nb-count">0</b></button></div>
+  <div class="hdr-tools"><a class="nb-btn code-link" id="code-btn" href="../code/#1" title="Learn this chapter's Python, step by step">&lt;/&gt; Code</a><button class="nb-btn" id="map-btn">Map</button><button class="nb-btn" id="nb-btn" aria-label="Open notebook">Notebook <b id="nb-count">0</b></button></div>
   <nav class="tabs" role="tablist" aria-label="Chapters">
     <button role="tab" data-tab="ch1" aria-selected="true"><i>1</i>City</button>
     <button role="tab" data-tab="ch2" aria-selected="false"><i>2</i>Party</button>
@@ -2362,7 +2353,7 @@ TOURS.ch8.steps.splice(6,0,{enter(){sandPour()},btns:[{t:'Start pouring again',f
 const tabs={ch1:tab1,ch2:tab2,ch3:tab3,ch4:tab4,ch5:tab5,ch6:tab6,ch7:tab7,ch8:tab8,ch9:tab9,ch10:tab10,ch11:tab11,ch12:tab12};
 const DRAW={ch1:()=>drawCh1(),ch2:()=>drawCh2(),ch3:()=>drawCh3(),ch4:()=>drawCh4(),ch6:()=>drawLife(),ch7:()=>drawPhTrial(),ch8:()=>{drawSandSizes();drawSandAvg()},ch9:()=>{drawSugPop();drawSugWealth()},ch10:()=>drawTrExp(),ch11:()=>{drawEv();drawEvOcc()},ch12:()=>drawPd()};
 function drawAll(){Object.values(DRAW).forEach(f=>f())}
-function show(t){if(!tabs[t])return;cur=t;{const cb=document.getElementById('code-btn');if(cb)cb.href='code/#'+t.replace('ch','');}document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
+function show(t){if(!tabs[t])return;cur=t;{const cb=document.getElementById('code-btn');if(cb)cb.href='../code/#'+t.replace('ch','');}document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
   document.querySelectorAll('.station').forEach(s=>s.hidden=s.dataset.station!==t);$('#panel').scrollTop=0;$('#tip').hidden=true;
   whyClose();if(typeof TIME!=='undefined')TIME.paused=false;if(typeof tbSync==='function')setTimeout(tbSync,0);V.n=0;V.tile.fill(0);V.tcf.fill(0);V.sp.fill(0);V.mk.fill(-1);V.lift.fill(0);orbit.noAuto=false;_lg='';clearEdges();tabs[t].enter();if(G.tab&&G.tab!==t)gEnd();if(!G.visited.has(t))gStart(t);requestAnimationFrame(()=>{if(DRAW[t])DRAW[t]()})}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>show(b.dataset.tab));
