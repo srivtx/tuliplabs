@@ -117,7 +117,8 @@
           const d = e.data;
           if (d.status) {
             this.status = d.text;
-            setChip(d.text === "ready" ? "ready" : "busy", d.text === "ready" ? "Python ready" : d.text);
+            if (d.text === "failed") setChip("", "Python couldn't download. Press Run to try again.");
+            else setChip(d.text === "ready" ? "ready" : "busy", d.text === "ready" ? "Python ready" : d.text);
             for (const fn of this.listeners) fn(d.text);
             return;
           }
@@ -126,7 +127,17 @@
           if (p) { this.pending.delete(d.id); p.resolve(d.res); }
           if (!this.pending.size) setChip("ready", "Python ready");
         };
-        this.worker.onerror = () => setChip("", "Python failed to load. Check your connection and reload.");
+        // If the worker itself dies (its script failed to load, say), answer every waiting Run
+        // instead of leaving its button spinning, and start a fresh worker on the next Run.
+        this.worker.onerror = (e) => {
+          e.preventDefault && e.preventDefault();
+          setChip("", "Python couldn't start. Press Run to try again.");
+          this.worker && this.worker.terminate();
+          this.worker = null;
+          this.status = null;
+          for (const p of this.pending.values()) p.resolve({ error: "Python couldn't start (the connection dropped?). Press Run again to retry.", stdout: "", figures: [] });
+          this.pending.clear();
+        };
         setChip("busy", "Starting Python…");
       }
       // Download the packages this chapter needs now, so the first Run doesn't wait for them.
@@ -916,9 +927,18 @@
       next ? h("a", { class: "btn", href: "#" + next.num }, next.num + ". " + next.title + " →") : h("span")));
     m.append(col);
     document.title = `${ch.num}. ${ch.title} · ${CFG.pageTitle}`;
-    if (sectionId) { const t = document.getElementById("s-" + sectionId); if (t) { t.scrollIntoView(); Runner.start(ch.prelude); return; } }
-    window.scrollTo(0, 0);
-    Runner.start(ch.prelude);
+    if (sectionId) { const t = document.getElementById("s-" + sectionId); if (t) t.scrollIntoView(); else window.scrollTo(0, 0); }
+    else window.scrollTo(0, 0);
+    warmSoon(ch);
+  }
+
+  // Start Python once the page has painted and gone quiet, so arriving on a chapter never stutters.
+  // A Run pressed before then starts it at once anyway.
+  let warmT = 0;
+  function warmSoon(ch) {
+    clearTimeout(warmT);
+    const go = () => { if (location.hash.slice(1).split("/")[0] === String(ch.num)) Runner.start(ch.prelude); };
+    warmT = setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(go, { timeout: 2000 }) : go()), 600);
   }
 
   function pageReview() {
@@ -984,11 +1004,22 @@
   // ---------------------------------------------------------------- boot --
   async function boot() {
     document.querySelector(".menu-btn")?.addEventListener("click", () => document.body.classList.toggle("menu"));
-    try {
-      const r = await fetch(CFG.data, { cache: "no-cache" });
-      DATA = await r.json();
-    } catch (e) {
-      main().textContent = "Could not load the lessons. If you opened this file directly, serve the folder instead (python3 -m http.server).";
+    // Lessons are one JSON file. Try it a few times before giving up, then offer a retry button.
+    for (let i = 0; i < 4 && !DATA; i++) {
+      try {
+        const r = await fetch(CFG.data, { cache: "no-cache" });
+        if (!r.ok) throw new Error(r.status);
+        DATA = await r.json();
+      } catch (e) {
+        if (i < 3) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+      }
+    }
+    if (!DATA) {
+      const m = main();
+      m.textContent = "";
+      m.append(h("div", { class: "empty" },
+        h("p", {}, location.protocol === "file:" ? "Could not load the lessons. Serve the folder instead (python3 -m http.server)." : "Could not load the lessons. The connection may have dropped."),
+        h("button", { class: "btn primary", onclick: () => location.reload() }, "Try again")));
       return;
     }
     if (LOCAL) setChip("ready", "Python ready (local)");

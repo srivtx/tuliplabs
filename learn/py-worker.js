@@ -1,7 +1,8 @@
 /* Runs Python (Pyodide) off the main thread so a long simulation never freezes the page.
    Messages in:  {id, req}   where req is {op:'cell'|'check'|'reset', ...}
    Messages out: {id, res} | {status, text} */
-const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+// Two mirrors of the same files: if one CDN edge hiccups, the other usually answers.
+const MIRRORS = ["https://cdn.jsdelivr.net/pyodide/v0.26.4/full/", "https://fastly.jsdelivr.net/pyodide/v0.26.4/full/"];
 const FILES = ["harness.py", "modsim.py", "complexity.py"];
 let py = null;
 let sources = {};
@@ -9,15 +10,34 @@ let ready = null;
 
 function status(text) { postMessage({ status: true, text }); }
 
-async function init() {
-  status("Downloading Python…");
-  importScripts(PYODIDE + "pyodide.js");
-  py = await loadPyodide({ indexURL: PYODIDE });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function boot(base) {
+  if (typeof loadPyodide === "undefined") importScripts(base + "pyodide.js");
+  py = await loadPyodide({ indexURL: base });
   status("Loading numpy…");
   await py.loadPackage(["numpy"]);
+}
+
+async function init() {
+  status("Downloading Python…");
+  // Try each mirror, twice round, before giving up: a single dropped request shouldn't sink the page.
+  for (let i = 0; ; i++) {
+    try { await boot(MIRRORS[i % MIRRORS.length]); break; }
+    catch (e) {
+      py = null;
+      if (i >= 3) throw e;
+      status("Retrying the Python download…");
+      await wait(800 * (i + 1));
+    }
+  }
   for (const f of FILES) {
-    const r = await fetch(f);
-    if (!r.ok) throw new Error("Could not fetch " + f);
+    let r = null;
+    for (let i = 0; i < 3 && !(r && r.ok); i++) {
+      try { r = await fetch(f); } catch (e) { r = null; }
+      if (!(r && r.ok)) await wait(500 * (i + 1));
+    }
+    if (!(r && r.ok)) throw new Error("Could not fetch " + f);
     sources[f] = await r.text();
     py.FS.writeFile("/home/pyodide/" + f, sources[f]);
   }
@@ -51,7 +71,8 @@ async function packagesFor(req) {
 onmessage = async (e) => {
   const { id, req } = e.data;
   try {
-    if (!ready) ready = init();
+    // A failed start is forgotten, so the next Run tries again instead of failing forever.
+    if (!ready) ready = init().catch((err) => { ready = null; status("failed"); throw err; });
     await ready;
     if (req.op !== "reset") await packagesFor(req);
     if (req.op === "warm") { postMessage({ id, res: {} }); return; }
