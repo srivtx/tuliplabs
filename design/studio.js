@@ -126,40 +126,98 @@
     }
     return out + esc(code.slice(last)) + "\n";
   }
+  // A textarea over a highlighted <pre>. The current line gets a band, the gutter marks it, and a status line says where you are.
+  const PAIRS = { "(": ")", "[": "]", '"': '"', "'": "'" };
   function Editor(code, onChange) {
     const pre = h("pre", { "aria-hidden": "true" });
+    const band = h("i", { class: "band", "aria-hidden": "true" });
+    const layer = h("div", { class: "layer", "aria-hidden": "true" }, band, pre);
     const gut = h("div", { class: "gut", "aria-hidden": "true" });
     const ta = h("textarea", { spellcheck: "false", autocapitalize: "off", autocomplete: "off", "aria-label": "Your CSS", wrap: "off" });
-    const el = h("div", { class: "cssed" }, gut, pre, ta);
+    const pos = h("span", {}, "Ln 1, Col 1"), saved = h("span", { class: "saved" }, "saved");
+    const bar = h("div", { class: "edstat" }, pos, h("span", { class: "keys" }, h("kbd", {}, "Tab"), " indent ", h("kbd", {}, "⌘/"), " comment"), saved);
+    const el = h("div", { class: "edwrap" }, h("div", { class: "cssed" }, gut, layer, ta), bar);
     ta.value = code;
+    let lines = 0, curLn = -1;
+    const lineOf = (i) => ta.value.slice(0, i).split("\n").length - 1;
+    const caret = () => {
+      const s = ta.selectionStart, ln = lineOf(s), col = s - ta.value.lastIndexOf("\n", s - 1);
+      pos.textContent = `Ln ${ln + 1}, Col ${col}` + (ta.selectionEnd > s ? ` · ${ta.selectionEnd - s} picked` : "");
+      if (ln === curLn) return;
+      gut.children[curLn]?.classList.remove("on");
+      gut.children[ln]?.classList.add("on");
+      band.style.setProperty("--ln", ln);
+      curLn = ln;
+    };
     const paint = () => {
       pre.innerHTML = highlight(ta.value);
-      gut.textContent = Array.from({ length: ta.value.split("\n").length }, (_, i) => i + 1).join("\n");
+      const n = ta.value.split("\n").length;
+      if (n !== lines) { gut.replaceChildren(...Array.from({ length: n }, (_, i) => h("b", {}, String(i + 1)))); lines = n; curLn = -1; }
+      caret();
     };
+    let st = 0;
+    const flash = () => { saved.classList.add("now"); clearTimeout(st); st = setTimeout(() => saved.classList.remove("now"), 900); };
     const insert = (text) => {
       if (!document.execCommand || !document.execCommand("insertText", false, text)) {
         ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end");
         ta.dispatchEvent(new Event("input"));
       }
     };
+    // swap whole lines [a, b) for what fn makes of them, keeping them picked
+    const eachLine = (fn) => {
+      const v = ta.value, a = v.lastIndexOf("\n", ta.selectionStart - 1) + 1;
+      let b = v.indexOf("\n", Math.max(ta.selectionStart, ta.selectionEnd - (ta.selectionEnd > ta.selectionStart ? 1 : 0)));
+      if (b < 0) b = v.length;
+      const out = fn(v.slice(a, b).split("\n")).join("\n");
+      ta.setSelectionRange(a, b);
+      insert(out);
+      ta.setSelectionRange(a, a + out.length);
+    };
     let escaped = false;
-    ta.addEventListener("input", () => { paint(); onChange(ta.value); });
-    ta.addEventListener("scroll", () => { pre.style.transform = `translate(${-ta.scrollLeft}px,${-ta.scrollTop}px)`; gut.style.transform = `translateY(${-ta.scrollTop}px)`; });
+    ta.addEventListener("input", () => { paint(); onChange(ta.value); flash(); });
+    for (const ev of ["keyup", "click", "select", "focus"]) ta.addEventListener(ev, caret);
+    document.addEventListener("selectionchange", () => { if (document.activeElement === ta) caret(); });
+    ta.addEventListener("scroll", () => { layer.style.transform = `translate(${-ta.scrollLeft}px,${-ta.scrollTop}px)`; gut.style.transform = `translateY(${-ta.scrollTop}px)`; });
     ta.addEventListener("keydown", (e) => {
-      const v = ta.value, s = ta.selectionStart;
+      const v = ta.value, s = ta.selectionStart, end = ta.selectionEnd;
       const ls = v.lastIndexOf("\n", s - 1) + 1, line = v.slice(ls, s);
+      const mod = e.metaKey || e.ctrlKey;
       if (e.key === "Escape") { escaped = true; return; }
-      if (e.key === "Tab" && !escaped && !e.shiftKey) { e.preventDefault(); insert("  "); return; }
+      if (mod && e.key === "s") { e.preventDefault(); flash(); return; }
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        eachLine((ls) => ls.every((l) => /^\s*\/\*.*\*\/\s*$/.test(l) || !l.trim())
+          ? ls.map((l) => l.replace(/\/\* ?(.*?) ?\*\//, "$1"))
+          : ls.map((l) => (l.trim() ? l.replace(/^(\s*)(.*)$/, "$1/* $2 */") : l)));
+        return;
+      }
+      if (e.key === "Tab" && !escaped) {
+        e.preventDefault();
+        if (e.shiftKey) eachLine((ls) => ls.map((l) => l.replace(/^ {1,2}/, "")));
+        else if (end > s && v.slice(s, end).includes("\n")) eachLine((ls) => ls.map((l) => "  " + l));
+        else insert("  ");
+        return;
+      }
       escaped = false;
       if (e.key === "Enter") {
         e.preventDefault();
         let ind = (line.match(/^ */) || [""])[0];
+        // between { and }: open a new indented line and push the } below it
+        if (/\{\s*$/.test(line) && v[end] === "}") { insert("\n" + ind + "  \n" + ind); ta.setSelectionRange(s + ind.length + 3, s + ind.length + 3); return; }
         if (/\{\s*$/.test(line)) ind += "  ";
         insert("\n" + ind);
       } else if (e.key === "}" && /^ +$/.test(line)) {
         e.preventDefault();
         ta.setSelectionRange(Math.max(ls, s - 2), s);
         insert("}");
+      } else if (e.key === "{" && end === s && /^\s*$/.test(v.slice(s, v.indexOf("\n", s) < 0 ? v.length : v.indexOf("\n", s)))) {
+        e.preventDefault(); insert("{}"); ta.setSelectionRange(s + 1, s + 1);
+      } else if (PAIRS[e.key] && end === s && !/\w/.test(v[s] || "")) {
+        e.preventDefault(); insert(e.key + PAIRS[e.key]); ta.setSelectionRange(s + 1, s + 1);
+      } else if (Object.values(PAIRS).includes(e.key) && v[s] === e.key && end === s && e.key !== "}") {
+        e.preventDefault(); ta.setSelectionRange(s + 1, s + 1);
+      } else if (e.key === "Backspace" && end === s && PAIRS[v[s - 1]] && PAIRS[v[s - 1]] === v[s]) {
+        e.preventDefault(); ta.setSelectionRange(s - 1, s + 1); insert("");
       }
     });
     paint();
@@ -227,7 +285,8 @@
     const peekBtn = h("button", { class: "btn", onclick: () => { peekBox.hidden = !peekBox.hidden; peekBtn.textContent = peekBox.hidden ? "Peek at the answer" : "Hide the answer"; } }, "Peek at the answer");
     const ed = Editor(css, (v) => {
       css = v;
-      if (v === lv.start) delete S.code[lv.id]; else S.code[lv.id] = v;
+      // undefined (not delete) so the merge in save() carries the reset over what is stored
+      S.code[lv.id] = v === lv.start ? undefined : v;
       save();
       queue();
     });
@@ -237,7 +296,7 @@
         h("h1", {}, lv.title),
         h("p", { class: "ask", html: lv.brief }),
         h("p", { class: "idea", html: lv.idea })),
-      h("div", { class: "edhead" }, h("span", {}, "style.css"), h("button", { class: "btn small", onclick: () => { ed.set(lv.start); } }, "Reset")),
+      h("div", { class: "edhead" }, h("span", { class: "tab" }, h("i", { "aria-hidden": "true" }), "style.css"), h("span", { class: "grow" }), h("button", { class: "edbtn", title: "Back to how this level started", onclick: () => { ed.set(lv.start); ed.ta.focus(); } }, "↺ Reset")),
       ed.el,
       h("div", { class: "help" }, h("p", { class: "rh" }, "House rules"), rules, h("div", { class: "btns" }, hintBtn, peekBtn), hintBox, peekBox),
       h("details", { class: "markup" }, h("summary", {}, "The HTML (fixed)"), h("pre", {}, lv.html.replace(/></g, ">\n<"))));
