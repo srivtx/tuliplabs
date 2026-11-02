@@ -39,6 +39,23 @@ You actually build and run the system in a voxel city, then watch it break under
 Vectors, matrices as "what happens to the grid when I drag it", dot products, projections,
 eigenvectors, SVD, then gradients. Unlocks the Build X neural net, 3D engine, ray tracer and GPT.
 
+## 4. Design & CSS lab (`dz`)
+
+A track where the task is to make something beautiful, and the check is visual, not text output.
+
+- Left: a tiny HTML/CSS editor. Right: your result and the target, with an onion-skin slider between them.
+- Checked by comparing pixels with the target (a match score and a heat map of where you're off), plus rule checks
+  ("uses grid", "no fixed widths").
+- Chapters: boxes and spacing → type and rhythm → colour tokens and themes → flex → grid → pixel posters
+  (rebuild a Swiss poster, a striped sign, a pixel flower) → responsive → motion → a design system → a landing page.
+- Finale per chapter: your piece hangs in a gallery wall on the track page.
+
+## 5. 3D worlds: make the hands-on part easier to find
+
+The worlds already teach: each one has a "Play the guided story" with tasks (be the computer and predict
+the next row, hit a target), a notebook of ideas you unlock, and Quiz me. It just isn't obvious on arrival.
+Plan: open new visitors straight into story 1, and mark each world tab with its story progress.
+
 ## Visual polish to fold in while building
 
 - Lesson cover art per track drawn in the same isometric voxel style as the home hero.
