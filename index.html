@@ -1071,7 +1071,7 @@ function cards() {
     const fin = chs.filter(([id, , n]) => chState(id, n) === 2).length;
     const soon = t.data && !count;
     // the first chapters, so you can see where a door leads before you open it
-    const first = chs.slice(0, 3).map(([, title], k) => `<a href="${t.href}#${k + 1}" data-n="${String(k + 1).padStart(2, "0")}">${title.replace(/\s*\(.*$/, "").replace(/^(.{32}).+$/, "$1…")}</a>`).join("");
+    const first = chs.slice(0, 3).map(([, title], k) => `<a href="${t.href}${t.k === "dz" ? "studio.html" : ""}#${k + 1}" data-n="${String(k + 1).padStart(2, "0")}">${title.replace(/\s*\(.*$/, "").replace(/^(.{32}).+$/, "$1…")}</a>`).join("");
     return `<article class="card k-${t.k}${soon ? " soon" : ""}" style="--kc:${KC[t.k]}">
       <a class="hit" href="${t.href}" aria-label="Open ${t.name}"></a>
       ${t.k === "dz" ? dzPoster(count, chs) : `<div class="poster"><canvas data-art="${t.art}" data-i="${i}" aria-hidden="true"></canvas>

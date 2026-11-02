@@ -11,12 +11,12 @@ const TULIP = [".p.p.p.", "ppdpdpp", "ppyyypp", ".ppypp.", "g..k..g", "gg.k.gg",
 window.DZ = {
   base: (w, h) => `*,*::before,*::after{box-sizing:border-box}html,body{margin:0;width:${w}px;height:${h}px;overflow:hidden}body{font:16px/1.4 Georgia,serif}`,
   courses: [
-    { title: "Foundations", blurb: "Boxes, space and shape: the four ideas every layout is made of.", ids: ["dz01", "dz02", "dz03", "dz04", "dz09"] },
-    { title: "Type", blurb: "Leading, tracking, scale and alignment: how the best magazines set words.", ids: ["dz10", "dz11", "dz12", "dz13", "dz14"] },
-    { title: "Colour and light", blurb: "Tokens, themes, glows and shadows that feel like real depth.", ids: ["dz07", "dz15", "dz16", "dz17", "dz18"] },
-    { title: "Layout systems", blurb: "Grids that hold a whole page: tiles, bento, app shells, twelve columns.", ids: ["dz05", "dz19", "dz20", "dz21", "dz22"] },
-    { title: "Posters and patterns", blurb: "Swiss, Bauhaus and op art, drawn with nothing but CSS.", ids: ["dz06", "dz08", "dz23", "dz24", "dz25", "dz26"] },
-    { title: "Real interfaces", blurb: "The parts of today's best apps: pricing, a command menu, toasts, a player, stats, chat.", ids: ["dz27", "dz28", "dz29", "dz30", "dz31", "dz32"] },
+    { title: "Foundations", art: "stripes", learn: ["the box model", "padding and gap", "flex stacks", "centring", "pills"], blurb: "Boxes, space and shape: the four ideas every layout is made of.", ids: ["dz01", "dz02", "dz03", "dz04", "dz09"] },
+    { title: "Type", art: "type", learn: ["a type scale", "leading", "tracking", "hanging punctuation", "tabular numbers"], blurb: "Leading, tracking, scale and alignment: how the best magazines set words.", ids: ["dz10", "dz11", "dz12", "dz13", "dz14"] },
+    { title: "Colour and light", art: "aurora", learn: ["colour tokens", "light and dark", "mesh gradients", "layered shadows", "halftone"], blurb: "Tokens, themes, glows and shadows that feel like real depth.", ids: ["dz07", "dz15", "dz16", "dz17", "dz18"] },
+    { title: "Layout systems", art: "tiles", learn: ["CSS grid", "bento", "app shells", "twelve columns", "text overflow"], blurb: "Grids that hold a whole page: tiles, bento, app shells, twelve columns.", ids: ["dz05", "dz19", "dz20", "dz21", "dz22"] },
+    { title: "Posters and patterns", art: "mosaic", learn: ["Swiss grids", "stripes", "Bauhaus shapes", "op art", "pixel art"], blurb: "Swiss, Bauhaus and op art, drawn with nothing but CSS.", ids: ["dz06", "dz08", "dz23", "dz24", "dz25", "dz26"] },
+    { title: "Real interfaces", art: "stickers", learn: ["pricing", "a command menu", "toasts", "a player", "stat tiles", "chat"], blurb: "The parts of today's best apps: pricing, a command menu, toasts, a player, stats, chat.", ids: ["dz27", "dz28", "dz29", "dz30", "dz31", "dz32"] },
   ],
   levels: [
     {

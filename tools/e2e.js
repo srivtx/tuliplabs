@@ -94,7 +94,7 @@ const shots = process.env.SHOTS || ".";
 // The design studio: every level's start must miss the target and its answer must match it.
 //   node tools/e2e.js design
 async function studio(page, browser, errors) {
-  await page.goto(`${BASE}/design/#1`);
+  await page.goto(`${BASE}/design/studio.html#1`);
   await page.waitForSelector(".meter");
   const n = await page.locator("#map a").count();
   const bad = [];
