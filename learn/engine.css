@@ -512,3 +512,22 @@ tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--soft) 45%,transpa
 .log-words dd{margin:0;color:var(--muted);font-size:13.5px}
 .log .btns{margin-top:10px}
 @media (max-width:560px){.log-words dl{grid-template-columns:1fr}.log-words dd{margin-bottom:6px}}
+
+/* Build X wiring map: keycaps on blueprint paper, wires light up when both ends are built */
+.wiremap{margin:8px 0 26px}
+.wm-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;padding:14px;
+  background:linear-gradient(color-mix(in srgb,var(--kc,#e6a21a) 9%,transparent) 1px,transparent 1px) 0 0/16px 16px,
+  linear-gradient(90deg,color-mix(in srgb,var(--kc,#e6a21a) 9%,transparent) 1px,transparent 1px) 0 0/16px 16px,var(--card)}
+.wires{display:block;margin:0 auto;overflow:visible}
+.wire{fill:none;stroke:var(--line);stroke-width:2;stroke-dasharray:3 4}
+.wire.lit{stroke:var(--kc,#e6a21a);stroke-width:3;stroke-dasharray:10 6}
+@media (prefers-reduced-motion:no-preference){.wire.lit{animation:wflow 1.2s linear infinite}}
+@keyframes wflow{to{stroke-dashoffset:-16}}
+.wnode .cap{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.wnode .wn{font:700 13px var(--f-display);fill:var(--muted)}
+.wnode .wl{font:600 10.5px var(--f-body);fill:var(--ink)}
+.wnode.s1 .cap{stroke:var(--kc,#e6a21a);stroke-width:2}
+.wnode.s2 .cap{fill:var(--kc,#e6a21a);stroke:color-mix(in srgb,var(--kc,#e6a21a) 70%,#000)}
+.wnode.s2 .wn,.wnode.s2 .wl{fill:#1b1a12}
+.wnode:hover .cap{stroke:var(--kc,#e6a21a);stroke-width:2.5}
+.wnode{transition:transform .15s}.wnode:hover{transform:translateY(-2px)}

@@ -887,12 +887,54 @@
       h("ol", { class: "ladder" }, ladder.map(([b, t]) => h("li", {}, h("b", {}, b), t))),
       h("p", { html: "Anything you get right (or wrong) joins your <a href=\"#review\">spaced review</a> deck and comes back after 1, 3, 7, 16 and 35 days. Coming back is what makes it stick." }),
       CFG.homeNote ? h("div", { class: "note", html: CFG.homeNote }) : null,
+      CFG.wires ? wireMap() : null,
       h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), "Your garden", h("small", {}, "every chapter grows a flower: seed, sprout, bud, half open, full bloom")),
       beds);
     m.append(col);
     document.title = CFG.pageTitle;
     window.scrollTo(0, 0);
     requestAnimationFrame(() => bloomAll(true));
+  }
+
+  // A wiring map for tracks whose chapters reuse each other (CFG.wires = [[from, to], ...] by chapter
+  // number, CFG.short_names = labels). Rows are layers: a build sits one row below everything it reuses.
+  // A wire lights up in the track colour once both of its ends are finished.
+  function wireMap() {
+    const chs = DATA.chapters, E = CFG.wires, NS = "http://www.w3.org/2000/svg";
+    const by = new Map(chs.map((c) => [c.num, c])), layer = new Map();
+    const depth = (n) => { if (layer.has(n)) return layer.get(n); const ps = E.filter((e) => e[1] === n); const d = ps.length ? 1 + Math.max(...ps.map((e) => depth(e[0]))) : 0; layer.set(n, d); return d; };
+    chs.forEach((c) => depth(c.num));
+    const rows = [];
+    chs.forEach((c) => (rows[layer.get(c.num)] ||= []).push(c.num));
+    // roots that feed something go first, then order each lower row by where its parents sit
+    rows[0].sort((a, b) => (E.some((e) => e[0] === b) - E.some((e) => e[0] === a)) || a - b);
+    const pos = new Map(), W = 74, Hh = 92, KW = 62, KH = 44;
+    // each lower build sits under the average of its parents, nudged right only to avoid overlapping
+    const mid = (n) => { const ps = E.filter((e) => e[1] === n).map((e) => pos.get(e[0]).x); return ps.reduce((s, v) => s + v, 0) / ps.length; };
+    rows.forEach((r, y) => {
+      if (y) r.sort((a, b) => mid(a) - mid(b));
+      let x = -Infinity;
+      r.forEach((n, i) => { x = y ? Math.max(mid(n), x + W) : 8 + i * W; pos.set(n, { x, y: 10 + y * Hh }); });
+    });
+    const width = Math.max(...[...pos.values()].map((p) => p.x)) + KW + 10, height = rows.length * Hh + 8;
+    const st = (n) => { const p = chProgress(by.get(n)); return p.n && p.d === p.n ? 2 : p.d ? 1 : 0; };
+    const el = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width, height, class: "wires", role: "img", "aria-label": "How the builds reuse each other" });
+    for (const [a, b] of E) {
+      const p = pos.get(a), q = pos.get(b), x1 = p.x + KW / 2, y1 = p.y + KH, x2 = q.x + KW / 2, y2 = q.y, my = (y1 + y2) / 2;
+      svg.append(el("path", { d: `M${x1} ${y1} C${x1} ${my} ${x2} ${my} ${x2} ${y2}`, class: "wire" + (st(a) === 2 && st(b) === 2 ? " lit" : "") }));
+    }
+    for (const c of chs) {
+      const p = pos.get(c.num), s = st(c.num), a = el("a", { href: "#" + c.num, class: "wnode s" + s });
+      const t = el("title", {}); t.textContent = `${c.num}. ${c.title}`; a.append(t);
+      a.append(el("rect", { x: p.x, y: p.y, width: KW, height: KH, rx: 7, class: "cap" }));
+      const num = el("text", { x: p.x + 8, y: p.y + 17, class: "wn" }); num.textContent = String(c.num).padStart(2, "0");
+      const lbl = el("text", { x: p.x + 8, y: p.y + 34, class: "wl" }); lbl.textContent = (CFG.short_names || [])[c.num - 1] || "";
+      a.append(num, lbl); svg.append(a);
+    }
+    return h("div", { class: "wiremap" },
+      h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), "How the builds wire together", h("small", {}, "each build reuses parts of the one above it · finish both ends and the wire lights up")),
+      h("div", { class: "wm-scroll" }, svg));
   }
 
   function pageChapter(ch, sectionId) {
