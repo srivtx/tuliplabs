@@ -20,7 +20,7 @@ img{max-width:100%}
 <title>3D worlds · Voxel Network Lab</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
 <style>
 /* Layout: full-height lab bench. 3D voxel stage on the left, a scrolling station panel on the right; stacks on phones. */
 :root{
@@ -250,6 +250,55 @@ table.pay{border-collapse:collapse;font-size:13px;width:100%}table.pay th,table.
 }
 @media (max-width:480px){ .tabs button{padding:5px 7px;font-size:12px} .stats b{font-size:15px} h2{font-size:23px} }
 @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+<style>
+/* The garden look, carried into the 3D worlds: warm paper by day and black paper by night (the same
+   tokens as the lessons), a sky that runs from blue through a pink glow down to the paper, like the
+   stepped bowls, serif titles, keycap tabs and buttons, and a little paper grain over the panel. */
+:root{
+  --bg:#efebe2; --floor:#e4ded1; --panel:#f6f3ec; --card:#fffdf8; --ink:#1d1b17; --muted:#6a655a; --line:#dcd5c6;
+  --c1:#ee6a4c; --c2:#3d8fe0; --c3:#2fb38f; --c4:#e6a21a; --c5:#a39d8f; --pink:#ff6fb5; --sky:#9cc7f0;
+  --f-serif:"Instrument Serif", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c0d0b; --floor:#141611; --panel:#121410; --card:#181a16; --ink:#f0ede4; --muted:#a3a497; --line:#2b2e27;
+  --c1:#ff7a5c; --c2:#5aa6f0; --c3:#38c6a0; --c4:#f0b93f; --c5:#5d6157; --sky:#13284a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c0d0b; --floor:#141611; --panel:#121410; --card:#181a16; --ink:#f0ede4; --muted:#a3a497; --line:#2b2e27;
+  --c1:#ff7a5c; --c2:#5aa6f0; --c3:#38c6a0; --c4:#f0b93f; --c5:#5d6157; --sky:#13284a; color-scheme:dark}
+::selection{background:var(--pink);color:#2a0b1b}
+.panel{position:relative;isolation:isolate}
+.panel::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* titles in the serif, with a pixel-stepped mark before the eyebrow */
+h2,.welcome h2{font:400 34px/1.02 var(--f-serif);letter-spacing:-.005em}
+.station .eyebrow{display:flex;align-items:center;gap:8px}
+.station .eyebrow::before,.g-eye::before{content:"";width:9px;height:9px;flex:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 3'%3E%3Cpath fill='%23ff6fb5' d='M0 0h1v1H0zM1 1h2v1H1zM2 2h1v1H2z'/%3E%3C/svg%3E") 0 0/100% 100%}
+.g-eye{display:flex;align-items:center;gap:7px;color:var(--pink)}
+.g-title{font:400 25px/1.05 var(--f-serif)}
+.why-head b{font:400 20px var(--f-serif)}
+.lede em{background:linear-gradient(transparent 55%,color-mix(in srgb,var(--pink) 30%,transparent) 0);padding:0 1px}
+/* chapter tabs as keycaps */
+.tabs button{border:1px solid transparent}
+.tabs button i{background:var(--card);border:1px solid var(--line);box-shadow:inset 0 -2px 0 var(--line);color:var(--ink);border-radius:4px;width:22px;height:22px}
+.tabs button[aria-selected="true"]{background:color-mix(in srgb,var(--pink) 10%,var(--card));border-color:color-mix(in srgb,var(--pink) 45%,var(--line))}
+.tabs button[aria-selected="true"] i{background:var(--pink);border-color:var(--pink);color:#2a0b1b;box-shadow:inset 0 -2px 0 #c2407f}
+.tabs button.done i,.tabs button[aria-selected="true"].done i{background:var(--c3);border-color:var(--c3);color:#fff;box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--c3) 60%,#000)}
+/* buttons: ink keycaps, and pink for the one that starts a story */
+.btn,.tbar button,.g-x,.nb-btn{box-shadow:inset 0 -2px 0 var(--line);border-radius:7px}
+.btn.primary,#code-btn{background:var(--ink);border-color:var(--ink);color:var(--bg);box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--bg) 25%,var(--ink))}
+.story-btn.btn.primary,#w-go{background:var(--pink);border-color:var(--pink);color:#2a0b1b;box-shadow:inset 0 -3px 0 #c2407f}
+.nb-btn b{background:var(--pink);color:#2a0b1b}
+/* cards on the paper */
+.block,.stats,.guide,.why,.welcome,.map-card{border-radius:10px}
+.stats b{font:400 24px/1.1 var(--f-serif)}
+.g-dots i.past,.g-dots .gd{background:var(--pink)}.g-dots i.now{background:var(--c2)}
+.g-opt.on{border-color:var(--pink);background:color-mix(in srgb,var(--pink) 10%,var(--card))}
+.toast{background:var(--ink);color:var(--bg);box-shadow:4px 4px 0 var(--pink)}
+.legend,.hint{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.legend b{font:400 16px var(--f-serif)}
+.pin{border-radius:4px;box-shadow:2px 2px 0 color-mix(in srgb,var(--pink) 55%,transparent)}
+input[type=range]{accent-color:var(--pink)}
 </style>
 <link rel="stylesheet" href="../learn/nav.css">
 <script src="../learn/nav.js" defer></script>
@@ -2360,7 +2409,13 @@ function show(t){if(!tabs[t])return;cur=t;{const cb=document.getElementById('cod
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>show(b.dataset.tab));
 addEventListener('keydown',e=>{if(e.key==='Escape'){[er,ws,ba].forEach(G=>{G.src=G.dst=-1;G.bfs=null;G.edgesDirty=true})}});
 
-function applyTheme(){readTokens();scene.background=new THREE.Color(T.bg);scene.fog.color.set(T.bg);floorMat.color.set(T.floor);
+// the sky: blue at the top, a pink glow low down, fading into the paper where the fog takes over
+function skyTex(){const c=document.createElement('canvas');c.width=2;c.height=256;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,0,256);
+  const sky=getComputedStyle(document.documentElement).getPropertyValue('--sky').trim()||T.bg;
+  const mx=(a,t)=>'#'+new THREE.Color(T.bg).lerp(new THREE.Color(a),t).getHexString();
+  g.addColorStop(0,sky);g.addColorStop(.5,mx(sky,.45));g.addColorStop(.78,mx('#ff6fb5',.13));g.addColorStop(1,T.bg);
+  x.fillStyle=g;x.fillRect(0,0,2,256);const t=new THREE.CanvasTexture(c);if('colorSpace' in t&&THREE.SRGBColorSpace)t.colorSpace=THREE.SRGBColorSpace;return t}
+function applyTheme(){readTokens();if(scene.background&&scene.background.dispose)scene.background.dispose();scene.background=skyTex();scene.fog.color.set(T.bg);floorMat.color.set(T.floor);
   const dark=new THREE.Color(T.bg).getHSL({}).l<0.3;hemi.intensity=dark?0.62:0.72;sun.intensity=dark?0.7:0.78;
   er.edgesDirty=ws.edgesDirty=ba.edgesDirty=true;drawAll()}
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',applyTheme);
