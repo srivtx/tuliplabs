@@ -386,7 +386,7 @@ h1 {
     },
     {
       id: "dz07", title: "Colour tokens",
-      brief: "Every colour here reads a token, but none are defined yet. Define them on <code>:root</code>: <span class=\"sw\" style=\"--s:#1b1420\">--paper #1b1420</span> <span class=\"sw\" style=\"--s:#2a1f30\">--card #2a1f30</span> <span class=\"sw\" style=\"--s:#fff3fa\">--ink #fff3fa</span> <span class=\"sw\" style=\"--s:#ff6fb5\">--accent #ff6fb5</span>",
+      brief: "Every colour here reads a token, but none are defined yet. Define them on <code>:root</code>: <span class=\"swt\" style=\"--s:#1b1420\">--paper #1b1420</span> <span class=\"swt\" style=\"--s:#2a1f30\">--card #2a1f30</span> <span class=\"swt\" style=\"--s:#fff3fa\">--ink #fff3fa</span> <span class=\"swt\" style=\"--s:#ff6fb5\">--accent #ff6fb5</span>",
       idea: "A token names a colour once. Change it in one place and the whole design follows; that's how light and dark themes work.",
       html: `<div class="card"><h1>Night garden</h1><p>Name a colour once, use it everywhere.</p><span>Open</span></div>`,
       start: `:root {
@@ -774,7 +774,7 @@ td {
     },
     {
       id: "dz15", title: "Two themes, one card",
-      brief: "Both cards share every rule. Make the second one dark by changing <b>only its tokens</b> on <code>.dark</code>: <span class=\"sw\" style=\"--s:#15140f\">--bg #15140f</span> <span class=\"sw\" style=\"--s:#f3eee2\">--fg #f3eee2</span> <span class=\"sw\" style=\"--s:#8d887b\">--mute #8d887b</span> <span class=\"sw\" style=\"--s:#2c2a23\">--line #2c2a23</span>",
+      brief: "Both cards share every rule. Make the second one dark by changing <b>only its tokens</b> on <code>.dark</code>: <span class=\"swt\" style=\"--s:#15140f\">--bg #15140f</span> <span class=\"swt\" style=\"--s:#f3eee2\">--fg #f3eee2</span> <span class=\"swt\" style=\"--s:#8d887b\">--mute #8d887b</span> <span class=\"swt\" style=\"--s:#2c2a23\">--line #2c2a23</span>",
       idea: "A theme is a set of token values. Components never ask \"am I dark?\"; they just read <code>var(--bg)</code>, and the theme decides what that is.",
       html: `<div class="card"><b>Aa</b><p>Light</p></div><div class="card dark"><b>Aa</b><p>Dark</p></div>`,
       css: `body {

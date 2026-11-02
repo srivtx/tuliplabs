@@ -29,8 +29,8 @@
 .brief .ask{margin:0 0 12px;font-size:15.5px;line-height:1.55;text-wrap:pretty}
 .brief .idea{position:relative;margin:0 0 20px;padding-left:17px;font-size:13.5px;line-height:1.55;color:var(--muted)}
 .brief .idea::before{content:"";position:absolute;left:0;top:.55em;width:7px;height:7px;background:var(--kc)}
-.sw{display:inline-flex;align-items:center;gap:5px;font:12.5px var(--f-mono);white-space:nowrap;margin:3px 6px 0 0}
-.sw::before{content:"";width:12px;height:12px;border-radius:3px;background:var(--s);box-shadow:0 0 0 1px var(--line)}
+.brief .swt{display:inline-flex;align-items:center;gap:5px;font:12.5px var(--f-mono);white-space:nowrap;margin:3px 6px 0 0}
+.brief .swt::before{content:"";width:12px;height:12px;border-radius:3px;background:var(--s);box-shadow:0 0 0 1px var(--line)}
 
 .edhead{display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 12px;border:1px solid var(--line);border-bottom:0;border-radius:9px 9px 0 0;background:var(--panel);font:12px var(--f-mono);color:var(--muted)}
 .edhead span::before{content:"";display:inline-block;width:7px;height:7px;margin-right:8px;background:var(--kc)}
