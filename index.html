@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>try{document.documentElement.dataset.chips=localStorage.getItem("tl-chips")||"index";document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
+<script>try{document.documentElement.dataset.chips=localStorage.getItem("tl-chips")||"index";document.documentElement.dataset.cards=localStorage.getItem("tl-cards")||"print";document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tulip Labs · learn it by playing</title>
 <meta name="description" content="Learn by playing: complexity science as 3D voxel worlds, then the code, modeling, statistics, data structures and algorithms, all as step-by-step simulations.">
@@ -167,7 +167,7 @@ a{color:var(--pink-soft)}
 .card:hover .poster canvas{transform:scale(1.04)}
 .poster h3{position:absolute;left:16px;bottom:12px;right:45%;margin:0;font:400 clamp(26px,2.4vw,32px)/1 var(--f-serif);letter-spacing:-.01em;text-shadow:0 1px 14px rgba(0,0,0,.18)}
 .p-tag,.p-n{position:absolute;top:12px;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
-.p-tag{left:16px;color:#1a0d14;background:#fff6fb;padding:2px 7px;border-radius:3px}
+.p-tag{left:16px;color:#1a0d14;background:#fff6fb;padding:3px 9px;border-radius:99px}
 .p-n{right:16px;opacity:.9}
 .card .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:10px;flex:1}
 .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.55;flex:1}
@@ -188,6 +188,30 @@ a{color:var(--pink-soft)}
 .arw.down{transform:rotate(90deg) translateX(-2px);width:14px}a:hover>.arw.down{width:20px}
 @media (max-width:1000px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-ds{grid-column:auto}.card.soon{flex-direction:column}.card.soon .poster{min-height:150px}}
+/* Three card looks to try (?try): poster is the base above, print is the default. cover pours the track's colour over the whole card;
+   print mats the poster inside the card like a print on paper, with the tag as plain words. */
+:root[data-cards="cover"] .card{--on:#fff6fb;--on2:rgba(255,246,251,.72);--rule:rgba(255,246,251,.22);background:color-mix(in srgb,var(--kc) 86%,#000);border-color:transparent;color:var(--on)}
+:root[data-cards="cover"] .card .poster{background:var(--kc)}
+:root[data-cards="cover"] .card p,:root[data-cards="cover"] .first span,:root[data-cards="cover"] .card .go small{color:var(--on2)}
+:root[data-cards="cover"] .card :is(.first a,.go){color:var(--on)}
+:root[data-cards="cover"] .card .go b{color:var(--on)}
+:root[data-cards="cover"] .card .arw{background:var(--on)}
+:root[data-cards="cover"] .card .arw::after{border-color:var(--on)}
+:root[data-cards="cover"] .card .prog i{background:var(--rule)}
+:root[data-cards="cover"] .card .prog i.half{background:var(--on2)}:root[data-cards="cover"] .card .prog i.full{background:var(--on)}
+:root[data-cards="cover"] .card .first a{border-color:var(--rule)}
+:root[data-cards="cover"] .card .first a::before{color:var(--on2)}
+:root[data-cards="cover"][data-chips="pills"] .card .first a:hover{background:var(--on);color:var(--kc)}
+:root[data-cards="cover"][data-chips="dots"] .card .first a::before{background:var(--on)}
+:root[data-cards="cover"][data-chips="prose"] .card .first a{text-decoration-color:var(--on2)}
+:root[data-cards="cover"] .card:hover{box-shadow:0 22px 44px -20px color-mix(in srgb,var(--kc) 85%,transparent)}
+:root[data-cards="print"] .card{padding:8px;border-radius:12px}
+:root[data-cards="print"] .card .poster{border-radius:7px;overflow:hidden}
+:root[data-cards="print"] .card .hit{border-radius:12px}
+:root[data-cards="print"] .card .body{padding:14px 8px 8px}
+:root[data-cards="print"] .p-tag{background:none;color:#fff6fb;padding:0;border-radius:0;display:flex;align-items:center;gap:7px}
+:root[data-cards="print"] .p-tag::before{content:"";width:7px;height:7px;background:#fff6fb}
+:root[data-cards="print"] .card:hover{transform:translateY(-3px) rotate(-.4deg)}
 
 /* ---------------- keycap section ---------------- */
 .keys{background:var(--sun);color:#1b1a12}
@@ -292,8 +316,9 @@ a{color:var(--pink-soft)}
 :root[data-chips="dots"] :is(.chips,.first) a:hover{background:none;color:var(--ink)}
 :root[data-chips="dots"] :is(.chips,.first) a:hover::before{transform:rotate(45deg) scale(1.35)}
 /* the switcher that ?try shows */
-.try{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:60;display:flex;gap:4px;align-items:center;padding:6px;border-radius:99px;
-  background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);box-shadow:0 14px 40px -12px rgba(0,0,0,.45);backdrop-filter:blur(10px);font:12px var(--f-mono);max-width:calc(100vw - 24px);overflow-x:auto}
+.try-box{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;align-items:center;gap:6px;max-width:calc(100vw - 24px)}
+.try{display:flex;gap:4px;align-items:center;padding:6px;border-radius:99px;
+  background:color-mix(in srgb,var(--card) 92%,transparent);border:1px solid var(--line);box-shadow:0 14px 40px -12px rgba(0,0,0,.45);backdrop-filter:blur(10px);font:12px var(--f-mono);max-width:100%;overflow-x:auto}
 .try span{color:var(--faint);padding:0 8px 0 10px;white-space:nowrap}
 .try button{all:unset;cursor:pointer;padding:7px 13px;border-radius:99px;color:var(--muted);white-space:nowrap}
 .try button:hover{color:var(--ink)}
@@ -1251,15 +1276,17 @@ fetch("content/summary.json", { cache: "no-cache" }).then((r) => r.json()).catch
 })();
 </script>
 <script>
-/* ?try: a switcher for the chapter-link styles, so they can be compared on the real page. The pick is remembered. */
+/* ?try: switchers for the chapter-link styles and the card looks, so they can be compared on the real page. Picks are remembered. */
 (() => {
   if (!/[?&]try\b/.test(location.search)) return;
-  const html = document.documentElement, V = [["index", "Index"], ["prose", "Sentence"], ["dots", "Dots"], ["pills", "Pills"]];
-  const bar = document.createElement("div"); bar.className = "try"; bar.setAttribute("role", "group"); bar.setAttribute("aria-label", "Chapter link style");
-  bar.innerHTML = "<span>chapter links</span>" + V.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join("");
-  const set = (v) => { html.dataset.chips = v; try { localStorage.setItem("tl-chips", v); } catch (e) {} bar.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
-  bar.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) set(b.dataset.v); });
-  document.body.append(bar); set(html.dataset.chips || "index");
+  const html = document.documentElement;
+  const G = [["chips", "links", [["index", "Index"], ["prose", "Sentence"], ["dots", "Dots"], ["pills", "Pills"]]],
+             ["cards", "cards", [["poster", "Poster"], ["cover", "Cover"], ["print", "Print"]]]];
+  const box = document.createElement("div"); box.className = "try-box";
+  box.innerHTML = G.map(([k, label, V]) => `<div class="try" role="group" aria-label="${label}" data-k="${k}"><span>${label}</span>${V.map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join("")}</div>`).join("");
+  const set = (k, v) => { html.dataset[k] = v; try { localStorage.setItem("tl-" + k, v); } catch (e) {} box.querySelectorAll(`[data-k="${k}"] button`).forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === v)); };
+  box.addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) set(b.closest(".try").dataset.k, b.dataset.v); });
+  document.body.append(box); G.forEach(([k, , V]) => set(k, html.dataset[k] || V[0][0]));
 })();
 </script>
 </body>
