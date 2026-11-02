@@ -811,22 +811,34 @@ const TITLE = (() => {
       { d: 4, svg: box(1.2, -1.2, 0, 1, 1, T, PINK) },
       { d: 5, svg: box(0.2, -0.2, 0, 1, 1, T, PINK) },
       { d: 6, svg: box(0.2, -1.2, 0, 1, 1, 1, PINKC), cls: "bob" } ] },
-    { cap: "<b>a tulip</b>, grown one block at a time", pieces: [
-      { d: 0, svg: box(-1.3, -1.3, 0, 3.6, 3.6, T, GREEN) },
-      { d: 1, svg: box(-0.9, 0.3, 0.7, 1.2, 0.4, 0.18, GREEN) },
-      { d: 2, svg: box(0.3, -0.9, 1.1, 0.4, 1.2, 0.18, GREEN) },
-      { d: 3, svg: box(0.3, 0.3, T, 0.4, 0.4, 2, faces("#3f9b3f")) },
-      { d: 4, cls: "bob", svg: box(0, 0, 2.1, 1, 1, 0.8, PINKC) + box(0, 0, 2.9, 0.32, 0.32, 0.42, PINK) + box(0.34, 0.34, 2.9, 0.32, 0.32, 0.14, faces("#ffd21f")) +
-        box(0.68, 0, 2.9, 0.32, 0.32, 0.42, PINK) + box(0, 0.68, 2.9, 0.32, 0.32, 0.42, PINK) + box(0.68, 0.68, 2.9, 0.32, 0.32, 0.42, PINK) } ] },
-    { cap: "<b>six numbers</b>, sorted into a staircase", pieces: [
-      { d: 0, svg: box(-3.6, -0.4, 0, 6.9, 1.7, T, faces("#d9d2c2")) },
-      ...["#ff5fa8", "#ee6a4c", "#e6a21a", "#3caa4c", "#2fb38f", "#3d8fe0"].map((c, i) => ({ d: i + 1, svg: box(-3.3 + i * 1.1, 0, T, 0.9, 0.9, 0.45 + i * 0.4, faces(c)), cls: i === 5 ? "bob" : "" })) ] },
-    { cap: "<b>a sandpile</b>, one grain from toppling", pieces: (() => {
-      const H = [[1, 2, 1], [2, 3, 2], [1, 2, 1]], C = ["", "#8fe0bd", "#5cc455", "#3f9b3f"], out = [{ d: 0, svg: box(-1.75, -1.75, 0, 3.5, 3.5, T, faces("#d9d2c2")) }];
-      const cells = [];
-      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) cells.push([c, r]);
-      cells.sort((a, b) => a[0] + a[1] - (b[0] + b[1])).forEach(([c, r], k) => out.push({ d: k + 1, svg: box(-1.6 + c * 1.1, -1.6 + r * 1.1, T, 1, 1, H[r][c] * 0.42, faces(C[H[r][c]])) }));
-      out.push({ d: 10, cls: "bob", svg: box(-0.35, -0.35, T + 3 * 0.42 + 0.5, 0.5, 0.5, 0.5, PINKC) });
+    // the logo itself, stood up as a wall of voxels and built from the soil up, one row at a time
+    { cap: "<b>our tulip</b>, built one row of blocks at a time", pieces: (() => {
+      const LOGO = [".p.p.p.", "ppdpdpp", "ppyyypp", ".ppypp.", "g..G..g", "gg.G.gg", ".ggGgg."];
+      const COL = { p: "#ff6fb5", d: "#d23f87", y: "#ffd21f", g: "#3faa52", G: "#24803c" }, s = 0.54, out = [{ d: 0, svg: box(-2.6, -1.2, 0, 5.2, 3, T, GREEN) }];
+      for (let row = 6; row >= 0; row--) out.push({ d: 7 - row, svg: [...LOGO[row]].map((c, x) => c === "." ? "" : box(-1.6 + x * s, 0.1, T + (6 - row) * s, s, s, s, faces(COL[c]))).join("") });
+      return out; })() },
+    // one tulip: a stem, a leaf, a cup and three petal tips, drawn back to front
+    { cap: "<b>six tulips</b>, sorted by height", pieces: (() => {
+      const out = [{ d: 0, svg: box(-3.7, -0.6, 0, 7.1, 1.6, 0.42, faces("#c9714f")) }];
+      ["#ff9ccc", "#ff6fb5", "#ee6a4c", "#ffd21f", "#d23f87", "#9a6be0"].forEach((c, i) => {
+        const x = -3.4 + i * 1.12, y = -0.3, z = 0.42, h = 0.5 + i * 0.36, F = faces(c), w = 0.84, t = 0.26;
+        out.push({ d: i + 1, cls: i === 5 ? "bob" : "", svg: box(x + 0.33, y + 0.33, z, 0.18, 0.18, h, faces("#3f9b3f")) + box(x + 0.51, y + 0.33, z + h * 0.35, 0.36, 0.12, 0.1, faces("#5cc455")) +
+          box(x, y, z + h, w, w, 0.46, F) + box(x, y, z + h + 0.46, t, t, 0.2, F) + box(x + w - t, y, z + h + 0.46, t, t, 0.2, F) + box(x, y + w - t, z + h + 0.46, t, t, 0.2, F) + box(x + w - t, y + w - t, z + h + 0.46, t, t, 0.2, F) });
+      });
+      return out; })() },
+    // the garden: a plot of soil where every chapter you finish grows from a sprout to a bud to a tulip
+    { cap: "<b>your garden</b>: every chapter you finish blooms", pieces: (() => {
+      const STAGE = [[3, 1, 2], [2, 3, 0], [0, 2, 3]], out = [{ d: 0, svg: box(-1.85, -1.85, 0, 3.7, 3.7, T, GREEN) }], cellsAt = [];
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) cellsAt.push([c, r]);
+      cellsAt.sort((a, b) => a[0] + a[1] - (b[0] + b[1])).forEach(([c, r], k) => {
+        const x = -1.7 + c * 1.15, y = -1.7 + r * 1.15, z = T + 0.14, st = STAGE[r][c], m = 0.35;
+        let svg = box(x, y, T, 1.05, 1.05, 0.14, faces("#8a5a3b"));
+        if (st >= 1) svg += box(x + 0.45, y + 0.45, z, 0.15, 0.15, st === 1 ? 0.3 : 0.75 + st * 0.15, faces("#3f9b3f"));
+        if (st === 1) svg += box(x + 0.3, y + 0.45, z + 0.3, 0.45, 0.15, 0.1, faces("#5cc455"));
+        if (st === 2) svg += box(x + m, y + m, z + 1.05, 0.35, 0.35, 0.38, faces("#f6b7da"));
+        if (st === 3) { const F = faces("#ff6fb5"), hz = z + 1.2; svg += box(x + 0.22, y + 0.22, hz, 0.6, 0.6, 0.42, F) + box(x + 0.22, y + 0.22, hz + 0.42, 0.18, 0.18, 0.2, F) + box(x + 0.64, y + 0.22, hz + 0.42, 0.18, 0.18, 0.2, F) + box(x + 0.22, y + 0.64, hz + 0.42, 0.18, 0.18, 0.2, F) + box(x + 0.43, y + 0.43, hz + 0.42, 0.18, 0.18, 0.08, faces("#ffd21f")) + box(x + 0.64, y + 0.64, hz + 0.42, 0.18, 0.18, 0.2, F); }
+        out.push({ d: k + 1, svg, cls: st === 3 && k === 8 ? "bob" : "" });
+      });
       return out; })() },
   ];
   const cap = $("#fig figcaption"), keys = $("#fig-keys");
