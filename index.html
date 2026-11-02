@@ -183,6 +183,93 @@ a{color:var(--pink-soft)}
 .empty{margin-top:16px;font-size:14px;color:var(--muted);border-left:3px solid var(--pink);padding-left:12px}
 @media (max-width:900px){.globe-grid{grid-template-columns:1fr}}
 
+/* ---------------- a look inside ----------------
+   Each row is a painted panel (a textile poster, a striped sign, a tile puzzle, a paper-cut grove)
+   with a small working window on top that plays one real moment from the lab. Text sits to the right. */
+.shows{display:flex;flex-direction:column;gap:clamp(56px,8vw,110px);margin-top:44px}
+.show{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px clamp(28px,5vw,72px);align-items:center}
+.art{position:relative;aspect-ratio:3/2;overflow:hidden;border-radius:4px;background:#0a9a4a}
+.art>svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.win{position:absolute;left:7%;top:9%;width:600px;height:360px;transform:scale(var(--s,1));transform-origin:0 0;
+  background:var(--card);color:var(--ink);border-radius:10px;overflow:hidden;
+  box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 30px 60px -20px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.12)}
+.win-bar{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel);font:11.5px var(--f-mono);color:var(--muted)}
+.win-bar i{width:9px;height:9px;border-radius:1px;background:var(--pink)}.win-bar i+i{background:var(--sun)}.win-bar i+i+i{background:var(--leaf)}
+.win-bar span{flex:1;text-align:center;margin-right:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.win-in{padding:16px 18px;height:calc(100% - 34px);font-size:13px}
+.say p{font:400 clamp(26px,2.7vw,34px)/1.12 var(--f-serif);margin:0;color:var(--muted);letter-spacing:-.005em}
+.say p b{font-weight:400;color:var(--ink);display:block}
+.say a{display:inline-block;margin-top:20px;font:600 14px var(--f-mono);color:var(--pink);text-decoration:none}
+.say a:hover{text-decoration:underline;text-underline-offset:4px}
+:root[data-theme="light"] .say a{color:#c2357a}
+@media (max-width:860px){.show{grid-template-columns:1fr}}
+@media (max-width:600px){.art{aspect-ratio:4/3}.win{left:4%;top:5%}}
+/* shared bits inside the windows */
+.w-k{font:600 12px var(--f-mono);border:0;border-radius:6px;padding:6px 12px;background:var(--pink);color:#1a0d14;box-shadow:inset 0 -3px 0 #c2357a;transition:transform .1s,box-shadow .1s}
+.w-k.press{transform:translateY(2px);box-shadow:inset 0 -1px 0 #c2357a}
+.w-code{margin:0;font:12.5px/1.65 var(--f-mono);background:var(--soft);border-radius:6px;padding:10px 12px;white-space:pre;overflow:hidden}
+.w-code .kw{color:#d23f87}.w-code .fn{color:#2f7fd0}.w-code .nu{color:#b07a00}.w-code .cm{color:var(--faint)}
+:root:not([data-theme="light"]) .w-code .kw{color:#ff8fc6}:root:not([data-theme="light"]) .w-code .fn{color:#7fb6ff}:root:not([data-theme="light"]) .w-code .nu{color:#f0c35a}
+.w-ok{color:#2f9a45}.w-no{color:#e0533a}
+:root:not([data-theme="light"]) .w-ok{color:#6fd47f}:root:not([data-theme="light"]) .w-no{color:#ff8a70}
+.w-line{opacity:0;transform:translateY(6px);transition:opacity .35s,transform .35s cubic-bezier(.2,.8,.3,1)}
+.w-line.on{opacity:1;transform:none}
+.w-hop{display:flex;gap:4px;align-items:center;font:12px var(--f-mono);color:var(--muted)}
+.w-hop i{width:8px;height:8px;border-radius:1px;background:var(--pink)}.w-hop i:nth-child(2){background:var(--sun)}.w-hop i:nth-child(3){background:var(--leaf)}
+@media (prefers-reduced-motion:no-preference){.w-hop i{animation:whop .6s ease-in-out infinite}.w-hop i:nth-child(2){animation-delay:.1s}.w-hop i:nth-child(3){animation-delay:.2s}}
+@keyframes whop{50%{transform:translateY(-5px)}}
+/* 1 · sim + code */
+.w-sim{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px}
+.w-sim canvas{width:200px;height:200px;display:block;border-radius:6px;background:var(--soft);image-rendering:pixelated}
+.w-cap{font:11px var(--f-mono);color:var(--muted);margin-top:6px}
+.w-run{display:flex;align-items:center;gap:10px;margin:10px 0 8px}
+.w-out{border-top:1px solid var(--line);padding-top:8px;font:12.5px/1.75 var(--f-mono);min-height:96px}
+/* 2 · blueprint */
+.w-bp{display:grid;grid-template-columns:260px minmax(0,1fr);gap:18px;align-items:center;height:100%}
+.w-bp svg{width:260px;height:270px;display:block;overflow:visible}
+.w-bp .cube{opacity:.14;transition:opacity .3s}
+.w-bp .cube.up{opacity:1;animation:cdrop .55s cubic-bezier(.2,.8,.3,1.3)}
+@keyframes cdrop{from{transform:translateY(-30px);opacity:0}}
+.w-ver{font:700 22px var(--f-display);margin:0 0 4px}.w-ver small{font:12px var(--f-mono);color:var(--muted);font-weight:400}
+.w-parts{list-style:none;margin:10px 0 0;padding:0;font:12.5px/1.95 var(--f-mono);color:var(--muted)}
+.w-parts li::before{content:"▢ ";color:var(--faint)}.w-parts li.on{color:var(--ink)}.w-parts li.on::before{content:"■ ";color:#e6a21a}
+.w-stamp{position:absolute;right:28px;bottom:28px;font:700 20px var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:#d23f87;
+  border:3px solid currentColor;padding:4px 12px;border-radius:4px;transform:rotate(-9deg) scale(1.6);opacity:0;transition:transform .35s cubic-bezier(.2,.8,.3,1.4),opacity .2s}
+.w-stamp.on{opacity:.9;transform:rotate(-9deg) scale(1)}
+/* 3 · hidden test */
+.w-q{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+.w-q b{font:600 15px var(--f-body)}.w-q small{font:11.5px var(--f-mono);color:var(--muted);white-space:nowrap}
+.w-try{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:12px;align-items:center;margin-bottom:10px}
+.w-try .w-code{font-size:12px;padding:8px 10px}
+.w-res{font:12px/1.5 var(--f-mono)}
+.w-bar{height:10px;border-radius:2px;margin-top:6px;width:0;transition:width 1.1s cubic-bezier(.3,.7,.2,1)}
+.w-bar.slow{background:#e0533a}.w-bar.fast{background:#3caa4c}
+.w-xp{display:inline-block;font:700 15px var(--f-display);background:#1c1d1a;color:#ffd21f;border-radius:7px;padding:5px 12px;box-shadow:inset 0 -4px 0 #000;transform:scale(0);transition:transform .35s cubic-bezier(.2,.8,.3,1.5)}
+.w-xp.on{transform:scale(1)}
+.w-next{display:flex;align-items:center;gap:12px;margin-top:4px}.w-next .w-cap{margin:0}
+/* 4 · garden */
+.w-gd{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;font:11.5px var(--f-mono);color:var(--muted)}
+.w-gd canvas{width:100%;aspect-ratio:1;display:block;background:var(--soft);border-radius:6px;image-rendering:pixelated}
+.w-gd b{display:block;color:var(--ink);font:600 12px var(--f-body);margin-top:6px}
+.w-caps{display:flex;gap:10px;margin-top:18px}
+.w-cap2{flex:1;background:#1c1d1a;color:#f3efe2;border-radius:9px;padding:9px 12px 11px;box-shadow:inset 0 -5px 0 #000;font:11px var(--f-mono)}
+.w-cap2 b{display:block;font:700 22px/1.1 var(--f-display);color:#fff}
+.w-cap2.g{background:#2f8f3e;box-shadow:inset 0 -5px 0 #1a5a26}
+
+/* ---------------- product news ---------------- */
+.news{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:22px}
+.nw{display:flex;flex-direction:column;text-decoration:none;color:inherit}
+.nw-art{display:flex;aspect-ratio:1.9;border-radius:6px;overflow:hidden;transition:transform .25s cubic-bezier(.2,.8,.3,1)}
+.nw:hover .nw-art{transform:translateY(-3px)}
+.nw-art>span{flex:0 0 42%;display:grid;place-items:center;background:var(--a)}
+.nw-art>span svg{width:46%;height:auto;image-rendering:pixelated}
+.nw-art>b{flex:1;display:flex;align-items:center;padding:0 16px;background:var(--b);color:var(--c,#fff);font:400 21px/1.08 var(--f-serif)}
+.nw-meta{font:12px var(--f-mono);color:var(--muted);margin-top:12px}
+.nw-meta em{font-style:normal;color:var(--ink)}
+.nw-t{font:500 16px/1.35 var(--f-body);margin-top:4px}
+.nw-t::after{content:" ›";color:var(--muted)}
+.nw:hover .nw-t{text-decoration:underline;text-underline-offset:3px}
+
 /* ---------------- how it works ---------------- */
 .how{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;counter-reset:s;margin:0;padding:0;list-style:none}
 .how li{border-top:2px solid var(--line);padding-top:14px;counter-increment:s}
@@ -194,6 +281,7 @@ a{color:var(--pink-soft)}
 <link rel="stylesheet" href="learn/nav.css">
 <script src="learn/garden.js" defer></script>
 <script src="learn/nav.js" defer></script>
+<script src="learn/look.js" defer></script>
 </head>
 <body>
 <header class="top">
@@ -257,6 +345,90 @@ a{color:var(--pink-soft)}
   </div></div>
 </section>
 
+<section class="sec" id="look" aria-labelledby="look-h">
+  <div class="wrap">
+    <p class="eyebrow">a look inside</p>
+    <h2 class="h2" id="look-h">What it's <i>actually like.</i></h2>
+    <div class="shows">
+      <article class="show" data-show="sim">
+        <div class="art" data-art="tex">
+          <div class="win" aria-hidden="true">
+            <div class="win-bar"><i></i><i></i><i></i><span>complexity / ch 6 · game of life</span></div>
+            <div class="win-in w-sim">
+              <div><canvas width="20" height="20"></canvas><div class="w-cap">generation <b class="gen">0</b> · a glider</div></div>
+              <div>
+<pre class="w-code"><span class="kw">def</span> <span class="fn">step</span>(grid):
+    n = <span class="fn">neighbours</span>(grid)
+    born = (grid == <span class="nu">0</span>) &amp; (n == <span class="nu">3</span>)
+    stay = (grid == <span class="nu">1</span>) &amp; ((n == <span class="nu">2</span>) | (n == <span class="nu">3</span>))
+    <span class="kw">return</span> (born | stay).<span class="fn">astype</span>(<span class="fn">int</span>)</pre>
+                <div class="w-run"><button class="w-k" tabindex="-1">▶ Run</button><span class="w-cap">python, right in the page</span></div>
+                <div class="w-out"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="say"><p><b>Watch it move, then write it.</b> Every idea opens as a simulation you can step and poke. Then you write the Python yourself, and checks tell you what works.</p>
+          <a href="code/">Open Complexity →</a></div>
+      </article>
+
+      <article class="show" data-show="bp">
+        <div class="art" data-art="sign">
+          <div class="win" aria-hidden="true">
+            <div class="win-bar"><i></i><i></i><i></i><span>build your own x / ch 4 · a programming language</span></div>
+            <div class="win-in w-bp">
+              <svg viewBox="-125 -82 250 250"></svg>
+              <div><p class="w-ver">v0.<span class="vn">0</span> <small>· blueprint</small></p>
+                <ul class="w-parts"><li>tokenizer</li><li>parser</li><li>environment</li><li>eval</li><li>functions</li><li>repl</li></ul></div>
+            </div>
+            <span class="w-stamp">shipped</span>
+          </div>
+        </div>
+        <div class="say"><p><b>Every chapter is a build.</b> Each step adds one real part, and the blueprint stacks it into place. Pass the last test and it ships.</p>
+          <a href="build/">Open Build your own X →</a></div>
+      </article>
+
+      <article class="show" data-show="test">
+        <div class="art" data-art="tiles">
+          <div class="win" aria-hidden="true">
+            <div class="win-bar"><i></i><i></i><i></i><span>dsa / ch 7 · two pointers</span></div>
+            <div class="win-in">
+              <div class="w-q"><b>Q4 · Pair with a target sum</b><small>n ≤ 200,000 · 1 s limit</small></div>
+              <div class="w-try w-line">
+<pre class="w-code"><span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(n):
+    <span class="kw">for</span> j <span class="kw">in</span> <span class="fn">range</span>(i + <span class="nu">1</span>, n): <span class="cm">…</span></pre>
+                <div class="w-res"><span class="w-no">✗ too slow · 3.2 s</span><br><span class="w-cap">20,000,000,000 steps</span><div class="w-bar slow" data-w="100%"></div></div>
+              </div>
+              <div class="w-try w-line">
+<pre class="w-code">i, j = <span class="nu">0</span>, n - <span class="nu">1</span>
+<span class="kw">while</span> i &lt; j: <span class="cm">… move the side that's off</span></pre>
+                <div class="w-res"><span class="w-ok">✓ 40 / 40 hidden tests</span><br><span class="w-cap">200,000 steps · 0.04 s</span><div class="w-bar fast" data-w="3%"></div></div>
+              </div>
+              <div class="w-next"><span class="w-xp">+40 XP</span><span class="w-cap w-line">next · Q5 · three numbers that sum to zero →</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="say"><p><b>Slow code doesn't pass.</b> Every question has a big hidden test, like LeetCode and Codeforces, so you feel why the clever way exists.</p>
+          <a href="dsa/">Open DSA →</a></div>
+      </article>
+
+      <article class="show" data-show="garden">
+        <div class="art" data-art="grove">
+          <div class="win" aria-hidden="true">
+            <div class="win-bar"><i></i><i></i><i></i><span>home · your garden</span></div>
+            <div class="win-in">
+              <div class="w-gd"><div><canvas width="64" height="64"></canvas><b>Complexity</b><span class="st">4 / 12</span></div><div><canvas width="64" height="64"></canvas><b>Build X</b><span class="st">9 / 29</span></div><div><canvas width="64" height="64"></canvas><b>Stats</b><span class="st">7 / 13</span></div><div><canvas width="64" height="64"></canvas><b>DSA</b><span class="st">31 / 44</span></div></div>
+              <div class="w-caps"><span class="w-cap2"><b class="xp">0</b>XP, every track</span><span class="w-cap2 g"><b>6</b>day streak</span><span class="w-cap2"><b>3</b>to review</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="say"><p><b>A garden that grows with you.</b> Every track is a flower. Chapters make it bloom, and wrong answers come back later for review.</p>
+          <a href="#map">See your map ↓</a></div>
+      </article>
+    </div>
+  </div>
+</section>
+
 <section class="sec grain" id="tracks">
   <div class="wrap">
     <div class="head">
@@ -284,7 +456,7 @@ a{color:var(--pink-soft)}
   </div>
 </section>
 
-<section class="sec grain" aria-labelledby="map-h">
+<section class="sec grain" id="map" aria-labelledby="map-h">
   <div class="wrap globe-grid">
     <canvas id="globe" width="520" height="520" aria-label="A turning globe drawn with glyphs. Pink marks are chapters you have finished."></canvas>
     <div>
