@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){}</script>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Data Structures & Algorithms · Tulip Labs</title>
 <meta name="description" content="Data structures and algorithms from first principles: every pattern as a 3D simulation, then a ladder of interview and Codeforces-style questions.">

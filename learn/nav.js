@@ -175,3 +175,58 @@ window.SVX = (() => {
   let t = 0;
   addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => { if (SUM) { grass(); draw(); } }, 200); });
 })();
+
+/* Page change, in pink pixels (styles in nav.css). Leaving: blocks pop in from the click outward, then we go.
+   Arriving: the head script has already covered the page; the blocks clear from the middle out. */
+(() => {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document.documentElement.classList.remove("wipe-in");
+    try { sessionStorage.removeItem("tl-wipe"); } catch (e) { /* private mode */ }
+    return;
+  }
+  const KEY = "tl-wipe", CELL = 72;
+  const curtain = (cx, cy) => {
+    const cols = Math.ceil(innerWidth / CELL), rows = Math.ceil(innerHeight / CELL);
+    const el = document.createElement("div");
+    el.className = "px-wipe now";
+    el.setAttribute("aria-hidden", "true");
+    el.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+    el.style.gridTemplateRows = `repeat(${rows},1fr)`;
+    el.innerHTML = "<i></i>".repeat(cols * rows) + '<b class="tl"></b>';
+    // each block waits by its distance from (cx, cy), in cells, so the change ripples out from one spot
+    const gx = cx / CELL, gy = cy / CELL, far = Math.hypot(Math.max(gx, cols - gx), Math.max(gy, rows - gy));
+    el.querySelectorAll("i").forEach((c, k) => { c.style.transitionDelay = ((Math.hypot((k % cols) + 0.5 - gx, ((k / cols) | 0) + 0.5 - gy) / far) * 170).toFixed(0) + "ms"; });
+    document.body.append(el);
+    return el;
+  };
+  const root = document.documentElement;
+  if (root.classList.contains("wipe-in")) {
+    try { sessionStorage.removeItem(KEY); } catch (e) { /* private mode */ }
+    const el = curtain(innerWidth / 2, innerHeight / 2);
+    el.classList.add("full");
+    void el.offsetWidth;
+    root.classList.remove("wipe-in");
+    requestAnimationFrame(() => requestAnimationFrame(() => { el.classList.remove("now", "full"); setTimeout(() => el.remove(), 520); }));
+  }
+  document.addEventListener("click", (e) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+    const u = new URL(a.href, location.href);
+    if (u.origin !== location.origin || (u.pathname === location.pathname && u.search === location.search) || /\.(json|png|jpe?g|svg|pdf|zip)$/i.test(u.pathname)) return;
+    e.preventDefault();
+    const el = curtain(e.clientX || innerWidth / 2, e.clientY || innerHeight / 2);
+    void el.offsetWidth;
+    el.classList.remove("now");
+    el.classList.add("full");
+    try { sessionStorage.setItem(KEY, "1"); } catch (err) { /* private mode: no curtain on arrival */ }
+    setTimeout(() => location.assign(u.href), 330);
+  });
+  // coming back through the back button restores this page as it was, curtain and all: clear it
+  addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    document.querySelectorAll(".px-wipe").forEach((x) => x.remove());
+    root.classList.remove("wipe-in");
+    try { sessionStorage.removeItem(KEY); } catch (err) { /* private mode */ }
+  });
+})();

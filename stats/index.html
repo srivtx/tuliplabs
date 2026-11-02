@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){}</script>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Probability & Statistics · Tulip Labs</title>
 <meta name="description" content="Probability and statistics from counting to MCMC: every idea as a 3D simulation first, then questions, then Python, with real-world projects.">
