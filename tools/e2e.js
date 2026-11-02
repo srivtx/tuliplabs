@@ -43,7 +43,10 @@ const shots = process.env.SHOTS || ".";
       (await el.locator(".result.pass").count()) ? ok++ : bad.push(b.id + " solution failed in browser: " + (await el.innerText()).slice(-400));
     } else if (b.type === "parsons") {
       for (const line of b.lines) {
-        await el.locator(".pz ol").first().locator("button.ln", { hasText: line.trim() }).filter({ hasText: new RegExp("^" + escapeRe(line) + "$") }).first().click();
+        // Exact text match in the page: Playwright's regex filters break on lines containing quotes.
+        const btns = el.locator(".pz ol").first().locator("button.ln");
+        const i = await btns.evaluateAll((bs, t) => bs.findIndex((x) => x.textContent === t), line);
+        await btns.nth(i).click();
       }
       await el.locator("button:has-text('Check order')").click();
       await el.locator(".result").waitFor();
@@ -86,4 +89,3 @@ const shots = process.env.SHOTS || ".";
   process.exit(bad.length || errors.length ? 1 : 0);
 })();
 function CSS_escape(s) { return s.replace(/([^a-zA-Z0-9_-])/g, "\\$1"); }
-function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
