@@ -4,21 +4,41 @@
 .top .brand b{font:700 18px/1 var(--f-display);white-space:nowrap}
 .top .brand small,.top .brand p{display:none}
 .top .logo{width:24px;height:24px}
-/* the name: "TL" at rest, "Tulip Labs by svx" on hover or focus (letters are built by nav.js) */
-.wm{display:inline-flex;align-items:baseline}
-.wm-x{display:inline-block;max-width:0;opacity:0;overflow:hidden;transform:translateY(.4em);color:var(--pink);
-  transition:max-width .26s cubic-bezier(.2,.8,.3,1),opacity .18s,transform .32s cubic-bezier(.2,.8,.3,1.5),color .4s;transition-delay:calc((4 - var(--i)) * 18ms)}
-.wm-gap{display:inline-block;width:.12em;transition:width .26s}
-.top .brand .by{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--f-mono);color:var(--muted);white-space:nowrap;
-  max-width:0;opacity:0;overflow:hidden;border:1px solid transparent;border-radius:4px;padding:2px 0;margin-left:-6px;transition:max-width .3s,opacity .2s,padding .3s,border-color .3s,margin .3s}
+/* the name (built by nav.js): a TL monogram at rest; pointing at it plays the chosen idea. The tulip never moves.
+   .play is the same as hovering, so the brand/ page can show each idea without a mouse. */
+.wm{display:inline-flex;align-items:center;height:24px}
 .svx{height:10px;width:auto;display:block}
-.top .brand:is(:hover,:focus-visible) .wm-x{max-width:1em;opacity:1;transform:none;color:inherit;
-  transition-delay:calc(var(--i) * 40ms),calc(var(--i) * 40ms),calc(var(--i) * 40ms),calc(var(--i) * 40ms + 260ms)}
-.top .brand:is(:hover,:focus-visible) .wm-gap{width:.32em}
-.top .brand:is(:hover,:focus-visible) .by{max-width:90px;opacity:1;padding:2px 6px 2px 5px;margin-left:0;border-color:var(--line);transition-delay:.18s}
-.top .brand:is(:hover,:focus-visible) .logo{animation:tnod .6s cubic-bezier(.3,.7,.3,1.4)}
-@keyframes tnod{30%{transform:rotate(-12deg) scale(1.15)}60%{transform:rotate(6deg) scale(.96)}}
-@media (prefers-reduced-motion:reduce){.wm-x,.wm-gap,.top .brand .by{transition:none}.top .brand:is(:hover,:focus-visible) .logo{animation:none}}
+.tl-mono{display:block;height:100%;width:auto}
+/* spill: every pixel of TULIP LABS is a rect that starts on the TL and flies to its letter */
+.tl-spill{display:block;height:20px;width:20px;overflow:visible;transition:width .35s cubic-bezier(.2,.8,.3,1) .12s}
+.tl-spill rect{transform:translate(calc(var(--a) * 1px),calc(var(--b) * 1px));
+  transition:transform .5s cubic-bezier(.3,.7,.2,1.25),opacity .25s;transition-delay:calc((37 - var(--x)) * 4ms)}
+.tl-spill rect.h{opacity:0}
+.brand:is(:hover,:focus-visible,.play) .tl-spill{width:calc(var(--w) * 4px);transition-delay:0s}
+.brand:is(:hover,:focus-visible,.play) .tl-spill rect{transform:translate(calc(var(--x) * 1px),calc(var(--y) * 1px));opacity:1;transition-delay:calc(var(--x) * 11ms)}
+/* runner: the whole name, a pink pixel parked as its full stop; it hops back through every letter */
+.tl-run{position:relative;display:inline-flex;align-items:baseline;font:700 18px/1 var(--f-display);padding-right:10px;white-space:nowrap}
+.tl-run span{display:inline-block}
+.tl-run i{position:absolute;left:calc(100% - 6px);bottom:1px;width:6px;height:6px;background:var(--pink)}
+.brand:is(:hover,:focus-visible,.play) .tl-run span{animation:tlight .5s calc(var(--i) * 60ms + 60ms) both}
+.brand:is(:hover,:focus-visible,.play) .tl-run i{animation:trun .66s cubic-bezier(.4,0,.5,1) both,thop .066s ease-in-out 10 alternate both}
+@keyframes trun{from{left:0}to{left:calc(100% - 6px)}}
+@keyframes thop{to{translate:0 -9px}}
+@keyframes tlight{35%{color:var(--pink);transform:translateY(-2px)}}
+.wm-phone{display:none;height:20px}
+/* typed: TL on a pink keycap; pressing it types the rest after a blinking caret */
+.tl-typed{display:inline-flex;align-items:center;gap:7px}
+.tl-typed kbd{display:grid;place-items:center;width:26px;height:24px;border-radius:5px;background:var(--pink);color:#1a0d14;
+  box-shadow:inset 0 -3px 0 #c2357a;transition:transform .1s,box-shadow .1s}
+.tl-typed kbd svg{height:12px}.tl-typed kbd rect[fill]{fill:#fff6fb}
+.tl-t{display:inline-flex;font:600 15px/1 var(--f-mono);white-space:nowrap}
+.tl-t i{font-style:normal;max-width:0;overflow:hidden;transition:max-width 0s calc((9 - var(--i)) * 20ms)}
+.tl-typed em{width:2px;height:16px;background:var(--pink);opacity:0;margin-left:1px}
+.brand:is(:hover,:focus-visible,.play) .tl-typed kbd{transform:translateY(2px);box-shadow:inset 0 -1px 0 #c2357a}
+.brand:is(:hover,:focus-visible,.play) .tl-t i{max-width:1ch;transition-delay:calc(var(--i) * 55ms + 120ms)}
+.brand:is(:hover,:focus-visible,.play) .tl-typed em{animation:tcaret 1s steps(2) .1s infinite}
+@keyframes tcaret{from{opacity:1}}
+@media (prefers-reduced-motion:reduce){.tl-spill,.tl-spill rect,.tl-t i{transition:none!important}.tl-run i,.tl-run span{animation:none!important}}
 .top .grow{flex:1}
 
 .sw{position:relative}
@@ -50,7 +70,8 @@
   .sw-menu{grid-template-columns:1fr;position:fixed;left:12px;right:12px;width:auto;top:56px;max-height:calc(100vh - 72px);overflow:auto}
   .sw>summary .sl{display:none}
 }
-@media (max-width:480px){.top .brand b{display:none}}
+/* phones: the name shrinks to the TL monogram */
+@media (max-width:480px){.tl-run,.tl-t,.tl-typed em{display:none!important}.wm-phone{display:block}.tl-spill{width:20px!important}.tl-spill rect{transform:translate(calc(var(--a) * 1px),calc(var(--b) * 1px))!important;opacity:1!important}.tl-spill rect.h{opacity:0!important}}
 
 /* colours switch, at the foot of the section menu */
 .sw-theme{grid-column:1/-1;display:flex;align-items:center;gap:6px;margin:8px 0 0;padding:10px 8px 2px;border-top:1px dashed var(--line)}

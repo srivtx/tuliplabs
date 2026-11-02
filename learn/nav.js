@@ -77,17 +77,54 @@ window.SVX = (() => {
     `<rect x="${i * 4 + x}" y="${y}" width="1" height="1"${ch === "x" ? ' fill="#ff6fb5"' : ""}/>` : "").join("")).join("")).join("");
   return `<svg class="svx" viewBox="0 0 11 5" shape-rendering="crispEdges" fill="currentColor" role="img" aria-label="svx">${cells}</svg>`;
 })();
-/* The name in the top bar rests as two letters, TL. Point at it (or tab to it) and it blooms:
-   the missing letters slide in one by one in pink and settle to ink, the tulip nods, and "by svx" follows. */
+/* The name in the top bar. At rest it is one designed letter: a T whose stem runs on into the foot of an L,
+   drawn in the same 3×5 pixels as the svx mark, with one pink pixel. Pointing at it plays one of three ideas
+   we are still choosing between (see them side by side at brand/):
+   - "spill": the TL's pixels fly apart and the rest pour out of it to spell TULIP LABS
+   - "runner": the full name stays put and only a pink pixel hops through it, lighting each letter
+   - "typed": TL sits on a pink keycap; pressing it types the rest of the name after a blinking caret */
+window.TLMARK = (() => {
+  const F = { T: ["###", ".#.", ".#.", ".#.", ".#."], U: ["#.#", "#.#", "#.#", "#.#", "###"], L: ["#..", "#..", "#..", "#..", "###"],
+    I: ["###", ".#.", ".#.", ".#.", "###"], P: ["###", "#.#", "###", "#..", "#.."], A: ["###", "#.#", "###", "#.#", "#.#"],
+    B: ["##.", "#.#", "###", "#.#", "##."], S: ["###", "#..", "###", "..#", "###"] };
+  const MONO = ["###..", ".#...", ".#...", ".#...", ".####"], PX = 4;
+  const cells = (rows, ox = 0) => rows.flatMap((r, y) => [...r].flatMap((c, x) => (c === "#" ? [[ox + x, y]] : [])));
+  const rect = (x, y, pink) => `<rect x="${x}" y="${y}" width="1" height="1"${pink ? ' fill="#ff6fb5"' : ""}/>`;
+  const mono = () => `<svg class="tl-mono" viewBox="0 0 5 5" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true">${cells(MONO).map(([x, y]) => rect(x, y, x === PX)).join("")}</svg>`;
+  function spill() {
+    const text = []; let ox = 0;
+    for (const ch of "TULIP LABS") { if (ch === " ") { ox += 2; continue; } text.push(...cells(F[ch], ox)); ox += 4; }
+    const W = ox - 1, out = text.map(([x, y]) => ({ a: 1, b: 2, x, y, h: 1 })), at = (x, y) => out.find((p) => p.x === x && p.y === y);
+    // pixels the TL and the name share stay put, the rest of the TL fly to the nearest free spot,
+    // the pink pixel runs to the very end of LABS, and everything else pours out of the stem
+    const last = Object.assign(at(W - 1, 4), { a: PX, b: 4, h: 0, pink: 1 });
+    for (const [x, y] of cells(MONO)) {
+      if (x === PX && y === 4) continue;
+      const same = at(x, y), free = out.filter((p) => p.h);
+      const t = same && same.h ? same : free.sort((p, q) => Math.hypot(p.x - x, p.y - y) - Math.hypot(q.x - x, q.y - y))[0];
+      Object.assign(t, { a: x, b: y, h: 0 });
+    }
+    return `<svg class="tl-spill" viewBox="0 0 ${W} 5" preserveAspectRatio="xMinYMid slice" style="--w:${W}" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true">` +
+      out.map((p) => `<rect width="1" height="1"${p.h ? ' class="h"' : ""} style="--a:${p.a};--b:${p.b};--x:${p.x};--y:${p.y}"${p.pink ? ' fill="#ff6fb5"' : ""}/>`).join("") + "</svg>";
+  }
+  const runner = () => `<span class="tl-run">${[..."Tulip Labs"].map((c, i) => `<span style="--i:${i}">${c === " " ? "&nbsp;" : c}</span>`).join("")}<i></i></span>`;
+  const typed = () => `<span class="tl-typed"><kbd>${mono()}</kbd><span class="tl-t">${[..."tulip labs"].map((c, i) => `<i style="--i:${i}">${c === " " ? "&nbsp;" : c}</i>`).join("")}</span><em></em></span>`;
+  const KINDS = { spill, runner, typed };
+  return Object.assign((brand, kind) => {
+    const b = brand && brand.querySelector("b");
+    if (!b) return;
+    kind = KINDS[kind] ? kind : "spill";
+    brand.setAttribute("aria-label", "Tulip Labs, home");
+    brand.dataset.wm = kind;
+    b.className = "wm";
+    b.setAttribute("aria-hidden", "true");
+    b.innerHTML = KINDS[kind]() + (kind === "runner" ? `<span class="wm-phone">${mono()}</span>` : "");
+  }, { KINDS: Object.keys(KINDS) });
+})();
 (() => {
-  const brand = document.querySelector(".top .brand"), b = brand && brand.querySelector("b");
-  if (!b) return;
-  const word = (w) => `<span class="wm-c">${w[0]}</span>` + [...w.slice(1)].map((ch, i) => `<span class="wm-x" style="--i:${i}">${ch}</span>`).join("");
-  brand.setAttribute("aria-label", "Tulip Labs, home");
-  b.className = "wm";
-  b.setAttribute("aria-hidden", "true");
-  b.innerHTML = word("Tulip") + '<span class="wm-gap"></span>' + word("Labs");
-  b.insertAdjacentHTML("afterend", `<span class="by" aria-hidden="true">by ${SVX}</span>`);
+  let kind = "spill";
+  try { kind = localStorage.getItem("tl-wm") || kind; } catch (e) {}
+  TLMARK(document.querySelector(".top .brand"), kind);
 })();
 
 /* The footer is your whole garden: one flower per track, grown as far as your progress in it,
