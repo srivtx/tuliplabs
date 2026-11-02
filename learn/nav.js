@@ -70,9 +70,19 @@
 (() => {
   if (document.querySelector(".foot") || !document.querySelector("main")) return;
   const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
-  const T = [["worlds", "worlds/", "3D worlds", "#ff5fa8"], ["tc", "code/", "Think Complexity", "#2fb38f"], ["ms", "modsim/", "ModSim", "#3d8fe0"],
-    ["bx", "build/", "Build your own X", "#e6a21a"], ["ps", "stats/", "Probability & Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "Open Data Structures", "#ee6a4c"]];
+  const T = [["worlds", "worlds/", "Worlds", "#ff5fa8"], ["tc", "code/", "Complexity", "#2fb38f"], ["ms", "modsim/", "ModSim", "#3d8fe0"],
+    ["bx", "build/", "Build X", "#e6a21a"], ["ps", "stats/", "Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "ODS", "#ee6a4c"]];
+  const credits = `Built on open books by Allen B. Downey (<a href="https://greenteapress.com/wp/think-complexity-2e/">Think Complexity</a>, <a href="https://greenteapress.com/wp/modsimpy/">ModSim</a>) and Pat Morin (<a href="https://opendatastructures.org">Open Data Structures</a>).`;
   const f = document.createElement("footer");
+  // Lesson pages keep it quiet: one line of grass and one line of text. The garden lives on the home page.
+  if (document.querySelector("#side")) {
+    f.className = "foot sfoot";
+    f.innerHTML = `<canvas class="gf-grass" aria-hidden="true"></canvas><div class="gf-base"><span>${credits}</span><span>Progress stays in this browser</span></div>`;
+    document.body.append(f);
+    requestAnimationFrame(() => grass());
+    addEventListener("resize", () => grass());
+    return;
+  }
   f.className = "foot gfoot";
   f.innerHTML = `<div class="gf-in">
     <div class="gf-head"><p class="gf-eye">voxel network lab / your whole garden</p>
@@ -81,7 +91,7 @@
     <div class="gf-beds">${T.map(([k, h, n]) => `<a class="gf-bed k-${k}" href="${root}${h}" data-k="${k}"><span class="gf-pot"><canvas class="gf-ghost" aria-hidden="true"></canvas><canvas aria-hidden="true"></canvas></span><b>${n}</b><small>&nbsp;</small></a>`).join("")}</div>
   </div>
   <canvas class="gf-grass" aria-hidden="true"></canvas>
-  <div class="gf-base"><span>Built on open books by Allen B. Downey (<a href="https://greenteapress.com/wp/think-complexity-2e/">Think Complexity</a>, <a href="https://greenteapress.com/wp/modsimpy/">ModSim</a>) and Pat Morin (<a href="https://opendatastructures.org">Open Data Structures</a>). Simulations run in your browser with three.js and Pyodide.</span><span>No sign-up · progress stays in this browser</span></div>`;
+  <div class="gf-base"><span>${credits} Simulations run in your browser with three.js and Pyodide.</span><span>No sign-up · progress stays in this browser</span></div>`;
   document.body.append(f);
 
   function grass() {
@@ -111,9 +121,10 @@
     if (!SUM) return;
     f.querySelectorAll(".gf-bed").forEach((a) => {
       const k = a.dataset.k, [p, full, all] = pct(k);
-      a.querySelector("small").textContent = all ? `${full} / ${all} in bloom` : "coming soon";
+      a.querySelector("small").textContent = all ? `${full}/${all}` : "soon";
+      a.title = all ? `${full} of ${all} chapters in bloom` : "Coming soon";
       if (!window.GARDEN) return;
-      const o = { id: "foot:" + k, hues: [T.find((t) => t[0] === k)[3]], ink: "rgba(255,255,255,.6)" };
+      const o = { id: "foot:" + k, hues: [T.find((t) => t[0] === k)[3]], ink: "rgba(0,0,0,0)" };
       const [ghost, now] = a.querySelectorAll("canvas");
       GARDEN.draw(ghost, Object.assign({ stage: 4 }, o));
       GARDEN.draw(now, Object.assign({ stage: GARDEN.stage(p) }, o));
