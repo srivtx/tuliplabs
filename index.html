@@ -31,14 +31,15 @@
   color-scheme:dark;
 }
 html,body{margin:0}
-/* Light, picked in the section menu: the page turns to warm paper, while the hero and the globe
-   stay as black-paper posters (the "isle" sections), like the covers on the lesson pages. */
-:root[data-theme="light"]{--bg:#efebe2; --panel:#f6f3ec; --card:#fffdf8; --line:#dcd5c6; --ink:#1d1b17; --muted:#6a655a; --faint:#8a8475; --soft:#ece7dc; color-scheme:light}
-:root[data-theme="light"] .isle{--bg:#0b0c0a; --panel:#121410; --card:#171a15; --line:#2a2e26; --ink:#f2efe6; --muted:#a3a497; --faint:#6b6d62; --soft:#1d211b; background:var(--bg); color:var(--ink); color-scheme:dark}
-:root[data-theme="light"] .sec:not(.isle) a:not([class]){color:#c2357a}
+/* Light, picked in the section menu: the whole page turns to warm paper, hero and globe included.
+   The pictures drawn in code read the same choice (see INK below), so the letters and the globe go dark-on-paper. */
+:root[data-theme="light"]{--bg:#efebe2; --panel:#f6f3ec; --card:#fffdf8; --line:#dcd5c6; --ink:#1d1b17; --muted:#6a655a; --faint:#8a8475; --soft:#ece7dc; --cream:#1d1b17; color-scheme:light}
+:root[data-theme="light"] .fig figcaption b,:root[data-theme="light"] .serif-title i,:root[data-theme="light"] .mosaic h2 i{color:#d23f87}
+:root[data-theme="light"] #dash{stroke:#1d1b17}
+:root[data-theme="light"] .hero{background:radial-gradient(50% 60% at 78% 45%,rgba(255,111,181,.13),transparent 70%)}
+:root[data-theme="light"] .sec a:not([class]){color:#c2357a}
 :root[data-theme="light"] .xp-chip b{color:#b07a00}
 :root[data-theme="light"] .h2 i{color:#d23f87}
-:root[data-theme="light"] .isle .h2 i{color:var(--pink-soft)}
 :root[data-theme="light"] .card .go{color:var(--ink)}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:var(--pink-soft)}
@@ -189,7 +190,7 @@ a{color:var(--pink-soft)}
 </header>
 
 <main>
-<section class="hero grain isle">
+<section class="hero grain">
   <svg class="steps" style="left:6%;top:120px" viewBox="0 0 3 3"><rect x="0" y="0" width="1" height="1"/><rect x="1" y="1" width="1" height="1"/><rect x="2" y="1" width="1" height="1"/></svg>
   <svg class="steps" style="left:47%;top:60px" viewBox="0 0 3 3"><rect x="0" y="0" width="1" height="1"/><rect x="0" y="1" width="1" height="1"/><rect x="1" y="2" width="1" height="1"/></svg>
   <svg class="steps" style="right:4%;top:420px" viewBox="0 0 3 3"><rect x="1" y="0" width="1" height="1"/><rect x="1" y="1" width="1" height="1"/><rect x="0" y="2" width="1" height="1"/><rect x="2" y="2" width="1" height="1"/></svg>
@@ -264,7 +265,7 @@ a{color:var(--pink-soft)}
   </div>
 </section>
 
-<section class="sec grain isle" aria-labelledby="map-h">
+<section class="sec grain" aria-labelledby="map-h">
   <div class="wrap globe-grid">
     <canvas id="globe" width="520" height="520" aria-label="A turning globe drawn with glyphs. Pink marks are chapters you have finished."></canvas>
     <div>
@@ -303,6 +304,9 @@ if (/^#ch\d+$/.test(location.hash)) location.replace("worlds/" + location.hash);
 (() => {
 "use strict";
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// drawn pictures follow the colour switch: cream on black paper, ink on warm paper
+const LIGHT = () => document.documentElement.dataset.theme === "light";
+const INK = () => (LIGHT() ? "#1d1b17" : "#f3ecd7");
 const $ = (s) => document.querySelector(s);
 
 /* ---------- tracks: the one list the page is built from ---------- */
@@ -480,23 +484,23 @@ const TITLE = (() => {
     ctx.clearRect(0, 0, cols * cell, rows * cell);
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
       const i = idx(x, y), L = on[i];
-      if (!st) { if (L) glyph(x, y, "#", "#f3ecd7"); continue; }
+      if (!st) { if (L) glyph(x, y, "#", INK()); continue; }
       if (st.k === 0) {
         const d = st.dist[i], seen = d >= 0 && d <= st.r, front = d === st.r;
-        if (st.rock[i]) { glyph(x, y, ".", "#3a3d35"); continue; }
+        if (st.rock[i]) { glyph(x, y, ".", LIGHT() ? "#c9c2b2" : "#3a3d35"); continue; }
         if (st.pathShown && st.pl.indexOf(i) > -1 && st.pl.indexOf(i) < st.pathShown) { glyph(x, y, L ? "#" : "+", "#8fe0bd"); continue; }
-        if (!L) { if (front) glyph(x, y, "o", "#ff6fb5", .7); else if (seen) glyph(x, y, ".", "#ff6fb5", .45); else glyph(x, y, ".", "#2c3029"); continue; }
+        if (!L) { if (front) glyph(x, y, "o", "#ff6fb5", .7); else if (seen) glyph(x, y, ".", "#ff6fb5", .45); else glyph(x, y, ".", LIGHT() ? "#d3ccbc" : "#2c3029"); continue; }
         if (front) glyph(x, y, "x", "#ff6fb5");
         else if (seen) glyph(x, y, "#", "#c94d8c");
-        else glyph(x, y, "#", "#f3ecd7");
-        if (i === st.src || i === st.tgt) glyph(x, y, "o", "#f3ecd7");
+        else glyph(x, y, "#", INK());
+        if (i === st.src || i === st.tgt) glyph(x, y, "o", INK());
       } else if (st.k === 1) {
         if (!L) continue;
-        if (st.a[i]) glyph(x, y, "#", "#5cc455"); else glyph(x, y, "#", "#f3ecd7", .22);
+        if (st.a[i]) glyph(x, y, "#", "#5cc455"); else glyph(x, y, "#", INK(), .22);
       } else {
         if (!L) continue;
         const hh = Math.min(3, st.h[i]);
-        glyph(x, y, SAND[hh], i === st.fall ? "#f3ecd7" : SANDC[hh]);
+        glyph(x, y, SAND[hh], i === st.fall ? INK() : hh ? SANDC[hh] : LIGHT() ? "rgba(29,27,23,.22)" : SANDC[0]);
       }
     }
   }
@@ -764,7 +768,7 @@ function caps() {
   CAT.forEach((line, y) => [...line].forEach((ch, x) => {
     if (ch === ".") return;
     const px = OX + x * K, py = OY + y * K;
-    if (ch === "e") out += `<g class="eye"><rect x="${px}" y="${py}" width="${K - G}" height="${K - G}" rx="3" fill="#1c1d1a"/><rect class="lid" x="${px + 2}" y="${py + 6}" width="${K - G - 4}" height="2" fill="#f3ecd7"/><rect class="iris" x="${px + 2}" y="${py + 2}" width="${K - G - 4}" height="${K - G - 4}" rx="2" fill="#bfe34a" opacity="0"/></g>`;
+    if (ch === "e") out += `<g class="eye"><rect x="${px}" y="${py}" width="${K - G}" height="${K - G}" rx="3" fill="#1c1d1a"/><rect class="lid" x="${px + 2}" y="${py + 6}" width="${K - G - 4}" height="2" fill=INK()/><rect class="iris" x="${px + 2}" y="${py + 2}" width="${K - G - 4}" height="${K - G - 4}" rx="2" fill="#bfe34a" opacity="0"/></g>`;
     else if (ch === "n") out += key(px, py, "#ff6fb5", "", "", "");
     else if (ch === "t") out += key(px, py, "#1c1d1a", glyphs[gi++ % glyphs.length], "tail");
     else out += key(px, py, ch === "w" ? "#2b2c28" : "#1c1d1a", glyphs[gi++ % glyphs.length]);
@@ -834,10 +838,10 @@ function globe() {
       for (const p of pins) { const dl = Math.abs(((lon - p.lon) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI); if (dl < 0.09 && Math.abs(lat - p.lat) < 0.09) { pin = p; break; } }
       ctx.lineWidth = Math.max(1, cs * 0.1);
       if (pin && pin.s === 2) { ctx.fillStyle = "#ff6fb5"; ctx.beginPath(); ctx.arc(cx, cy, s * 1.1, 0, 7); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.beginPath(); ctx.moveTo(cx - s * .5, cy - s * .5); ctx.lineTo(cx + s * .5, cy + s * .5); ctx.moveTo(cx + s * .5, cy - s * .5); ctx.lineTo(cx - s * .5, cy + s * .5); ctx.stroke(); }
-      else if (pin && pin.s === 1) { ctx.fillStyle = "#f3ecd7"; ctx.fillRect(cx - s, cy - s * 0.3, s * 2, s * 0.6); ctx.fillRect(cx - s * 0.3, cy - s, s * 0.6, s * 2); }
+      else if (pin && pin.s === 1) { ctx.fillStyle = INK(); ctx.fillRect(cx - s, cy - s * 0.3, s * 2, s * 0.6); ctx.fillRect(cx - s * 0.3, cy - s, s * 0.6, s * 2); }
       else if (landAt(lon, lat)) {
-        if (edge) { ctx.strokeStyle = "#cfd8cf"; ctx.beginPath(); ctx.arc(cx, cy, s, 0, 7); ctx.stroke(); }
-        else { ctx.fillStyle = (gx + gy) % 3 ? "#8fbf9a" : "#6f9f7c"; ctx.fillRect(cx - s * 0.75, cy - s, s * 0.45, s * 2); ctx.fillRect(cx + s * 0.3, cy - s, s * 0.45, s * 2); }
+        if (edge) { ctx.strokeStyle = LIGHT() ? "#7d8f80" : "#cfd8cf"; ctx.beginPath(); ctx.arc(cx, cy, s, 0, 7); ctx.stroke(); }
+        else { ctx.fillStyle = LIGHT() ? ((gx + gy) % 3 ? "#5f9a6c" : "#447f53") : (gx + gy) % 3 ? "#8fbf9a" : "#6f9f7c"; ctx.fillRect(cx - s * 0.75, cy - s, s * 0.45, s * 2); ctx.fillRect(cx + s * 0.3, cy - s, s * 0.45, s * 2); }
       } else { ctx.fillStyle = edge ? "#2c5e58" : "#3f8f86"; ctx.fillRect(cx - s * 0.8, cy - 0.6, s * 1.6, 1.2); ctx.fillRect(cx - 0.6, cy - s * 0.8, 1.2, s * 1.6); }
     }
   }
