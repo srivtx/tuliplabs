@@ -212,8 +212,14 @@
         btn.onclick = (e) => { e.stopImmediatePropagation(); Runner.stop(); };
       }, 2500);
     };
+    // The output box under this cell dims and shows three hopping blocks while it runs, then the
+    // result slides in, so a fast run still reads as "it ran" rather than text that just changed.
+    let box = null;
+    for (let p = btn.parentNode; p && p !== document.body && !box; p = p.parentNode) box = p.querySelector(".out");
+    if (box) { box.classList.remove("fresh"); box.classList.add("pending"); }
     try { return await Runner.run(req, onStart); }
     finally {
+      if (box) { box.classList.remove("pending"); void box.offsetWidth; box.classList.add("fresh"); }
       Runner.listeners.delete(onStatus);
       clearTimeout(stopT);
       btn.classList.remove("loading");
