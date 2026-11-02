@@ -879,8 +879,8 @@
         h("h3", { class: "bed-h" }, h("span", { class: "tree" }, "└──"), pt || "Chapters", h("small", {}, `${bloomed} / ${list.length} in bloom`)),
         h("div", { class: "plots" }, list.map((ch) => {
           const p = chProgress(ch);
-          return h("a", { class: "plot" + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : ""), href: "#" + ch.num },
-            h("div", { class: "soil" }, flower(ch.id)),
+          return h("a", { class: "plot" + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : "") + (ch === nextCh ? " next" : ""), href: "#" + ch.num },
+            h("div", { class: "soil" }, h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id), ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
             h("span", { class: "num" }, String(ch.num).padStart(2, "0")),
             h("b", {}, ch.title), h("small", {}, ch.tagline),
             h("span", { class: "pbar" }, h("i", { "data-prog": ch.id, style: `width:${p.pct}%` })));
@@ -890,7 +890,7 @@
     const col = h("div", { class: "col wide hero" },
       poster,
       h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), "Every chapter climbs the same ladder"),
-      h("ol", { class: "ladder" }, ladder.map(([b, t]) => h("li", {}, h("b", {}, b), t))),
+      h("ol", { class: "ladder" }, ladder.map(([b, t], i) => h("li", { style: `--n:${i}` }, h("b", {}, b), t))),
       h("p", { html: "Anything you get right (or wrong) joins your <a href=\"#review\">spaced review</a> deck and comes back after 1, 3, 7, 16 and 35 days. Coming back is what makes it stick." }),
       CFG.homeNote ? h("div", { class: "note", html: CFG.homeNote }) : null,
       CFG.wires ? wireMap() : null,
