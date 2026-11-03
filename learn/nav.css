@@ -215,3 +215,5 @@ html.wipe-in body::after{content:"";position:fixed;inset:0;z-index:9998;backgrou
 .as-list{list-style:none;margin:22px 0 0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:14px;color:var(--muted)}
 .as-list li{display:flex;gap:10px;align-items:baseline}
 .as-dot{flex:none;width:7px;height:7px;background:#3faa52}
+.acct-sheet [hidden]{display:none!important}
+.as-or[hidden] + .as-mail{margin-top:24px}

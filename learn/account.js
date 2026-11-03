@@ -3,11 +3,11 @@
    Supabase holds one row per person (see docs/supabase.sql); row-level security lets each person
    read and write only their own row, so the public key below can't reach anyone else's.
 
-   Off until CFG is filled in. To preview the sheet before then: add ?signin to any URL. */
+   The key below is Supabase's publishable key: it's meant to be in the page. */
 (() => {
-  const CFG = { url: "", key: "" };
+  const CFG = { url: "https://gjnhyidkikiiiasntbeh.supabase.co", key: "sb_publishable_IeyIP2JxwDPeRmFAif2asg_IGwAMYKh" };
   const KEYS = ["vnl-code-v1", "vnl-progress"];
-  const LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
+  const LIB = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js";
   let preview = false;
   try {
     if (/[?&]signin\b/.test(location.search)) localStorage.setItem("tl-auth-preview", "1");
@@ -61,6 +61,7 @@
   const H = `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.5c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.3 1.9.9 2.4.7 0-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-4 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.5 7.5 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.1 0 3.1-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.2c0 .2.1.5.6.4A8 8 0 0 0 8 0Z"/></svg>`;
 
   function sheetOut() {
+    asked = false;
     dlg.innerHTML = `<form method="dialog" class="as-x"><button aria-label="Close">×</button></form>
       <div class="as-head">${tulip}<h2>Sign in to <i>Tulip Labs</i></h2><p>Your progress in this browser comes with you.</p></div>
       <div class="as-btns"><button type="button" data-p="google">${G}Continue with Google</button><button type="button" data-p="github">${H}Continue with GitHub</button></div>
@@ -103,7 +104,21 @@
     dlg.querySelector("[data-a=out]").addEventListener("click", async () => { await (await client()).auth.signOut(); dlg.close(); });
   }
 
-  btn.addEventListener("click", () => { if (!dlg.open) dlg.showModal(); });
+  // Show only the providers switched on in the Supabase dashboard; asked once, when the sheet first opens.
+  let asked = false;
+  function providers() {
+    if (asked || !on) return;
+    asked = true;
+    fetch(CFG.url + "/auth/v1/settings", { headers: { apikey: CFG.key } }).then((r) => r.json()).then((s) => {
+      const ext = s.external || {};
+      dlg.querySelectorAll("[data-p]").forEach((b) => (b.hidden = !ext[b.dataset.p]));
+      const none = !dlg.querySelector("[data-p]:not([hidden])");
+      dlg.querySelector(".as-btns").hidden = none;
+      dlg.querySelector(".as-or").hidden = none;
+      dlg.querySelector(".as-mail").hidden = !ext.email;
+    }).catch(() => {});
+  }
+  btn.addEventListener("click", () => { if (!dlg.open) { dlg.showModal(); providers(); } });
   sheetOut();
   if (!on) return;
 
