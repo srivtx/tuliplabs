@@ -967,6 +967,7 @@ const TITLE = (() => {
   function build() {
     const dpr = Math.min(2, devicePixelRatio || 1);
     W = box.clientWidth; H = box.clientHeight;
+    if (!W || !H) return;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     TS = W < 600 ? 22 : 30;
     land = document.createElement("canvas"); land.width = W; land.height = H; paintLand(land, W, H);
@@ -985,6 +986,8 @@ const TITLE = (() => {
     drawn = -1; draw();
   }
   function draw() {
+    // nothing to draw into until the box has a size (a hidden tab, or before layout); a resize builds it again
+    if (!W || !H) return;
     const p = Math.round(prog * 60) / 60;
     if (p === drawn) return; drawn = p;
     ctx.drawImage(land, 0, 0, W, H);
@@ -1001,7 +1004,8 @@ const TITLE = (() => {
   }
   build(); onScroll();
   addEventListener("scroll", onScroll, { passive: true });
-  let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { build(); onScroll(); }, 150); });
+  // rebuild when the box changes size, which also covers a page first laid out while hidden
+  let rt = 0; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => { build(); onScroll(); }, 150); }).observe(box);
 })();
 
 /* ================================================================
