@@ -10,7 +10,7 @@ Order: finish the visual pass first, then sign-in and sync, then hosting and pri
 | Pricing page | ✅ `/pricing/`: Free is live; Pro and Schools say "opens soon" | Wire the buttons once checkout exists |
 | Sign-in and sync | ✅ Built in `learn/account.js`, switched off. Preview with `?signin` on any page. | babes: create a Supabase project, run `docs/supabase.sql`, turn on Google, GitHub and email sign-in, send me the project URL and the anon key (public, safe to ship). I paste them into `CFG` and it's on. |
 | Hosting | Vercel Hobby, fine while everything is free | Before the first paid sale: move to Cloudflare Pages (free, allows commercial use), then point `tuliplabs` at it with one CNAME in Vercel DNS. Or Vercel Pro at $20 a month. |
-| Payments | Decided: **Lemon Squeezy** | babes: open a store (it pays out to an Indian bank and handles GST/VAT as the seller). Needs terms, privacy and refund pages first, which I'll write. Student and regional prices go in as discount codes. |
+| Payments | Decided: **Lemon Squeezy** | babes: open a store (it handles GST/VAT as the seller; check at signup that it pays out to your bank, and if not, Paddle is the fallback). Needs terms, privacy and refund pages first, which I'll write. Student and regional prices go in as discount codes. |
 | AI hints | Decided: a Cloudflare Worker holding the key, calling Claude Haiku 5.5, counting 5 a day for Free | After sign-in is on |
 
 ## 1. A name
