@@ -174,12 +174,12 @@ a{color:var(--pink-soft)}
 .dzp-m i{width:46px;height:5px;border-radius:3px;background:linear-gradient(90deg,#ff6fb5 calc(var(--dzm) * 1%),#cfe6ee 0)}
 .dzp-m b::after{counter-reset:m var(--dzm);content:counter(m) "%"}
 .dzp-art{position:absolute;left:62%;top:50%;width:min(30%,164px);aspect-ratio:1;translate:-50% -50%}
-.dzp-mo,.dzp-gh{position:absolute;inset:0;display:grid;grid-template-columns:repeat(13,1fr)}
+.dzp-mo{position:absolute;inset:0;display:grid;grid-template-columns:repeat(13,1fr)}
 .dzp-mo i{background:var(--c,transparent)}
-.dzp-gh{transform:translate(11px,-8px) rotate(3deg);opacity:.95;transition:transform .9s cubic-bezier(.2,.8,.3,1),opacity .9s}
-.dzp-gh i{box-shadow:inset 0 0 0 1.5px var(--g,transparent)}
-.card.k-dz:hover .dzp-gh,.card.k-dz:focus-within .dzp-gh{transform:none;opacity:0}
-@media (prefers-reduced-motion:reduce){.card.k-dz .poster,.dzp-gh{transition:none}}
+/* about a third of the tiles are still to draw: a faint outline each, and pointing at the card fills them in from the middle out */
+.dzp-mo i.x{background:transparent;box-shadow:inset 0 0 0 1px rgba(255,244,220,.32);scale:.62;transition:background .3s var(--d),scale .45s cubic-bezier(.3,1.5,.5,1) var(--d),box-shadow .3s var(--d)}
+.card.k-dz:hover .dzp-mo i.x,.card.k-dz:focus-within .dzp-mo i.x{background:var(--c);box-shadow:none;scale:1}
+@media (prefers-reduced-motion:reduce){.card.k-dz .poster,.dzp-mo i.x{transition:none}}
 @media (max-width:760px){.card .dzp-fine{display:none}.dzp-art{left:auto;right:16px;translate:0 -50%;width:42%}.dzp-m{left:16px;right:auto}}
 .poster canvas{position:absolute;inset:0;width:100%;height:100%;display:block;transition:transform .5s cubic-bezier(.2,.8,.3,1)}
 .card:hover .poster canvas{transform:scale(1.04)}
@@ -1043,20 +1043,21 @@ function drawArt(cv, art, col, seed) {
   x.fillStyle = "#ff6fb5"; x.fillRect(ox - px * 2, oy + R * px - px, px - 1, px - 1);
 }
 // The studio's poster: a mosaic worked out from distance to the centre, so it is symmetric in both directions.
-// Cells: g green, p pink, y yellow, o orange, b blue, c cream. The ghost is the same mosaic as pink outlines.
+// Cells: g green, p pink, y yellow, o orange, b blue, c cream. Some cells (x) start undrawn and fill in on hover.
 function dzPoster(count, chs) {
   const C = { g: "#0f9a4e", p: "#ff6fb5", y: "#ffd21f", o: "#ff8a1a", b: "#173fd6", c: "#fff4dc" };
-  let mo = "", gh = "";
+  let mo = "";
   for (let r = 0; r < 13; r++) for (let c = 0; c < 13; c++) {
     const dx = Math.abs(c - 6), dy = Math.abs(r - 6), m = Math.max(dx, dy), n = Math.min(dx, dy);
     const k = !m ? "g" : m === 1 ? "p" : m === 2 && n === 2 ? "y" : m === 2 && !n ? "o"
       : m >= 3 && m <= 5 && !n && m === 4 ? "c" : m >= 3 && m <= 5 && n <= 1 ? "b"
       : dx === dy && m <= 4 ? "y" : dx === dy && m === 5 ? "o" : m === 6 && n === 6 ? "y" : m === 6 && n === 4 ? "p" : "";
-    mo += `<i${k ? ` style="--c:${C[k]}"` : ""}></i>`;
-    gh += `<i${k ? ' style="--g:#ff6fb5"' : ""}></i>`;
+    // a quarter of the board, picked the same on every side so the half-drawn mosaic still mirrors
+    const x = k && m > 0 && (dx * 5 + dy * 5 + dx * dy) % 4 === 1;
+    mo += k ? `<i${x ? ' class="x"' : ""} style="--c:${C[k]}${x ? `;--d:${m * 70}ms` : ""}"></i>` : "<i></i>";
   }
   const courses = new Set(chs.map((c) => c[3])).size;
-  return `<div class="poster"><div class="dzp-art" aria-hidden="true"><div class="dzp-mo">${mo}</div><div class="dzp-gh">${gh}</div></div>
+  return `<div class="poster"><div class="dzp-art" aria-hidden="true"><div class="dzp-mo">${mo}</div></div>
     <h3>Design<br>studio</h3><p class="dzp-n">${count} levels<br>in ${["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"][courses] || courses} courses</p>
     <p class="dzp-fine"><span>Match the target</span><span>in plain CSS</span><span>pixel by pixel</span></p>
     <span class="dzp-m" aria-hidden="true"><i></i><b></b></span></div>`;
