@@ -61,7 +61,7 @@ main{max-width:900px;margin:0 auto;padding:56px 16px 90px}
 .row .k small,.row > label small{display:block;font-weight:400;color:var(--faint);font-size:12.5px}
 .row .v{min-width:0}
 .row .v p{margin:9px 0 0;color:var(--muted)}
-.inl{display:flex;gap:8px;flex-wrap:wrap}
+.inl{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center}
 .field{flex:1;min-width:200px;display:flex;align-items:center;border:1px solid var(--line);border-radius:4px;background:var(--card)}
 .field span{padding-left:12px;color:var(--faint);font:14px var(--f-mono)}
 .field input{flex:1;min-width:0;border:0;background:none;padding:10px 12px;color:var(--ink);font:inherit;font-size:14px;outline:none}
@@ -82,6 +82,33 @@ main{max-width:900px;margin:0 auto;padding:56px 16px 90px}
 .zone{border:1px solid color-mix(in srgb,#d23f87 35%,var(--line));border-radius:6px;padding:4px 18px;margin-top:4px}
 .zone .row:last-child{border-bottom:0}
 .zone .rows{border-top:0}
+
+/* picture picker */
+.av svg{width:100%;height:100%;display:block}
+.picker{display:grid;grid-template-columns:132px 1fr;gap:24px;padding:20px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.pv{text-align:center}
+.pv .big{width:112px;height:112px;margin:0 auto;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:color-mix(in srgb,var(--pink) 20%,var(--card));border:1px solid var(--line);font:600 34px var(--f-mono);color:var(--ink);transition:transform .25s}
+.pv .big.pop{animation:pop .35s ease-out}
+@keyframes pop{40%{transform:scale(1.07)}}
+.pv .big svg,.pv .big img{width:100%;height:100%;display:block;object-fit:cover}
+.pv p{margin:10px 0 0;font:12px var(--f-mono);color:var(--muted)}
+.grp + .grp{margin-top:16px}
+.grp h3{margin:0 0 10px;font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.faces{display:flex;flex-wrap:wrap;gap:10px}
+.fc{all:unset;position:relative;box-sizing:border-box;cursor:pointer;width:48px;height:48px;border-radius:50%;overflow:hidden;display:grid;place-items:center;border:1px solid var(--line);background:color-mix(in srgb,var(--pink) 20%,var(--card));font:600 15px var(--f-mono);color:var(--ink);transition:transform .15s}
+.fc:hover{transform:translateY(-2px)}
+.fc:focus-visible{outline:2px solid var(--pink);outline-offset:3px}
+.fc[aria-pressed="true"]{outline:2px solid var(--pink);outline-offset:3px}
+.fc[aria-pressed="true"]::after{content:"";position:absolute;right:-1px;bottom:-1px;width:16px;height:16px;border-radius:50%;background:var(--pink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.2l2.3 2.3 4.7-5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") center/100% no-repeat;border:2px solid var(--panel)}
+.fc{overflow:visible}.fc > *{border-radius:50%;overflow:hidden}
+.fc span{display:grid;place-items:center;width:100%;height:100%}
+.fc.up{width:auto;padding:0 16px;border-radius:99px;gap:6px;display:inline-flex;font:500 13px var(--f-body)}
+.fc.up svg{width:14px;height:14px;border-radius:0}
+@media (max-width:700px){.picker{grid-template-columns:1fr}.pv{display:flex;align-items:center;gap:16px;text-align:left}.pv .big{width:72px;height:72px;margin:0;font-size:22px}.pv p{margin:0}}
+.fc svg,.fc img{width:100%;height:100%;display:block;object-fit:cover}
+.fc.up{background:var(--card);border-style:dashed;color:var(--muted)}
+.fc.up:hover{color:var(--ink);border-color:var(--ink)}
+.av span,.fc span{pointer-events:none}
 
 /* signed out / loading */
 .gate{margin-top:14px;max-width:560px}
@@ -148,6 +175,8 @@ main{max-width:900px;margin:0 auto;padding:56px 16px 90px}
       <h2>Profile</h2>
       <p class="sub">This is how other people see you.</p>
       <form class="rows" id="prof">
+        <div class="row"><span class="k">Picture<small>Pick one, or upload your own</small></span>
+          <div class="v"><div class="picker"><div class="pv"><div class="big" id="pv"></div><p id="pv-name"></p></div><div id="faces"></div></div><input type="file" id="file" accept="image/png,image/jpeg,image/webp" hidden><p class="hint" id="h-pic"></p></div></div>
         <div class="row"><label for="f-user">Username</label>
           <div class="v"><div class="field"><span>@</span><input id="f-user" maxlength="20" spellcheck="false" autocapitalize="none" autocomplete="username"></div><p class="hint" id="h-user"></p></div></div>
         <div class="row"><label for="f-name">Name</label>
@@ -223,10 +252,8 @@ main{max-width:900px;margin:0 auto;padding:56px 16px 90px}
     $("#via").textContent = "";
     $("#prov").textContent = prov.join(", ");
     $("#email").textContent = u.email || "";
-    const pic = m.avatar_url || m.picture, av = $("#av");
-    const ini = (name.replace("@", "").match(/\b\w/g) || ["·"]).slice(0, 2).join("").toUpperCase();
-    av.textContent = ini;
-    if (pic) { const i = new Image(); i.alt = ""; i.referrerPolicy = "no-referrer"; i.onload = () => av.replaceChildren(i); i.src = pic; }
+    $("#av").innerHTML = A.face(A.profile, u);
+    faces();
     if (!$("#f-user").dataset.touched) { $("#f-user").value = p.username || ""; $("#f-name").value = p.display_name || ""; }
     progress();
   }
@@ -249,7 +276,64 @@ main{max-width:900px;margin:0 auto;padding:56px 16px 90px}
   const fu = $("#f-user"), fn = $("#f-name"), save = $("#save"), hu = $("#h-user"), hs = $("#h-save");
   let okUser = true, t = 0;
   const tell = (el, txt, cls) => { el.textContent = txt; el.className = "hint" + (cls ? " " + cls : ""); };
-  const dirty = () => { const p = A.profile || {}; save.disabled = !okUser || (fu.value === (p.username || "") && fn.value === (p.display_name || "")); };
+  // Picture: initials, one of the pixel characters, or your own upload. Nothing changes until you save.
+  let pick; // undefined = unchanged; null = initials; "px:name"; or { blob, url } for a new upload
+  const curAv = () => (pick === undefined ? A.profile?.avatar || null : pick && pick.blob ? "new" : pick);
+  const NAMES = { tulip: "Tulip", sprout: "Sprout", cactus: "Cactus", bee: "Bee", cat: "Cat", frog: "Frog", owl: "Owl", mushroom: "Mushroom", robot: "Robot", cube: "Cube", star: "Star", heart: "Heart" };
+  const UP = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 11V2.5M4.5 6 8 2.5 11.5 6M2.5 10.5v3h11v-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`;
+  function faces() {
+    const cur = curAv(), u = A.user, p = A.profile || {};
+    const tile = (v, html, label) => `<button type="button" class="fc" data-v="${v ?? ""}" aria-label="${label}" title="${label}" aria-pressed="${v === cur}">${html}</button>`;
+    let mine = tile(null, A.face({ ...p, avatar: null }, u), "Your initials");
+    if (A.photo(u)) mine += tile("provider", A.face({ ...p, avatar: "provider" }, u), "Your Google photo");
+    if (cur && cur.startsWith && cur.startsWith("img:")) mine += tile(cur, A.face(p, u), "Your picture");
+    else if ((A.profile?.avatar || "").startsWith("img:")) mine += tile(A.profile.avatar, A.face(A.profile, u), "Your picture");
+    if (pick && pick.blob) mine += tile("new", `<img src="${pick.url}" alt="">`, "Your new picture");
+    mine += `<button type="button" class="fc up" id="up">${UP}Upload</button>`;
+    const chars = A.FACES.map((n) => tile("px:" + n, A.sprite(n), NAMES[n] || n)).join("");
+    $("#faces").innerHTML = `<div class="grp"><h3>Yours</h3><div class="faces">${mine}</div></div><div class="grp"><h3>Characters</h3><div class="faces">${chars}</div></div>`;
+    // The big preview shows what you'll get when you save.
+    const pv = $("#pv"), label = $("#faces .fc[aria-pressed=true]")?.getAttribute("aria-label") || "Your initials";
+    pv.innerHTML = pick && pick.blob ? `<img src="${pick.url}" alt="">` : A.face({ ...p, avatar: cur }, u);
+    $("#pv-name").textContent = label;
+  }
+  $("#faces").addEventListener("click", (e) => {
+    const b = e.target.closest(".fc");
+    if (!b) return;
+    if (b.id === "up") return $("#file").click();
+    const v = b.dataset.v;
+    if (v === "new") return;
+    pick = v || null;
+    if (pick === (A.profile?.avatar || null)) pick = undefined;
+    tell($("#h-pic"), "");
+    faces(); dirty();
+    const pv = $("#pv"); pv.classList.remove("pop"); void pv.offsetWidth; pv.classList.add("pop");
+  });
+  // Uploads are cropped to a square and shrunk to 256 px before they leave your device.
+  $("#file").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) return tell($("#h-pic"), "Use a PNG, JPG or WebP picture", "no");
+    if (f.size > 10 * 1024 * 1024) return tell($("#h-pic"), "That picture is too big. Try one under 10 MB", "no");
+    try {
+      const img = await createImageBitmap(f);
+      const n = Math.min(img.width, img.height), c = document.createElement("canvas");
+      c.width = c.height = 256;
+      c.getContext("2d").drawImage(img, (img.width - n) / 2, (img.height - n) / 2, n, n, 0, 0, 256, 256);
+      const blob = await new Promise((ok) => c.toBlob(ok, "image/webp", 0.86));
+      pick = { blob, url: URL.createObjectURL(blob) };
+      tell($("#h-pic"), "Looks good. Save to use it.", "ok");
+      faces(); dirty();
+    } catch (err) { tell($("#h-pic"), "Couldn't read that picture. Try another one", "no"); }
+  });
+  async function clearFolder(keep) {
+    const { data } = await A.sb.storage.from("avatars").list(A.user.id);
+    const old = (data || []).map((o) => `${A.user.id}/${o.name}`).filter((x) => x !== keep);
+    if (old.length) await A.sb.storage.from("avatars").remove(old);
+  }
+
+  const dirty = () => { const p = A.profile || {}; save.disabled = !okUser || (pick === undefined && fu.value === (p.username || "") && fn.value === (p.display_name || "")); };
   fu.addEventListener("input", () => {
     fu.dataset.touched = 1;
     fu.value = fu.value.toLowerCase().replace(/[^a-z0-9_]/g, "");
@@ -272,9 +356,18 @@ main{max-width:900px;margin:0 auto;padding:56px 16px 90px}
     if (save.disabled) return;
     save.disabled = true; tell(hs, "Saving…");
     const row = { user_id: A.user.id, username: fu.value, display_name: fn.value.trim() || null, updated_at: new Date().toISOString() };
+    let path = null;
+    if (pick && pick.blob) {
+      path = `${A.user.id}/${Date.now()}.webp`;
+      const up = await A.sb.storage.from("avatars").upload(path, pick.blob, { contentType: "image/webp", cacheControl: "31536000" });
+      if (up.error) { tell(hs, "Couldn't upload your picture. Please try again.", "no"); return dirty(); }
+      row.avatar = "img:" + A.sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+    } else if (pick !== undefined) row.avatar = pick;
     const { data, error } = await A.sb.from("profiles").upsert(row).select().single();
     if (error) { tell(hs, error.code === "23505" ? `@${row.username} is taken` : error.code === "23514" ? "That username isn't allowed" : "Couldn't save. Please try again.", "no"); return dirty(); }
-    A.profile = data; delete fu.dataset.touched; tell(hu, ""); tell(hs, "Saved", "ok"); render(); dirty();
+    // Uploaded pictures you no longer use are removed: all of them, or all but the new one.
+    if (pick !== undefined) clearFolder(path).catch(() => {});
+    A.profile = data; pick = undefined; delete fu.dataset.touched; tell(hu, ""); tell(hs, "Saved", "ok"); tell($("#h-pic"), ""); A.changed(); dirty();
     setTimeout(() => tell(hs, ""), 2500);
   });
 
@@ -296,6 +389,7 @@ main{max-width:900px;margin:0 auto;padding:56px 16px 90px}
   fd.addEventListener("focus", () => (fd.placeholder = word()));
   del.addEventListener("click", async () => {
     del.disabled = true; del.textContent = "Deleting…";
+    await clearFolder(null).catch(() => {});
     const { error } = await A.sb.rpc("delete_my_account");
     if (error) { tell($("#h-del"), "Couldn't delete your account. Please try again.", "no"); del.textContent = "Delete my account"; return; }
     await A.sb.auth.signOut().catch(() => {});
