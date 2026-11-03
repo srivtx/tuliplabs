@@ -34,7 +34,7 @@ VIZ.register("bx-auction", async (api) => {
       W.label("vl" + i, `value ${v}`, [x, -1.85, 0.2], { color: "muted", size: 0.12 });
       W.label("nl" + i, `#${i + 1}`, [x, -2.1, 0.2], { color: "ink", size: 0.14 });
     });
-    W.box("price", { x: 0, y: -1.6 + price * 0.032, z: 0.2, sx: 6.4, sy: 0.03, sz: 0.03, color: "c4", opacity: winner >= 0 ? 0.9 : 0 });
+    W.box("price", { x: 0, y: -1.6 + price * 0.032, z: 0.2, sx: 6.4, sy: 0.03, sz: 0.03, color: "c4", opacity: 0.9, visible: winner >= 0 });
     W.label("pl", winner >= 0 ? `price paid ${price}` : "", [2.6, -1.45 + price * 0.032, 0.25], { color: "c4", size: 0.14 });
   }
   function show() { api.status(`${mode === "first" ? "first price: pay your own bid" : "second price: pay the runner-up's bid"}\n${line}`); }
