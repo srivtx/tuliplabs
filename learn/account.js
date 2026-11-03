@@ -89,8 +89,47 @@
     });
   }
 
-  // First sign-in: pick a username. It's checked as you type and saved to your profile.
   const esc = (t) => String(t).replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  // Faces: your initials, a pixel character drawn in the lab's own palette, or a picture you upload.
+  // Saved on your profile as null, "px:<name>", "provider" (your Google or GitHub photo) or "img:<url>".
+  const PAL = { k: "#1d1b17", w: "#fbf7ee", p: "#ff6fb5", D: "#d23f87", Y: "#ffd21f", a: "#e6a21a", o: "#ee6a4c", g: "#3faa52", G: "#24803c",
+    t: "#2fb38f", b: "#3d8fe0", B: "#2a5fa8", c: "#7cc8ef", v: "#9a6be0" };
+  const FACES = {
+    tulip: ["#ffe1ef", ".p.p.p.,ppDpDpp,ppYYYpp,.ppYpp.,g..G..g,gg.G.gg,.ggGgg."],
+    sprout: ["#e2f3dc", ".......,.gg.gg.,gGg.gGg,..gGg..,...G...,.aaaaa.,..aaa.."],
+    cactus: ["#e6f1d8", "...g...,.g.g...,.g.g.g.,.ggg.g.,...ggg.,...g...,.ooooo."],
+    bee: ["#fff3c4", "..w.w..,.wwkww.,.YkYkY.,kYkYkYk,.YkYkY.,..kkk..,......."],
+    cat: ["#fde9c8", "a.....a,aa...aa,aaaaaaa,akaaaka,aaapaaa,.aaaaa.,......."],
+    frog: ["#dff3e2", ".ww.ww.,.wk.kw.,ggggggg,gGgggGg,ggDDDgg,.ggggg.,gg...gg"],
+    owl: ["#ece3fb", "v.....v,vvvvvvv,vwkvkwv,vvvYvvv,.vwwwv.,.vwwwv.,..Y.Y.."],
+    mushroom: ["#fde2da", "..ooo..,.owooo.,ooooowo,ooooooo,..www..,..wkw..,..www.."],
+    robot: ["#d9f2ec", "...Y...,...t...,ttttttt,tkttwkt,ttttttt,twwwwwt,.t...t."],
+    cube: ["#dcebfb", "..ccc..,ccccccc,bbbcBBB,bbbbBBB,bbbbBBB,bbbbBBB,.bbbBB."],
+    star: ["#fff5cc", "...Y...,..YYY..,YYYYYYY,.YYYYY.,.YYYYY.,.YY.YY.,Y.....Y"],
+    heart: ["#ffe1ef", ".......,.pp.pp.,ppppppp,ppppppp,.ppppp.,..ppp..,...p..."],
+  };
+  function sprite(name) {
+    const f = FACES[name];
+    if (!f) return "";
+    const px = f[1].split(",").map((r, y) => [...r].map((c, x) => (PAL[c] ? `<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${PAL[c]}"/>` : "")).join("")).join("");
+    return `<svg viewBox="-1.5 -1.5 10 10" shape-rendering="crispEdges" aria-hidden="true" style="background:${f[0]}">${px}</svg>`;
+  }
+  const photo = (user) => user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "";
+  const initials = (t) => (String(t || "").replace("@", "").match(/\b\w/g) || ["·"]).slice(0, 2).join("").toUpperCase();
+  // The face as HTML: fills whatever round box it's put in.
+  function face(profile, user) {
+    const a = profile?.avatar || "";
+    if (a.startsWith("px:") && FACES[a.slice(3)]) return sprite(a.slice(3));
+    const m = user?.user_metadata || {};
+    const ini = esc(initials(profile?.display_name || m.full_name || m.name || profile?.username || user?.email || ""));
+    // A picture that fails to load falls back to your initials.
+    const img = (src) => `<img src="${esc(src)}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span>${ini}</span>'">`;
+    if (a.startsWith("img:")) return img(a.slice(4));
+    if (a === "provider" && photo(user)) return img(photo(user));
+    return `<span>${ini}</span>`;
+  }
+
+  // First sign-in: pick a username. It's checked as you type and saved to your profile.
   const RULE = /^[a-z0-9_]{3,20}$/;
   function suggest(user) {
     const m = user.user_metadata || {};
@@ -163,8 +202,14 @@
   sheetOut();
 
   // The account page reads and drives the session through this, and hears about changes on "tl-account".
-  const A = (window.TLA = { ready: false, user: null, profile: null, open, read });
-  const changed = () => { A.ready = true; dispatchEvent(new CustomEvent("tl-account", { detail: A })); };
+  const A = (window.TLA = { ready: false, user: null, profile: null, open, read, face, FACES: Object.keys(FACES), sprite, photo });
+  // Whenever the account changes, repaint the top-bar face and tell the page.
+  const changed = () => {
+    if (A.user) btn.innerHTML = face(A.profile, A.user);
+    A.ready = true;
+    dispatchEvent(new CustomEvent("tl-account", { detail: A }));
+  };
+  A.changed = changed;
   if (!on) return changed();
 
   // ----------------------------------------------------------------- sync --
@@ -224,17 +269,11 @@
     await sb.auth.signOut();
   }
 
-  // Signed in, the button shows your photo (or initials) and leads to your account page.
+  // Signed in, the button shows your face (initials until your profile loads) and leads to your account page.
   function signedIn(user) {
     if (uid === user.id) return;
     uid = user.id;
-    const m = user.user_metadata || {};
-    const name = m.full_name || m.name || m.user_name || user.email || "";
-    const pic = m.avatar_url || m.picture;
-    const ini = (name.match(/\b\w/g) || ["·"]).slice(0, 2).join("").toUpperCase();
-    btn.innerHTML = pic ? `<img src="${esc(pic)}" alt="" referrerpolicy="no-referrer">` : esc(ini);
-    const img = btn.querySelector("img");
-    if (img) img.onerror = () => (btn.textContent = ini);
+    btn.innerHTML = face(null, user);
     btn.classList.add("in");
     btn.title = "Your account";
     btn.setAttribute("aria-label", "Your account");
