@@ -55,7 +55,7 @@
       const pick = new Set(["1,0", "0,1", "1,2", "2,3", "4,0", "5,1", "4,2", "6,1", "7,2"]);
       let cells = "";
       for (let r = 0; r < 4; r++) for (let q = 0; q < 8; q++) cells += `<i${pick.has(q + "," + r) ? ' class="on"' : ""}></i>`;
-      const line = (pts) => `<polyline points="${pts.map(([q, r]) => `${q + .5},${r + .5}`).join(" ")}"/>`;
+      const line = (pts) => `<polyline pathLength="1" points="${pts.map(([q, r]) => `${q + .5},${r + .5}`).join(" ")}"/>`;
       return `<span class="sheet">${cells}<svg viewBox="0 0 8 4" preserveAspectRatio="none">${line([[1, 0], [0, 1], [1, 2], [2, 3]])}${line([[4, 0], [5, 1], [4, 2]])}${line([[6, 1], [7, 2]])}</svg></span>`;
     },
     // a printed weave on orange
@@ -69,7 +69,7 @@
       return `<span class="dv desk">${blocks(3)}</span><span class="dv tab">${blocks(2)}</span><span class="dv phone">${blocks(1)}</span>`;
     },
     // how a level works: the target, your board, and the meter between them
-    how: () => `<span class="pair"><span class="tg"><i></i></span><span class="bd"><i></i></span></span><span class="mt"><i></i><b>96%</b></span>`,
+    how: () => `<span class="pair"><span class="tg"><i></i></span><span class="bd"><i></i></span></span><span class="mt"><i></i><b></b></span>`,
   };
 
   // ------------------------------------------------------------- cards --

@@ -136,7 +136,28 @@ a.cc:hover .cc-t{text-decoration:underline;text-underline-offset:3px}
 .a-how .tg::after,.a-how .bd::after{position:absolute;left:0;right:0;top:calc(100% + 2.4cqh);text-align:center;font:600 5cqh var(--f-mono);color:var(--muted)}
 .a-how .tg::after{content:"target"}.a-how .bd::after{content:"yours"}
 .a-how .mt{position:absolute;left:50%;bottom:10cqh;translate:-50% 0;display:flex;align-items:center;gap:2.4cqw;padding:1.8cqh 3cqw;border-radius:99px;background:#fff4dc;color:#10313d;font:600 5.6cqh var(--f-mono)}
-.a-how .mt i{width:22cqw;height:2.4cqh;border-radius:2cqh;background:linear-gradient(90deg,#ff6fb5 96%,#d9e7dc 0)}
+@property --hm{syntax:"<integer>";inherits:true;initial-value:96}
+.a-how .mt{--hm:96;transition:--hm .6s cubic-bezier(.2,.8,.3,1)}
+.a-how .mt i{width:22cqw;height:2.4cqh;border-radius:2cqh;background:linear-gradient(90deg,#ff6fb5 calc(var(--hm) * 1%),#d9e7dc 0)}
+.a-how .mt b::after{counter-reset:m var(--hm);content:counter(m) "%"}
+
+/* ---- pointing at a card: each picture does one small thing from its own course ---- */
+.cc-art *{transition:transform .5s cubic-bezier(.2,.8,.3,1),rotate .5s cubic-bezier(.2,.8,.3,1),translate .5s cubic-bezier(.2,.8,.3,1),background .4s}
+.a-stripes .bars b:first-child{transition:flex-grow .6s cubic-bezier(.2,.8,.3,1)}
+.a-stripes:hover .bars i:nth-child(odd) b:first-child{flex-grow:40}
+.a-stripes:hover .shapes i:nth-child(1){rotate:45deg;scale:.8}
+.a-stripes:hover .shapes i:nth-child(2){translate:0 -18%}
+.a-type:hover .amp{rotate:-8deg;translate:-4% 0}
+.a-aurora:hover .b1{translate:18% 10%}.a-aurora:hover .b2{translate:-14% 14%}.a-aurora:hover .b3{translate:-10% -16%}
+.a-tiles:hover polyline{animation:route .9s cubic-bezier(.4,0,.2,1)}
+@keyframes route{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}
+.a-mosaic .mo{transition:rotate .9s cubic-bezier(.5,0,.2,1)}
+.a-mosaic:hover .mo{rotate:90deg}
+.a-stickers:hover .st{rotate:0deg}
+.a-devices:hover .tab{translate:0 -8%}.a-devices:hover .phone{translate:0 -12%}.a-devices:hover .desk{translate:0 -3%}
+.cc.a-how:hover .bd i{left:22%;top:22%;width:56%;height:56%;background:#ff6fb5}
+.cc.a-how:hover .mt{--hm:100}
+.cc.a-how .bd i{transition:left .6s cubic-bezier(.2,.8,.3,1),top .6s cubic-bezier(.2,.8,.3,1),width .6s,height .6s,background .4s}
 
 /* ---------------- smaller screens ---------------- */
 @media (max-width:1040px){.cl{grid-template-columns:repeat(2,minmax(0,1fr));gap:44px 24px}}
@@ -145,4 +166,4 @@ a.cc:hover .cc-t{text-decoration:underline;text-underline-offset:3px}
   .cl{grid-template-columns:1fr;gap:40px}
   .cl-head{margin-top:44px}
 }
-@media (prefers-reduced-motion:reduce){.cc-art,.r-a{transition:none}}
+@media (prefers-reduced-motion:reduce){.cc-art,.cc-art *,.r-a{transition:none!important;animation:none!important}}
