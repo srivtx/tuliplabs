@@ -28,13 +28,8 @@
   const pick = (e) => { const a = e.target.closest && e.target.closest(".sw-menu a, .foot-key a, .cards a.hit"); if (a) warm(a); };
   document.addEventListener("pointerover", pick, { passive: true });
   document.addEventListener("focusin", pick);
-  // Chrome can go further and prerender the page itself on hover.
-  if (HTMLScriptElement.supports && HTMLScriptElement.supports("speculationrules")) {
-    const s = document.createElement("script");
-    s.type = "speculationrules";
-    s.textContent = JSON.stringify({ prefetch: [{ source: "document", where: { selector_matches: ".sw-menu a, .foot-key a, .cards a.hit" }, eagerness: "moderate" }] });
-    document.head.append(s);
-  }
+  // No speculation-rules prefetch: Chrome fetches those on a connection of their own, and when one
+  // stalls the click waits for it (10 s, then a 10 s retry) instead of loading the page afresh.
 })();
 
 /* Light, dark or follow the system. The choice is one key in localStorage, read by a one-line
@@ -262,6 +257,12 @@ window.TLMARK = (() => {
     el.classList.add("full");
     try { sessionStorage.setItem(KEY, "1"); } catch (err) { /* private mode: no curtain on arrival */ }
     setTimeout(() => location.assign(u.href), 330);
+    // If the next page is slow (or the load was stopped), lift the curtain so this page stays usable.
+    setTimeout(() => {
+      el.classList.remove("full");
+      setTimeout(() => el.remove(), 520);
+      try { sessionStorage.removeItem(KEY); } catch (err) { /* private mode */ }
+    }, 4000);
   });
   // coming back through the back button restores this page as it was, curtain and all: clear it
   addEventListener("pageshow", (e) => {
