@@ -730,6 +730,181 @@
     return sh.el;
   }
 
+  // ------------------------------------------------------------ puzzles --
+  // Puzzle mode: no reading, just a picture to touch. Five kinds, all checked here in the page.
+  // Stars (1-3) say how cleanly you solved it; your best is kept in S.stars.
+  const CELL = { ".": "e", "#": "c2", "*": "c1", "o": "c3", "+": "c4" };
+  function cell(tok, attrs, tag) {
+    const k = CELL[tok];
+    return h(tag || "button", Object.assign({ class: "pc " + (k || "t"), "aria-label": tok === "." ? "empty" : tok }, attrs || {}), k ? "" : tok);
+  }
+  function gridEl(rows, make) {
+    const w = Math.max(...rows.map((r) => r.length));
+    return h("div", { class: "pgrid", style: `grid-template-columns:repeat(${w},auto)` }, rows.flatMap((r, i) => r.map((t, j) => make ? make(t, i, j) : cell(t, { tabindex: -1 }))));
+  }
+  function starsEl(n) { return h("span", { class: "stars", "aria-label": `${n} of 3 stars` }, [1, 2, 3].map((k) => h("i", { class: k <= n ? "on" : "" }))); }
+  function renderPuzzle(b) {
+    const best = (S.stars = S.stars || {})[b.id] || 0;
+    const head = h("span", { class: "pstar" }, best ? starsEl(best) : "");
+    const sh = shell(b, "puzzle", "Puzzle", b.title);
+    sh.el.querySelector(".bh").append(head);
+    const board = h("div", { class: "pboard" });
+    const msg = h("div", { class: "pmsg" });
+    const btns = h("div", { class: "btns" });
+    let tries = 0;
+    function solved(stars, note) {
+      const prev = S.stars[b.id] || 0;
+      if (stars > prev) { S.stars[b.id] = stars; save(); award(5 * (stars - prev), stars === 3 ? "puzzle, 3 stars" : "puzzle solved"); }
+      head.replaceChildren(starsEl(Math.max(stars, prev)));
+      msg.replaceChildren(h("div", { class: "result pass" }, starsEl(stars), " ", note || "Solved."), b.why ? h("div", { class: "why", html: b.why }) : "");
+      sh.done();
+      confetti(sh.el.querySelector(".bh"));
+    }
+    const fail = (t) => { tries++; msg.replaceChildren(h("div", { class: "result fail" }, t)); };
+    const byTries = () => (tries === 0 ? 3 : tries <= 2 ? 2 : 1);
+    if (b.kind === "swap") {
+      // Fewest moves: click two cells to swap them (neighbours only when `adjacent`).
+      let cur = b.cells.slice(), pick = -1, moves = 0;
+      const count = h("span", { class: "pcount" });
+      const draw = () => {
+        const won = cur.every((x, i) => x === b.goal[i]);
+        board.replaceChildren(h("div", { class: "prow" }, cur.map((t, i) => cell(t, { class: "pc t" + (i === pick ? " sel" : "") + (won ? " good" : ""), onclick: () => tap(i) }))),
+          h("div", { class: "prow goal" }, h("span", { class: "plab" }, "goal"), b.goal.map((t) => h("span", { class: "pc t ghost" }, t))));
+        count.textContent = `${moves} swap${moves === 1 ? "" : "s"} · fewest possible: ${b.par}`;
+        if (won) solved(moves <= b.par ? 3 : moves <= b.par + 2 ? 2 : 1, moves <= b.par ? "The fewest swaps possible." : `Done in ${moves}. It can be done in ${b.par}: try again for 3 stars.`);
+      };
+      const tap = (i) => {
+        if (cur.every((x, k) => x === b.goal[k])) return;
+        if (pick < 0) { pick = i; return draw(); }
+        if (pick === i) { pick = -1; return draw(); }
+        if (b.adjacent && Math.abs(pick - i) !== 1) { pick = i; msg.replaceChildren(h("div", { class: "result fail" }, "Only neighbours can swap here.")); return draw(); }
+        [cur[pick], cur[i]] = [cur[i], cur[pick]]; pick = -1; moves++; msg.textContent = ""; draw();
+      };
+      btns.append(count, h("button", { class: "btn", onclick: () => { cur = b.cells.slice(); pick = -1; moves = 0; msg.textContent = ""; draw(); } }, "Start over"));
+      draw();
+    } else if (b.kind === "fix") {
+      // Fix the picture: mark every cell that's wrong, then check.
+      const marked = new Set();
+      const key = (i, j) => i + "," + j;
+      const draw = () => board.replaceChildren(gridEl(b.grid, (t, i, j) => cell(t, { class: "pc " + (CELL[t] || "t") + (marked.has(key(i, j)) ? " mark" : ""), onclick: () => { marked.has(key(i, j)) ? marked.delete(key(i, j)) : marked.add(key(i, j)); draw(); } })));
+      const check = h("button", { class: "btn primary" }, "Check");
+      check.onclick = () => {
+        const want = new Set(b.wrong.map(([i, j]) => key(i, j)));
+        const miss = [...want].filter((k) => !marked.has(k)).length, extra = [...marked].filter((k) => !want.has(k)).length;
+        if (!miss && !extra) {
+          if (b.fixed) board.replaceChildren(gridEl(b.fixed, (t, i, j) => cell(t, { class: "pc " + (CELL[t] || "t") + (want.has(key(i, j)) ? " good" : "") }, "span")));
+          return solved(byTries());
+        }
+        fail(`${miss ? `${miss} wrong cell${miss > 1 ? "s" : ""} still unmarked. ` : ""}${extra ? `${extra} marked cell${extra > 1 ? "s are" : " is"} actually fine.` : ""}`);
+      };
+      btns.append(check);
+      draw();
+    } else if (b.kind === "frame") {
+      // Predict the frame: which picture comes next?
+      const opts = shuffle(b.options.map((g, k) => ({ g, ok: k === 0 })));
+      let over = false;
+      board.append(h("div", { class: "pnow" }, h("span", { class: "plab" }, "now"), gridEl(b.grid)),
+        h("div", { class: "popts" }, opts.map((o, k) => {
+          const el = h("button", { class: "popt", "aria-label": `Option ${k + 1}` }, h("span", { class: "plab" }, String.fromCharCode(65 + k)), gridEl(o.g));
+          el.onclick = () => {
+            if (over || el.classList.contains("wrong")) return;
+            if (o.ok) { over = true; el.classList.add("right"); solved(byTries()); }
+            else { el.classList.add("wrong"); fail("Not that one. Look again at what changes from one step to the next."); }
+          };
+          return el;
+        })));
+    } else if (b.kind === "order") {
+      // Order the steps: tap them in the order they happen.
+      let pool = shuffle(b.items.map((t, i) => ({ t, i }))), ans = [];
+      const draw = (marks) => board.replaceChildren(h("div", { class: "pz" },
+        h("div", {}, h("h4", {}, "Steps"), h("ol", {}, pool.map((it) => h("li", {}, h("button", { class: "ln wrapln", html: it.t, onclick: () => { pool = pool.filter((x) => x !== it); ans.push(it); msg.textContent = ""; draw(); } }))))),
+        h("div", {}, h("h4", {}, "In order"), h("ol", {}, ans.map((it, k) => h("li", { class: marks ? (marks[k] ? "right" : "wrong") : "" }, h("button", { class: "ln wrapln", html: it.t, onclick: () => { ans = ans.filter((x) => x !== it); pool.push(it); msg.textContent = ""; draw(); } })))))));
+      const check = h("button", { class: "btn primary" }, "Check order");
+      check.onclick = () => {
+        if (pool.length) return fail("Place every step first.");
+        const marks = ans.map((it, k) => it.i === k);
+        draw(marks);
+        if (marks.every(Boolean)) solved(byTries()); else fail(`${marks.filter((m) => !m).length} step${marks.filter((m) => !m).length > 1 ? "s are" : " is"} in the wrong place (red). Tap one to send it back.`);
+      };
+      btns.append(check, h("button", { class: "btn", onclick: () => { pool = shuffle(b.items.map((t, i) => ({ t, i }))); ans = []; msg.textContent = ""; draw(); } }, "Start over"));
+      draw();
+    } else if (b.kind === "target") {
+      // Hit the target: move the sliders until the value lands on the target.
+      const names = b.sliders.map((s) => s.name);
+      const f = new Function(...names, `return (${b.expr});`);
+      const vals = b.sliders.map((s) => s.start);
+      const fmt = (x) => (Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 1 ? x.toFixed(2) : x.toFixed(3)).replace(/\.?0+$/, "") || "0";
+      const out = h("div", { class: "ptarget" });
+      const draw = () => {
+        const v = f(...vals), off = v - b.target, close = Math.abs(off) <= b.tol;
+        const span = Math.max(Math.abs(b.target) * 2, 1), pos = (x) => Math.max(0, Math.min(100, 50 + (50 * (x - b.target)) / span));
+        out.replaceChildren(h("div", { class: "ptbar" }, h("i", { class: "tgt", style: `left:${pos(b.target - b.tol)}%;width:${Math.max(1, pos(b.target + b.tol) - pos(b.target - b.tol))}%` }), h("b", { class: close ? "hit" : "", style: `left:${pos(v)}%` })),
+          h("p", {}, `${b.output}: `, h("b", {}, fmt(v) + (b.unit ? " " + b.unit : "")), ` · target ${fmt(b.target)}${b.tol ? ` ± ${fmt(b.tol)}` : ""}`));
+        return close;
+      };
+      board.append(...b.sliders.map((s, k) => {
+        const lab = h("output", {}, fmt(vals[k]));
+        const r = h("input", { type: "range", min: s.min, max: s.max, step: s.step, value: s.start, "aria-label": s.label });
+        r.oninput = () => { vals[k] = +r.value; lab.textContent = fmt(vals[k]); draw(); };
+        return h("label", { class: "pslider" }, h("span", {}, s.label), r, lab);
+      }), out);
+      const check = h("button", { class: "btn primary" }, "Lock it in");
+      check.onclick = () => (draw() ? solved(byTries(), "On target.") : fail("Not on target yet. Watch which way the marker moves as you drag."));
+      btns.append(check);
+      draw();
+    }
+    const ask = b.prompt || (b.kind === "order" ? "<p>Tap the steps in the order they happen. Tap a placed step to send it back.</p>" : "");
+    sh.body.append(...[ask ? h("div", { class: "prompt", html: ask }) : null, board, btns, msg].filter(Boolean));
+    return sh.el;
+  }
+
+  // Puzzle mode for one chapter: its simulation to play with, then its puzzles, no prose.
+  function pagePuzzles(ch) {
+    sidebar(ch.id);
+    const m = main();
+    m.textContent = "";
+    const viz = ch.sections.flatMap((s) => s.blocks).filter((b) => b.type === "viz");
+    const got = ch.puzzles.reduce((a, p) => a + ((S.stars || {})[p.id] || 0), 0);
+    const ctx = { ch, review: false, runBlocksBefore: () => [] };
+    m.append(h("div", { class: "col pmode" },
+      h("header", { class: "ch-head cover dark" },
+        h("div", { class: "cv-text" },
+          h("div", { class: "eyebrow" }, `Chapter ${ch.num} · ${CFG.short} · puzzle mode`),
+          h("h1", {}, ch.title),
+          h("p", { class: "tag" }, "No reading. Touch the pictures until they're right."),
+          h("div", { class: "meta" }, modeSwitch(ch, "puzzle"), h("span", { class: "pill" }, `${got} / ${ch.puzzles.length * 3} stars`))),
+        h("div", { class: "cv-art" }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), flower(ch.id, "cv-fl"))),
+      ...ch.puzzles.map(renderPuzzle),
+      ...viz.map((b) => renderBlock(b, ctx)),
+      h("div", { class: "pager" }, h("a", { class: "btn", href: "#" + ch.num }, "← Back to the lesson"), h("a", { class: "btn", href: "#puzzles" }, "Every puzzle →"))));
+    requestAnimationFrame(() => bloomAll(true));
+    document.title = `Puzzles · ${ch.num}. ${ch.title} · ${CFG.pageTitle}`;
+    window.scrollTo(0, 0);
+  }
+  function modeSwitch(ch, on) {
+    if (!ch.puzzles || !ch.puzzles.length) return null;
+    return h("span", { class: "mode-sw", role: "group", "aria-label": "Mode" },
+      h("a", { href: "#" + ch.num, class: on === "learn" ? "on" : "", "aria-current": on === "learn" ? "page" : null }, "Learn"),
+      h("a", { href: "#" + ch.num + "/puzzle", class: on === "puzzle" ? "on" : "", "aria-current": on === "puzzle" ? "page" : null }, `Puzzle · ${ch.puzzles.length}`));
+  }
+  // Every puzzle in this track, as a wall of keycaps: play them in any order.
+  function pagePuzzleWall() {
+    sidebar("puzzles");
+    const m = main();
+    m.textContent = "";
+    const chs = DATA.chapters.filter((c) => c.puzzles && c.puzzles.length);
+    const all = chs.flatMap((c) => c.puzzles), got = all.reduce((a, p) => a + ((S.stars || {})[p.id] || 0), 0);
+    m.append(h("div", { class: "col" },
+      h("header", { class: "ch-head cover dark" }, h("div", { class: "cv-text" },
+        h("div", { class: "eyebrow" }, `${CFG.short} · puzzle mode`), h("h1", {}, "Every puzzle"),
+        h("p", { class: "tag" }, all.length ? `${all.length} puzzles in ${chs.length} chapters · ${got} of ${all.length * 3} stars` : "Puzzles are on their way for this track."))),
+      h("div", { class: "pwall" }, chs.map((c) => h("a", { class: "pkey", href: `#${c.num}/puzzle` },
+        h("b", {}, String(c.num).padStart(2, "0")), h("span", {}, c.title),
+        starsEl(Math.round(c.puzzles.reduce((a, p) => a + ((S.stars || {})[p.id] || 0), 0) / c.puzzles.length)))))));
+    document.title = `Puzzles · ${CFG.pageTitle}`;
+    window.scrollTo(0, 0);
+  }
+
   function renderBlock(b, ctx) {
     switch (b.type) {
       case "md": return h("div", { class: "prose", html: b.html });
@@ -823,6 +998,7 @@
     side.append(h("h2", {}, h("i", { class: "sq" }), CFG.short || "Chapters"));
     side.append(h("a", { class: "top-link", href: "#", "aria-current": current === "home" ? "page" : null }, h("span", { class: "n" }, "✿"), "Your garden"));
     side.append(h("a", { class: "top-link", href: "#review", "aria-current": current === "review" ? "page" : null }, h("span", { class: "n" }, "↻"), "Spaced review"));
+    if (DATA.chapters.some((c) => c.puzzles && c.puzzles.length)) side.append(h("a", { class: "top-link", href: "#puzzles", "aria-current": current === "puzzles" ? "page" : null }, h("span", { class: "n" }, "◆"), "Puzzles"));
     // Parts are branches; chapters hang off them like └── lines in a file tree.
     let part = null, branch = null;
     for (const ch of DATA.chapters) {
@@ -957,7 +1133,7 @@
       },
     };
     const p = chProgress(ch);
-    const pills = [h("span", { class: "pill" }, `≈ ${ch.minutes} min`), h("span", { class: "pill", "data-count": ch.id }, `${p.d} / ${p.n} done`)];
+    const pills = [modeSwitch(ch, "learn"), h("span", { class: "pill" }, `≈ ${ch.minutes} min`), h("span", { class: "pill", "data-count": ch.id }, `${p.d} / ${p.n} done`)].filter(Boolean);
     if (ch.world) pills.push(h("a", { class: "pill", href: "../worlds/#" + ch.world }, "Play this chapter in 3D →"));
     // The cover: a stepped wash of the track's colour that glows pink at its heart, the title in
     // serif, and this chapter's flower on the right, growing as the tasks below get done.
@@ -1250,9 +1426,11 @@
     const hash = decodeURIComponent(location.hash.slice(1));
     if (!hash) return pageHome();
     if (hash === "review") return pageReview();
+    if (hash === "puzzles") return pagePuzzleWall();
     const [num, sec] = hash.split("/");
     const ch = DATA.chapters.find((c) => String(c.num) === num);
-    if (ch) return pageChapter(ch, sec);
+    if (ch && sec === "puzzle" && ch.puzzles && ch.puzzles.length) return pagePuzzles(ch);
+    if (ch) return pageChapter(ch, sec === "puzzle" ? undefined : sec);
     pageHome();
   }
 
