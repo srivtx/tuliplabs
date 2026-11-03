@@ -114,6 +114,7 @@
     <span class="nx-t">${title[next.id]}</span>
     <span class="nx-b">${lv.brief}</span>`;
   const shot = nx.querySelector(".nx-shot"), frame = shot.firstChild;
+  frame.onload = () => frame.classList.add("on");
   frame.srcdoc = `<!doctype html><html><head><style>${window.DZ.base(w, h)}${answer}</style></head><body>${lv.html}</body></html>`;
   const fit = () => { frame.style.scale = shot.clientWidth / w; };
   fit();
