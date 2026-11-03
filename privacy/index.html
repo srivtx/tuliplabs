@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing · Tulip Labs</title>
+<meta name="description" content="Learning on Tulip Labs is free forever. Pro adds unlimited AI hints, the full puzzle library and a portfolio.">
+<meta name="theme-color" content="#0b0c0a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges'><rect x='1' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='1' width='1' height='1' fill='%23d23f87'/><rect x='3' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='4' y='1' width='1' height='1' fill='%23d23f87'/><rect x='5' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='3' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='5' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='3' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='4' width='1' height='1' fill='%233faa52'/><rect x='3' y='4' width='1' height='1' fill='%2324803c'/><rect x='6' y='4' width='1' height='1' fill='%233faa52'/><rect x='0' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='5' width='1' height='1' fill='%233faa52'/><rect x='3' y='5' width='1' height='1' fill='%2324803c'/><rect x='5' y='5' width='1' height='1' fill='%233faa52'/><rect x='6' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='6' width='1' height='1' fill='%233faa52'/><rect x='2' y='6' width='1' height='1' fill='%233faa52'/><rect x='3' y='6' width='1' height='1' fill='%2324803c'/><rect x='4' y='6' width='1' height='1' fill='%233faa52'/><rect x='5' y='6' width='1' height='1' fill='%233faa52'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{--bg:#0b0c0a;--panel:#121410;--card:#171a15;--line:#2a2e26;--ink:#f2efe6;--muted:#a3a497;--faint:#6b6d62;--soft:#1d211b;--pink:#ff6fb5;--pink-soft:#f7b6d7;--pink-ink:#ff8cc4;--leaf:#3faa52;
+  --f-display:"Pixelify Sans",ui-monospace,monospace;--f-serif:"Instrument Serif",Georgia,serif;--f-body:"IBM Plex Sans",system-ui,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:dark}
+:root[data-theme="light"]{--bg:#efebe2;--panel:#f6f3ec;--card:#fffdf8;--line:#dcd5c6;--ink:#1d1b17;--muted:#6a655a;--faint:#8a8475;--soft:#ece7dc;--pink-ink:#d23f87;color-scheme:light}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.65 var(--f-body);-webkit-font-smoothing:antialiased}
+.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px 16px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+main{max-width:760px;margin:0 auto;padding:56px 16px 90px}
+.eyebrow{font:500 13px var(--f-display);letter-spacing:.06em;color:var(--pink);margin:0}
+h1{font:400 clamp(44px,7vw,72px)/.95 var(--f-serif);margin:6px 0 0;letter-spacing:-.01em}
+h1 i{color:var(--pink-ink)}
+.lede{color:var(--muted);margin:14px 0 0;font-size:16px}
+.docs{display:flex;gap:20px;margin:30px 0 0;padding-bottom:10px;border-bottom:1px solid var(--line);font:500 13px var(--f-mono)}
+.docs a{color:var(--faint);text-decoration:none;padding:4px 0;border-bottom:2px solid transparent;margin-bottom:-12px}
+.docs a:hover{color:var(--ink)}
+.docs a[aria-current]{color:var(--ink);border-color:var(--pink)}
+.when{font:12px var(--f-mono);color:var(--faint);margin:18px 0 0}
+.short{margin:28px 0 0;padding:20px 22px;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+.short h2{margin:0 0 8px;font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pink-ink)}
+.short ul{margin:0;padding:0;list-style:none}
+.short li{display:flex;gap:12px;align-items:baseline;padding:4px 0}
+.short li::before{content:"";flex:none;width:7px;height:7px;background:var(--leaf);transform:translateY(-1px)}
+section{padding:26px 0 4px;border-bottom:1px solid var(--line)}
+section h2{font:400 28px/1.15 var(--f-serif);margin:0 0 8px}
+section p,section li{color:var(--muted)}
+section p strong,section li strong{color:var(--ink);font-weight:500}
+section ul{padding-left:18px}
+a{color:var(--pink-ink);text-underline-offset:3px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:6px 0 18px}
+th,td{text-align:left;padding:9px 8px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+td{color:var(--muted)}td:first-child{color:var(--ink);white-space:nowrap}
+@media (max-width:560px){main{padding-top:40px}td:first-child{white-space:normal}}
+</style>
+<link rel="stylesheet" href="../learn/nav.css">
+<script src="../learn/nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Tulip Labs</b></a>
+  <details class="sw k-home"><summary aria-label="Switch section"><i class="sq"></i><span>Privacy</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections"><a class="home k-home" href="../"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a><h6>Play</h6><a class="k-worlds" href="../worlds/"><i class="sq"></i><b>3D worlds</b><small>Think Complexity as 12 voxel worlds you can poke</small></a><a class="k-dz" href="../design/"><i class="sq"></i><b>Design studio</b><small>Match a target in CSS, pixel by pixel</small></a><h6>Code along</h6><a class="k-tc" href="../code/"><i class="sq"></i><b>Think Complexity</b><small>The Python behind every world, step by step</small></a><a class="k-ms" href="../modsim/"><i class="sq"></i><b>ModSim</b><small>Modeling and simulation, learnt in code</small></a><h6>Courses</h6><a class="k-bx" href="../build/"><i class="sq"></i><b>Build your own X</b><small>See every part of a real tool, then write it</small></a><a class="k-ps" href="../stats/"><i class="sq"></i><b>Probability & Stats</b><small>Simulate it, then prove it</small></a><a class="k-ds" href="../dsa/"><i class="sq"></i><b>DSA</b><small>From the ground floor to Codeforces</small></a><a class="k-od" href="../ods/"><i class="sq"></i><b>Open Data Structures</b><small>Pat Morin's book, chapter by chapter</small></a></nav></details>
+  <span class="grow"></span>
+</header>
+<main>
+  <p class="eyebrow">privacy</p>
+  <h1>Your data, <i>plainly.</i></h1>
+  <p class="lede">Tulip Labs is a product by svx, run by Sribatsha Dash. This page says what we keep about you, who else sees it, and how to get it removed.</p>
+  <nav class="docs" aria-label="Policies"><a href="../privacy/" aria-current="page">Privacy</a><a href="../terms/">Terms</a><a href="../refunds/">Refunds</a></nav>
+  <p class="when">Last updated 4 November 2026</p>
+  <div class="short"><h2>The short version</h2><ul><li>No ads, no trackers, no analytics.</li><li>Learning without an account keeps everything in your own browser.</li><li>If you sign in, we keep your email, your name and your progress. Nothing else.</li><li>You can download a copy any time, and delete your account yourself.</li></ul></div>
+
+  <section><h2>Without an account</h2>
+    <p>You never need an account to learn. Your progress, your code and your settings are saved in your browser's own storage on your device. They never reach us. Clearing this site's data in your browser removes them.</p></section>
+  <section><h2>When you sign in</h2>
+    <p>Signing in is optional, and only carries your progress between your devices. When you sign in, we keep:</p>
+    <ul><li><strong>Your email address</strong>, and your name and profile picture link if you sign in with Google or GitHub.</li>
+    <li><strong>Your progress</strong>: the same data your browser already saves, such as finished chapters, XP, stars, review dates and the code you wrote in exercises.</li></ul>
+    <p>We use it only to sign you in and sync your progress. We don't sell it, share it for advertising, or send you marketing email.</p>
+    <p>It's stored with Supabase, our database provider. Database rules mean each signed-in person can read and change only their own progress.</p></section>
+  <section><h2>Who else is involved</h2>
+    <table><thead><tr><th>Service</th><th>What for</th><th>What it sees</th></tr></thead><tbody>
+      <tr><td>Supabase</td><td>Sign-in and the progress database</td><td>Your email, name and progress, if you sign in</td></tr>
+      <tr><td>Google, GitHub</td><td>Only if you choose to sign in with them</td><td>That you signed in to Tulip Labs</td></tr>
+      <tr><td>Vercel</td><td>Hosts the website</td><td>Your IP address and the pages you request, in standard server logs</td></tr>
+      <tr><td>Google Fonts, jsDelivr, cdnjs</td><td>Fonts, and the Python and 3D libraries that run in your browser</td><td>Your IP address when files download</td></tr>
+      <tr><td>Lemon Squeezy</td><td>Payments, once Pro opens</td><td>Your payment details. They're the seller on your receipt; we never see your card.</td></tr>
+    </tbody></table></section>
+  <section><h2>Cookies</h2>
+    <p>We don't use tracking cookies. If you sign in, your browser keeps a sign-in token in local storage so you stay signed in.</p></section>
+  <section><h2>Your choices</h2>
+    <ul><li><strong>Export:</strong> once signed in, click your initials, then "Export my progress".</li>
+    <li><strong>Sign out:</strong> the same box has "Sign out". Your progress stays in that browser.</li>
+    <li><strong>Delete your account:</strong> <a href="https://github.com/srivtx/voxel-network-lab/issues">open an issue on GitHub</a> asking us to delete it, without posting your email there; we'll reply with how to confirm privately. We delete your account and progress within 30 days.</li></ul></section>
+  <section><h2>Children</h2>
+    <p>Tulip Labs isn't aimed at children under 13, and we don't knowingly keep accounts for them. Learning without an account stores nothing with us at all.</p></section>
+  <section><h2>Changes</h2>
+    <p>If this changes, we'll update this page and the date at the top. Big changes also go in the news.</p>
+    <p>Questions? <a href="https://github.com/srivtx/voxel-network-lab/issues">open an issue on GitHub</a>.</p></section>
+</main>
+</body>
+</html>
