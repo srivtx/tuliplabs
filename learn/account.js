@@ -198,14 +198,27 @@
     }).catch(() => show({ google: true, github: true, email: true }));
   }
   const open = () => { if (!dlg.open) { sheetOut(); dlg.showModal(); providers(); } };
-  btn.addEventListener("click", () => (uid ? (location.href = root + "account/") : open()));
+  btn.addEventListener("click", () => (btn.classList.contains("in") ? (location.href = root + "account/") : open()));
   sheetOut();
 
   // The account page reads and drives the session through this, and hears about changes on "tl-account".
   const A = (window.TLA = { ready: false, user: null, profile: null, open, read, face, FACES: Object.keys(FACES), sprite, photo });
   // Whenever the account changes, repaint the top-bar face and tell the page.
+  // Your face and profile are remembered on this device, so every page shows the right face at once
+  // instead of your initials while the profile loads.
+  const ME = "tl-me";
+  const remember = () => {
+    try {
+      if (!A.user) return localStorage.removeItem(ME);
+      const m = A.user.user_metadata || {};
+      localStorage.setItem(ME, JSON.stringify({ id: A.user.id, email: A.user.email, meta: { full_name: m.full_name, name: m.name, avatar_url: m.avatar_url, picture: m.picture }, profile: A.profile }));
+    } catch (e) {}
+  };
+  let known = null;
+  try { known = JSON.parse(localStorage.getItem(ME) || "null"); } catch (e) {}
   const changed = () => {
     if (A.user) btn.innerHTML = face(A.profile, A.user);
+    if (A.user && A.profile !== undefined) remember();
     A.ready = true;
     dispatchEvent(new CustomEvent("tl-account", { detail: A }));
   };
@@ -273,7 +286,8 @@
   function signedIn(user) {
     if (uid === user.id) return;
     uid = user.id;
-    btn.innerHTML = face(null, user);
+    if (known && known.id === user.id && A.profile == null) A.profile = known.profile;
+    btn.innerHTML = face(A.profile, user);
     btn.classList.add("in");
     btn.title = "Your account";
     btn.setAttribute("aria-label", "Your account");
@@ -288,6 +302,8 @@
     btn.removeAttribute("title");
     btn.removeAttribute("aria-label");
     Object.assign(A, { user: null, profile: null });
+    known = null;
+    try { localStorage.removeItem(ME); } catch (e) {}
     sheetOut();
     changed();
   }
@@ -296,6 +312,14 @@
   let back = false;
   try { back = Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k)); } catch (e) {}
   if (!back && !/access_token=|[?&]code=/.test(location.href)) return signedOut();
+  // Someone signed in before: show their face now, while the session and profile load behind it.
+  if (back && known) {
+    A.profile = known.profile;
+    btn.innerHTML = face(known.profile, { id: known.id, email: known.email, user_metadata: known.meta });
+    btn.classList.add("in");
+    btn.title = "Your account";
+    btn.setAttribute("aria-label", "Your account");
+  }
   client().then((c) => {
     c.auth.getSession().then(({ data }) => (data.session ? signedIn(data.session.user) : signedOut()));
     c.auth.onAuthStateChange((ev, session) => {
