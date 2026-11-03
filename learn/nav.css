@@ -217,3 +217,4 @@ html.wipe-in body::after{content:"";position:fixed;inset:0;z-index:9998;backgrou
 .as-dot{flex:none;width:7px;height:7px;background:#3faa52}
 .acct-sheet [hidden]{display:none!important}
 .as-or[hidden] + .as-mail{margin-top:24px}
+.as-btns .as-out{color:#d23f87;border-color:color-mix(in srgb,#d23f87 45%,transparent)}.as-btns .as-out:hover{border-color:#d23f87}

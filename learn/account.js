@@ -89,11 +89,12 @@
   }
 
   function sheetIn(user) {
-    const who = user.email || user.user_metadata?.user_name || "you";
+    const m = user.user_metadata || {}, esc = (t) => String(t).replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const name = m.full_name || m.name || m.user_name || "";
     dlg.innerHTML = `<form method="dialog" class="as-x"><button aria-label="Close">×</button></form>
-      <div class="as-head">${tulip}<h2>Signed in</h2><p>${who.replace(/[<>&]/g, "")}</p></div>
+      <div class="as-head">${tulip}<h2>${name ? `Hi, <i>${esc(name.split(" ")[0])}</i>` : "Signed in"}</h2><p>${esc(user.email || "")}</p></div>
       <ul class="as-list"><li><i class="as-dot"></i>Sync is on. Your progress saves a few seconds after each change.</li></ul>
-      <div class="as-btns"><button type="button" data-a="export">Export my progress</button><button type="button" data-a="out">Sign out</button></div>
+      <div class="as-btns"><button type="button" data-a="export">Export my progress</button><button type="button" class="as-out" data-a="out">Sign out</button></div>
       <p class="as-fine">Signing out keeps your progress in this browser.</p>`;
     dlg.querySelector("[data-a=export]").addEventListener("click", () => {
       const a = document.createElement("a");
@@ -101,13 +102,18 @@
       a.download = "tulip-labs-progress.json";
       a.click();
     });
-    dlg.querySelector("[data-a=out]").addEventListener("click", async () => { await (await client()).auth.signOut(); dlg.close(); });
+    dlg.querySelector("[data-a=out]").addEventListener("click", async (e) => {
+      e.currentTarget.textContent = "Signing out…";
+      await push().catch(() => {});
+      await (await client()).auth.signOut();
+      dlg.close();
+    });
   }
 
   // Show only the providers switched on in the Supabase dashboard; asked once, when the sheet first opens.
   let asked = false;
   function providers() {
-    if (asked || !on) return;
+    if (asked || !on || !dlg.querySelector("[data-p]")) return;
     asked = true;
     fetch(CFG.url + "/auth/v1/settings", { headers: { apikey: CFG.key } }).then((r) => r.json()).then((s) => {
       const ext = s.external || {};
@@ -164,11 +170,12 @@
   }
 
   function signedIn(user) {
+    if (uid === user.id) return;
     uid = user.id;
     const name = user.user_metadata?.full_name || user.user_metadata?.user_name || user.email || "";
     btn.textContent = (name.match(/\b\w/g) || ["·"]).slice(0, 2).join("").toUpperCase();
     btn.classList.add("in");
-    btn.title = "Signed in: sync is on";
+    btn.title = "Your account";
     sheetIn(user);
     pull();
   }
