@@ -218,3 +218,22 @@ html.wipe-in body::after{content:"";position:fixed;inset:0;z-index:9998;backgrou
 .acct-sheet [hidden]{display:none!important}
 .as-or[hidden] + .as-mail{margin-top:24px}
 .as-btns .as-out{color:#d23f87;border-color:color-mix(in srgb,#d23f87 45%,transparent)}.as-btns .as-out:hover{border-color:#d23f87}
+/* signed in: your photo, or initials, in the top bar */
+.acct.in{display:grid;place-items:center;width:32px;height:32px;padding:0;border-radius:50%;overflow:hidden;font:600 11.5px var(--f-mono)}
+.acct.in img{width:100%;height:100%;object-fit:cover;display:block}
+/* first sign-in: pick a username */
+.as-name{display:grid;gap:6px;margin-top:22px}
+.as-name label{font:500 12px var(--f-mono);color:var(--muted)}
+.as-name label[for=as-disp]{margin-top:10px}
+.as-at{display:flex;align-items:center;border:1px solid var(--line);border-radius:4px;background:var(--bg)}
+.as-at span{padding:0 0 0 12px;color:var(--faint);font:14px var(--f-mono)}
+.as-at input{flex:1;min-width:0;border:0;background:none;padding:10px 12px 10px 2px;color:var(--ink);font:14px var(--f-mono);outline:none}
+.as-at:focus-within{outline:2px solid var(--pink);outline-offset:-1px;border-color:transparent}
+.as-name > input{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
+.as-name > input:focus{outline:2px solid var(--pink);outline-offset:-1px;border-color:transparent}
+.as-hint{margin:0;min-height:1.3em;font:12px var(--f-mono);color:var(--faint)}
+.as-hint.ok{color:#3faa52}.as-hint.no{color:#d23f87}
+.as-name button{all:unset;box-sizing:border-box;cursor:pointer;margin-top:16px;padding:11px 14px;border-radius:4px;background:var(--ink);color:var(--bg);text-align:center;font-weight:500;font-size:14px}
+.as-name button:disabled{opacity:.4;cursor:default}
+.as-name button:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+.as-fine a{color:inherit;text-underline-offset:2px}

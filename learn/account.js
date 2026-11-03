@@ -42,6 +42,7 @@
   const read = () => { const o = {}; for (const k of KEYS) { try { o[k] = JSON.parse(localStorage.getItem(k) || "{}"); } catch (e) { o[k] = {}; } } return o; };
 
   // ---------------------------------------------------------------- sheet --
+  const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
   // The pixel tulip, the same 7×7 mark as the favicon.
   const C = { p: "#ff6fb5", D: "#d23f87", Y: "#ffd21f", g: "#3faa52", G: "#24803c" };
   const tulip = `<svg class="as-tulip" viewBox="0 0 7 7" shape-rendering="crispEdges" aria-hidden="true">${".p.p.p.,ppDpDpp,ppYYYpp,.ppYpp.,g..G..g,gg.G.gg,.ggGgg."
@@ -60,22 +61,22 @@
   const G = `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M15.5 8.2c0-.6-.1-1.1-.2-1.6H8v3h4.2a3.6 3.6 0 0 1-1.6 2.4v2h2.6c1.5-1.4 2.3-3.4 2.3-5.8ZM8 16c2.2 0 4-.7 5.3-2l-2.6-2a4.8 4.8 0 0 1-7.2-2.5H.8v2A8 8 0 0 0 8 16Zm-4.5-6.5a4.8 4.8 0 0 1 0-3V4.4H.8a8 8 0 0 0 0 7.2l2.7-2.1ZM8 3.2c1.2 0 2.3.4 3.2 1.2l2.3-2.3A8 8 0 0 0 .8 4.4l2.7 2.1A4.8 4.8 0 0 1 8 3.2Z"/></svg>`;
   const H = `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.5c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.3 1.9.9 2.4.7 0-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-4 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.5 7.5 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.1 0 3.1-1.9 3.8-3.7 4 .3.3.6.8.6 1.5v2.2c0 .2.1.5.6.4A8 8 0 0 0 8 0Z"/></svg>`;
 
+  const oops = (e) => (e?.status === 429 ? "Too many tries. Wait a few minutes, then try again." : "Something went wrong. Please try again.");
   function sheetOut() {
-    asked = false;
     dlg.innerHTML = `<form method="dialog" class="as-x"><button aria-label="Close">×</button></form>
-      <div class="as-head">${tulip}<h2>Sign in to <i>Tulip Labs</i></h2><p>Your progress in this browser comes with you.</p></div>
+      <div class="as-head">${tulip}<h2>Sign in to <i>Tulip Labs</i></h2><p>Pick up where you left off, on any device.</p></div>
       <div class="as-btns"><button type="button" data-p="google">${G}Continue with Google</button><button type="button" data-p="github">${H}Continue with GitHub</button></div>
       <div class="as-or"><span>or</span></div>
       <form class="as-mail"><label for="as-email">Email</label><div><input id="as-email" type="email" required autocomplete="email" placeholder="you@example.com"><button>Email me a link</button></div></form>
       <p class="as-msg" role="status"></p>
-      <p class="as-fine">No passwords. Learning never needs an account.</p>`;
+      <p class="as-fine">By continuing you agree to the <a href="${root}terms/">terms</a> and <a href="${root}privacy/">privacy policy</a>.</p>`;
     const msg = dlg.querySelector(".as-msg");
     const say = (t) => (msg.textContent = t);
     dlg.querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", async () => {
       if (!on) return say("Sign-in isn't switched on yet. This is a preview.");
       const sb = await client();
       const { error } = await sb.auth.signInWithOAuth({ provider: b.dataset.p, options: { redirectTo: location.href.split("#")[0] } });
-      if (error) say(error.message);
+      if (error) say(oops(error));
     }));
     dlg.querySelector(".as-mail").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -84,49 +85,87 @@
       const sb = await client();
       say("Sending…");
       const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href.split("#")[0] } });
-      say(error ? error.message : `Check ${email} for a sign-in link.`);
+      say(error ? oops(error) : `Check ${email} for a sign-in link.`);
     });
   }
 
-  function sheetIn(user) {
-    const m = user.user_metadata || {}, esc = (t) => String(t).replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
-    const name = m.full_name || m.name || m.user_name || "";
+  // First sign-in: pick a username. It's checked as you type and saved to your profile.
+  const esc = (t) => String(t).replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const RULE = /^[a-z0-9_]{3,20}$/;
+  function suggest(user) {
+    const m = user.user_metadata || {};
+    let u = (m.user_name || m.full_name || m.name || (user.email || "").split("@")[0] || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 20);
+    return u.length >= 3 ? u : (u + "_tulip").slice(0, 20);
+  }
+  function sheetName(user) {
+    const m = user.user_metadata || {};
     dlg.innerHTML = `<form method="dialog" class="as-x"><button aria-label="Close">×</button></form>
-      <div class="as-head">${tulip}<h2>${name ? `Hi, <i>${esc(name.split(" ")[0])}</i>` : "Signed in"}</h2><p>${esc(user.email || "")}</p></div>
-      <ul class="as-list"><li><i class="as-dot"></i>Sync is on. Your progress saves a few seconds after each change.</li></ul>
-      <div class="as-btns"><button type="button" data-a="export">Export my progress</button><button type="button" class="as-out" data-a="out">Sign out</button></div>
-      <p class="as-fine">Signing out keeps your progress in this browser.</p>`;
-    dlg.querySelector("[data-a=export]").addEventListener("click", () => {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([JSON.stringify(read(), null, 2)], { type: "application/json" }));
-      a.download = "tulip-labs-progress.json";
-      a.click();
-    });
-    dlg.querySelector("[data-a=out]").addEventListener("click", async (e) => {
-      e.currentTarget.textContent = "Signing out…";
-      await push().catch(() => {});
-      await (await client()).auth.signOut();
+      <div class="as-head">${tulip}<h2>Pick your <i>username</i></h2><p>You can change it any time.</p></div>
+      <form class="as-name">
+        <label for="as-user">Username</label><div class="as-at"><span>@</span><input id="as-user" required maxlength="20" autocomplete="username" spellcheck="false" autocapitalize="none" value="${esc(suggest(user))}"></div>
+        <p class="as-hint" role="status"></p>
+        <label for="as-disp">Name</label><input id="as-disp" maxlength="50" autocomplete="name" value="${esc(m.full_name || m.name || "")}" placeholder="What should we call you?">
+        <button>Continue</button>
+      </form>`;
+    const f = dlg.querySelector(".as-name"), u = f.querySelector("#as-user"), hint = f.querySelector(".as-hint"), go = f.querySelector("button");
+    let ok = false, t = 0;
+    const tell = (txt, good) => { hint.textContent = txt; hint.className = "as-hint" + (good ? " ok" : txt ? " no" : ""); ok = !!good; go.disabled = !good; };
+    async function check() {
+      const v = u.value.trim().toLowerCase();
+      if (!RULE.test(v)) return tell(v.length < 3 ? "At least 3 characters" : "Letters, numbers and _ only", false);
+      tell("Checking…", false);
+      const { data } = await sb.from("profiles").select("user_id").eq("username", v).maybeSingle();
+      if (u.value.trim().toLowerCase() !== v) return;
+      data && data.user_id !== uid ? tell(`@${v} is taken`, false) : tell(`@${v} is yours`, true);
+    }
+    u.addEventListener("input", () => { u.value = u.value.toLowerCase().replace(/[^a-z0-9_]/g, ""); clearTimeout(t); t = setTimeout(check, 300); });
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!ok) return;
+      go.textContent = "Saving…";
+      const row = { user_id: uid, username: u.value.trim(), display_name: f.querySelector("#as-disp").value.trim() || null };
+      const { data, error } = await sb.from("profiles").upsert(row).select().single();
+      go.textContent = "Continue";
+      if (error) return tell(error.code === "23505" ? `@${row.username} is taken` : error.code === "23514" ? "That username isn't allowed" : "Couldn't save. Please try again.", false);
+      A.profile = data;
+      changed();
       dlg.close();
     });
+    check();
+    if (!dlg.open) dlg.showModal();
   }
 
-  // Show only the providers switched on in the Supabase dashboard; asked once, when the sheet first opens.
+  // Show only the providers switched on in the Supabase dashboard. Nothing shows until we know,
+  // so a switched-off button never flashes; the last answer is remembered so the sheet opens right.
   let asked = false;
+  function show(ext) {
+    dlg.querySelectorAll("[data-p]").forEach((b) => (b.hidden = !ext[b.dataset.p]));
+    const none = !dlg.querySelector("[data-p]:not([hidden])");
+    dlg.querySelector(".as-btns").hidden = none;
+    dlg.querySelector(".as-or").hidden = none || !ext.email;
+    dlg.querySelector(".as-mail").hidden = !ext.email;
+  }
   function providers() {
-    if (asked || !on || !dlg.querySelector("[data-p]")) return;
+    if (!dlg.querySelector("[data-p]")) return;
+    let known = null;
+    try { known = JSON.parse(localStorage.getItem("tl-providers") || "null"); } catch (e) {}
+    show(known || {});
+    if (asked || !on) return;
     asked = true;
     fetch(CFG.url + "/auth/v1/settings", { headers: { apikey: CFG.key } }).then((r) => r.json()).then((s) => {
       const ext = s.external || {};
-      dlg.querySelectorAll("[data-p]").forEach((b) => (b.hidden = !ext[b.dataset.p]));
-      const none = !dlg.querySelector("[data-p]:not([hidden])");
-      dlg.querySelector(".as-btns").hidden = none;
-      dlg.querySelector(".as-or").hidden = none;
-      dlg.querySelector(".as-mail").hidden = !ext.email;
-    }).catch(() => {});
+      try { localStorage.setItem("tl-providers", JSON.stringify({ google: ext.google, github: ext.github, email: ext.email })); } catch (e) {}
+      if (dlg.querySelector("[data-p]")) show(ext);
+    }).catch(() => show({ google: true, github: true, email: true }));
   }
-  btn.addEventListener("click", () => { if (!dlg.open) { dlg.showModal(); providers(); } });
+  const open = () => { if (!dlg.open) { sheetOut(); dlg.showModal(); providers(); } };
+  btn.addEventListener("click", () => (uid ? (location.href = root + "account/") : open()));
   sheetOut();
-  if (!on) return;
+
+  // The account page reads and drives the session through this, and hears about changes on "tl-account".
+  const A = (window.TLA = { ready: false, user: null, profile: null, open, read });
+  const changed = () => { A.ready = true; dispatchEvent(new CustomEvent("tl-account", { detail: A })); };
+  if (!on) return changed();
 
   // ----------------------------------------------------------------- sync --
   let sb = null;
@@ -144,8 +183,11 @@
   let uid = null, pushT = 0;
   async function push() {
     clearTimeout(pushT);
+    pushT = 0;
     if (!uid) return;
-    await sb.from("progress").upsert({ user_id: uid, data: read(), updated_at: new Date().toISOString() });
+    const at = new Date().toISOString();
+    const { error } = await sb.from("progress").upsert({ user_id: uid, data: read(), updated_at: at });
+    if (!error) { A.synced = at; changed(); }
   }
   const soon = () => { clearTimeout(pushT); pushT = setTimeout(push, 3000); };
 
@@ -169,22 +211,46 @@
     if (changed && !sessionStorage.getItem("tl-synced")) { sessionStorage.setItem("tl-synced", "1"); location.reload(); }
   }
 
+  // Your profile: username and name. No row yet means a first sign-in, so ask for a username.
+  async function profile(user) {
+    const { data, error } = await sb.from("profiles").select("*").eq("user_id", uid).maybeSingle();
+    if (error) return changed(); // the profiles table isn't set up yet
+    A.profile = data;
+    changed();
+    if (!data) sheetName(user);
+  }
+  async function signOut() {
+    await push().catch(() => {});
+    await sb.auth.signOut();
+  }
+
+  // Signed in, the button shows your photo (or initials) and leads to your account page.
   function signedIn(user) {
     if (uid === user.id) return;
     uid = user.id;
-    const name = user.user_metadata?.full_name || user.user_metadata?.user_name || user.email || "";
-    btn.textContent = (name.match(/\b\w/g) || ["·"]).slice(0, 2).join("").toUpperCase();
+    const m = user.user_metadata || {};
+    const name = m.full_name || m.name || m.user_name || user.email || "";
+    const pic = m.avatar_url || m.picture;
+    const ini = (name.match(/\b\w/g) || ["·"]).slice(0, 2).join("").toUpperCase();
+    btn.innerHTML = pic ? `<img src="${esc(pic)}" alt="" referrerpolicy="no-referrer">` : esc(ini);
+    const img = btn.querySelector("img");
+    if (img) img.onerror = () => (btn.textContent = ini);
     btn.classList.add("in");
     btn.title = "Your account";
-    sheetIn(user);
-    pull();
+    btn.setAttribute("aria-label", "Your account");
+    Object.assign(A, { user, client: sb, push, signOut, sb });
+    if (dlg.open) dlg.close();
+    pull().then(() => profile(user));
   }
   function signedOut() {
     uid = null;
     btn.textContent = "Sign in";
     btn.classList.remove("in");
     btn.removeAttribute("title");
+    btn.removeAttribute("aria-label");
+    Object.assign(A, { user: null, profile: null });
     sheetOut();
+    changed();
   }
 
   // Guests never load the library: only someone with a saved session, or coming back from a sign-in link, does.
