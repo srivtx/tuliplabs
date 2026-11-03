@@ -29,3 +29,5 @@ our own path.
 | **6 · Advanced structures** | 43–50 | segment trees · lazy propagation · Fenwick trees · sparse tables · LCA with binary lifting · KMP and the Z-function · rolling hashes · suffix arrays |
 | **7 · Advanced graphs** | 51–56 | strongly connected components · bridges and articulation points · max flow · bipartite matching · 2-SAT · Euler paths |
 | **8 · Contest craft** | 57–60 | constructive and ad-hoc problems · game theory (Sprague-Grundy) · meet in the middle and square-root decomposition · stress testing your own solution |
+
+All 60 chapters are live (finished 2026-11-03).
