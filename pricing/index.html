@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing · Tulip Labs</title>
+<meta name="description" content="Learning on Tulip Labs is free forever. Pro adds unlimited AI hints, the full puzzle library and a portfolio.">
+<meta name="theme-color" content="#0b0c0a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges'><rect x='1' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='1' width='1' height='1' fill='%23d23f87'/><rect x='3' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='4' y='1' width='1' height='1' fill='%23d23f87'/><rect x='5' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='3' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='5' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='3' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='4' width='1' height='1' fill='%233faa52'/><rect x='3' y='4' width='1' height='1' fill='%2324803c'/><rect x='6' y='4' width='1' height='1' fill='%233faa52'/><rect x='0' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='5' width='1' height='1' fill='%233faa52'/><rect x='3' y='5' width='1' height='1' fill='%2324803c'/><rect x='5' y='5' width='1' height='1' fill='%233faa52'/><rect x='6' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='6' width='1' height='1' fill='%233faa52'/><rect x='2' y='6' width='1' height='1' fill='%233faa52'/><rect x='3' y='6' width='1' height='1' fill='%2324803c'/><rect x='4' y='6' width='1' height='1' fill='%233faa52'/><rect x='5' y='6' width='1' height='1' fill='%233faa52'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{--bg:#0b0c0a;--panel:#121410;--card:#171a15;--line:#2a2e26;--ink:#f2efe6;--muted:#a3a497;--faint:#6b6d62;--soft:#1d211b;--pink:#ff6fb5;--pink-soft:#f7b6d7;--pink-ink:#ff8cc4;--leaf:#3faa52;--sun:#ffd21f;
+  --f-display:"Pixelify Sans",ui-monospace,monospace;--f-serif:"Instrument Serif",Georgia,serif;--f-body:"IBM Plex Sans",system-ui,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:dark}
+:root[data-theme="light"]{--bg:#efebe2;--panel:#f6f3ec;--card:#fffdf8;--line:#dcd5c6;--ink:#1d1b17;--muted:#6a655a;--faint:#8a8475;--soft:#ece7dc;--pink-ink:#d23f87;color-scheme:light}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px 16px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+main{max-width:1120px;margin:0 auto;padding:56px 16px 90px}
+.eyebrow{font:500 13px var(--f-display);letter-spacing:.06em;color:var(--pink);margin:0}
+h1{font:400 clamp(44px,7vw,84px)/.95 var(--f-serif);margin:6px 0 0;letter-spacing:-.01em}
+h1 i{color:var(--pink-soft)}
+:root[data-theme="light"] h1 i{color:#d23f87}
+.lede{color:var(--muted);max-width:580px;margin:14px 0 0}
+h2{font:400 clamp(30px,4vw,40px)/1.05 var(--f-serif);margin:0}
+h2 i{color:var(--pink-ink)}
+
+/* billing switch: two words on a hairline, the picked one underlined in pink */
+.bill{display:flex;align-items:center;gap:18px;margin:40px 0 18px;font:500 13px var(--f-mono)}
+.bill button{all:unset;cursor:pointer;color:var(--faint);padding:4px 0;border-bottom:2px solid transparent;transition:color .2s,border-color .2s}
+.bill button:hover{color:var(--ink)}
+.bill button[aria-pressed="true"]{color:var(--ink);border-color:var(--pink)}
+.bill button:focus-visible{outline:2px solid var(--pink);outline-offset:4px}
+.bill .save{color:var(--leaf);font-size:12px}
+
+/* the plans: one matted sheet split by hairlines */
+.plans{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:6px;background:var(--panel);overflow:hidden}
+.plan{position:relative;display:flex;flex-direction:column;padding:28px 28px 30px;border-left:1px solid var(--line)}
+.plan:first-child{border-left:0}
+.plan.pro{background:color-mix(in srgb,var(--pink) 7%,var(--card))}
+.tag{font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0;display:flex;align-items:center;gap:8px}
+.pro .tag{color:var(--pink-ink)}
+.tag .soon{color:var(--faint);text-transform:none;letter-spacing:0}
+.price{display:flex;align-items:baseline;gap:8px;margin:18px 0 2px;min-height:76px}
+.price b{font:400 76px/1 var(--f-serif);letter-spacing:-.02em;font-variant-numeric:lining-nums}
+.price span{color:var(--muted);font-size:14px}
+.note{color:var(--faint);font:12px/1.5 var(--f-mono);margin:0;min-height:36px}
+.plan p.what{margin:16px 0 20px;color:var(--muted)}
+.plan ul{list-style:none;margin:0 0 26px;padding:0;border-top:1px solid var(--line)}
+.plan li{display:flex;gap:12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.plan li::before{content:"";flex:none;width:7px;height:7px;background:var(--leaf);transform:translateY(-1px)}
+.pro li::before{background:var(--pink)}
+.plan li em{font-style:normal;color:var(--faint);margin-left:auto;font:12px var(--f-mono);white-space:nowrap}
+.go{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-radius:4px;border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:500;transition:background .2s,border-color .2s}
+.go:hover{border-color:var(--ink)}
+.go .arr{position:relative;width:18px;height:1px;background:currentColor;transition:width .25s}
+.go .arr::after{content:"";position:absolute;right:0;top:-3px;width:7px;height:7px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg)}
+.go:hover .arr{width:30px}
+.go.main{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.go[aria-disabled="true"]{cursor:default;color:var(--muted);border-style:dashed}
+.go[aria-disabled="true"]:hover{border-color:var(--line)}
+
+/* Pro's tulip: its pixels fill in one by one when you hover the plan */
+.bloom{position:absolute;top:26px;right:26px;display:grid;grid-template-columns:repeat(7,6px);gap:1px}
+.bloom i{width:6px;height:6px;background:var(--line);transition:background .25s}
+.pro:hover .bloom i,.pro:focus-within .bloom i{background:var(--c);transition-delay:calc(var(--n) * 18ms)}
+
+/* founders line */
+.found{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px 28px;margin:22px 0 0;padding:22px 28px;border:1px solid var(--line);border-radius:6px}
+.found b{font:400 44px/1 var(--f-serif)}
+.found p{margin:0;color:var(--muted)}
+.found p strong{color:var(--ink);font-weight:500}
+.found .sp{font:12px var(--f-mono);color:var(--faint);text-align:right}
+
+/* compare: an index with hairlines */
+.sec{margin-top:88px}
+.sec > p{color:var(--muted);margin:10px 0 26px;max-width:560px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:baseline}
+thead th{font:500 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom-color:var(--ink)}
+th:not(:first-child),td:not(:first-child){text-align:center;width:16%}
+tbody th{font-weight:400}
+tbody th small{display:block;color:var(--faint);font-size:12.5px}
+td .y{display:inline-block;width:8px;height:8px;background:var(--leaf)}
+td .n{color:var(--faint)}
+td.pc{background:color-mix(in srgb,var(--pink) 6%,transparent)}
+td.pc .y{background:var(--pink)}
+tr.grp th{font:500 13px var(--f-display);letter-spacing:.06em;color:var(--pink);padding-top:26px}
+
+/* questions */
+.faq{border-top:1px solid var(--ink)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:16px;padding:16px 4px;font-size:16px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"";margin-left:auto;flex:none;width:10px;height:10px;background:linear-gradient(currentColor,currentColor) center/10px 1px no-repeat,linear-gradient(currentColor,currentColor) center/1px 10px no-repeat;transition:transform .25s;color:var(--muted)}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details p{margin:0 4px 18px;color:var(--muted);max-width:680px}
+.faq summary:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
+
+@media (max-width:900px){
+  .plans{grid-template-columns:1fr}
+  .plan{border-left:0;border-top:1px solid var(--line)}
+  .plan:first-child{border-top:0}
+  .price,.note{min-height:0}
+  .found{grid-template-columns:auto 1fr}
+  .found .sp{grid-column:1/-1;text-align:left}
+}
+@media (max-width:560px){
+  main{padding-top:40px}
+  .plan{padding:24px 20px}
+  .found{padding:20px;grid-template-columns:1fr}
+  th,td{padding:10px 4px}
+  th:not(:first-child),td:not(:first-child){width:19%}
+  thead th{font-size:10px;letter-spacing:.04em}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<link rel="stylesheet" href="../learn/nav.css">
+<script src="../learn/nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Tulip Labs</b></a>
+  <details class="sw k-home"><summary aria-label="Switch section"><i class="sq"></i><span>Pricing</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections"><a class="home k-home" href="../"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a><h6>Play</h6><a class="k-worlds" href="../worlds/"><i class="sq"></i><b>3D worlds</b><small>Think Complexity as 12 voxel worlds you can poke</small></a><a class="k-dz" href="../design/"><i class="sq"></i><b>Design studio</b><small>Match a target in CSS, pixel by pixel</small></a><h6>Code along</h6><a class="k-tc" href="../code/"><i class="sq"></i><b>Think Complexity</b><small>The Python behind every world, step by step</small></a><a class="k-ms" href="../modsim/"><i class="sq"></i><b>ModSim</b><small>Modeling and simulation, learnt in code</small></a><h6>Courses</h6><a class="k-bx" href="../build/"><i class="sq"></i><b>Build your own X</b><small>See every part of a real tool, then write it</small></a><a class="k-ps" href="../stats/"><i class="sq"></i><b>Probability & Stats</b><small>Simulate it, then prove it</small></a><a class="k-ds" href="../dsa/"><i class="sq"></i><b>DSA</b><small>From the ground floor to Codeforces</small></a><a class="k-od" href="../ods/"><i class="sq"></i><b>Open Data Structures</b><small>Pat Morin's book, chapter by chapter</small></a></nav></details>
+  <span class="grow"></span>
+</header>
+<main>
+  <p class="eyebrow">pricing</p>
+  <h1>Learning is free. <i>Forever.</i></h1>
+  <p class="lede">Every track, chapter, simulation and test is free, and always will be. Pro is for the extras that cost us money to run or save you time.</p>
+
+  <div class="bill" role="group" aria-label="Billing period">
+    <button type="button" data-bill="m" aria-pressed="true">Monthly</button>
+    <button type="button" data-bill="y" aria-pressed="false">Yearly</button>
+    <span class="save">2 months free</span>
+  </div>
+
+  <section class="plans" aria-label="Plans">
+    <article class="plan">
+      <p class="tag">Free</p>
+      <div class="price"><b>$0</b><span>forever</span></div>
+      <p class="note">No card. No sign-in needed.</p>
+      <p class="what">The whole lab: every track, every simulation, Python in the page.</p>
+      <ul>
+        <li>All tracks and chapters</li>
+        <li>3D worlds and the design studio</li>
+        <li>Hidden tests, XP, your garden</li>
+        <li>Spaced review</li>
+        <li>Sync across devices <em>with sign-in</em></li>
+        <li>AI hints <em>5 a day</em></li>
+        <li>Puzzles <em>daily set</em></li>
+      </ul>
+      <a class="go main" href="../">Start learning <span class="arr"></span></a>
+    </article>
+
+    <article class="plan pro">
+      <span class="bloom" aria-hidden="true"></span>
+      <p class="tag">Pro <span class="soon">· opens soon</span></p>
+      <div class="price"><b data-m="$8" data-y="$6">$8</b><span data-m="a month" data-y="a month">a month</span></div>
+      <p class="note" data-m="Students $4 a month. Lower prices by region." data-y="$72 billed once a year. Students $36 a year.">Students $4 a month. Lower prices by region.</p>
+      <p class="what">Everything in Free, plus the help and the proof.</p>
+      <ul>
+        <li>AI hints <em>unlimited</em></li>
+        <li>The full puzzle library</li>
+        <li>Timed mock interviews</li>
+        <li>Certificates</li>
+        <li>A public portfolio page</li>
+        <li>New tracks <em>30 days early</em></li>
+        <li>Offline install</li>
+      </ul>
+      <a class="go" aria-disabled="true">Pro opens soon</a>
+    </article>
+
+    <article class="plan">
+      <p class="tag">Schools and teams <span class="soon">· opens soon</span></p>
+      <div class="price"><b data-m="$5" data-y="$4">$5</b><span>a seat, a month</span></div>
+      <p class="note" data-m="For classes, clubs and bootcamps." data-y="$48 a seat, billed yearly.">For classes, clubs and bootcamps.</p>
+      <p class="what">Pro for everyone in the room, plus a way to teach with it.</p>
+      <ul>
+        <li>Everything in Pro, for every seat</li>
+        <li>A class dashboard</li>
+        <li>Assign chapters and puzzles</li>
+        <li>See who's stuck, and where</li>
+        <li>One invoice</li>
+      </ul>
+      <a class="go" aria-disabled="true">Opens with Pro</a>
+    </article>
+  </section>
+
+  <div class="found">
+    <b>$149</b>
+    <p><strong>Founders: Pro for life, paid once.</strong> Only for the first 300 people, when Pro opens.</p>
+    <span class="sp">300 spots</span>
+  </div>
+
+  <section class="sec">
+    <h2>Side by <i>side.</i></h2>
+    <p>Everything you need to learn is in Free. The ticks Pro adds are extras.</p>
+    <table>
+      <thead><tr><th>What you get</th><th>Free</th><th>Pro</th><th>Schools</th></tr></thead>
+      <tbody>
+        <tr class="grp"><th colspan="4">learn</th></tr>
+        <tr><th>Every track and chapter<small>Complexity, ModSim, Build your own X, Stats, DSA, ODS</small></th><td><i class="y"></i></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr><th>Simulations, 3D worlds, the design studio</th><td><i class="y"></i></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr><th>Python in the page, with hidden tests</th><td><i class="y"></i></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr><th>Garden, XP and spaced review</th><td><i class="y"></i></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr><th>Sign in and sync across devices</th><td><i class="y"></i></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr class="grp"><th colspan="4">practise</th></tr>
+        <tr><th>AI hints<small>"Why does my code fail?"</small></th><td>5 a day</td><td class="pc">Unlimited</td><td>Unlimited</td></tr>
+        <tr><th>Puzzle mode</th><td>Daily set</td><td class="pc">Full library</td><td>Full library</td></tr>
+        <tr><th>Timed mock interviews</th><td><span class="n">–</span></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr class="grp"><th colspan="4">show it</th></tr>
+        <tr><th>Certificates</th><td><span class="n">–</span></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr><th>Public portfolio page<small>Your builds, your garden, your designs</small></th><td><span class="n">–</span></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr><th>New tracks 30 days early</th><td><span class="n">–</span></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr><th>Offline install</th><td><span class="n">–</span></td><td class="pc"><i class="y"></i></td><td><i class="y"></i></td></tr>
+        <tr class="grp"><th colspan="4">teach</th></tr>
+        <tr><th>Class dashboard and assignments</th><td><span class="n">–</span></td><td class="pc"><span class="n">–</span></td><td><i class="y"></i></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="sec">
+    <h2>Good <i>questions.</i></h2>
+    <p>The things people ask before they pay for anything.</p>
+    <div class="faq">
+      <details><summary>Will you ever lock a chapter behind Pro?</summary><p>No. Every chapter, simulation and test stays free. Pro only adds things that cost money to run, like AI hints, or extras like certificates.</p></details>
+      <details><summary>Do I need an account?</summary><p>No. You can learn as a guest, and your progress stays in this browser. Signing in, which is free, only carries your progress to your other devices.</p></details>
+      <details><summary>Why are there lower prices by region?</summary><p>$8 is a lot more in some countries than in others. Checkout will show a lower price where you live, and students pay half.</p></details>
+      <details><summary>Who handles payment and tax?</summary><p>A payment company (a "merchant of record") is the seller on your receipt. It takes the card, handles sales tax and VAT in every country, and sends the invoice. We never see your card.</p></details>
+      <details><summary>Can I cancel?</summary><p>Any time, in one click. You keep Pro until the end of the period you paid for, and your progress stays with you either way.</p></details>
+      <details><summary>When does Pro open?</summary><p>After sign-in and AI hints are live. Founders spots open the same day.</p></details>
+    </div>
+  </section>
+</main>
+<script>
+// The tulip in the Pro plan: the same 7×7 mark as the logo, drawn as tiles that fill in on hover.
+(() => {
+  const C = { p: "#ff6fb5", D: "#d23f87", Y: "#ffd21f", g: "#3faa52", G: "#24803c" };
+  const rows = ".p.p.p.,ppDpDpp,ppYYYpp,.ppYpp.,g..G..g,gg.G.gg,.ggGgg.".split(",");
+  const el = document.querySelector(".bloom"); let n = 0;
+  rows.forEach((r) => [...r].forEach((ch) => { const i = document.createElement("i"); if (ch !== ".") { i.style.setProperty("--c", C[ch]); i.style.setProperty("--n", n++); } else i.style.visibility = "hidden"; el.append(i); }));
+})();
+// Monthly / yearly: swap every figure that has both.
+(() => {
+  const bs = document.querySelectorAll("[data-bill]");
+  const set = (k) => { bs.forEach((b) => b.setAttribute("aria-pressed", b.dataset.bill === k)); document.querySelectorAll("[data-m]").forEach((e) => (e.textContent = e.dataset[k])); };
+  bs.forEach((b) => b.addEventListener("click", () => set(b.dataset.bill)));
+})();
+</script>
+</body>
+</html>
