@@ -24,3 +24,21 @@ Front matter: `id`, `num`, `title`, `tagline`, `world` (3D world id, optional), 
 | ` ```project ` | A real-world project: `title:`, optional `client:` and `skills:` (comma-separated), then `---brief`, `---why` (where this shows up in real software), `---milestones` (a `- ` list the learner ticks off) and optional `---stretch` ideas. The exercises after it in the same step are its parts. |
 
 Everything the learner finishes joins a spaced-review deck (Leitner boxes: 1, 3, 7, 16, 35 days).
+
+## Puzzles (puzzle mode)
+
+` ```puzzle ` blocks don't appear in the lesson. They make up the chapter's **puzzle mode** (`#N/puzzle`, and
+`#puzzles` lists every one in the track): no prose, just pictures to touch, checked in the page and scored with
+1–3 stars (kept in `S.stars`). Header lines: `kind:`, `title:`, then kind-specific fields; parts: `---prompt`
+and `---why` (shown once solved). The build proves each puzzle is solvable as written.
+
+| `kind` | What the learner does | Needs |
+|---|---|---|
+| `swap` | Swaps cells until they match the goal. 3 stars at the fewest swaps. | `cells:`, optional `goal:` (default sorted), `adjacent: yes` for neighbours only, `par:` (checked by search) |
+| `fix` | Taps every wrong cell in a picture. | `---grid`, `wrong: r,c …` (or column numbers for one row), optional `---fixed` (checked against `wrong`) |
+| `frame` | Picks which picture comes next. | `---grid` (now), then two or more `---option` grids; the first is right |
+| `order` | Taps steps into the order they happen. The order must be the only sensible one. | `---items`, one per line, in order |
+| `target` | Drags sliders until a value lands on the target. | `expr:` (arithmetic valid in both Python and JS), `target:`, `tol:`, `output:`, `unit:`, and `---sliders` lines `name \| label \| min \| max \| step \| start` |
+
+Grid cells are space-separated: `.` empty, `#` filled (blue), `*` active (red), `o` done (green), `+` focus (amber);
+anything else is shown as text.

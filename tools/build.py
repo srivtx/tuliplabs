@@ -158,6 +158,90 @@ def parse_recall(body):
     return {"q": md(m.group(1).strip()), "a": md(m.group(2).strip())}
 
 
+def parse_grid(text):
+    """Rows of space-separated cells. `.` empty, `#` filled, `*` active, `o` done, `+` focus, anything else is shown as text."""
+    return [row.split() for row in text.split("\n") if row.strip()]
+
+
+def min_swaps(cells, goal, adjacent):
+    """Fewest swaps (of neighbours only, if `adjacent`) turning cells into goal, by breadth-first search."""
+    start, goal = tuple(cells), tuple(goal)
+    seen, frontier, d = {start}, [start], 0
+    while frontier:
+        if goal in frontier:
+            return d
+        nxt = []
+        for s in frontier:
+            for i in range(len(s)):
+                for j in ([i + 1] if adjacent else range(i + 1, len(s))):
+                    if j < len(s):
+                        t = list(s)
+                        t[i], t[j] = t[j], t[i]
+                        t = tuple(t)
+                        if t not in seen:
+                            seen.add(t)
+                            nxt.append(t)
+        frontier, d = nxt, d + 1
+    return None
+
+
+def parse_puzzle(raw, ch, path, n):
+    """A puzzle: solved by touching, checked in the browser. The build proves each one is solvable as written."""
+    f, rest = header_fields(raw)
+    parts = split_parts(rest, "prompt")
+    kind = f.get("kind", "")
+    where = f"{path}: puzzle {n} ({f.get('title', kind)})"
+    p = {"type": "puzzle", "kind": kind, "title": f.get("title", "Puzzle"),
+         "prompt": md(parts.get("prompt", [""])[0]), "why": md(parts.get("why", [""])[0]) if parts.get("why") else ""}
+    if kind == "swap":
+        cells = f["cells"].split()
+        goal = f["goal"].split() if "goal" in f else sorted(cells, key=lambda x: (float(x) if re.match(r"^-?\d+(\.\d+)?$", x) else 0, x))
+        adjacent = f.get("adjacent", "no") == "yes"
+        best = min_swaps(cells, goal, adjacent) if len(cells) <= 9 else None
+        assert sorted(cells) == sorted(goal), f"{where}: goal must use the same cells"
+        assert best is not None and best > 0, f"{where}: already solved or unsolvable"
+        assert int(f["par"]) == best, f"{where}: par is {f['par']} but the fewest swaps is {best}"
+        p.update(cells=cells, goal=goal, adjacent=adjacent, par=best)
+    elif kind == "fix":
+        grid = parse_grid(parts["grid"][0])
+        wrong = [[int(x) for x in w.split(",")] if "," in w else [0, int(w)] for w in f["wrong"].split()]
+        for r, c in wrong:
+            assert r < len(grid) and c < len(grid[r]), f"{where}: wrong cell {r},{c} is outside the grid"
+        if parts.get("fixed"):
+            fixed = parse_grid(parts["fixed"][0])
+            diff = sorted([r, c] for r in range(len(grid)) for c in range(len(grid[r])) if grid[r][c] != fixed[r][c])
+            assert diff == sorted(wrong), f"{where}: wrong cells {sorted(wrong)} don't match the fixed grid {diff}"
+            p["fixed"] = fixed
+        assert wrong, f"{where}: needs wrong cells"
+        p.update(grid=grid, wrong=wrong)
+    elif kind == "frame":
+        opts = [parse_grid(o) for o in parts.get("option", []) if o.strip()]
+        assert len(opts) >= 2, f"{where}: needs at least two ---option grids (the first is right)"
+        assert len({str(o) for o in opts}) == len(opts), f"{where}: options must differ"
+        p.update(grid=parse_grid(parts["grid"][0]), options=opts)
+    elif kind == "order":
+        items = [inline(x.strip()) for x in parts["items"][0].split("\n") if x.strip()]
+        assert len(items) >= 3 and len(set(items)) == len(items), f"{where}: needs 3+ distinct ---items"
+        p["items"] = items
+    elif kind == "target":
+        sliders = []
+        for line in parts["sliders"][0].split("\n"):
+            if line.strip():
+                name, label, lo, hi, step, start = [x.strip() for x in line.split("|")]
+                sliders.append({"name": name, "label": label, "min": float(lo), "max": float(hi), "step": float(step), "start": float(start)})
+        target, tol, expr = float(f["target"]), float(f.get("tol", 0)), f["expr"]
+        val = lambda vals: eval(expr, {"__builtins__": {}}, dict(zip([s["name"] for s in sliders], vals)))
+        assert abs(val([s["start"] for s in sliders]) - target) > tol, f"{where}: the starting sliders already hit the target"
+        import itertools
+        axes = [[s["min"] + k * s["step"] for k in range(int(round((s["max"] - s["min"]) / s["step"])) + 1)] for s in sliders]
+        assert any(abs(val(v) - target) <= tol for v in itertools.product(*axes)), f"{where}: no slider setting hits the target"
+        p.update(sliders=sliders, target=target, tol=tol, expr=expr, unit=f.get("unit", ""), output=f.get("output", "value"))
+    else:
+        raise AssertionError(f"{where}: unknown puzzle kind '{kind}'")
+    p["id"] = f"{ch['id']}-pz-{f.get('id', slug(p['title']))}"
+    return p
+
+
 def parse_chapter(path, track):
     text = open(path, encoding="utf-8").read()
     m = re.match(r"(?s)^---\n(.*?)\n---\n(.*)$", text)
@@ -180,7 +264,7 @@ def parse_chapter(path, track):
         "minutes": int(meta.get("minutes", 40)), "book": meta.get("book", ""),
         "part": meta.get("part", ""),
         "goals": [inline(g) for g in meta.get("goals", [])],
-        "prelude": "", "sections": [],
+        "prelude": "", "sections": [], "puzzles": [],
     }
     body = m.group(2)
     section = None
@@ -287,6 +371,8 @@ def parse_chapter(path, track):
                 assert blk["milestones"], f"{path}: project '{blk['title']}' has no ---milestones"
                 blk["id"] = f"{ch['id']}-proj-{slug(blk['title'])}"
                 add(blk)
+            elif kind == "puzzle":
+                ch["puzzles"].append(parse_puzzle(raw, ch, path, len(ch["puzzles"]) + 1))
             else:
                 raise AssertionError(f"{path}:{i+1}: unknown block {kind}")
         else:
