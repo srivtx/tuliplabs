@@ -103,9 +103,21 @@
     const id = all.find((x) => !done[x]) || all[0];
     next = { id, c: COURSES.find((c) => c.ids.includes(id)) };
   }
-  const r = $("#resume");
-  r.href = "studio.html#" + at(next.id);
-  r.innerHTML = `<span class="r-k">${fin ? "Carry on" : "Start here"}</span><span class="r-t">${title[next.id]}</span><span class="r-c">${next.c.title} · level ${next.c.ids.indexOf(next.id) + 1}</span><i class="r-a" aria-hidden="true">→</i>`;
+  // the next level's own target, drawn live from its HTML and answer CSS, the same way the studio draws it
+  const lv = levels.find((l) => l.id === next.id);
+  const answer = lv.css ? lv.css.split("\n").filter((l) => !l.startsWith("-")).map((l) => (l.startsWith("+") ? l.slice(1) : l)).join("\n") : lv.answer;
+  const [w, h] = lv.devices ? lv.devices.desktop : [lv.w || 360, lv.h || 240];
+  const nx = $("#next");
+  nx.href = "studio.html#" + at(next.id);
+  nx.innerHTML = `<span class="nx-shot" style="aspect-ratio:${w}/${h}"><iframe sandbox="" tabindex="-1" aria-hidden="true" title="" width="${w}" height="${h}"></iframe></span>
+    <span class="nx-k"><em>${fin ? "Carry on" : "Start here"}</em> · ${next.c.title}, level ${next.c.ids.indexOf(next.id) + 1}</span>
+    <span class="nx-t">${title[next.id]}</span>
+    <span class="nx-b">${lv.brief}</span>`;
+  const shot = nx.querySelector(".nx-shot"), frame = shot.firstChild;
+  frame.srcdoc = `<!doctype html><html><head><style>${window.DZ.base(w, h)}${answer}</style></head><body>${lv.html}</body></html>`;
+  const fit = () => { frame.style.scale = shot.clientWidth / w; };
+  fit();
+  new ResizeObserver(fit).observe(shot);
   $("#cl-n").innerHTML = `${WORDS[COURSES.length] || COURSES.length} courses <span>·</span> ${total} levels <span>·</span> <b>${fin}</b> matched`;
   $("#dz-count").textContent = `${fin} of ${total} matched`;
 })();
