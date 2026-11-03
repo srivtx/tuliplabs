@@ -272,3 +272,12 @@ window.TLMARK = (() => {
     try { sessionStorage.removeItem(KEY); } catch (err) { /* private mode */ }
   });
 })();
+
+// Sign in and sync live in their own file; it does nothing until sign-in is switched on.
+(() => {
+  const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
+  const s = document.createElement("script");
+  s.src = root + "learn/account.js";
+  s.defer = true;
+  document.head.append(s);
+})();
