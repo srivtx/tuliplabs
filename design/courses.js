@@ -86,7 +86,7 @@
       <span class="cc-meta"><em>Course ${String(i + 1).padStart(2, "0")}</em> · ${c.ids.length} levels${c.isNew ? '<span class="new">new</span>' : ""}</span>
       <span class="cc-t">${c.title}</span>
       <span class="cc-b">${c.blurb}</span>
-      <span class="cc-p">${pips(c.ids)}<span${got === c.ids.length ? ' class="all"' : ""}>${state}</span></span>
+      <span class="cc-p">${pips(c.ids)}<span class="cc-s${got === c.ids.length ? " all" : ""}">${state}${got < c.ids.length ? ` · <b>${title[first]}</b>` : ""}</span></span>
     </a>`;
   });
   // the eighth tile, so the grid comes out even: what every level asks of you

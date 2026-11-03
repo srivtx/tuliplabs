@@ -51,9 +51,13 @@ a.cc:hover .cc-t{text-decoration:underline;text-underline-offset:3px}
 /* a pip per level; finished ones take the course's ink */
 .cc-p{display:flex;align-items:center;gap:10px;margin-top:auto;padding-top:14px;font:11.5px var(--f-mono);color:var(--muted)}
 .pips{display:flex;gap:3px}
-.pips i{width:14px;height:6px;border-radius:2px;background:var(--line)}
+.pips i{width:10px;height:6px;border-radius:2px;background:var(--line)}
 .pips i.on{background:var(--ac)}
-.cc-p .all{color:var(--ok,#3faa52)}
+.pips{flex:none}
+/* where a click takes you: the state, then the level it opens */
+.cc-s{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.cc-s b{font-weight:400;color:var(--ink)}
+.cc-s.all{color:var(--ok,#3faa52)}
 .cc-how{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.5}
 .cc-how li+li{margin-top:3px}
 .cc-how li::marker{font:600 11px var(--f-mono);color:var(--pink)}
