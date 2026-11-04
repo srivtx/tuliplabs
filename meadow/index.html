@@ -65,6 +65,7 @@ body.carrying-kept .letgo{scale:1;opacity:.85;pointer-events:auto;background:col
   box-shadow:0 8px 24px -10px rgba(0,0,0,.45);transition:opacity .4s,translate .4s cubic-bezier(.2,.8,.3,1)}
 .toast.out{opacity:0;translate:-50% 10px;pointer-events:none}
 .toast button{background:var(--ground);color:var(--ink);padding:4px 12px;border-radius:999px;font-weight:600}
+#keep{min-width:calc(7ch + 36px)}
 .kept{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .kept .kl{opacity:.65;font-size:11px;margin-right:2px}
 .keptrow{display:flex;gap:6px;flex-wrap:wrap}
@@ -230,7 +231,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 
 <div class="tag" id="tag"><b>Meadow</b><a href="../">Tulip Labs</a><button id="home" hidden>← Back to the meadow</button><span id="hint">Drag to wander. Scroll to go deeper. Type a letter to plant it. Click a mark to pick it.</span></div>
 
-<div class="foot">
+<div class="foot" id="foot">
   <div class="place"><strong id="place">Meadow</strong><small id="scale"></small><small class="symline"> · <button class="word" id="symword" aria-haspopup="true" aria-expanded="false" title="How much of the meadow grows mirror-shaped">half mirrored</button></small><div class="modepop" id="sympop" hidden role="menu" aria-label="How much of the meadow grows mirrored"></div></div>
   <div class="lenses" id="lenses" role="group" aria-label="Look at the field as"></div>
   <div class="right"><div class="shelf" id="shelf" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span><button class="plant" id="plant">Plant a letter</button></div>
@@ -635,7 +636,7 @@ let lens=0,lensPrev=0,lensAt=-9,lensO=[0,0];
 let growAt=performance.now()/1000,growO=[0,0],growK=1.9,prevKeyMs=0;
 // the field grows back from one spot outward; k is how fast the wave spreads
 const regrow=(o,k=1.9)=>{growAt=performance.now()/1000;growO=o;growK=k};
-let letters="",hover=null,tiles=[],pointer={x:-1e4,y:-1e4,in:false};
+let letters="",hover=null,hoverP=[-1e4,-1e4],tiles=[],pointer={x:-1e4,y:-1e4,in:false};
 let shelf=[];try{shelf=JSON.parse(localStorage.getItem("meadow-shelf")||"[]")}catch(e){}
 
 function resize(){dpr=Math.min(devicePixelRatio||1,sharp);W=Math.round(innerWidth*dpr);H=Math.round(innerHeight*dpr);field.width=W;field.height=H;
@@ -658,7 +659,7 @@ function frame(ms){
   const i0=Math.floor((cam.x-W/2/sc)/sp)-1,i1=Math.ceil((cam.x+W/2/sc)/sp)+1,j0=Math.floor((cam.y-H/2/sc)/sp)-1,j1=Math.ceil((cam.y+H/2/sc)/sp)+1;
   const size=base*.86,born=sstep(.08,.86,f),speed=Math.hypot(cam.vx,cam.vy)*sc;
   const reach=Math.hypot(W,H)*.6,pX=pointer.x*dpr,pY=pointer.y*dpr,bulge=base*1.5;
-  let n=0;tiles.length=0;hover=null;let bestD=1e18;const fresh=[],freshAt=[];
+  let n=0;tiles.length=0;hover=null;hoverP=[pointer.x,pointer.y];let bestD=1e18;const fresh=[],freshAt=[];
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
     if(n>=R.MAX)break;
     const even=!(i&1)&&!(j&1);if(!even&&born<.02)continue;
@@ -778,7 +779,10 @@ field.addEventListener("pointermove",(e)=>{pointer.x=e.clientX;pointer.y=e.clien
   drag.x=e.clientX;drag.y=e.clientY;drag.t=now});
 function lift(e){const had=pts.size;pts.delete(e.pointerId);field.classList.remove("dragging");
   if(had===1&&drag){const still=performance.now()-drag.t>120;if(still)cam.vx=cam.vy=0;drag=null;
-    if(moved<7){pointer.x=e.clientX;pointer.y=e.clientY;const m=hover||nearest(e.clientX,e.clientY);if(m)openStudio(m,onField(m))}}
+    if(moved<7){pointer.x=e.clientX;pointer.y=e.clientY;
+      // the mark under the pointer as the last frame saw it, unless the pointer has moved since: a quick tap or a click
+      // right after the editor closes would otherwise open whichever mark was hovered before
+      const fresh=Math.hypot(e.clientX-hoverP[0],e.clientY-hoverP[1])<4,m=(fresh&&hover)||nearest(e.clientX,e.clientY);if(m)openStudio(m,onField(m))}}
   if(pts.size<2)pinch=0}
 field.addEventListener("pointerup",lift);field.addEventListener("pointercancel",lift);
 field.addEventListener("pointerleave",()=>{pointer.in=false});
@@ -908,7 +912,7 @@ function showTray(i){if(i===trayAt||drop)return;trayAt=i;const p=PAL[i],el=$("tr
   [...$("swatches").children].forEach((b,k)=>b.classList.toggle("shown",k===i))}
 function setRole(r,h){if(!cur)return;const now=r==="gr"?groundOf(cur):r==="ink"?inkOf(cur):accOf(cur);if(now===h)return;remember();cur[r]=h;told();drawStudio();warnRead()}
 function warnRead(){const s=$("say"),low=contrast(inkOf(cur),groundOf(cur))<1.6,t="The ink barely shows on this ground.";if(low)s.textContent=t;else if(s.textContent===t)s.textContent=""}
-function openStudio(m,from){ftag.classList.add("out");
+function openStudio(m,from){ftag.classList.add("out");pointer.in=false;hover=null;$("tag").inert=$("foot").inert=true;
   if(!m.ok)tend([m]);
   cur={...m,g:genes(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
@@ -929,7 +933,7 @@ let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
 function closeStudio(){$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
-  $("studio").hidden=true;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
+  $("studio").hidden=true;$("tag").inert=$("foot").inert=false;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 let keptNow=false;
 function leave(){closeStudio();
   if(keptNow){keptNow=false;let seen=false;try{seen=!!localStorage.getItem("meadow-shelf-told");localStorage.setItem("meadow-shelf-told","1")}catch(e){}
@@ -1050,6 +1054,9 @@ const leant=()=>lw.some(v=>v>.002);
    a twist or a pinwheel turns it (it keeps its turns but loses its mirrors); a bend or a heavy end, a fan, bars or a
    pointed frame leave it one mirror at most; both together leave it free. The ghost above always steps one rung
    toward balance, the ghost below one rung toward motion, so either way can be walked as far as you like */
+/* a hexagon frame, unlike the shield, the drop and the arch, is mirrored six ways (every 30°, through its corners
+   and its sides), so it keeps any petal line that falls on one of those and leaves the mark mirrored */
+const hexOf=(g)=>{if(g[14]<=.7||g[24]<=.06)return 0;const u=clamp((g[24]-.12)/.88)*3;if(u>=1)return 0;const t=clamp((u-.3)/.4);return 1-t*t*(3-2*t)};
 const SYMW=.11; // within this of the middle a twist doesn't show, so the mark is mirrored
 /* A bend, a heavy end, a stretch, a fan or bars each keep a mirror only along their own axis: a bend along the
    level line, the others along the upright one. The petals keep theirs only where a petal or a gap lies, so a bent
@@ -1061,7 +1068,7 @@ function symOf(m){const g=m.g,n=m.s>.5?m.n1:m.n0;
   const turn=Math.max(Math.max(Math.abs(g[6]-.5)-SYMW,0)*2.5,g[16]>.6?1:0), // twisted or hooked one way round
     bd=Math.abs(g[21]-.5)>.02,hv=Math.abs(g[22]-.5)>.02,
     bent=Math.max(Math.abs(g[21]-.5),Math.abs(g[22]-.5))*2,                  // leaned or heavier at one end
-    kind=Math.max(g[17]>.6?1:0,g[18]>.6?1:0,g[14]>.74&&g[24]>.06?.6:0),     // a fan, bars or a pointed frame
+    kind=Math.max(g[17]>.6?1:0,g[18]>.6?1:0,g[14]>.74&&g[24]>.06&&hexOf(g)<.5?.6:0), // a fan, bars or a pointed frame
     wide=Math.abs(g[19]-.5)*2;
   let mirrors;
   if(turn>.02||(bd&&(hv||kind)))mirrors=0;                    // two axes that disagree leave none
@@ -1072,18 +1079,19 @@ function symOf(m){const g=m.g,n=m.s>.5?m.n1:m.n0;
   const turns=bent>.04||kind?1:wide>.04?(n%2?1:2):n;
   return {n,turn,bent,kind,wide,mirrors,turns,free:!mirrors&&turns<2}}
 // the axis a mark's lean or kind needs its petals on, if it has one
-const axisOf=(g)=>Math.abs(g[21]-.5)>.02?0:Math.abs(g[22]-.5)>.02||g[17]>.6||g[18]>.6||(g[14]>.74&&g[24]>.06)?Math.PI/2:null;
+const axisOf=(g)=>Math.abs(g[21]-.5)>.02?0:Math.abs(g[22]-.5)>.02||g[17]>.6||g[18]>.6||(g[14]>.74&&g[24]>.06&&hexOf(g)<.5)?Math.PI/2:null;
 /* where the mark lands for each kind of symmetry, changing as little as it can: what it already has is kept
    (its twist, its lean, its fan), what's missing is added at a strength that clearly shows, and what breaks the
    choice is taken off. A mark asked for one mirror has its petals turned the little it takes to meet the axis */
 function symTo(kind,m){const g=Float32Array.from(m.g),n=m.s>.5?m.n1:m.n0,sg=Math.sign(g[6]-.5)||1;
   const unturn=()=>{if(Math.abs(g[6]-.5)>=SYMW*.9)g[6]=.5;if(g[16]>.5)g[16]=.38},
     twist=()=>{if(Math.abs(g[6]-.5)<.27&&g[16]<.6)g[6]=.5+sg*.34},
-    unlean=()=>{g[21]=g[22]=.5},unkind=()=>{if(g[17]>.5)g[17]=.38;if(g[18]>.5)g[18]=.38;if(g[14]>.7&&g[24]>.002)g[24]=0},
+    unlean=()=>{g[21]=g[22]=.5},unkind=()=>{if(g[17]>.5)g[17]=.38;if(g[18]>.5)g[18]=.38;if(g[14]>.7&&g[24]>.002&&hexOf(g)<.5)g[24]=0},
     leans=()=>Math.abs(g[21]-.5)>.02||Math.abs(g[22]-.5)>.02,
     lean=(any)=>{if(!leans()&&(any||axisOf(g)===null))g[22]=.5+(Math.sign(g[22]-.5)||1)*.36};
   if(kind==="mirrored"){unturn();unlean();unkind();if(Math.abs(g[19]-.5)>.02)alignTo(g,n,n%2?[0,Math.PI/2]:[0]);
-    else if(g[14]>.69&&g[12]>.47)alignTo(g,n,[0,Math.PI/4,Math.PI/2,Math.PI*.75])} // a square badge mirrors only on its own four lines
+    else if(hexOf(g)>.5){if(g[24]>.2)g[24]=.16;alignTo(g,n,[0,1,2,3,4,5].map(k=>k*Math.PI/6))} // a hexagon keeps its six
+    else if(g[14]>.69&&g[12]>.47&&!(g[14]>.7&&g[24]>.06))alignTo(g,n,[0,Math.PI/4,Math.PI/2,Math.PI*.75])} // a square badge mirrors only on its own four lines
   else if(kind==="one"){unturn();
     if(Math.abs(g[21]-.5)>.02&&(Math.abs(g[22]-.5)>.02||axisOf({...g,21:.5})!==null))g[21]=.5; // a bend and an upright axis disagree: the bend goes
     lean();alignTo(g,n,[axisOf(g)]);if(scan({...m,g}).mirrors>1&&!leans())g[22]=.86} // bars level and upright keep two: a heavy end leaves one
@@ -1149,6 +1157,7 @@ function drawBig(){
   const m=peek?{...cur,g:peek.g}:leant()?mix(lw):cur;
   if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal,cur));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(tiny,0,0);
   if(mirOn())drawMirrors(m);else mirC.classList.remove("on");
+  if(tune&&tune.moved&&!peek)shapeWord(true); // the symmetry word follows a drag as it goes, not only when you let go
 }
 /* ---------- the mark's own symmetry ----------
    Which mirror lines a mark holds is worked out from how it's drawn: the petals offer a line through every petal and
@@ -1163,7 +1172,7 @@ function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,key=Array.from(g,v=>v.toFixed(3)
   const PI=Math.PI,near=(th,ax)=>{const d=Math.abs(((th-ax)%PI+PI)%PI);return Math.min(d,PI-d)<.01};
   const tw=Math.max(Math.abs(g[6]-.5)-SYMW,0),spin=ss(.5,.85,g[16]),fan=ss(.5,.85,g[17]),stk=ss(.5,.85,g[18]),
     bd=Math.abs(g[21]-.5),hv=Math.abs(g[22]-.5),wd=Math.abs(g[19]-.5),frm=g[14]>.7?ss(0,.12,g[24]):0,
-    sqb=ss(.67,.73,g[14])*ss(.47,.53,g[12]),mid=Math.min(m.s,1-m.s);
+    sqb=ss(.67,.73,g[14])*ss(.47,.53,g[12])*(1-frm),mid=Math.min(m.s,1-m.s),hx=hexOf(g);
   // what's left of every line once the twist, a pinwheel or a half-made petal count has had its way
   const all=clamp(1-tw/.025)*clamp(1-spin/.12);
   // a mark melting between two petal counts keeps only the lines both counts share
@@ -1174,12 +1183,13 @@ function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,key=Array.from(g,v=>v.toFixed(3)
   const lines=[];
   for(const th of cand){const up=near(th,PI/2),lv=near(th,0);let al=all;
     if(!lv)al*=clamp(1-bd/.025);                                    // a bend keeps the level line
-    if(!up)al*=clamp(1-hv/.025)*clamp(1-fan/.12)*clamp(1-stk/.12)*clamp(1-frm/.2); // the rest keep the upright one
+    const q6=((th%(PI/6))+PI/6)%(PI/6),six=Math.min(q6,PI/6-q6)<.01; // on one of the hexagon's lines, every 30°
+    if(!up)al*=clamp(1-hv/.025)*clamp(1-fan/.12)*clamp(1-stk/.12)*clamp(1-frm*(six?1-hx:1)/.2); // the rest keep the upright one
     if(!up&&!lv)al*=clamp(1-wd/.025);                               // a stretch keeps both
     if(stk>.01&&lv)al*=clamp(1-Math.abs(g[1]-.5)/.02*stk);          // chevrons tip the bars off the level line
     if(sqb>.01){const q=((th%(PI/4))+PI/4)%(PI/4);if(Math.min(q,PI/4-q)>.01)al*=clamp(1-sqb/.15)} // a square badge keeps its four
     if(al>.01)lines.push({th,al})}
-  let turns=bd>.02||hv>.02||fan>.01||stk>.01||frm>.01?1:wd>.02?(n%2?1:2):sqb>.1?gcd(n,4):n;if(mid>.01&&m.n0!==m.n1)turns=gcd(turns,n===m.n0?m.n1:m.n0);
+  let turns=bd>.02||hv>.02||fan>.01||stk>.01||(frm>.01&&hx<.99)?1:wd>.02?(n%2?1:2):sqb>.1?gcd(n,4):frm>.01?gcd(n,6):n;if(mid>.01&&m.n0!==m.n1)turns=gcd(turns,n===m.n0?m.n1:m.n0);
   if(letters&&lines.length+turns>1){ // fold the drawn mark over each line and turn it, and keep only what holds
     paint(m,SP,0,{i:K("#000000"),a:K("#000000")});scx.clearRect(0,0,SP,SP);scx.drawImage(tiny,0,0);
     const px=scx.getImageData(0,0,SP,SP).data;let a=new Float32Array(SP*SP);for(let i=0;i<SP*SP;i++)a[i]=px[i*4+3]/255;
