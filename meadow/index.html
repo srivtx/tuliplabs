@@ -66,6 +66,10 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .ghost.fresh{opacity:0;transform:scale(.4)}
 @keyframes drift{0%,100%{translate:0 0}50%{translate:0 -5px}}
 @media (prefers-reduced-motion:reduce){.ghost{animation:none;transition:none}}
+/* unfolding: the mark pulls back onto a sheet */
+#poster{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.stage.unfolded{overflow:hidden}
+.tunehint button[aria-pressed=true]{font-weight:600;text-decoration-thickness:2px}
 .sheet{border-left:1px solid color-mix(in srgb,var(--ink) 40%,transparent);padding:26px max(16px,env(safe-area-inset-right,0px)) 26px 24px;display:flex;flex-direction:column;gap:20px;min-width:0;overflow:auto}
 .back{align-self:flex-start;opacity:.8}.back:hover{opacity:1}
 .latin{font-family:var(--f-serif);font-style:italic;font-size:clamp(32px,3.4vw,46px);line-height:1;margin:0;text-wrap:balance}
@@ -133,7 +137,8 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
   <div class="stage">
     <canvas id="big" width="900" height="900" aria-label="Your mark. Drag sideways to twist it, up and down to thicken it."></canvas>
     <div id="halo" aria-label="Ways your mark could grow"></div>
-    <p class="tunehint"><span id="leanhint">Lean toward a ghost to see it, click to become it.</span> Drag the mark to twist and thicken. Petals: <button id="fewer">fewer</button> / <button id="more">more</button><span id="undoWrap" hidden> · <button id="undo">step back</button></span></p>
+    <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
+    <p class="tunehint"><span id="markhint"><span id="leanhint">Lean toward a ghost to see it, click to become it.</span> Drag the mark to twist and thicken. Petals: <button id="fewer">fewer</button> / <button id="more">more</button> · Scroll out, or <button id="unfold">make a poster</button></span><span id="posterhint" hidden>Scroll for more layers, or back to peel them off. Drag the mark and its echoes follow. <span id="fmts"></span> · <button id="layer">another layer</button> · <button id="fold">back to the mark</button></span><span id="undoWrap" hidden> · <button id="undo">step back</button></span></p>
   </div>
   <aside class="sheet">
     <button class="back" id="back">← Back to the field</button>
@@ -565,7 +570,7 @@ async function plant(str){
 }
 addEventListener("keydown",(e)=>{
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.key==="Escape")leave();else if(e.key==="Backspace"){e.preventDefault();stepBack()}return}
+  if(!$("studio").hidden){if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -592,14 +597,15 @@ function latin(m){const n=m.s>.5?m.n1:m.n0;let name=PAL[biome(m.x,m.y).id].genus
 function drawStudio(){
   if(!cur)return;theme(cur.pal);const c=colours(cur.pal,cur);
   drawBig();drawGhosts();
-  [16,24,32,48,64].forEach((s)=>copyTo($("sz"+s),s,lens===0||lens===1?lens:lens,c));
-  copyTo($("wPaper"),56,0,{i:K("#111111"),a:K("#111111")});
-  copyTo($("wNight"),56,0,{i:K("#f5f5f5"),a:K("#f5f5f5")});
+  [16,24,32,48,64].forEach((s)=>copyTo($("sz"+s),s,lens,c));
+  copyTo($("wPaper"),56,lens,{i:K("#111111"),a:K("#111111")});
+  copyTo($("wNight"),56,lens,{i:K("#f5f5f5"),a:K("#f5f5f5")});
   // the phone icon gets its own ground, the way a home screen shows it
   const app=$("wApp"),r=devicePixelRatio||1,px=Math.round(46*r);app.width=app.height=px;app.style.width=app.style.height="46px";const g=app.getContext("2d");
   g.fillStyle=PAL[cur.pal].g;g.fillRect(0,0,px,px);paint(cur,Math.round(px*.82),lens,c);g.drawImage(tiny,px*.09,px*.09);
-  copyTo($("wTab"),16,0,c);
+  copyTo($("wTab"),16,lens,c);
   [...$("swatches").children].forEach((b,i)=>b.setAttribute("aria-pressed",i===cur.pal));
+  if(unf>0)prender();
 }
 (function buildSheet(){
   $("sizes").innerHTML=[16,24,32,48,64].map(s=>`<figure><canvas id="sz${s}"></canvas><figcaption>${s}</figcaption></figure>`).join("");
@@ -615,13 +621,13 @@ function openStudio(m){
   $("keep").textContent="Keep it";
   cur.at="#at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)+(letters?"-"+encodeURIComponent(letters):"");
   try{history.pushState({mark:1},"",cur.at)}catch(e){}
-  hist=[];leanK=tgtK=-1;leanW=tgtW=0;pending=-1;told();
+  hist=[];leanK=tgtK=-1;leanW=tgtW=0;pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
   layoutHalo();makeGhosts();drawStudio();
 }
 let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
-function closeStudio(){$("studio").hidden=true;cur=null;drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
+function closeStudio(){$("studio").hidden=true;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 function leave(){closeStudio();if(history.state&&history.state.mark)history.back();else try{history.replaceState(null,"",location.pathname)}catch(e){}}
 addEventListener("popstate",()=>{if(!location.hash.startsWith("#at-")&&!$("studio").hidden)closeStudio()});
 $("back").onclick=leave;
@@ -643,7 +649,7 @@ function petals(dir){const n=cur.s>.5?cur.n1:cur.n0,i=clamp(SYM.indexOf(n)+dir,0
    Move toward one and the mark melts into it; click and it becomes it, and a new ring grows.
    A ghost is stored as a change, not a shape, so twisting or recolouring the mark carries them along. */
 const GN=8,halo=$("halo"),stage=big.parentElement;
-let ghosts=[],hist=[],leanK=-1,leanW=0,tgtK=-1,tgtW=0,pending=-1,leaning=false,leanMs=0,gLay=null;
+let gen=0,ghosts=[],hist=[],leanK=-1,leanW=0,tgtK=-1,tgtW=0,pending=-1,leaning=false,leanMs=0,gLay=null;
 const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15];
 const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74}; // traits that are either there or not
 function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
@@ -671,7 +677,7 @@ function makeGhosts(){
     list=list.map((G,i)=>{if(!weak(rs[i]))return G;again=true;const n=roll(G.far);if(!G.far||!pure)n.pet=pure?G.pet:0;return n});
     if(!again)break;
   }
-  ghosts=list;
+  ghosts=list;gen++;
   [...halo.children].forEach((b,i)=>{b.classList.add("fresh");setTimeout(()=>b.classList.remove("fresh"),calm?0:90+i*45)});
 }
 (function buildHalo(){for(let i=0;i<GN;i++){const b=document.createElement("button");b.className="ghost";b.setAttribute("aria-label","Become this one");
@@ -706,7 +712,7 @@ function leanStep(ms){
 }
 function settle(){leanK=tgtK=-1;leanW=tgtW=0;pending=-1;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
 stage.addEventListener("pointermove",(e)=>{
-  if(tune||pending>=0||!gLay||e.pointerType!=="mouse")return;
+  if(tune||pending>=0||!gLay||unf>0||e.pointerType!=="mouse")return;
   const sr=stage.getBoundingClientRect(),x=e.clientX-sr.left,y=e.clientY-sr.top;let best=-1,bd=1e9;
   for(let i=0;i<GN;i++){const a=-Math.PI/2+i*Math.PI*2/GN,d=Math.hypot(x-gLay.cx-gLay.R*Math.cos(a),y-gLay.cy-gLay.R*Math.sin(a));if(d<bd){bd=d;best=i}}
   const w=1-sstep(gLay.gs*.42,gLay.gs*1.3,bd);leanTo(w>.004?best:-1,w)});
@@ -725,9 +731,9 @@ function told(){const n=hist.length;$("latin").textContent=latin(cur);$("keep").
   const url=cur.at+(n||cur.dye.length||cur.edited?"&"+codeOf(cur):"");
   if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}}
 $("undo").onclick=stepBack;
-addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio()}});
+addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio();prender()}});
 $("fewer").onclick=()=>petals(-1);$("more").onclick=()=>petals(1);
-big.addEventListener("wheel",(e)=>{e.preventDefault();if(Math.abs(e.deltaY)>6)petals(e.deltaY>0?-1:1)},{passive:false});
+
 
 /* ---------- dye ----------
    Carry a colour from the swatches onto the mark and hold: it soaks out from where it lands, further the
@@ -750,7 +756,7 @@ function carry(b,j){
       const el=document.createElement("div");el.className="drop";el.style.background=dyeFor(j);document.body.append(el);drop.el=el;drop.h=dyeFor(j)}
     drop.x=e.clientX;drop.y=e.clientY;drop.el.style.translate=drop.x+"px "+drop.y+"px";
     const r=big.getBoundingClientRect(),px=(drop.x-r.left)/r.width*2-1,py=(drop.y-r.top)/r.height*2-1;
-    drop.in=Math.hypot(px,py)<.98;drop.el.classList.toggle("in",drop.in);
+    drop.in=unf<.01&&Math.hypot(px,py)<.98;drop.el.classList.toggle("in",drop.in);
     if(drop.in){
       if(!wet){remember();settle();wet={x:px,y:py,r:.14,h:drop.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();$("wash").hidden=false}
       else{wet.x=px;wet.y=py} // still wet, so it smears
@@ -785,6 +791,103 @@ function readCode(s){if(!/^[0-9a-z]{37}([0-9a-z]{6}[0-9a-f]{6}){0,2}$/.test(s))r
   const g=new Float32Array(16);for(let k=0;k<16;k++)g[k]=U36(s.substr(5+k*2,2));
   const dye=[];for(let o=37;o<s.length;o+=12)dye.push({x:U36(s.substr(o,2))*2-1,y:U36(s.substr(o+2,2))*2-1,r:U36(s.substr(o+4,2))*2,h:"#"+s.substr(o+6,6),w:0});
   return {pal,n0,n1,s:U36(s.substr(3,2)),g,dye}}
+
+/* ---------- unfolding ----------
+   Scroll out on the mark and it pulls back onto a sheet. Keep scrolling and layers arrive one at a time:
+   its name, echoes of itself, its kin, then the patch of meadow it grew in. Scroll back to peel them off.
+   Drag the mark about the sheet and the echoes trail after it, slower the further out they are. */
+const FMT=[["post",1080,1350],["story",1080,1920],["square",1080,1080],["poster",1600,2400]],EN=5;
+const pv=$("poster");
+let unf=0,unfT=0,unfOn=false,unfMs=0,unfIdle=0,fmt=0,pk="",pc=null,off=[0,0],pDrag=null,pgeo=null;
+const echo=Array.from({length:EN},()=>[0,0]);
+function snap(m,px,l,fix){paint(m,px,l,fix);const c=document.createElement("canvas");c.width=c.height=px;c.getContext("2d").drawImage(tiny,0,0);return c}
+function sheet(items,w,h,l,fix){ // many marks in one draw
+  tiny.width=w;tiny.height=h;const gl=T.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  const b=new Float32Array(items.length*T.STRIDE);items.forEach((it,k)=>put(b,k*T.STRIDE,it.x,it.y,it.s,it.r||0,1,it.m,l));
+  T.marks(b,items.length,w,h,[0,0],1,fix,false);
+  const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(tiny,0,0);return c}
+function pplan(){const [,Wp,Hp]=FMT[fmt],m=.06*Wp,det=.021*Wp,name=.074*Wp,kin=(Wp-2*m)/8*.64;
+  const top=m+det*2.4,bottom=name*1.3+det*2.2+kin*1.5,area=Hp-top-bottom-m,hs=Math.min(Wp*.58,area*.9);
+  return {Wp,Hp,m,det,name,kin,hs,hx:Wp/2,hy:top+area/2,kinY:Hp-m-det*2.2-name*1.15-kin*.62}}
+function pbuild(){
+  const key=codeOf(cur)+"/"+lens+"/"+fmt+"/"+gen;if(key===pk&&pc)return;pk=key;
+  const P=pplan(),c=colours(cur.pal,cur),bsz=Math.round(big.getBoundingClientRect().width*Math.min(devicePixelRatio||1,2));
+  pc={hero:snap(cur,Math.min(1400,Math.max(Math.round(P.hs),bsz)),lens,c),line:snap(cur,1100,1,c),field:null,pad:Math.round(P.Wp*.12)};
+  pc.kin=sheet(ghosts.map((G,i)=>({m:blend(G,1),x:P.m+(P.Wp-2*P.m)/8*(i+.5),y:P.kinY,s:P.kin})),P.Wp,P.Hp,lens,c);
+  const mine=pc;setTimeout(()=>{if(pc===mine&&cur){mine.field=pfield(P,mine.pad);prender()}},30);
+}
+function pfield(P,pad){ // its neighbours, as they grow round the spot it was found, with a gap where it stood
+  const cell=P.Wp/7,sp=cur.sp||.0125,ci=Math.ceil((P.Wp/2+pad)/cell)+1,cj=Math.ceil((P.Hp/2+pad)/cell)+1,items=[],raw=[];
+  for(let j=-cj;j<=cj;j++)for(let i=-ci;i<=ci;i++){if(!i&&!j)continue;const m=specimen(cur.x+i*sp,cur.y+j*sp);raw.push(m);
+    items.push({m,x:pad+P.hx+i*cell,y:pad+P.hy+j*cell,s:cell*.78})}
+  const need=raw.filter(m=>!m.ok);if(need.length)tend(need);
+  return sheet(items,P.Wp+pad*2,P.Hp+pad*2,lens,colours(cur.pal));
+}
+function fitText(g,t,font,size,max){g.font=font(size);const w=g.measureText(t).width;if(w>max){size*=max/w;g.font=font(size)}return size}
+function pdraw(g,P,a){
+  const C=PAL[cur.pal];g.save();g.beginPath();g.rect(0,0,P.Wp,P.Hp);g.clip();
+  g.globalAlpha=1;g.fillStyle=C.g;g.fillRect(0,0,P.Wp,P.Hp);
+  if(pc.field&&a.f>0){g.globalAlpha=a.f*.17;g.drawImage(pc.field,-pc.pad-off[0]*.12,-pc.pad-off[1]*.12)}
+  const tw=Math.sign(cur.g[6]-.5)||1;
+  for(let k=EN-1;k>=0&&a.e>0;k--){const sc=1+.42*(k+1)**1.25,r=(k+1)*.11*tw,x=P.hx+echo[k][0],y=P.hy+echo[k][1],h=P.hs*sc;
+    g.globalAlpha=a.e*(.3-.05*k);g.save();g.translate(x,y);g.rotate(r);g.drawImage(pc.line,-h/2,-h/2,h,h);g.restore()}
+  g.globalAlpha=1;g.drawImage(pc.hero,P.hx+off[0]-P.hs/2,P.hy+off[1]-P.hs/2,P.hs,P.hs);
+  if(a.k>0){g.globalAlpha=a.k;g.drawImage(pc.kin,0,0)}
+  if(a.t>0){g.globalAlpha=a.t;g.fillStyle=C.i;g.textBaseline="alphabetic";
+    const mono=(z)=>`400 ${z}px "IBM Plex Mono",ui-monospace,monospace`,serif=(z)=>`italic 400 ${z}px "Instrument Serif",Georgia,serif`;
+    const home=biome(cur.x,cur.y),place="The "+PAL[home.id].place+" "+SUFFIX[h3(home.bx,home.by,7)%8];
+    g.font=mono(P.det);g.textAlign="left";g.fillText(place,P.m,P.m+P.det);g.textAlign="right";g.fillText("Meadow",P.Wp-P.m,P.m+P.det);
+    g.textAlign="left";fitText(g,latin(cur),serif,P.name,P.Wp-2*P.m);g.fillText(latin(cur),P.m-P.name*.03,P.Hp-P.m-P.det*2.2);
+    g.font=mono(P.det);g.fillText(`found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}`,P.m,P.Hp-P.m);
+    g.textAlign="right";g.fillText(hist.length?`changed ${hist.length} time${hist.length>1?"s":""}`:"as found",P.Wp-P.m,P.Hp-P.m)}
+  g.restore();
+}
+const layers=()=>({t:sstep(.5,1,unf),e:clamp(unf-1),k:clamp(unf-2),f:clamp(unf-3)});
+function prender(){
+  const on=!!cur&&unf>.001;pv.hidden=!on;big.style.visibility=on?"hidden":"";halo.style.visibility=on?"hidden":"";stage.classList.toggle("unfolded",on);
+  $("markhint").hidden=unf>=.5;$("posterhint").hidden=unf<.5;$("png").textContent=unf>=.5?"Save poster":"Save PNG";
+  if(!on)return;pbuild();
+  const sr=stage.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2),cw=Math.round(sr.width*dp),ch=Math.round(sr.height*dp);
+  if(pv.width!==cw||pv.height!==ch){pv.width=cw;pv.height=ch}
+  const P=pplan(),room=sr.height-70,fit=Math.min((sr.width-48)/P.Wp,(room-24)/P.Hp),dw=P.Wp*fit,dh=P.Hp*fit,dx=(sr.width-dw)/2,dy=Math.max(12,(room-dh)/2);
+  // at the start the sheet is so close that its mark is the big mark; it pulls back from there
+  const br=big.getBoundingClientRect(),bx=br.left-sr.left+br.width/2,by=br.top-sr.top+br.height/2;
+  const hx=dx+(P.hx+off[0])*fit,hy=dy+(P.hy+off[1])*fit,e=sstep(0,1,Math.min(1,unf)),s0=br.width/(P.hs*fit),S=s0**(1-e);
+  const cx=lerp(bx,hx,e),cy=lerp(by,hy,e),f=fit*S,ox=cx-(P.hx+off[0])*f,oy=cy-(P.hy+off[1])*f;
+  const g=pv.getContext("2d");g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cw,ch);
+  g.setTransform(f*dp,0,0,f*dp,ox*dp,oy*dp);pdraw(g,P,layers());
+  g.globalAlpha=sstep(.05,.7,unf)*.45;g.strokeStyle=PAL[cur.pal].i;g.lineWidth=1/f;g.strokeRect(0,0,P.Wp,P.Hp);g.globalAlpha=1;
+  pgeo={f,ox,oy,P};
+}
+function pframe(ms){
+  if(!cur){unfOn=false;return}
+  const dt=Math.min(.05,Math.max(0,ms-unfMs)/1000);unfMs=ms;
+  unf+=(unfT-unf)*(calm?1:1-Math.exp(-dt*8));if(Math.abs(unfT-unf)<.002)unf=unfT;
+  let trailing=false;echo.forEach((e,k)=>{const r=calm?1:1-Math.exp(-dt*15/(k+1.3));e[0]+=(off[0]-e[0])*r;e[1]+=(off[1]-e[1])*r;if(Math.hypot(off[0]-e[0],off[1]-e[1])>.4)trailing=true});
+  prender();
+  if(unf!==unfT||trailing||pDrag)requestAnimationFrame(pframe);else{unfOn=false;if(!unf){off=[0,0];echo.forEach(e=>{e[0]=e[1]=0})}}
+}
+function kick(){if(!unfOn){unfOn=true;unfMs=performance.now();requestAnimationFrame(pframe)}}
+function foldTo(v){unfT=clamp(v,0,4);if(unfT>0)Promise.all([document.fonts.load('italic 40px "Instrument Serif"'),document.fonts.load('40px "IBM Plex Mono"')]).then(()=>{if(unf>0)prender()}).catch(()=>{});settle();kick()}
+stage.addEventListener("wheel",(e)=>{if(!cur||drop)return;e.preventDefault();
+  foldTo(unfT+e.deltaY*(e.deltaMode?.1:.0032));
+  clearTimeout(unfIdle);unfIdle=setTimeout(()=>{if(unfT>0&&unfT<1)foldTo(unfT<.45?0:1)},220)},{passive:false});
+$("unfold").onclick=()=>foldTo(1);$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
+(function buildFmts(){$("fmts").innerHTML="Shape: "+FMT.map((f,i)=>`<button data-f="${i}" aria-pressed="${!i}">${f[0]}</button>`).join(" / ");
+  $("fmts").onclick=(e)=>{const b=e.target.closest("button");if(!b)return;fmt=+b.dataset.f;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";
+    [...$("fmts").children].forEach(x=>x.setAttribute("aria-pressed",x===b));prender()}})();
+const onHero=(e)=>{if(!pgeo)return false;const sr=stage.getBoundingClientRect(),P=pgeo.P,u=(e.clientX-sr.left-pgeo.ox)/pgeo.f,v=(e.clientY-sr.top-pgeo.oy)/pgeo.f;
+  return Math.hypot(u-P.hx-off[0],v-P.hy-off[1])<P.hs*.5};
+pv.addEventListener("pointerdown",(e)=>{if(unf<.5||!onHero(e))return;try{pv.setPointerCapture(e.pointerId)}catch(_){}pDrag={x:e.clientX,y:e.clientY};pv.style.cursor="grabbing";kick()});
+pv.addEventListener("pointermove",(e)=>{if(!pDrag){pv.style.cursor=unf>=.5&&onHero(e)?"grab":"";return}
+  const P=pgeo.P,d=pgeo.f;off[0]=clamp(off[0]+(e.clientX-pDrag.x)/d,-P.hx+P.hs*.15,P.Wp-P.hx-P.hs*.15);off[1]=clamp(off[1]+(e.clientY-pDrag.y)/d,-P.hy+P.hs*.15,P.Hp-P.hy-P.hs*.15);
+  pDrag.x=e.clientX;pDrag.y=e.clientY;kick()});
+const pUp=()=>{if(pDrag){pDrag=null;pv.style.cursor="grab";kick()}};pv.addEventListener("pointerup",pUp);pv.addEventListener("pointercancel",pUp);
+function savePoster(){
+  const P=pplan();pbuild();if(!pc.field)pc.field=pfield(P,pc.pad);
+  const c=document.createElement("canvas");c.width=P.Wp;c.height=P.Hp;pdraw(c.getContext("2d"),P,layers());
+  c.toBlob(async(b)=>{try{await saveFile(slug()+"-"+FMT[fmt][0]+".png",b);$("say").textContent=`Saved, ${P.Wp} by ${P.Hp}.`}catch(e){$("say").textContent="That didn't save."}},"image/png");
+}
 
 /* ---------- keeping ---------- */
 function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal,m));const u=tiny.toDataURL("image/png");cur=keep;return u}
@@ -871,7 +974,7 @@ const slug=()=>latin(cur).toLowerCase().replace(/\s+/g,"-");
 const note=()=>lens>=3?" Dots and Soft are PNG looks, so the SVG holds the plain shape.":"";
 $("svg").onclick=async()=>{try{await saveFile(slug()+".svg",new Blob([svgText()],{type:"image/svg+xml"}));$("say").textContent="Saved."+note()}catch(e){$("say").textContent="That didn't save. Try Copy SVG."}};
 $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(svgText());$("say").textContent="Copied."+note()}catch(e){$("say").textContent="Your browser blocked copying here. Try Save SVG."}};
-$("png").onclick=async()=>{const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=PAL[cur.pal].g;g.fillRect(0,0,1024,1024);
+$("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=PAL[cur.pal].g;g.fillRect(0,0,1024,1024);
   paint(cur,900,lens,colours(cur.pal,cur));g.drawImage(tiny,62,62);
   c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
