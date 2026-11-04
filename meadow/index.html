@@ -58,6 +58,14 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #big{width:min(100%,74vh);aspect-ratio:1;max-width:100%;touch-action:none;cursor:ew-resize;display:block}
 .tunehint{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:16px;bottom:16px;opacity:.8;line-height:1.5}
 .tunehint button{text-decoration:underline;text-underline-offset:3px}
+/* the mark's possible next selves, floating round it */
+#halo{position:absolute;inset:0;pointer-events:none}
+.ghost{position:absolute;pointer-events:auto;opacity:.5;transition:opacity .45s,transform .45s cubic-bezier(.2,.9,.3,1.3);animation:drift 7s ease-in-out infinite}
+.ghost canvas{display:block}
+.ghost:hover,.ghost:focus-visible{opacity:1;transform:scale(1.08)}
+.ghost.fresh{opacity:0;transform:scale(.4)}
+@keyframes drift{0%,100%{translate:0 0}50%{translate:0 -5px}}
+@media (prefers-reduced-motion:reduce){.ghost{animation:none;transition:none}}
 .sheet{border-left:1px solid color-mix(in srgb,var(--ink) 40%,transparent);padding:26px max(16px,env(safe-area-inset-right,0px)) 26px 24px;display:flex;flex-direction:column;gap:20px;min-width:0;overflow:auto}
 .back{align-self:flex-start;opacity:.8}.back:hover{opacity:1}
 .latin{font-family:var(--f-serif);font-style:italic;font-size:clamp(32px,3.4vw,46px);line-height:1;margin:0;text-wrap:balance}
@@ -115,7 +123,8 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 <section id="studio" hidden aria-label="The mark you picked">
   <div class="stage">
     <canvas id="big" width="900" height="900" aria-label="Your mark. Drag sideways to twist it, up and down to thicken it."></canvas>
-    <p class="tunehint">Drag it sideways to twist, up and down to thicken. Petals: <button id="fewer">fewer</button> / <button id="more">more</button></p>
+    <div id="halo" aria-label="Ways your mark could grow"></div>
+    <p class="tunehint"><span id="leanhint">Lean toward a ghost to see it, click to become it.</span> Drag the mark to twist and thicken. Petals: <button id="fewer">fewer</button> / <button id="more">more</button><span id="undoWrap" hidden> · <button id="undo">step back</button></span></p>
   </div>
   <aside class="sheet">
     <button class="back" id="back">← Back to the field</button>
@@ -537,7 +546,7 @@ async function plant(str){
 }
 addEventListener("keydown",(e)=>{
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.key==="Escape")leave();return}
+  if(!$("studio").hidden){if(e.key==="Escape")leave();else if(e.key==="Backspace"){e.preventDefault();stepBack()}return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -563,8 +572,7 @@ function latin(m){const n=m.s>.5?m.n1:m.n0;let name=PAL[biome(m.x,m.y).id].genus
   if(Math.abs(m.g[6]-.5)>.26)name+=" torta";else if(m.g[14]>.72)name+=" inversa";return name}
 function drawStudio(){
   if(!cur)return;theme(cur.pal);const c=colours(cur.pal);
-  const big=$("big"),bs=Math.min(1100,Math.round(big.clientWidth*Math.min(devicePixelRatio||1,2)))||900;
-  big.width=big.height=bs;paint(cur,bs,lens,c);big.getContext("2d").drawImage(tiny,0,0);
+  drawBig();drawGhosts();
   [16,24,32,48,64].forEach((s)=>copyTo($("sz"+s),s,lens===0||lens===1?lens:lens,c));
   copyTo($("wPaper"),56,0,{i:K("#111111"),a:K("#111111")});
   copyTo($("wNight"),56,0,{i:K("#f5f5f5"),a:K("#f5f5f5")});
@@ -584,12 +592,14 @@ function openStudio(m){
   cur={...m,g:Float32Array.from(m.g)};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
   $("latin").textContent=latin(cur);
-  const home=biome(cur.x,cur.y);$("found").textContent=`Found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}, in The ${PAL[home.id].place} ${SUFFIX[h3(home.bx,home.by,7)%8]}.`;
+  const home=biome(cur.x,cur.y);foundAt=`Found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}, in The ${PAL[home.id].place} ${SUFFIX[h3(home.bx,home.by,7)%8]}.`;
   $("keep").textContent="Keep it";
   const url="#at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)+(letters?"-"+encodeURIComponent(letters):"");
   try{history.pushState({mark:1},"",url)}catch(e){}
-  drawStudio();
+  hist=[];leanK=tgtK=-1;leanW=tgtW=0;pending=-1;told();
+  layoutHalo();makeGhosts();drawStudio();
 }
+let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
 function closeStudio(){$("studio").hidden=true;cur=null}
@@ -600,12 +610,100 @@ $("deeper").onclick=()=>{const m=cur;leave();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.
 // tuning happens on the mark itself
 let tune=null;
 const big=$("big");
-big.addEventListener("pointerdown",(e)=>{big.setPointerCapture(e.pointerId);tune={x:e.clientX,y:e.clientY}});
-big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;tune={x:e.clientX,y:e.clientY};
+big.addEventListener("pointerdown",(e)=>{big.setPointerCapture(e.pointerId);tune={x:e.clientX,y:e.clientY,moved:false};settle()});
+big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
+  if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;remember()}
+  tune.x=e.clientX;tune.y=e.clientY;
   cur.g[6]=clamp(cur.g[6]+dx*.0028);cur.g[13]=clamp(cur.g[13]-dy*.0034);queue()});
-const end=()=>{tune=null};big.addEventListener("pointerup",end);big.addEventListener("pointercancel",end);
+const end=()=>{if(tune&&tune.moved)told();tune=null};big.addEventListener("pointerup",end);big.addEventListener("pointercancel",end);
 let queued=false;const queue=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;drawStudio()})};
-function petals(dir){const n=cur.s>.5?cur.n1:cur.n0,i=clamp(SYM.indexOf(n)+dir,0,SYM.length-1);cur.n0=cur.n1=SYM[i];cur.s=0;$("latin").textContent=latin(cur);queue()}
+function petals(dir){const n=cur.s>.5?cur.n1:cur.n0,i=clamp(SYM.indexOf(n)+dir,0,SYM.length-1);if(SYM[i]===n&&cur.s%1===0)return;remember();cur.n0=cur.n1=SYM[i];cur.s=0;told();queue()}
+
+/* ---------- ghosts ----------
+   Eight possible next selves float round the mark, each a clear step away in two or three traits.
+   Move toward one and the mark melts into it; click and it becomes it, and a new ring grows.
+   A ghost is stored as a change, not a shape, so twisting or recolouring the mark carries them along. */
+const GN=8,halo=$("halo"),stage=big.parentElement;
+let ghosts=[],hist=[],leanK=-1,leanW=0,tgtK=-1,tgtW=0,pending=-1,leaning=false,leanMs=0,gLay=null;
+const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15];
+const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74}; // traits that are either there or not
+function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
+  const d=new Float32Array(16),pool=TRAITS.slice().sort(()=>Math.random()-.5),k=2;let pet=0;
+  if(far){ // a stranger from somewhere else in the meadow wanders in and they meet halfway
+    const s=specimen(Math.round((cur.x+(Math.random()-.5)*9)*40)/40,Math.round((cur.y+(Math.random()-.5)*9)*40)/40),mix=.42+Math.random()*.2;
+    TRAITS.forEach(t=>{d[t]=(s.g[t]-cur.g[t])*mix});pet=s.s>.5?s.n1:s.n0;
+  }
+  for(let i=0;i<k;i++){const t=pool[i],v=cur.g[t];
+    if(t in TOGGLE){const th=TOGGLE[t];d[t]=(v>th?th-.22:Math.min(.97,th+.18))-v}
+    else{const s=(far?.28+Math.random()*.2:.17+Math.random()*.13)*(Math.random()<.5?-1:1);d[t]=clamp(v+s)===v+s?s:-s}}
+  return {d,pet,far};
+}
+function blend(G,w){
+  const g=Float32Array.from(cur.g,(v,i)=>clamp(v+G.d[i]*w));let n0=cur.n0,n1=cur.n1,s=cur.s;
+  const cn=cur.s>.5?cur.n1:cur.n0;if(G.pet&&G.pet!==cn){n0=cn;n1=G.pet;s=w}
+  return {...cur,g,n0,n1,s};
+}
+function makeGhosts(){
+  let list=Array.from({length:GN},(_,i)=>roll(i%2===1));
+  const pure=cur.s<.02||cur.s>.98,cn=cur.s>.5?cur.n1:cur.n0,ci=SYM.indexOf(cn);
+  if(pure){list[2].pet=SYM[Math.min(SYM.length-1,ci+1)];list[6].pet=SYM[Math.max(0,ci-1)]}else list.forEach(G=>G.pet=0);
+  for(let pass=0;pass<3;pass++){ // a ghost that would fall apart at icon size is rolled again
+    const rs=judgeAll(list.map(G=>blend(G,1)));let again=false;
+    list=list.map((G,i)=>{if(!weak(rs[i]))return G;again=true;const n=roll(G.far);if(!G.far||!pure)n.pet=pure?G.pet:0;return n});
+    if(!again)break;
+  }
+  ghosts=list;
+  [...halo.children].forEach((b,i)=>{b.classList.add("fresh");setTimeout(()=>b.classList.remove("fresh"),calm?0:90+i*45)});
+}
+(function buildHalo(){for(let i=0;i<GN;i++){const b=document.createElement("button");b.className="ghost";b.setAttribute("aria-label","Become this one");
+  b.style.animationDelay=(-i*.9)+"s";b.append(document.createElement("canvas"));
+  b.onclick=()=>become(i);b.onfocus=()=>{if(!b.matches(":hover"))leanTo(i,1)};b.onblur=()=>leanTo(-1,0);halo.append(b)}})();
+function layoutHalo(){
+  const narrow=matchMedia("(max-width:820px)").matches,sw=stage.clientWidth-32;
+  let h=narrow?Math.min(sw/2.84,innerHeight*.29):Math.min(sw/2.84,(stage.clientHeight/2-64)/1.42);h=Math.max(70,Math.floor(h));
+  big.style.width=big.style.height=2*h+"px";big.style.margin=narrow?Math.round(.44*h)+"px auto":"0";
+  const br=big.getBoundingClientRect(),sr=stage.getBoundingClientRect(),gs=Math.round(.42*h);
+  gLay={cx:br.left-sr.left+br.width/2,cy:br.top-sr.top+br.height/2,R:1.2*h,gs};
+  [...halo.children].forEach((b,i)=>{const a=-Math.PI/2+i*Math.PI*2/GN;
+    b.style.left=Math.round(gLay.cx+gLay.R*Math.cos(a)-gs/2)+"px";b.style.top=Math.round(gLay.cy+gLay.R*Math.sin(a)-gs/2)+"px";
+    const c=b.firstChild,px=Math.round(gs*Math.min(devicePixelRatio||1,2));c.width=c.height=px;c.style.width=c.style.height=gs+"px"});
+}
+function drawBig(){
+  const bs=Math.min(1100,Math.round(big.clientWidth*Math.min(devicePixelRatio||1,2)))||900;
+  const m=leanK>=0&&leanW>.002?blend(ghosts[leanK],leanW):cur;
+  if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(tiny,0,0);
+}
+function drawGhosts(){if(!ghosts.length)return;const c=colours(cur.pal);
+  [...halo.children].forEach((b,i)=>{const cv=b.firstChild;paint(blend(ghosts[i],1),cv.width,lens,c);const g=cv.getContext("2d");g.clearRect(0,0,cv.width,cv.width);g.drawImage(tiny,0,0)})}
+function leanTo(k,w){tgtK=k;tgtW=w;if(!leaning){leaning=true;leanMs=performance.now();requestAnimationFrame(leanStep)}}
+function leanStep(ms){
+  if(!cur){leaning=false;return}
+  const dt=Math.min(.05,Math.max(0,ms-leanMs)/1000);leanMs=ms;const a=calm?1:1-Math.exp(-dt*(pending>=0?7:11));
+  if(tgtK!==leanK){leanW-=leanW*a+.004;if(leanW<=.01){leanW=0;leanK=tgtK}}else leanW+=(tgtW-leanW)*a;
+  drawBig();
+  [...halo.children].forEach((b,i)=>b.style.opacity=i===leanK&&leanW>.02?.5+.5*leanW:"");
+  if(pending>=0&&leanK===pending&&leanW>.985){commit(pending);leaning=false;return}
+  if(tgtK!==leanK||Math.abs(tgtW-leanW)>.003)requestAnimationFrame(leanStep);else leaning=false;
+}
+function settle(){leanK=tgtK=-1;leanW=tgtW=0;pending=-1;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
+stage.addEventListener("pointermove",(e)=>{
+  if(tune||pending>=0||!gLay||e.pointerType!=="mouse")return;
+  const sr=stage.getBoundingClientRect(),x=e.clientX-sr.left,y=e.clientY-sr.top;let best=-1,bd=1e9;
+  for(let i=0;i<GN;i++){const a=-Math.PI/2+i*Math.PI*2/GN,d=Math.hypot(x-gLay.cx-gLay.R*Math.cos(a),y-gLay.cy-gLay.R*Math.sin(a));if(d<bd){bd=d;best=i}}
+  const w=1-sstep(gLay.gs*.42,gLay.gs*1.3,bd);leanTo(w>.004?best:-1,w)});
+stage.addEventListener("pointerleave",()=>{if(pending<0)leanTo(-1,0)});
+function become(i){if(!ghosts[i]||pending>=0)return;if(leanK===i&&leanW>.97){commit(i);return}pending=i;leanTo(i,1)}
+function commit(i){
+  remember();const m=blend(ghosts[i],1);cur.g=m.g;if(m.n1!==cur.n1||m.n0!==cur.n0){cur.n0=cur.n1=m.n1;cur.s=0}
+  leanK=tgtK=-1;leanW=tgtW=0;pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
+  told();drawBig();makeGhosts();drawGhosts();queue(); // the mark first, the sheet on the next frame
+}
+function remember(){hist.push({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s});if(hist.length>60)hist.shift()}
+function stepBack(){if(!hist.length)return;const h=hist.pop();cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;settle();told();makeGhosts();drawGhosts();queue()}
+function told(){const n=hist.length;$("latin").textContent=latin(cur);$("keep").textContent="Keep it";$("undoWrap").hidden=!n;
+  $("found").textContent=foundAt+(n?` You've changed it ${n} time${n>1?"s":""} since.`:"")}
+$("undo").onclick=stepBack;
+addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio()}});
 $("fewer").onclick=()=>petals(-1);$("more").onclick=()=>petals(1);
 big.addEventListener("wheel",(e)=>{e.preventDefault();if(Math.abs(e.deltaY)>6)petals(e.deltaY>0?-1:1)},{passive:false});
 
@@ -694,7 +792,7 @@ $("png").onclick=async()=>{const c=document.createElement("canvas");c.width=c.he
   c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
 /* ---------- start ---------- */
-if(matchMedia("(pointer:coarse)").matches)$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";
+if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";$("leanhint").textContent="Tap a ghost and your mark melts into it."}
 function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-(.+))?$/.exec(location.hash);if(!m)return null;
   cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3)}}
 const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
