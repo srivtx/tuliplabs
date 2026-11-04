@@ -43,8 +43,8 @@ VIZ.register("bx-traffic", async (api) => {
   let ring = { cx: 0, cy: 0, r: 0 };
   const cv = api.canvas2d((g, w, h) => {
     if (!x) return;
-    const left = Math.min(h, w * 0.46), r = left / 2 - 26;
-    ring = { cx: left / 2 + 4, cy: h / 2, r };
+    const narrow = w < 520, left = narrow ? Math.min(w, h * 0.56) : Math.min(h, w * 0.46), r = left / 2 - 26;
+    ring = { cx: narrow ? w / 2 : left / 2 + 4, cy: narrow ? left / 2 : h / 2, r };
     g.strokeStyle = api.color("line"); g.lineWidth = 26;
     g.beginPath(); g.arc(ring.cx, ring.cy, r, 0, 6.2832); g.stroke();
     for (let i = 0; i < N; i++) {
@@ -59,14 +59,14 @@ VIZ.register("bx-traffic", async (api) => {
     g.fillStyle = api.color("muted"); g.font = "11px 'IBM Plex Sans', sans-serif";
     g.fillText(stopped === 1 ? "car nearly stopped" : "cars nearly stopped", ring.cx, ring.cy + 18);
     // the time and position picture
-    const px = left + 34, pw = w - px - 12, ph = h - 44, py = 20;
+    const px = narrow ? 12 : left + 34, pw = w - px - 12, py = narrow ? left + 4 : 20, ph = h - py - 24;
     if (!strip || strip.width !== Math.floor(pw) || strip.height !== Math.floor(ph)) {
       strip = document.createElement("canvas"); strip.width = Math.max(10, Math.floor(pw)); strip.height = Math.max(10, Math.floor(ph)); sctx = strip.getContext("2d");
     }
     g.drawImage(strip, px, py);
     g.strokeStyle = api.color("line"); g.lineWidth = 1; g.strokeRect(px - 0.5, py - 0.5, strip.width + 1, strip.height + 1);
     g.fillStyle = api.color("muted"); g.font = "11px 'IBM Plex Sans', sans-serif"; g.textAlign = "left";
-    g.fillText("every car's path: forward is up, time goes right", px, h - 8);
+    g.fillText("each car's path: up is forward, right is time", px, h - 8);
   });
   cv.canvas.style.cursor = "pointer";
   cv.canvas.addEventListener("pointerdown", (e) => {
