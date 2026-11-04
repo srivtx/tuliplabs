@@ -34,6 +34,8 @@ button:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-
 .tag a{color:inherit;opacity:.82;text-underline-offset:3px;white-space:nowrap}.tag a:hover{opacity:1}
 .tag span{opacity:.82;line-height:1.5;transition:opacity .6s}
 .tag.quiet span{opacity:0;width:0;overflow:hidden;white-space:nowrap}
+.tag #home{text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+.drop.mark{width:56px;height:56px;margin:-28px 0 0 -28px;background-size:cover!important;background-position:center!important}
 
 .foot{position:fixed;z-index:3;left:0;right:0;bottom:0;background:var(--ground);border-top:1px solid color-mix(in srgb,var(--ink) 45%,transparent);
   display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:20px;min-height:62px;
@@ -124,7 +126,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 <body>
 <canvas id="field" aria-label="A map of marks. Drag to wander, scroll to go deeper, click a mark to pick it."></canvas>
 
-<div class="tag" id="tag"><b>Meadow</b><a href="../">Tulip Labs</a><span id="hint">Drag to wander. Scroll to go deeper. Type a letter to plant it. Click a mark to pick it.</span></div>
+<div class="tag" id="tag"><b>Meadow</b><a href="../">Tulip Labs</a><button id="home" hidden>← Back to the meadow</button><span id="hint">Drag to wander. Scroll to go deeper. Type a letter to plant it. Click a mark to pick it.</span></div>
 
 <div class="foot">
   <div class="place"><strong id="place">Meadow</strong><small id="scale"></small></div>
@@ -145,7 +147,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div><p class="latin" id="latin"></p><p class="found" id="found"></p></div>
     <div><h2>At real size</h2><div id="sizes"></div></div>
     <div><h2>Out in the world</h2><div class="worlds" id="worlds"></div></div>
-    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><p class="dyehint">Click one for a new set. Or drag one onto the mark and hold: the colour soaks in from where it lands.</p></div>
+    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><p class="dyehint">Click one for a new set. Drag one onto the mark and hold: the colour soaks in. Drop it on the space around the mark to change the ground.</p></div>
     <div class="acts">
       <button class="primary" id="keep">Keep it</button>
       <button id="deeper">Grow from here</button>
@@ -230,7 +232,9 @@ uint h3(int x,int y,int k){uint h=(uint(x)*0x27d4eb2du)^(uint(y)*0x165667b1u)^(u
 float r01(int x,int y,int k){return float(h3(x,y,k)&65535u)/65536.;}
 vec2 worldAt(vec2 fc){return uCam+vec2(fc.x-uRes.x*.5,(uRes.y-fc.y)-uRes.y*.5)/uPPW;}
 // nearest country, the next one, and the distance to the border between them
+uniform int uNu;uniform int uNA;uniform int uNB;
 void country(vec2 w,out int a,out int b,out float e){
+ if(uNu==1){a=w.x<0.?uNA:uNB;b=w.x<0.?uNB:uNA;e=abs(w.x);return;} // in the nursery, each parent's colours on its own side
  ivec2 c=ivec2(floor(w/BC));float d1=1e9,d2=1e9;vec2 s1=vec2(0.),s2=vec2(0.);a=0;b=0;
  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){int x=c.x+i,y=c.y+j;
   vec2 s=(vec2(float(x),float(y))+.5+(vec2(r01(x,y,1),r01(x,y,2))-.5)*.9)*BC;
@@ -394,6 +398,7 @@ function makeR(canvas,alpha){
       if(prev){gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,tex0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,prev)}
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);if(data)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,data)},
     melt(v,o){lm=v;if(o)lo=o},
+    nursery(on,a,b){[pG,pM].forEach(p=>{gl.useProgram(p);gl.uniform1i(U(p,"uNu"),on?1:0);gl.uniform1i(U(p,"uNA"),a|0);gl.uniform1i(U(p,"uNB"),b|0)})},
     ground(w,h,cam,ppw){gl.viewport(0,0,w,h);gl.disable(gl.BLEND);view(pG,w,h,cam,ppw);gl.bindVertexArray(vao);
       gl.disableVertexAttribArray(1);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.enableVertexAttribArray(1);gl.bindVertexArray(null)},
     marks(data,n,w,h,cam,ppw,fix,out){gl.viewport(0,0,w,h);
@@ -448,7 +453,7 @@ function frame(ms){
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
     if(n>=R.MAX)break;
     const even=!(i&1)&&!(j&1);if(!even&&born<.02)continue;
-    const x=i*sp,y=j*sp,m=specimen(x,y);
+    const x=i*sp,y=j*sp,m=world(x,y);
     let sx=(x-cam.x)*sc+W/2,sy=(y-cam.y)*sc+H/2;
     let s=even?size:size*(.25+.75*born),g=even?1:born;
     const rip=calm?1:clamp((t-growAt)*1.9-Math.hypot(sx-growO[0],sy-growO[1])/reach*1.1);
@@ -471,7 +476,8 @@ function frame(ms){
 }
 let lastPlace="";
 function chrome(){
-  const b=biome(cam.x,cam.y),key=b.bx+","+b.by;
+  const b=biome(cam.x,cam.y),id=nur?(cam.x<0?nur.A.pal:nur.B.pal):b.id,key=nur?"n"+id+nur.genus:b.bx+","+b.by;
+  if(key!==lastPlace&&nur){lastPlace=key;const p=PAL[id],s=document.documentElement.style;s.setProperty("--ground",p.g);s.setProperty("--ink",p.i);s.setProperty("--accent",p.a);$("place").textContent="The nursery of × "+nur.genus}
   if(key!==lastPlace){lastPlace=key;const p=PAL[b.id];
     const s=document.documentElement.style;s.setProperty("--ground",p.g);s.setProperty("--ink",p.i);s.setProperty("--accent",p.a);
     $("place").textContent="The "+p.place+" "+SUFFIX[h3(b.bx,b.by,7)%8]}
@@ -547,7 +553,7 @@ function lift(e){const had=pts.size;pts.delete(e.pointerId);field.classList.remo
 field.addEventListener("pointerup",lift);field.addEventListener("pointercancel",lift);
 field.addEventListener("pointerleave",()=>{pointer.in=false});
 function nearest(px,py){const sc=ppw(),L=Math.floor(cam.z),sp=S0*2**-L,wx=cam.x+(px*dpr-W/2)/sc,wy=cam.y+(py*dpr-H/2)/sc;
-  return specimen(Math.round(wx/sp)*sp,Math.round(wy/sp)*sp)}
+  return world(Math.round(wx/sp)*sp,Math.round(wy/sp)*sp)}
 field.addEventListener("wheel",(e)=>{e.preventDefault();
   const unit=e.deltaMode===1?18:1;cam.zt=clamp(cam.zt-e.deltaY*unit*(e.ctrlKey?.012:.0026),ZMIN,ZMAX);cam.ax=e.clientX*dpr;cam.ay=e.clientY*dpr},{passive:false});
 field.addEventListener("dblclick",(e)=>{cam.zt=clamp(cam.zt+1,ZMIN,ZMAX);cam.ax=e.clientX*dpr;cam.ay=e.clientY*dpr});
@@ -597,7 +603,7 @@ addEventListener("keydown",(e)=>{
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
-  if(e.key==="Escape"){plant("");return}
+  if(e.key==="Escape"){if(nur)leaveNursery();else plant("");return}
   if(e.target.tagName==="BUTTON"&&(e.key===" "||e.key==="Enter"))return;
   if(e.key.length===1&&/\p{L}|\p{N}|[&?!#@]/u.test(e.key)){plant((letters+e.key).slice(-3))}
   const step=base/ppw()*1.2;if(e.key==="ArrowLeft")cam.vx=-step*4;if(e.key==="ArrowRight")cam.vx=step*4;if(e.key==="ArrowUp")cam.vy=-step*4;if(e.key==="ArrowDown")cam.vy=step*4;
@@ -614,8 +620,9 @@ const colours=(p,m)=>({i:new Float32Array(hex(PAL[p].i)),a:new Float32Array(hex(
 const K=(c)=>new Float32Array(hex(c));
 function copyTo(cv,size,l,fix,scale){const r=scale||(devicePixelRatio||1);const px=Math.round(size*r);if(cv.width!==px){cv.width=cv.height=px;cv.style.width=cv.style.height=size+"px"}
   paint(cur,px,l,fix);const g=cv.getContext("2d");g.clearRect(0,0,px,px);g.drawImage(tiny,0,0)}
-function theme(p){const s=$("studio").style;s.setProperty("--ground",PAL[p].g);s.setProperty("--ink",PAL[p].i);s.setProperty("--accent",PAL[p].a)}
-function latin(m){const n=m.s>.5?m.n1:m.n0;let name=PAL[biome(m.x,m.y).id].genus+" "+SPECIES[n];
+const groundOf=(m)=>m.gr||PAL[m.pal].g;
+function theme(p){const s=$("studio").style;s.setProperty("--ground",cur?groundOf(cur):PAL[p].g);s.setProperty("--ink",PAL[p].i);s.setProperty("--accent",PAL[p].a)}
+function latin(m){const n=m.s>.5?m.n1:m.n0;let name=(m.genus||PAL[biome(m.x,m.y).id].genus)+" "+SPECIES[n];
   if(Math.abs(m.g[6]-.5)>.26)name+=" torta";else if(m.g[14]>.72)name+=" inversa";return name}
 function drawStudio(){
   if(!cur)return;theme(cur.pal);const c=colours(cur.pal,cur);
@@ -625,7 +632,7 @@ function drawStudio(){
   copyTo($("wNight"),56,lens,{i:K("#f5f5f5"),a:K("#f5f5f5")});
   // the phone icon gets its own ground, the way a home screen shows it
   const app=$("wApp"),r=devicePixelRatio||1,px=Math.round(46*r);app.width=app.height=px;app.style.width=app.style.height="46px";const g=app.getContext("2d");
-  g.fillStyle=PAL[cur.pal].g;g.fillRect(0,0,px,px);paint(cur,Math.round(px*.82),lens,c);g.drawImage(tiny,px*.09,px*.09);
+  g.fillStyle=groundOf(cur);g.fillRect(0,0,px,px);paint(cur,Math.round(px*.82),lens,c);g.drawImage(tiny,px*.09,px*.09);
   copyTo($("wTab"),16,lens,c);
   [...$("swatches").children].forEach((b,i)=>b.setAttribute("aria-pressed",i===cur.pal));
   if(unf>0)prender();
@@ -633,14 +640,14 @@ function drawStudio(){
 (function buildSheet(){
   $("sizes").innerHTML=[16,24,32,48,64].map(s=>`<figure><canvas id="sz${s}"></canvas><figcaption>${s}</figcaption></figure>`).join("");
   $("worlds").innerHTML=`<div class="world w-tab" title="In a browser tab"><div><canvas id="wTab"></canvas>Your site</div></div><div class="world w-app" title="On a phone"><canvas id="wApp"></canvas></div><div class="world w-paper" title="Printed in black"><canvas id="wPaper"></canvas></div><div class="world w-night" title="On black"><canvas id="wNight"></canvas></div>`;
-  PAL.forEach((p,i)=>{const b=document.createElement("button");b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");b.onclick=()=>{if(performance.now()-dropEnd<350||cur.pal===i)return;remember();cur.pal=i;told();drawStudio()};carry(b,i);$("swatches").append(b)});
+  PAL.forEach((p,i)=>{const b=document.createElement("button");b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");b.onclick=()=>{if(performance.now()-dropEnd<350||cur.pal===i)return;remember();cur.pal=i;cur.gr=null;told();drawStudio()};carry(b,i);$("swatches").append(b)});
 })();
 function openStudio(m){
   if(!m.ok)tend([m]);
   cur={...m,g:Float32Array.from(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
   $("latin").textContent=latin(cur);
-  const home=biome(cur.x,cur.y);foundAt=`Found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}, in The ${PAL[home.id].place} ${SUFFIX[h3(home.bx,home.by,7)%8]}.`;
+  const home=biome(cur.x,cur.y);foundAt=cur.from?`Bred from ${cur.from}.`:`Found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}, in The ${PAL[home.id].place} ${SUFFIX[h3(home.bx,home.by,7)%8]}.`;if(cur.from)cur.edited=true;
   $("keep").textContent="Keep it";
   cur.at="#at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)+(letters?"-"+encodeURIComponent(letters):"");
   try{history.pushState({mark:1},"",cur.at)}catch(e){}
@@ -746,8 +753,8 @@ function commit(i){
   leanK=tgtK=-1;leanW=tgtW=0;pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
   told();drawBig();makeGhosts();drawGhosts();queue(); // the mark first, the sheet on the next frame
 }
-function remember(){hist.push({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,dye:cur.dye.map(d=>({...d,w:0}))});if(hist.length>60)hist.shift()}
-function stepBack(){if(!hist.length||drop)return;const h=hist.pop();cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.dye=h.dye;wet=null;settle();told();makeGhosts();drawGhosts();queue()}
+function remember(){hist.push({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,dye:cur.dye.map(d=>({...d,w:0}))});if(hist.length>60)hist.shift()}
+function stepBack(){if(!hist.length||drop)return;const h=hist.pop();cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.dye=h.dye;wet=null;settle();told();makeGhosts();drawGhosts();queue()}
 function told(){const n=hist.length;$("latin").textContent=latin(cur);$("keep").textContent="Keep it";$("undoWrap").hidden=!n;$("wash").hidden=!cur.dye.length;
   $("found").textContent=foundAt+(cur.note||"");
   // the link carries every change, so a shared mark arrives exactly as it was left
@@ -768,23 +775,30 @@ function dyeFor(j){ // of a set's three colours, the one that shows best on this
   const P=PAL[cur.pal];let best=PAL[j].a,bs=-1;
   for(const h of [PAL[j].a,PAL[j].i,PAL[j].g]){const s=contrast(h,P.g)*Math.min(1,apart(h,P.i)/.45);if(s>bs){bs=s;best=h}}
   return best}
+function groundFor(j){ // of a set's colours, the one the mark's ink reads best on, and not the ground already
+  const ink=PAL[cur.pal].i,now=groundOf(cur);let best=PAL[j].g,bs=-1;
+  for(const h of [PAL[j].g,PAL[j].a,PAL[j].i]){const s=contrast(h,ink)*Math.min(1,apart(h,now)/.3);if(s>bs){bs=s;best=h}}
+  return best}
 function dyeAt(x,y,h){let c=hex(h);
   for(const d of cur.dye.slice(-2)){const w=1-sstep(d.r*.35,d.r,Math.hypot(x-d.x,y-d.y)),e=hex(d.h);c=c.map((v,i)=>v+(e[i]-v)*w)}
   return "#"+c.map(v=>Math.round(v*255).toString(16).padStart(2,"0")).join("")}
 let drop=null,wet=null,dropEnd=0,dyeOn=false,dyeMs=0,washing=false;
 function carry(b,j){
-  b.addEventListener("pointerdown",(e)=>{if(e.button||!cur||drop)return;try{b.setPointerCapture(e.pointerId)}catch(_){}drop={j,b,x:e.clientX,y:e.clientY,on:false,in:false,age:0,el:null}});
+  b.addEventListener("pointerdown",(e)=>{if(e.button||!cur||drop)return;if(wet){wet.w=0;wet=null}try{b.setPointerCapture(e.pointerId)}catch(_){}drop={j,b,x:e.clientX,y:e.clientY,on:false,in:false,age:0,el:null}});
   b.addEventListener("pointermove",(e)=>{if(!drop||drop.b!==b)return;
     if(!drop.on){if(Math.hypot(e.clientX-drop.x,e.clientY-drop.y)<6)return;drop.on=true;
       const el=document.createElement("div");el.className="drop";el.style.background=dyeFor(j);document.body.append(el);drop.el=el;drop.h=dyeFor(j)}
     drop.x=e.clientX;drop.y=e.clientY;drop.el.style.translate=drop.x+"px "+drop.y+"px";
     const r=big.getBoundingClientRect(),px=(drop.x-r.left)/r.width*2-1,py=(drop.y-r.top)/r.height*2-1;
     drop.in=unf<.01&&Math.hypot(px,py)<.98;drop.el.classList.toggle("in",drop.in);
-    if(drop.in){
-      if(!wet){remember();settle();wet={x:px,y:py,r:.14,h:drop.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();$("wash").hidden=false}
-      else{wet.x=px;wet.y=py} // still wet, so it smears
-      soak()}});
+    const sr=stage.getBoundingClientRect(),bg=unf<.01&&!drop.in&&!wet&&Math.hypot(px,py)>1.05&&drop.x>sr.left&&drop.x<sr.right&&drop.y>sr.top&&drop.y<sr.bottom;
+    if(bg!==!!drop.bg){drop.bg=bg;drop.gh=drop.gh||groundFor(j);$("studio").style.setProperty("--ground",bg?drop.gh:groundOf(cur))}
+    drop.px=px;drop.py=py;
+    if(drop.in){if(!drop.inAt)drop.inAt=performance.now();if(wet){wet.x=px;wet.y=py} // still wet, so it smears
+      soak()}else drop.inAt=0});
   const up=()=>{if(!drop||drop.b!==b)return;const d=drop;drop=null;if(!d.on)return;dropEnd=performance.now();
+    if(d.bg){remember();cur.gr=d.gh;told();queue()}
+    else if(d.in&&!wet){remember();settle();wet={x:d.px,y:d.py,r:.55,h:d.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift()} // a quick drop leaves a spot
     if(d.el){d.el.classList.add(d.in?"in":"gone");setTimeout(()=>d.el.remove(),320)}soak()};
   b.addEventListener("pointerup",up);b.addEventListener("pointercancel",up);
 }
@@ -793,10 +807,13 @@ function dyeStep(ms){
   if(!cur){dyeOn=false;drop=wet=null;return}
   const dt=Math.min(.05,Math.max(0,ms-dyeMs)/1000);dyeMs=ms;let busy=false;
   if(washing){cur.dye.forEach(d=>d.r*=Math.exp(-dt*9));if(cur.dye.every(d=>d.r<.03)){cur.dye=[];washing=false}else busy=true}
-  else if(wet){
+  if(!washing&&!wet&&drop&&drop.in&&drop.inAt&&ms-drop.inAt>130){ // it lands once it rests a moment, not as it passes over
+    remember();settle();wet={x:drop.px,y:drop.py,r:.14,h:drop.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();$("wash").hidden=false}
+  if(washing){}else if(wet){
     if(drop&&drop.in){drop.age+=dt;wet.r=.14+1.5*(1-Math.exp(-drop.age*1.3));wet.w=calm?0:1;busy=true}
     else if(!drop){wet.w*=Math.exp(-dt*5);if(wet.w<.01||calm){wet.w=0;wet=null}else busy=true}
     else busy=true}
+  else if(drop&&drop.in)busy=true; // resting, about to land
   drawBig();
   if(busy){requestAnimationFrame(dyeStep);return}
   dyeOn=false;told();drawGhosts();queue();
@@ -808,12 +825,14 @@ const U36=(s)=>parseInt(s,36)/(36**s.length-1);
 function codeOf(m){let s=m.pal.toString(36)+SYM.indexOf(m.n0).toString(36)+SYM.indexOf(m.n1).toString(36)+B36(m.s,2);
   for(let k=0;k<16;k++)s+=B36(m.g[k],2);
   for(const d of m.dye.slice(-2))s+=B36(d.x*.5+.5,2)+B36(d.y*.5+.5,2)+B36(d.r/2,2)+d.h.slice(1).toLowerCase();
+  if(m.gr)s+="g"+m.gr.slice(1).toLowerCase();
   return s}
-function readCode(s){if(!/^[0-9a-z]{37}([0-9a-z]{6}[0-9a-f]{6}){0,2}$/.test(s))return null;
+function readCode(s){let gr=null;if((s.length-37)%12===7){gr="#"+s.slice(-6);s=s.slice(0,-7)}
+  if(!/^[0-9a-z]{37}([0-9a-z]{6}[0-9a-f]{6}){0,2}$/.test(s)||(gr&&!/^#[0-9a-f]{6}$/.test(gr)))return null;
   const pal=parseInt(s[0],36),n0=SYM[parseInt(s[1],36)],n1=SYM[parseInt(s[2],36)];if(!(pal<8)||!n0||!n1)return null;
   const g=new Float32Array(16);for(let k=0;k<16;k++)g[k]=U36(s.substr(5+k*2,2));
   const dye=[];for(let o=37;o<s.length;o+=12)dye.push({x:U36(s.substr(o,2))*2-1,y:U36(s.substr(o+2,2))*2-1,r:U36(s.substr(o+4,2))*2,h:"#"+s.substr(o+6,6),w:0});
-  return {pal,n0,n1,s:U36(s.substr(3,2)),g,dye}}
+  return {pal,n0,n1,s:U36(s.substr(3,2)),g,dye,gr}}
 
 /* ---------- unfolding ----------
    Scroll out on the mark and it pulls back onto a sheet. Keep scrolling and layers arrive one at a time:
@@ -849,7 +868,7 @@ function pfield(P,pad){ // its neighbours, as they grow round the spot it was fo
 function fitText(g,t,font,size,max){g.font=font(size);const w=g.measureText(t).width;if(w>max){size*=max/w;g.font=font(size)}return size}
 function pdraw(g,P,a){
   const C=PAL[cur.pal];g.save();g.beginPath();g.rect(0,0,P.Wp,P.Hp);g.clip();
-  g.globalAlpha=1;g.fillStyle=C.g;g.fillRect(0,0,P.Wp,P.Hp);
+  g.globalAlpha=1;g.fillStyle=groundOf(cur);g.fillRect(0,0,P.Wp,P.Hp);
   if(pc.field&&a.f>0){g.globalAlpha=a.f*.17;g.drawImage(pc.field,-pc.pad-off[0]*.12,-pc.pad-off[1]*.12)}
   const tw=Math.sign(cur.g[6]-.5)||1;
   for(let k=EN-1;k>=0&&a.e>0;k--){const sc=1+.42*(k+1)**1.25,r=(k+1)*.11*tw,x=P.hx+echo[k][0],y=P.hy+echo[k][1],h=P.hs*sc;
@@ -915,12 +934,63 @@ function savePoster(){
   c.toBlob(async(b)=>{try{await saveFile(slug()+"-"+FMT[fmt][0]+".png",b);$("say").textContent=`Saved, ${P.Wp} by ${P.Hp}.`}catch(e){$("say").textContent="That didn't save."}},"image/png");
 }
 
+/* ---------- the nursery ----------
+   Drag a kept mark onto any other mark and the field becomes their nursery: one parent on the left,
+   the other on the right, every mix of them in between. Walk past a parent and its children go further
+   than it ever did. Up, they grow wilder; down, every trait is pushed bolder. Children can be kept and bred again. */
+let nur=null,shelfEnd=0;const hyCache=new Map();
+const world=(x,y)=>nur?hybrid(x,y):specimen(x,y);
+const genusOf=(m)=>m.genus||PAL[biome(m.x,m.y).id].genus;
+const rootsOf=(m)=>m.roots||[genusOf(m)];
+function cross(r){if(r.length<2||r[0]===r[1])return r[0];const stem=r[0].replace(/(is|us|um|a)$/,"");return stem+(/^[aeiou]/i.test(r[1])?"":"i")+r[1].toLowerCase()}
+const petalOf=(m)=>m.s>.5?m.n1:m.n0;
+function hybrid(x,y){
+  const key=x+"|"+y;let m=hyCache.get(key);if(m)return m;
+  const {A,B}=nur,u=clamp(x+.5,-.6,1.6),up=clamp(-y*.9,0,1),down=clamp(y*.9,0,1.4);
+  const at=Math.abs(y)<1e-9&&(Math.abs(u)<1e-9||Math.abs(u-1)<1e-9);
+  if(at){const P=u<.5?A:B;m={x,y,pal:P.pal,g:Float32Array.from(P.g),n0:P.n0,n1:P.n1,s:P.s,genus:P.genus,roots:P.roots,from:P.from,ok:true,parent:true}}
+  else{const g=new Float32Array(16);
+    for(let k=0;k<16;k++){let v=A.g[k]+(B.g[k]-A.g[k])*u;
+      if(up>0)v=lerp(v,1/(1+Math.exp(-fbm(x*3,y*3,k)*24)),up*.85);
+      if(down>0)v=.5+(v-.5)*(1+down*1.8);
+      g[k]=clamp(v)}
+    const f=clamp(lerp(SYM.indexOf(petalOf(A)),SYM.indexOf(petalOf(B)),u),0,SYM.length-1),i0=Math.min(SYM.length-2,Math.floor(f));
+    m={x,y,pal:x<0?A.pal:B.pal,g,n0:SYM[i0],n1:SYM[i0+1],s:sstep(.3,.7,f-i0),genus:nur.genus,roots:nur.roots,from:nur.from}}
+  if(hyCache.size>9000)hyCache.clear();hyCache.set(key,m);return m;
+}
+function breed(a,b){
+  const P=(m)=>({g:Float32Array.from(m.g),n0:m.n0,n1:m.n1,s:m.s,pal:m.pal,genus:genusOf(m),roots:rootsOf(m),from:m.from,name:latin(m)});
+  const A=P(a),B=P(b),home=nur?nur.home:{x:cam.x,y:cam.y,z:cam.zt},roots=[A.roots[0],B.roots[B.roots.length-1]];
+  nur={A,B,home,roots,genus:cross(roots),from:A.name+" × "+B.name};hyCache.clear();
+  if(!$("studio").hidden)leave();
+  R.nursery(true,A.pal,B.pal);cam.x=0;cam.y=0;cam.vx=cam.vy=0;cam.z=cam.zt=innerWidth<1100?-1.1:-.9;cam.ax=W/2;cam.ay=H/2;
+  growAt=performance.now()/1000;growO=[W/2,H/2];lastPlace="";$("home").hidden=false;
+  say2(`${A.name} on the left, ${B.name} on the right. Up grows wilder, down bolder.`);
+}
+function leaveNursery(){if(!nur)return;const h=nur.home;nur=null;hyCache.clear();R.nursery(false);
+  cam.x=h.x;cam.y=h.y;cam.z=cam.zt=h.z;cam.vx=cam.vy=0;growAt=performance.now()/1000;growO=[W/2,H/2];lastPlace="";$("home").hidden=true;
+  say2("Back in the meadow.")}
+$("home").onclick=leaveNursery;
+function breeder(b,k){ // carry a kept mark out of the shelf; the field leans toward it as it goes
+  let st=null;
+  b.addEventListener("pointerdown",(e)=>{if(e.button)return;st={x:e.clientX,y:e.clientY,id:e.pointerId,on:false,el:null}});
+  b.addEventListener("pointermove",(e)=>{if(!st)return;
+    if(!st.on){if(Math.hypot(e.clientX-st.x,e.clientY-st.y)<6)return;st.on=true;try{b.setPointerCapture(st.id)}catch(_){}
+      const el=document.createElement("div");el.className="drop mark";el.style.background=`${groundOf(k)} url(${k.thumb})`;document.body.append(el);st.el=el}
+    st.el.style.translate=e.clientX+"px "+e.clientY+"px";pointer.x=e.clientX;pointer.y=e.clientY;pointer.in=true});
+  const up=(e)=>{if(!st)return;const s0=st;st=null;if(!s0.on)return;shelfEnd=performance.now();s0.el.classList.add("gone");setTimeout(()=>s0.el.remove(),320);
+    const t=document.elementFromPoint(e.clientX,e.clientY),other=t&&t.closest(".shelf button");
+    if(other&&other!==b){breed(k,shelf[+other.dataset.i]);return}
+    if(t===field){const m=hover||nearest(e.clientX,e.clientY);if(m)breed(k,m)}};
+  b.addEventListener("pointerup",up);b.addEventListener("pointercancel",()=>{if(st&&st.el)st.el.remove();st=null});
+}
+
 /* ---------- keeping ---------- */
 function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal,m));const u=tiny.toDataURL("image/png");cur=keep;return u}
 function drawShelf(){$("shelf").innerHTML="";shelf.forEach((k,i)=>{const b=document.createElement("button");b.setAttribute("aria-label","Open kept mark "+(i+1));
-  b.style.background=PAL[k.pal].g;const im=new Image();im.alt="";im.src=k.thumb;b.append(im);b.onclick=async()=>{if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,ok:true,g:Float32Array.from(k.g),edited:true})};$("shelf").append(b)})}
-$("keep").onclick=()=>{const m={x:cur.x,y:cur.y,pal:cur.pal,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h}))};m.thumb=thumb({...m,g:Float32Array.from(m.g)});
-  shelf.unshift(m);shelf=shelf.slice(0,24);try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf))}catch(e){}drawShelf();$("keep").textContent="Kept";$("say").textContent="It's on your shelf at the bottom of the field."};
+  b.style.background=groundOf(k);b.title="Click to open. Drag onto another mark to breed them.";b.dataset.i=i;const im=new Image();im.alt="";im.src=k.thumb;b.append(im);breeder(b,k);b.onclick=async()=>{if(performance.now()-shelfEnd<350)return;if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,ok:true,g:Float32Array.from(k.g),edited:true})};$("shelf").append(b)})}
+$("keep").onclick=()=>{const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h}))};m.thumb=thumb({...m,g:Float32Array.from(m.g)});
+  shelf.unshift(m);shelf=shelf.slice(0,24);try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf))}catch(e){}drawShelf();$("keep").textContent="Kept";$("say").textContent="It's on your shelf at the bottom of the field. Drag it onto another mark to breed them."};
 drawShelf();
 
 /* ---------- saving ---------- */
@@ -1000,7 +1070,7 @@ const slug=()=>latin(cur).toLowerCase().replace(/\s+/g,"-");
 const note=()=>lens>=3?" Dots and Soft are PNG looks, so the SVG holds the plain shape.":"";
 $("svg").onclick=async()=>{try{await saveFile(slug()+".svg",new Blob([svgText()],{type:"image/svg+xml"}));$("say").textContent="Saved."+note()}catch(e){$("say").textContent="That didn't save. Try Copy SVG."}};
 $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(svgText());$("say").textContent="Copied."+note()}catch(e){$("say").textContent="Your browser blocked copying here. Try Save SVG."}};
-$("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=PAL[cur.pal].g;g.fillRect(0,0,1024,1024);
+$("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=groundOf(cur);g.fillRect(0,0,1024,1024);
   paint(cur,900,lens,colours(cur.pal,cur));g.drawImage(tiny,62,62);
   c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
@@ -1009,11 +1079,11 @@ if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander
 function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^&]+))?(?:&([0-9a-z]+))?$/.exec(location.hash);if(!m)return null;
   cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3),code:m[5]}}
 const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
-window.__meadow={cam,setLens,plant,openStudio,specimen,svgText,tend,probe(m,n){const k=cur;cur=m;const r=readField(n,0);cur=k;return r},get cur(){return cur},get tiles(){return tiles}};
+window.__meadow={cam,setLens,plant,openStudio,specimen,world:(x,y)=>world(x,y),breed:(a,b)=>breed(a,b),svgText,tend,probe(m,n){const k=cur;cur=m;const r=readField(n,0);cur=k;return r},get cur(){return cur},get tiles(){return tiles}};
 requestAnimationFrame(frame);
 setTimeout(()=>document.body.classList.add("live"),400);
 if(landed)(async()=>{if(landed.letters)await plant(landed.letters);const m=specimen(cam.x,cam.y);if(!m.ok)tend([m]);openStudio(m);const e=landed.code&&readCode(landed.code);
-  if(e){Object.assign(cur,{pal:e.pal,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:""});told();makeGhosts();drawStudio()}
+  if(e){Object.assign(cur,{pal:e.pal,gr:e.gr,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:""});told();makeGhosts();drawStudio()}
   try{history.replaceState(null,"",location.hash)}catch(e){}})();
 </script>
 </body>
