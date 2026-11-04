@@ -127,13 +127,15 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 /* mirror lines laid over the mark while its symmetry is being changed, fading as each line stops holding */
 #mirrors{position:absolute;pointer-events:none;opacity:0;transition:opacity .35s ease}
 #mirrors.on{opacity:1}
+#big{transition:opacity .45s ease}#big.inking{opacity:.22;transition:opacity .18s ease}
+#inkpad{position:absolute;pointer-events:none;opacity:0;transition:opacity .5s ease .08s}#inkpad.on{opacity:1;transition:none}.stage.unfolded #inkpad{display:none}
 .stage.unfolded #mirrors{display:none}
 /* while you drag, a small label beside the pointer names what you're making */
 .readout{position:fixed;z-index:9;pointer-events:none;font:11px var(--f-mono);background:var(--ink);color:var(--ground);padding:3px 9px;border-radius:999px;translate:14px -28px;transition:opacity .2s}
 .readout.out{opacity:0}
 .readout.fieldname{font:italic 15px/1.2 var(--f-serif);padding:2px 10px 3px;translate:16px -34px;transition:opacity .25s,scale .3s cubic-bezier(.2,.9,.3,1.4)}.readout.fieldname.out{scale:.92}
 .sheet h2 .looks{float:right;margin-top:-5px;font-weight:400;letter-spacing:0}.looks button{padding:2px 9px;font-size:11px}
-#big.m-stretch,#big.m-lean{cursor:move}#big.m-colour{cursor:crosshair}
+#big.m-stretch,#big.m-lean{cursor:move}#big.m-colour,#big.m-draw{cursor:crosshair}
 /* the mark's possible next selves, floating round it */
 #halo{position:absolute;inset:0;pointer-events:none}
 .ghost{position:absolute;pointer-events:auto;opacity:.5;transition:opacity .45s,transform .45s cubic-bezier(.2,.9,.3,1.3);animation:drift 7s ease-in-out infinite}
@@ -244,6 +246,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <canvas id="big" width="900" height="900" aria-label="Your mark. Drag sideways to twist it, up and down to thicken it."></canvas>
     <div id="halo" aria-label="Ways your mark could grow"></div>
     <canvas id="mirrors" aria-hidden="true"></canvas>
+    <canvas id="inkpad" aria-hidden="true"></canvas>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
       <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–6)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
@@ -404,6 +407,7 @@ in vec2 vP;in vec4 vI;flat in float vL;in float vS;in vec4 vG0;in vec4 vG1;in ve
 out vec4 o;
 uniform int uFix;uniform vec3 uInk;uniform vec3 uAcc;uniform int uOut;uniform int uHasL;uniform sampler2D uL;uniform sampler2D uL0;uniform float uLm;uniform vec3 uLo;
 uniform vec4 uD[2];uniform vec3 uDC[2];
+uniform vec2 uPen[32];uniform int uPenN;uniform int uPenJ;uniform vec3 uPenS;uniform vec3 uPenB; // a petal drawn by hand: its points, how far its copies reach, (weight, closed, mirrored), its bounding circle
 const float PI=3.14159265,TAU=6.2831853;
 // dye dropped on the mark soaks out from where it landed; while it is still wet its edge wavers
 vec3 dyed(vec3 c,vec2 q){if(uFix!=1)return c;
@@ -462,6 +466,18 @@ float frameOf(vec2 p,int i){
  if(i==1)return smax(max(length(p-vec2(-.5,-.3))-1.25,length(p-vec2(.5,-.3))-1.25),-(p.y+.85),.06);
  if(i==2)return uneven(vec2(p.x,p.y+.87),.03,.7,1.09);
  return min(boxd(p-vec2(0.,.375),vec2(.6,.465))-.06,length(p-vec2(0.,-.15))-.66);}
+// a petal you drew, in the petal's own units (its length is 1). An open stroke is a brush line that swells in the
+// middle and tapers at both ends; a closed loop is filled
+float penD(vec2 c,float t){int N=uPenN;
+ if(uPenS.y>.5){float d=dot(c-uPen[0],c-uPen[0]),sg=1.;int j=N-1;
+  for(int i=0;i<32;i++){if(i>=N)break;vec2 e=uPen[j]-uPen[i],w=c-uPen[i],b=w-e*clamp(dot(w,e)/max(dot(e,e),1e-9),0.,1.);d=min(d,dot(b,b));
+   bvec3 k=bvec3(c.y>=uPen[i].y,c.y<uPen[j].y,e.x*w.y>e.y*w.x);if(all(k)||all(not(k)))sg=-sg;j=i;}
+  return sg*sqrt(d)-t*.22;}
+ float d=1e9,fn=float(N-1);
+ for(int i=0;i<31;i++){if(i+1>=N)break;vec2 a=uPen[i],pa=c-a,ba=uPen[i+1]-a;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);
+  float ra=t*(.22+.78*sqrt(sin(PI*float(i)/fn))),rb=t*(.22+.78*sqrt(sin(PI*float(i+1)/fn)));
+  d=min(d,length(pa-ba*h)-mix(ra,rb,h));}
+ return d;}
 vec2 markN(vec2 p0,float n){
  gPO=vG6.x;
  float g_ph=vG0.y,g_pr=vG0.z,g_r=vG0.w,g_l=vG1.x,g_w=vG1.y,g_tw=vG1.z,g_rr=vG1.w,
@@ -491,6 +507,14 @@ vec2 markN(vec2 p0,float n){
   for(int j=-1;j<=1;j++){float c=clamp(c0+float(j),0.,R-1.),off=c-(R-1.)*.5,yy=p.y-off*h-abs(p.x)*(g_ph-.5)*1.3;
    float Lk=L*(1.-(g_r-.5)*.9*abs(off/((R-1.)*.5)));ds=min(ds,shape(vec2(p.x,yy),max(Lk,ws),ws,g_pr));}
   d=mix(d,ds,stk);}
+ if(uPenN>1&&uPenS.x>0.){ // the drawn petal, repeated round; its neighbours' copies are checked too, as far as it reaches
+  float tp=w*.95/l,dp=1e9;vec2 q0=wheel(p,n,ph);
+  for(int j=-6;j<=6;j++){if(abs(j)>uPenJ)continue;vec2 c=(rot(q0,float(j)*TAU/n)-vec2(r1,0.))/l;
+   // a copy too far away to matter is skipped, except while the mirror is half made, when every copy counts
+   bool midway=uPenS.z>.001&&uPenS.z<.999;float a=(midway||length(c-uPenB.xy)-uPenB.z-tp<dp)?penD(c,tp):1e9;
+   if(uPenS.z>.001){vec2 cm=vec2(c.x,-c.y);float b=(midway||length(cm-uPenB.xy)-uPenB.z-tp<dp)?penD(cm,tp):1e9;a=midway?mix(a,min(a,b),uPenS.z):min(a,b);}
+   dp=min(dp,a);}
+  d=mix(d,dp*l,uPenS.x);}
  float inv=smoothstep(.67,.73,g_inv); // switches ease over a short ramp, so a shape melts through them instead of jumping
  float ring=smoothstep(.56,.68,g_ring);
  // inside a badge the ring stays well clear of the rim, or it leaves thin slivers
@@ -606,6 +630,10 @@ function makeR(canvas,alpha){
       if(prev){gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,tex0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,prev)}
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);if(data)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,data)},
     melt(v,o){lm=v;if(o)lo=o},
+    // the drawn petal of the mark about to be drawn, or none; every mark in one draw shares it
+    pen(m){gl.useProgram(pM);const P=m&&m.pen;if(!P||!(P.w>0)){gl.uniform1i(U(pM,"uPenN"),0);return}
+      gl.uniform2fv(U(pM,"uPen"),P.p);gl.uniform1i(U(pM,"uPenN"),P.p.length>>1);gl.uniform3f(U(pM,"uPenS"),P.w,P.c,P.mir);
+      gl.uniform3f(U(pM,"uPenB"),P.b[0],P.b[1],P.b[2]);gl.uniform1i(U(pM,"uPenJ"),penReach(m))},
     nursery(on,a,b){[pG,pM].forEach(p=>{gl.useProgram(p);gl.uniform1i(U(p,"uNu"),on?1:0);gl.uniform1i(U(p,"uNA"),a|0);gl.uniform1i(U(p,"uNB"),b|0)})},
     ground(w,h,cam,ppw){gl.viewport(0,0,w,h);gl.disable(gl.BLEND);view(pG,w,h,cam,ppw);gl.bindVertexArray(vao);
       gl.disableVertexAttribArray(1);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.enableVertexAttribArray(1);gl.bindVertexArray(null)},
@@ -729,7 +757,7 @@ function judgeAll(list){
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,AN,AN,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
     gl.bindFramebuffer(gl.FRAMEBUFFER,atlasFB);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tx,0);gl.activeTexture(gl.TEXTURE0)}
   gl.bindFramebuffer(gl.FRAMEBUFFER,atlasFB);
-  list.forEach((m,i)=>put(atlas,i*T.STRIDE,(i%AC+.5)*AS,(((i/AC)|0)+.5)*AS,AS,0,1,m,0));
+  list.forEach((m,i)=>put(atlas,i*T.STRIDE,(i%AC+.5)*AS,(((i/AC)|0)+.5)*AS,AS,0,1,m,0));T.pen(list[0]);
   T.marks(atlas,list.length,AN,AN,[0,0],1,{i:K("#000000"),a:K("#000000")},2);
   const used=Math.ceil(list.length/AC)*AS;gl.readPixels(0,AN-used,AN,used,gl.RGBA,gl.UNSIGNED_BYTE,atlasPx);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   return list.map((m,i)=>judge(i%AC,(i/AC)|0,used));
@@ -843,7 +871,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-6]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-7]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -858,7 +886,7 @@ function say2(t){$("hint").textContent=t;$("tag").classList.remove("quiet")}
 
 /* ---------- the picked mark ---------- */
 let cur=null;
-const paint=(m,px,l,fix)=>{tiny.width=tiny.height=px;const gl=T.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+const paint=(m,px,l,fix)=>{tiny.width=tiny.height=px;const gl=T.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);T.pen(m);
   put(one,0,px/2,px/2,px,0,1,m,l);T.marks(one,1,px,px,[0,0],1,fix,false)};
 const colours=(p,m)=>({i:new Float32Array(hex(m&&m.ink||PAL[p].i)),a:new Float32Array(hex(m&&m.acc||PAL[p].a)),d:m&&m.dye});
 const inkOf=(m)=>m.ink||PAL[m.pal].i,accOf=(m)=>m.acc||PAL[m.pal].a;
@@ -912,7 +940,7 @@ function showTray(i){if(i===trayAt||drop)return;trayAt=i;const p=PAL[i],el=$("tr
   [...$("swatches").children].forEach((b,k)=>b.classList.toggle("shown",k===i))}
 function setRole(r,h){if(!cur)return;const now=r==="gr"?groundOf(cur):r==="ink"?inkOf(cur):accOf(cur);if(now===h)return;remember();cur[r]=h;told();drawStudio();warnRead()}
 function warnRead(){const s=$("say"),low=contrast(inkOf(cur),groundOf(cur))<1.6,t="The ink barely shows on this ground.";if(low)s.textContent=t;else if(s.textContent===t)s.textContent=""}
-function openStudio(m,from){ftag.classList.add("out");pointer.in=false;hover=null;$("tag").inert=$("foot").inert=true;
+function openStudio(m,from){ftag.classList.add("out");cancelAnimationFrame(penRaf);penShow=null;pointer.in=false;hover=null;$("tag").inert=$("foot").inert=true;
   if(!m.ok)tend([m]);
   cur={...m,g:genes(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
@@ -932,7 +960,7 @@ function openStudio(m,from){ftag.classList.add("out");pointer.in=false;hover=nul
 let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
-function closeStudio(){$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
+function closeStudio(){cancelAnimationFrame(penRaf);penShow=null;inkC.classList.remove("on");big.classList.remove("inking");$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
   $("studio").hidden=true;$("tag").inert=$("foot").inert=false;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 let keptNow=false;
 function leave(){closeStudio();
@@ -944,10 +972,83 @@ $("deeper").onclick=()=>{const m=cur;leave();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.
 // tuning happens on the mark itself
 let tune=null;
 const big=$("big");
-big.addEventListener("pointerdown",(e)=>{try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false}});
+/* ---------- a petal you draw ----------
+   In Draw, a stroke on the mark becomes its petal. The stroke is read back through everything that shapes the mark
+   (the bend, the twist, the turn of the petals), so it lands exactly where you drew it, and then it grows all the way
+   round. A loop that closes on itself is filled. It's kept in the petal's own units, so the petal's length, width and
+   reach still scale and move it, and every ghost, blend, poster and export carries it along */
+const PEN_N=32,inkC=$("inkpad");let penShow=null,penRaf=0,penId=0;
+const rotv=(x,y,a)=>{const c=Math.cos(a),s=Math.sin(a);return [c*x-s*y,s*x+c*y]};
+function bendJS(x,y,g){const b=(g[21]-.5)*2,hv=(g[22]-.5)*2,a=(g[19]-.5)*2,sq=g[20],k=1+Math.abs(b)*.22+Math.abs(hv)*.3;
+  x*=k;y*=k;x-=b*.32*(y*y-.3);x/=Math.max(.4,1+hv*.32*y);const e=Math.exp(Math.abs(a)*.55);if(a>0)y*=e;else x*=e;
+  if(sq>.002){const n=lerp(2,5.5,sq),qx=Math.abs(x)+1e-5,qy=Math.abs(y)+1e-5,f=(qx**n+qy**n)**(1/n)/Math.hypot(qx,qy);x*=f;y*=f}
+  return [x,y]}
+// the petal's size and place, as the shader works them out
+function petalSize(g,n){const r1=lerp(.2,.62,g[3]);let l=lerp(.13,.4,g[4]),w=lerp(.058,.24,g[5]);w=Math.min(w,Math.sin(Math.PI/n)*Math.max(r1,.14)*1.1);return {r1,l:Math.max(l,w),w}}
+const pureN=(m)=>m.s>.5?m.n1:m.n0;
+// how many neighbouring copies a drawn petal can reach into, so a long stroke is never cut off at a seam
+function penReach(m){const P=m.pen,n=Math.max(m.n0,m.n1),{r1,l,w}=petalSize(m.g,n),t=w*1.3,s=Math.PI*2/n;let A=0;
+  for(let i=0;i<P.p.length;i+=2){const x=P.p[i]*l+r1,y=P.p[i+1]*l,r=Math.hypot(x,y);A=Math.max(A,Math.abs(Math.atan2(y,x))+(r>t?Math.asin(t/r):Math.PI))}
+  return clamp(Math.ceil((A+s/2)/s-1e-6),1,6)}
+// even steps along the stroke, so a quick flick and a slow careful line make the same petal
+function resample(pts,N,closed){const P=closed?[...pts,pts[0]]:pts,L=[0];for(let i=1;i<P.length;i++)L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));
+  const tot=L[L.length-1]||1,out=[];let j=0;for(let k=0;k<N;k++){const d=closed?tot*k/N:tot*k/(N-1);while(j<L.length-2&&L[j+1]<d)j++;const f=clamp((d-L[j])/((L[j+1]-L[j])||1));
+    out.push([lerp(P[j][0],P[j+1][0],f),lerp(P[j][1],P[j+1][1],f)])}return out}
+function makePen(pts,closed,mir){const p=new Float32Array(PEN_N*2);pts.forEach(([x,y],i)=>{p[i*2]=clamp(x,-3,3);p[i*2+1]=clamp(y,-3,3)});
+  let x0=9,x1=-9,y0=9,y1=-9;for(let i=0;i<p.length;i+=2){x0=Math.min(x0,p[i]);x1=Math.max(x1,p[i]);y0=Math.min(y0,p[i+1]);y1=Math.max(y1,p[i+1])}
+  const cx=(x0+x1)/2,cy=(y0+y1)/2;let r=0;for(let i=0;i<p.length;i+=2)r=Math.max(r,Math.hypot(p[i]-cx,p[i+1]-cy));
+  // whether it's already mirror-shaped about its own middle line, in which case mirroring it changes nothing
+  let off=0;for(let i=0;i<p.length;i+=2){let best=9;for(let k=0;k<p.length;k+=2)best=Math.min(best,Math.hypot(p[i]-p[k],-p[i+1]-p[k+1]));off+=best}
+  return {p,c:closed?1:0,mir:mir||0,w:1,b:[cx,cy,r],sym:off/PEN_N<.06*Math.max(r,.3),id:++penId}}
+// a stroke drawn on the mark, in the mark's square (-1..1), into the petal's own units
+function toPetal(pts,m){const g=m.g,n=pureN(m),{r1,l}=petalSize(g,n),ph=g[1]*Math.PI*2/n,s=Math.PI*2/n;
+  let tw=(g[6]-.5)*2;tw=Math.sign(tw)*Math.max(Math.abs(tw)-.22,0)*3.4;
+  const P=pts.map(([x,y])=>{[x,y]=bendJS(x,y,g);const r=Math.hypot(x,y);[x,y]=rotv(x,y,tw*r*r);return rotv(x,y,ph)});
+  let mx=0,my=0;P.forEach(([x,y])=>{mx+=x;my+=y});const k=Math.round(Math.atan2(my,mx)/s);
+  return P.map(([x,y])=>{[x,y]=rotv(x,y,-k*s);return [(x-r1)/l,y/l]})}
+// a link carries the drawing too: whether it's a loop, how mirrored, then each point
+const penCode=(P)=>P?(P.c?"1":"0")+B36(P.mir,1)+Array.from(P.p,v=>B36((v+3)/6,2)).join(""):"";
+function readPen(t){if(!/^[01][0-9a-z][0-9a-z]{128}$/.test(t||""))return null;const pts=[];for(let i=0;i<PEN_N;i++)pts.push([U36(t.substr(2+i*4,2))*6-3,U36(t.substr(4+i*4,2))*6-3]);
+  return makePen(pts,t[0]==="1",U36(t[1]))}
+// the shown petal glides from the one it was to the new one: the points flow when both are strokes or both loops,
+// otherwise the old one melts away as the new one grows in
+function lineUp(A,B){if(!A||!B||A.c!==B.c)return B;let best=null,bd=1e9;const N=PEN_N;
+  for(const rev of [false,true])for(let sh=0;sh<(B.c?N:1);sh++){let d=0;for(let i=0;i<N;i++){const j=((rev?N-1-i:i)+sh)%N;d+=(A.p[i*2]-B.p[j*2])**2+(A.p[i*2+1]-B.p[j*2+1])**2}if(d<bd){bd=d;best=[rev,sh]}}
+  const p=new Float32Array(N*2);for(let i=0;i<N;i++){const j=((best[0]?N-1-i:i)+best[1])%N;p[i*2]=B.p[j*2];p[i*2+1]=B.p[j*2+1]}return {...B,p}}
+function penTo(next){cancelAnimationFrame(penRaf);const A=penShow||cur.pen||null;cur.pen=next;next=lineUp(A,next); // the shown glide lines the points up; the kept drawing stays as drawn
+  if(calm||(!A&&!next)){penShow=null;drawStudio();return}
+  const same=A&&next&&A.c===next.c,t0=performance.now(),D=same?480:620;
+  const step=(ms)=>{if(!cur){penShow=null;return}const k=clamp((ms-t0)/D),e=1-(1-k)**3;
+    if(same){const p=new Float32Array(A.p.length);for(let i=0;i<p.length;i++)p[i]=lerp(A.p[i],next.p[i],e);
+      const b=[lerp(A.b[0],next.b[0],e),lerp(A.b[1],next.b[1],e),Math.max(A.b[2],next.b[2])+Math.hypot(A.b[0]-next.b[0],A.b[1]-next.b[1])];penShow={...next,p,b,mir:lerp(A.mir,next.mir,e),w:lerp(A.w,1,e)}}
+    else if(A&&next){penShow=k<.4?{...A,w:A.w*(1-sstep(0,.4,k))}:{...next,w:sstep(.4,1,k)}}
+    else if(next)penShow={...next,w:e};else penShow={...A,w:A.w*(1-e)};
+    drawBig();if(k<1)penRaf=requestAnimationFrame(step);else{penShow=null;penRaf=0;drawStudio()}};
+  penRaf=requestAnimationFrame(step)}
+// while you draw, the stroke shows with its copies round the mark, so you see the flower forming as you go
+function closesOn(pts){if(pts.length<8)return false;let L=0,x0=9,x1=-9,y0=9,y1=-9;for(let i=0;i<pts.length;i++){const [x,y]=pts[i];x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);if(i)L+=Math.hypot(x-pts[i-1][0],y-pts[i-1][1])}
+  const diag=Math.hypot(x1-x0,y1-y0),gap=Math.hypot(pts[0][0]-pts[pts.length-1][0],pts[0][1]-pts[pts.length-1][1]);return diag>.06&&gap<.22*diag&&L>1.5*diag}
+function drawInk(pts){const px=big.width;if(inkC.width!==px)inkC.width=inkC.height=px;const g=inkC.getContext("2d");g.clearRect(0,0,px,px);if(pts.length<2)return;
+  const n=pureN(cur),{w}=petalSize(cur.g,n),c=px/2,closed=closesOn(pts);
+  g.lineCap=g.lineJoin="round";g.strokeStyle=g.fillStyle=inkOf(cur);g.lineWidth=Math.max(2,w*.95*2*c*.85);
+  for(let k=n-1;k>=0;k--){g.save();g.translate(c,c);g.rotate(k*Math.PI*2/n);g.translate(-c,-c);g.globalAlpha=k?.5:.92;g.beginPath();
+    pts.forEach(([x,y],i)=>{const X=(x*.5+.5)*px,Y=(y*.5+.5)*px;i?g.lineTo(X,Y):g.moveTo(X,Y)});if(closed){g.closePath();g.fill()}else g.stroke();g.restore()}
+  return closed}
+const markAt=(e)=>{const r=big.getBoundingClientRect();return [(e.clientX-r.left)/r.width*2-1,(e.clientY-r.top)/r.height*2-1]};
+function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");const pts=t.ink;let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+  if(pts.length<4||L<.07){hist.pop();ro.classList.add("out");return false}
+  const closed=closesOn(pts),raw=closed?pts.slice(0,-1):pts,N=raw.length;
+  // two soft passes take the shake out of a hand-drawn line; a loop is smoothed all the way round, a stroke keeps its ends
+  const soft=(q)=>q.map((p,i)=>{const a=q[closed?(i-1+N)%N:Math.max(0,i-1)],b=q[closed?(i+1)%N:Math.min(N-1,i+1)];return [(a[0]+p[0]*2+b[0])/4,(a[1]+p[1]*2+b[1])/4]}),sm=soft(soft(raw));
+  penTo(makePen(toPetal(resample(sm,PEN_N,closed),cur),closed,cur.pen?cur.pen.mir:0));
+  told();drawGhosts();
+  ro.textContent=closed?"filled · tap the mark to let it go":"drawn · tap the mark to let it go";ro.classList.remove("out");clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1600);return true}
+big.addEventListener("pointerdown",(e)=>{try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false,ink:mode===6?[markAt(e)]:null}});
 big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
   if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
   tune.x=e.clientX;tune.y=e.clientY;
+  if(tune.ink){const v=markAt(e),q=tune.ink[tune.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)tune.ink.push(v);inkC.classList.add("on");big.classList.add("inking");const closed=drawInk(tune.ink);
+    ro.textContent=closed?"let go to fill it":"";ro.classList.toggle("out",!closed);ro.style.left=e.clientX+"px";ro.style.top=e.clientY+"px";return}
   if(mode===0){cur.g[6]=clamp(cur.g[6]+dx*.0028);cur.g[13]=clamp(cur.g[13]-dy*.0034)}
   else if(mode===1){slide(19,dx*.0026);cur.g[20]=clamp(cur.g[20]-dy*.003)}
   else if(mode===2){slide(21,dx*.0026);slide(22,-dy*.0026)}
@@ -964,15 +1065,17 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
 const DET=.035,toRaw=(v)=>{const a=v-.5;return a?.5+Math.sign(a)*(Math.abs(a)*(.5-DET)/.5+DET):.5},
   fromRaw=(r)=>{const a=r-.5;return .5+Math.sign(a)*Math.max(Math.abs(a)-DET,0)*.5/(.5-DET)};
 function slide(k,dv){const raw=tune.raw||(tune.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
-const end=()=>{if(tune&&tune.moved)told();tune=null;ro.classList.add("out");if(cur&&!mirOn())mirC.classList.remove("on")};
+const end=()=>{const t=tune;tune=null;
+  if(t&&t.ink){if(!cur)return;if(t.moved)inkDone(t);else if(cur.pen&&cur.pen.w>0){remember();penTo(null);told();ro.classList.add("out")}return} // a tap in Draw lets the drawing go
+  if(t&&t.moved)told();ro.classList.add("out");if(cur&&!mirOn())mirC.classList.remove("on")};
 /* what dragging the mark changes. Each mode is the same gesture, sideways and up-down, on two traits that belong together */
 const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],["stretch it","Stretch","wide or tall, and up to square it off softly"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
-  ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"]];
+  ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw a petal","Draw","draw one petal and it grows all the way round; close a loop to fill it"]];
 let mode=0;
 function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];
   if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
-  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
+  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
 MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
   b.onclick=()=>{setMode(i);popMode(false)};$("modepop").append(b)});setMode(0);
 function popMode(on){const p=$("modepop");p.hidden=!on;$("modeword").setAttribute("aria-expanded",on);if(on)p.children[mode].focus()}
@@ -1032,7 +1135,8 @@ function roll(far){ // every other ghost is a bigger leap, so the ring holds nea
 function blend(G,w){
   const g=Float32Array.from(cur.g,(v,i)=>clamp(v+G.d[i]*w));let n0=cur.n0,n1=cur.n1,s=cur.s;
   const cn=cur.s>.5?cur.n1:cur.n0;if(G.pet&&G.pet!==cn){n0=cn;n1=G.pet;s=w}
-  return {...cur,g,n0,n1,s};
+  const pen=G.pm!=null&&cur.pen?{...cur.pen,mir:lerp(cur.pen.mir,G.pm,w)}:cur.pen;
+  return {...cur,g,n0,n1,s,pen};
 }
 // the mark leaning toward one ghost, or toward two neighbours at once: the shapes between them are real shapes too
 function mix(w){
@@ -1047,7 +1151,8 @@ function mix(w){
   for(let k=0;k<NG;k++)g[k]=clamp(g[k]+Math.sign(sum[k])*Math.min(Math.abs(sum[k]),most[k]));
   let n0=cur.n0,n1=cur.n1,s=cur.s;
   if(top>=0){n0=cn;n1=ghosts[top].pet;s=clamp(tv-rival)}
-  return {...cur,g,n0,n1,s};
+  let pen=cur.pen;if(pen){let pm=pen.mir;for(let i=0;i<GN;i++)if(ghosts[i]&&ghosts[i].pm!=null&&w[i]>.002)pm+=(ghosts[i].pm-pen.mir)*w[i];if(pm!==pen.mir)pen={...pen,mir:clamp(pm)}}
+  return {...cur,g,n0,n1,s,pen};
 }
 const leant=()=>lw.some(v=>v>.002);
 /* symmetry is a direction of its own, both ways. A mark's symmetry is read from what breaks it:
@@ -1098,7 +1203,9 @@ function symTo(kind,m){const g=Float32Array.from(m.g),n=m.s>.5?m.n1:m.n0,sg=Math
   else if(kind==="turning"){unlean();unkind();twist();if(n%2&&Math.abs(g[19]-.5)>.02)g[19]=.5}
   else{twist();lean()}
   return g}
+const penSided=(m)=>m.pen&&m.pen.w>.5&&!m.pen.sym;
 function towardBalance(){const g=cur.g,S=symOf(cur),t=Float32Array.from(g);let say="";
+  if(penSided(cur)&&cur.pen.mir<.5)return {d:new Float32Array(NG),pet:0,far:false,sym:1,pm:1,say:"petal mirrored"};
   if(S.turn>.02||(!S.mirrors&&axisOf(g)!==null)){t.set(symTo("one",cur));const s=symOf({...cur,g:t});
     if(axisOf(g)===null){t.set(symTo("mirrored",cur));say="mirrored"}else say=s.mirrors?"one mirror":"untwisted"}
   else if(S.bent>.04){t[21]=t[22]=.5;say="balanced"}
@@ -1107,6 +1214,7 @@ function towardBalance(){const g=cur.g,S=symOf(cur),t=Float32Array.from(g);let s
   else return null; // already as balanced as it gets: this ghost is an ordinary cousin
   return {d:Float32Array.from(t,(v,i)=>v-g[i]),pet:0,far:false,sym:1,say}}
 function towardMotion(){const d=new Float32Array(NG),g=cur.g,S=symOf(cur),side=()=>Math.random()<.5?-1:1,n=S.n;let say="";
+  if(penSided(cur)&&cur.pen.mir>.5)return {d,pet:0,far:false,sym:-1,pm:0,say:"petal as you drew it"};
   const twist=()=>{const sg=Math.sign(g[6]-.5)||side();d[6]=clamp(.5+sg*(.36+Math.random()*.1))-g[6];say="turning"},
     // a lean from a mirrored mark keeps one mirror: the petals turn the little it takes to meet its axis
     lean=(keep)=>{const t=Float32Array.from(g);if(Math.random()<.5){t[22]=clamp(.5+side()*(.34+Math.random()*.1));say="heavier one end"}else{t[21]=clamp(.5+side()*(.38+Math.random()*.1));say="bent"}
@@ -1147,14 +1255,15 @@ function layoutHalo(){
   // and swells when you keep a shape, and measuring it mid-flight used to put the whole ring of ghosts off-centre
   const bx=big.offsetLeft,by=big.offsetTop,bw=big.offsetWidth,gs=Math.round(.42*h);
   gLay={cx:bx+bw/2,cy:by+bw/2,R:1.2*h,gs};
-  Object.assign(mirC.style,{left:bx+"px",top:by+"px",width:bw+"px",height:bw+"px"});{const px=Math.round(bw*Math.min(devicePixelRatio||1,2));if(mirC.width!==px)mirC.width=mirC.height=px}
+  Object.assign(mirC.style,{left:bx+"px",top:by+"px",width:bw+"px",height:bw+"px"});Object.assign(inkC.style,{left:bx+"px",top:by+"px",width:bw+"px",height:bw+"px"});{const px=Math.round(bw*Math.min(devicePixelRatio||1,2));if(mirC.width!==px)mirC.width=mirC.height=px}
   [...halo.children].forEach((b,i)=>{const a=-Math.PI/2+i*Math.PI*2/GN;
     b.style.left=Math.round(gLay.cx+gLay.R*Math.cos(a)-gs/2)+"px";b.style.top=Math.round(gLay.cy+gLay.R*Math.sin(a)-gs/2)+"px";
     const c=b.firstChild,px=Math.round(gs*Math.min(devicePixelRatio||1,2));c.width=c.height=px;c.style.width=c.style.height=gs+"px"});
 }
 function drawBig(){
   const bs=Math.min(1100,Math.round(big.clientWidth*Math.min(devicePixelRatio||1,2)))||900;
-  const m=peek?{...cur,g:peek.g}:leant()?mix(lw):cur;
+  let m=peek?{...cur,g:peek.g}:leant()?mix(lw):cur;
+  if(penShow)m={...m,pen:penShow};else if(peek&&peek.pm!=null&&cur.pen)m={...m,pen:{...cur.pen,mir:peek.pm}};
   if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal,cur));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(tiny,0,0);
   if(mirOn())drawMirrors(m);else mirC.classList.remove("on");
   if(tune&&tune.moved&&!peek)shapeWord(true); // the symmetry word follows a drag as it goes, not only when you let go
@@ -1167,7 +1276,7 @@ function drawBig(){
 const SP=96,scv=document.createElement("canvas");scv.width=scv.height=SP;const scx=scv.getContext("2d",{willReadFrequently:true});
 const ss=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)},gcd=(a,b)=>b?gcd(b,a%b):a;
 let scanKey="",scanned=null;
-function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,key=Array.from(g,v=>v.toFixed(3)).join()+n+m.s.toFixed(2)+letters;
+function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,pen=m.pen&&m.pen.w>.02?m.pen:null,key=Array.from(g,v=>v.toFixed(3)).join()+n+m.s.toFixed(2)+letters+(pen?pen.id+"/"+pen.mir.toFixed(2)+"/"+pen.w.toFixed(2):"");
   if(key===scanKey)return scanned;
   const PI=Math.PI,near=(th,ax)=>{const d=Math.abs(((th-ax)%PI+PI)%PI);return Math.min(d,PI-d)<.01};
   const tw=Math.max(Math.abs(g[6]-.5)-SYMW,0),spin=ss(.5,.85,g[16]),fan=ss(.5,.85,g[17]),stk=ss(.5,.85,g[18]),
@@ -1190,7 +1299,7 @@ function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,key=Array.from(g,v=>v.toFixed(3)
     if(sqb>.01){const q=((th%(PI/4))+PI/4)%(PI/4);if(Math.min(q,PI/4-q)>.01)al*=clamp(1-sqb/.15)} // a square badge keeps its four
     if(al>.01)lines.push({th,al})}
   let turns=bd>.02||hv>.02||fan>.01||stk>.01||(frm>.01&&hx<.99)?1:wd>.02?(n%2?1:2):sqb>.1?gcd(n,4):frm>.01?gcd(n,6):n;if(mid>.01&&m.n0!==m.n1)turns=gcd(turns,n===m.n0?m.n1:m.n0);
-  if(letters&&lines.length+turns>1){ // fold the drawn mark over each line and turn it, and keep only what holds
+  if((letters||pen)&&lines.length+turns>1){ // fold the drawn mark over each line and turn it, and keep only what holds
     paint(m,SP,0,{i:K("#000000"),a:K("#000000")});scx.clearRect(0,0,SP,SP);scx.drawImage(tiny,0,0);
     const px=scx.getImageData(0,0,SP,SP).data;let a=new Float32Array(SP*SP);for(let i=0;i<SP*SP;i++)a[i]=px[i*4+3]/255;
     for(let pass=0;pass<2;pass++){const b=new Float32Array(SP*SP);for(let y=1;y<SP-1;y++)for(let x=1;x<SP-1;x++){let s=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)s+=a[(y+j)*SP+x+i];b[y*SP+x]=s/9}a=b}
@@ -1218,10 +1327,11 @@ function drawMirrors(m){const s=scan(m),px=mirC.width,c=px/2,R=px*.5,g=mirC.getC
   g.globalAlpha=1}
 // a choice from the symmetry word is previewed on the mark before it's made: the mark glides to it, and back
 let peek=null,peekRaf=0,peekMs=0;
-function peekTo(t){if(!cur)return;if(!peek)peek={g:Float32Array.from(cur.g)};peek.t=Float32Array.from(t||cur.g);peek.home=!t;
+function peekTo(t,pm){if(!cur)return;if(!peek)peek={g:Float32Array.from(cur.g),pm:cur.pen?cur.pen.mir:null};peek.t=Float32Array.from(t||cur.g);peek.home=!t;peek.pt=cur.pen?(t&&pm!=null?pm:cur.pen.mir):null;
   if(!peekRaf){peekMs=performance.now();peekRaf=requestAnimationFrame(peekStep)}}
 function peekStep(ms){peekRaf=0;if(!cur||!peek)return;const dt=Math.min(.05,Math.max(0,ms-peekMs)/1000);peekMs=ms;const a=calm?1:1-Math.exp(-dt*10);let far=0;
   for(let k=0;k<NG;k++){peek.g[k]+=(peek.t[k]-peek.g[k])*a;far=Math.max(far,Math.abs(peek.t[k]-peek.g[k]))}
+  if(peek.pm!=null&&peek.pt!=null){peek.pm+=(peek.pt-peek.pm)*a;far=Math.max(far,Math.abs(peek.pt-peek.pm));if(Math.abs(peek.pt-peek.pm)<.002)peek.pm=peek.pt}
   if(far<.002){peek.g.set(peek.t);if(peek.home){peek=null}}
   drawBig();if(peek&&far>=.002)peekRaf=requestAnimationFrame(peekStep)}
 function shapeWord(anim){if(!cur)return;const w=$("shapeword"),k=kindOfScan(scan(cur)),t=SHAPES[k].toLowerCase();if(w.textContent===t)return;w.textContent=t;
@@ -1231,14 +1341,15 @@ function popShape(on){const p=$("shapepop");if(on===!p.hidden)return;p.hidden=!o
   if(!on){peekTo(null);if(!mirOn())mirC.classList.remove("on");return}
   tw.fill(0);lw.fill(0);[...halo.children].forEach(b=>b.style.opacity="");
   const now=kindOfScan(scan(cur)),c=colours(cur.pal,cur);p.innerHTML="";
-  for(const k of Object.keys(SHAPES)){const t=symTo(k,cur),m={...cur,g:t},s=scan(m),b=document.createElement("button");
+  for(const k of Object.keys(SHAPES)){const t=symTo(k,cur),pm=penSided(cur)?(k==="mirrored"||k==="one"?1:0):null,m={...cur,g:t,pen:pm==null?cur.pen:{...cur.pen,mir:pm}},s=scan(m),b=document.createElement("button");
     b.setAttribute("role","menuitemradio");b.setAttribute("aria-checked",k===now);
     const cv=document.createElement("canvas"),r=Math.round(30*Math.min(devicePixelRatio||1,2));cv.width=cv.height=r;paint(m,r,lens,c);cv.getContext("2d").drawImage(tiny,0,0);
-    const got=kindOfScan(s),hint=got===k?(k==="mirrored"?(s.mirrors===s.n?"all "+s.n+" mirror lines":s.mirrors+" mirror lines, as it's stretched"):SHAPE_SAY[k]):"not with "+(letters?"a letter in it":"this shape");
+    const got=kindOfScan(s),hint=got===k?(k==="mirrored"?(s.mirrors===s.n?"all "+s.n+" mirror lines":s.mirrors+" mirror lines, as it's stretched"):SHAPE_SAY[k]):"not with "+(letters?"a letter in it":cur.pen?"this drawing":"this shape");
     b.append(cv);b.insertAdjacentHTML("beforeend",`<b>${SHAPES[k]}</b><small>${hint}</small>`);
-    b.onpointerenter=b.onfocus=()=>peekTo(t);b.onclick=()=>{popShape(false);setShape(t)};p.append(b)}
+    b.onpointerenter=b.onfocus=()=>peekTo(t,pm);b.onclick=()=>{popShape(false);setShape(t,pm)};p.append(b)}
   drawBig();p.querySelector("[aria-checked=true]")?.focus({preventScroll:true})}
-function setShape(t){if(cur.g.every((v,i)=>Math.abs(v-t[i])<1e-4))return;remember();
+function setShape(t,pm){const pmOld=cur.pen?cur.pen.mir:null;if(cur.g.every((v,i)=>Math.abs(v-t[i])<1e-4)&&(pm==null||pm===pmOld))return;remember();
+  if(pm!=null&&cur.pen){if(!peek)peek={g:Float32Array.from(cur.g),pm:pmOld};else if(peek.pm==null)peek.pm=pmOld;peek.pt=pm;cur.pen={...cur.pen,mir:pm}}
   // the shown mark keeps gliding from wherever the preview had it, so choosing never jumps
   if(!peek)peek={g:Float32Array.from(cur.g)};cur.g=Float32Array.from(t);peek.t=Float32Array.from(t);peek.home=true;if(!peekRaf){peekMs=performance.now();peekRaf=requestAnimationFrame(peekStep)}
   told();makeGhosts();drawGhosts();queue();mirShow=true;clearTimeout(mirT2);mirT2=setTimeout(()=>{mirShow=false;drawBig()},1100)}
@@ -1288,7 +1399,7 @@ stage.addEventListener("pointerleave",()=>{if(pending<0){tw.fill(0);leanTo()}});
 // double-click keeps the shape you're looking at, even one caught halfway between two ghosts; a new ring grows round it
 stage.addEventListener("dblclick",(e)=>{if(!cur||unf>0||pending>=0||e.target.closest(".ghost,.tunehint")||!leant())return;e.preventDefault();keepLive()});
 function keepLive(){
-  remember();const m=mix(lw);cur.g=m.g;cur.n0=m.n0;cur.n1=m.n1;cur.s=m.s;
+  remember();const m=mix(lw);cur.g=m.g;cur.pen=m.pen;cur.n0=m.n0;cur.n1=m.n1;cur.s=m.s;
   if(cur.s<.02||cur.s>.98){cur.n0=cur.n1=cur.s>.5?cur.n1:cur.n0;cur.s=0}
   lw.fill(0);tw.fill(0);[...halo.children].forEach(b=>b.style.opacity="");
   if(!calm)big.animate([{scale:1.045},{scale:1}],{duration:420,easing:"cubic-bezier(.2,.9,.3,1.3)"});
@@ -1296,13 +1407,13 @@ function keepLive(){
 }
 function become(i){if(!ghosts[i]||pending>=0)return;if(lw[i]>.97&&lw.every((v,k)=>k===i||v<.02)){commit(i);return}pending=i;leanOne(i,1)}
 function commit(i){
-  remember();const m=blend(ghosts[i],1);cur.g=m.g;if(m.n1!==cur.n1||m.n0!==cur.n0){cur.n0=cur.n1=m.n1;cur.s=0}
+  remember();const m=blend(ghosts[i],1);cur.g=m.g;cur.pen=m.pen;if(m.n1!==cur.n1||m.n0!==cur.n0){cur.n0=cur.n1=m.n1;cur.s=0}
   lw.fill(0);tw.fill(0);pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
   told();drawBig();makeGhosts();drawGhosts();queue(); // the mark first, the sheet on the next frame
 }
-const snapOf=()=>({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0})),gh:ghosts});
+const snapOf=()=>({pen:cur.pen||null,g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0})),gh:ghosts});
 function remember(){hist.push(snapOf());if(hist.length>80)hist.shift();fut=[]}
-function restore(h){if(petT){cancelAnimationFrame(petT);petT=0}cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();
+function restore(h){if(petT){cancelAnimationFrame(petT);petT=0}if(h.pen!==cur.pen&&!calm&&(h.pen||cur.pen))penTo(h.pen||null);else{cancelAnimationFrame(penRaf);penShow=null;cur.pen=h.pen}cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();
   // the ring you had then comes back with it
   if(h.gh&&h.gh!==ghosts){ghosts=h.gh;gen++;[...halo.children].forEach((b,i)=>{b.classList.add("fresh");setTimeout(()=>b.classList.remove("fresh"),calm?0:60+i*30)})}
   told();drawGhosts();queue()}
@@ -1312,7 +1423,7 @@ function told(){const n=hist.length;if(!$("hexes").contains(document.activeEleme
   const pn=cur.s>.5?cur.n1:cur.n0;$("petn").textContent=pn+" petals";$("fewer").disabled=pn===SYM[0]&&cur.s%1===0;$("more").disabled=pn===SYM[SYM.length-1]&&cur.s%1===0;
   $("found").textContent=foundAt+(cur.note||"");shapeWord(true);
   // the link carries every change, so a shared mark arrives exactly as it was left
-  const url=cur.at+(n||cur.dye.length||cur.edited||symI!==2?"&"+codeOf(cur):""); // under another symmetry setting the spot alone would grow a different mark
+  const url=cur.at+(n||cur.dye.length||cur.edited||cur.pen||symI!==2?"&"+codeOf(cur):"")+(cur.pen?"&p"+penCode(cur.pen):""); // under another symmetry setting the spot alone would grow a different mark
   if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}}
 $("undo").onclick=stepBack;$("redo").onclick=stepAgain;
 addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio();prender()}});
@@ -1471,7 +1582,7 @@ const echo=Array.from({length:EN},()=>[0,0]);
 function snap(m,px,l,fix){paint(m,px,l,fix);const c=document.createElement("canvas");c.width=c.height=px;c.getContext("2d").drawImage(tiny,0,0);return c}
 function sheet(items,w,h,l,fix){ // many marks in one draw
   tiny.width=w;tiny.height=h;const gl=T.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
-  const b=new Float32Array(items.length*T.STRIDE);items.forEach((it,k)=>put(b,k*T.STRIDE,it.x,it.y,it.s,it.r||0,1,it.m,l));
+  const b=new Float32Array(items.length*T.STRIDE);items.forEach((it,k)=>put(b,k*T.STRIDE,it.x,it.y,it.s,it.r||0,1,it.m,l));T.pen(items[0]&&items[0].m);
   T.marks(b,items.length,w,h,[0,0],1,fix,false);
   const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(tiny,0,0);return c}
 /* four ways to set the mark on a sheet. Each uses the same four layers you scroll through: the words, the
@@ -1500,7 +1611,7 @@ function kinItems(P){const L=ghosts.map(G=>blend(G,1)),W=P.Wp-2*P.m;
   if(P.st===3)return L.map((m,i)=>({m,x:P.m+W/4*(i%4+.5),y:P.kinY+(i>>2)*P.kin*1.75,s:P.kin}));
   return L.map((m,i)=>({m,x:P.m+W/8*(i+.5),y:P.kinY,s:P.kin}))}
 function pbuild(){
-  const key=codeOf(cur)+"/"+lens+"/"+fmt+"/"+gen+"/"+pstyle;if(key===pk&&pc)return;pk=key;
+  const key=codeOf(cur)+penCode(cur.pen)+"/"+lens+"/"+fmt+"/"+gen+"/"+pstyle;if(key===pk&&pc)return;pk=key;
   const P=pplan(),c=colours(cur.pal,cur),bsz=Math.round(big.offsetWidth*Math.min(devicePixelRatio||1,2));
   pc={hero:snap(cur,Math.min(1400,Math.max(Math.round(P.hs),bsz)),lens,c),line:snap(cur,1100,1,c),field:null,pad:Math.round(P.Wp*.12),items:kinItems(P)};
   if(pstyle===2)pc.acc=snap(cur,360,lens,{i:K(accOf(cur)),a:K(inkOf(cur)),d:[]}),pc.ink=snap(cur,360,lens,{i:K(inkOf(cur)),a:K(accOf(cur)),d:[]});
@@ -1710,7 +1821,7 @@ function breeder(b,k){
 /* ---------- keeping ---------- */
 function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal,m));const u=tiny.toDataURL("image/png");cur=keep;return u}
 // the same mark, in the same colours and letters, is only kept once
-const keyOf=(m)=>codeOf({...m,g:Float32Array.from(m.g),dye:m.dye||[],gr:m.gr||null,ink:m.ink||null,acc:m.acc||null})+"|"+(m.letters||"");
+const keyOf=(m)=>codeOf({...m,g:Float32Array.from(m.g),dye:m.dye||[],gr:m.gr||null,ink:m.ink||null,acc:m.acc||null})+"|"+(m.letters||"")+(m.pen?"|"+penCode(m.pen):"");
 shelf.forEach(k=>{if(!k.key)k.key=keyOf(k)});
 const saveShelf=()=>{try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf));return true}catch(e){return false}};
 function drawShelf(fresh){
@@ -1724,7 +1835,7 @@ function drawShelf(fresh){
 function flashKept(key){document.querySelectorAll(".shelf button,.keptrow button").forEach(b=>{if(shelf[+b.dataset.i]&&shelf[+b.dataset.i].key===key){b.classList.remove("flash");void b.offsetWidth;b.classList.add("flash")}})}
 const isKept=()=>cur&&shelf.some(k=>k.key===keyOf({...cur,letters}));
 $("keep").onclick=()=>{
-  const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,ink:cur.ink||undefined,acc:cur.acc||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h}))};
+  const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,ink:cur.ink||undefined,acc:cur.acc||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h})),pen:cur.pen?{...cur.pen,p:Array.from(cur.pen.p,v=>+v.toFixed(4))}:undefined};
   m.key=keyOf(m);const at=shelf.findIndex(k=>k.key===m.key);
   if(at>=0){if(at>0){shelf.unshift(shelf.splice(at,1)[0]);saveShelf();drawShelf()}flashKept(m.key);$("say").textContent="That one's already on your shelf.";return}
   m.thumb=thumb({...m,g:Float32Array.from(m.g)});shelf.unshift(m);
@@ -1751,7 +1862,7 @@ function readField(n,l){ // the mark's outline as numbers, read back from the gr
   const gl=T.gl,fb=gl.createFramebuffer(),tx=gl.createTexture();gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,tx);
   gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
   gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tx,0);
-  put(one,0,n/2,n/2,n,0,1,cur,l);gl.activeTexture(gl.TEXTURE0);
+  put(one,0,n/2,n/2,n,0,1,cur,l);T.pen(cur);gl.activeTexture(gl.TEXTURE0);
   T.marks(one,1,n,n,[0,0],1,{i:K("#000000"),a:K("#000000")},true);
   const px=new Uint8Array(n*n*4);gl.readPixels(0,0,n,n,gl.RGBA,gl.UNSIGNED_BYTE,px);
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.deleteFramebuffer(fb);gl.bindTexture(gl.TEXTURE_2D,null);gl.deleteTexture(tx);gl.activeTexture(gl.TEXTURE0);
@@ -1829,14 +1940,14 @@ $("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.crea
 
 /* ---------- start ---------- */
 if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";$("ghosthint").textContent="Tap a ghost and your mark melts into it."}
-function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^&]+))?(?:&([0-9a-z]+))?$/.exec(location.hash);if(!m)return null;
-  cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3),code:m[5]}}
+function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^&]+))?(?:&([0-9a-z]+))?(?:&p([0-9a-z]+))?$/.exec(location.hash);if(!m)return null;
+  cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3),code:m[5],pen:m[6]}}
 const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
 window.__meadow={cam,setLens,plant,openStudio,specimen,world:(x,y)=>world(x,y),breed:(a,b)=>breed(a,b),svgText,tend,probe(m,n){const k=cur;cur=m;const r=readField(n,0);cur=k;return r},get cur(){return cur},get tiles(){return tiles}};
 requestAnimationFrame(frame);
 setTimeout(()=>document.body.classList.add("live"),400);
 if(landed)(async()=>{if(landed.letters)await plant(landed.letters);const m=specimen(cam.x,cam.y);if(!m.ok)tend([m]);openStudio(m);const e=landed.code&&readCode(landed.code);
-  if(e){Object.assign(cur,{pal:e.pal,gr:e.gr,ink:e.ink,acc:e.acc,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:""});told();makeGhosts();drawStudio()}
+  if(e){Object.assign(cur,{pal:e.pal,gr:e.gr,ink:e.ink,acc:e.acc,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:"",pen:readPen(landed.pen)});told();makeGhosts();drawStudio()}
   try{history.replaceState(null,"",location.hash)}catch(e){}})();
 </script>
 </body>
