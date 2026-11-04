@@ -118,6 +118,15 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .modepop button[aria-checked=true]{background:color-mix(in srgb,var(--ink) 16%,transparent)}
 .modepop kbd{font:10px var(--f-mono);opacity:.5;grid-row:1/3;align-self:center}
 .modepop b{font-weight:600}.modepop small{opacity:.65;font-size:10.5px;line-height:1.35}
+/* the mark's own symmetry: a word beside the petals, its menu showing each choice as a small mark */
+.shapewrap{position:relative;display:inline-flex;align-items:center;padding:0 4px;white-space:nowrap}
+#shapepop{left:auto;right:-6px;transform-origin:85% 100%;min-width:268px}
+#shapepop button{grid-template-columns:34px 1fr;align-items:center}
+#shapepop canvas{grid-row:1/3;width:30px;height:30px;justify-self:center}
+/* mirror lines laid over the mark while its symmetry is being changed, fading as each line stops holding */
+#mirrors{position:absolute;pointer-events:none;opacity:0;transition:opacity .35s ease}
+#mirrors.on{opacity:1}
+.stage.unfolded #mirrors{display:none}
 /* while you drag, a small label beside the pointer names what you're making */
 .readout{position:fixed;z-index:9;pointer-events:none;font:11px var(--f-mono);background:var(--ink);color:var(--ground);padding:3px 9px;border-radius:999px;translate:14px -28px;transition:opacity .2s}
 .readout.out{opacity:0}
@@ -233,13 +242,14 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
   <div class="stage">
     <canvas id="big" width="900" height="900" aria-label="Your mark. Drag sideways to twist it, up and down to thicken it."></canvas>
     <div id="halo" aria-label="Ways your mark could grow"></div>
+    <canvas id="mirrors" aria-hidden="true"></canvas>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
       <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–6)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
       <div class="modepop" id="modepop" hidden role="menu" aria-label="What dragging the mark changes"></div>
       <div class="modepop" id="stylepop" hidden role="menu" aria-label="How the poster sets the mark"></div>
       <div class="tools">
-        <span class="tools" id="markhint"><span class="grp" role="group" aria-label="Petals"><button id="fewer" aria-label="Fewer petals" title="Fewer petals (scroll down)">−</button><span id="petn">6 petals</span><button id="more" aria-label="More petals" title="More petals (scroll up)">+</button></span></span>
+        <span class="tools" id="markhint"><span class="grp" role="group" aria-label="Petals"><button id="fewer" aria-label="Fewer petals" title="Fewer petals (scroll down)">−</button><span id="petn">6 petals</span><button id="more" aria-label="More petals" title="More petals (scroll up)">+</button></span><span class="shapewrap"><button class="word" id="shapeword" aria-haspopup="true" aria-expanded="false" title="Its symmetry: mirrored, one mirror, turning or free (M)">mirrored</button><div class="modepop" id="shapepop" hidden role="menu" aria-label="This mark's symmetry"></div></span></span>
         <span class="tools" id="posterhint" hidden><span class="grp" id="fmts" role="group" aria-label="Poster shape"></span><button class="chip" id="layer">Another layer</button><button class="chip" id="fold">Back to the mark</button></span>
         <span class="grp" id="undoWrap" role="group" aria-label="History"><button id="undo" aria-label="Step back" title="Step back  ⌘Z">↶</button><button id="redo" aria-label="Step forward" title="Step forward  ⇧⌘Z">↷</button></span>
       </div>
@@ -829,7 +839,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-6]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-6]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -918,7 +928,7 @@ function openStudio(m,from){ftag.classList.add("out");
 let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
-function closeStudio(){if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
+function closeStudio(){$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
   $("studio").hidden=true;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 let keptNow=false;
 function leave(){closeStudio();
@@ -950,7 +960,7 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
 const DET=.035,toRaw=(v)=>{const a=v-.5;return a?.5+Math.sign(a)*(Math.abs(a)*(.5-DET)/.5+DET):.5},
   fromRaw=(r)=>{const a=r-.5;return .5+Math.sign(a)*Math.max(Math.abs(a)-DET,0)*.5/(.5-DET)};
 function slide(k,dv){const raw=tune.raw||(tune.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
-const end=()=>{if(tune&&tune.moved)told();tune=null;ro.classList.add("out")};
+const end=()=>{if(tune&&tune.moved)told();tune=null;ro.classList.add("out");if(cur&&!mirOn())mirC.classList.remove("on")};
 /* what dragging the mark changes. Each mode is the same gesture, sideways and up-down, on two traits that belong together */
 const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],["stretch it","Stretch","wide or tall, and up to square it off softly"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
@@ -964,15 +974,17 @@ MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribu
 function popMode(on){const p=$("modepop");p.hidden=!on;$("modeword").setAttribute("aria-expanded",on);if(on)p.children[mode].focus()}
 $("modeword").onclick=(e)=>{e.stopPropagation();popMode($("modepop").hidden)};
 addEventListener("pointerdown",(e)=>{if(!$("modepop").hidden&&!e.target.closest("#modepop,#modeword"))popMode(false)});
-$("modepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropagation();popMode(false);$("modeword").focus()}});
+$("modepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropagation();popMode(false);$("modeword").focus()}else menuKeys(e,$("modepop"))});
 // the names a drag passes through, said beside the pointer so you know what you're getting
 const OUTLINES=["circle","capsule","lens","diamond","box","teardrop","heart","crescent","star","flame"],FRAMES=["hexagon","shield","drop","arch"];
 function nameNow(){const g=cur.g;
   if(mode===3)return g[23]<.06?OUTLINES[Math.round(g[2]*4)]:OUTLINES[5+Math.round(clamp((g[23]-.12)/.88)*4)];
   if(mode===4)return g[14]<.7?"no frame":g[24]<.06?(g[12]>.5?"rounded square":"circle"):FRAMES[Math.round(clamp((g[24]-.12)/.88)*3)];
-  if(mode===0)return Math.abs(g[6]-.5)<SYMW?"mirrored":"turning";
-  if(mode===2){const b=Math.abs(g[21]-.5)>.004,h=Math.abs(g[22]-.5)>.004;return b&&h?"bent, heavier one end":b?"bent":h?"heavier one end":"balanced"}
-  if(mode===1){const a=g[19]-.5;return (Math.abs(a)<.06?"":a>0?"wider":"taller")+(g[20]>.2?(Math.abs(a)<.06?"":", ")+"squarer":"")||"round"}
+  // twist, stretch and lean are where symmetry is made and lost, so their labels also say what the mark now holds
+  const s=scan(cur),k=kindOfScan(s),short=k==="mirrored"?s.mirrors+" mirror lines":k==="one"?"one mirror":k;
+  if(mode===0)return sayScan(s);
+  if(mode===2){const b=Math.abs(g[21]-.5)>.004,h=Math.abs(g[22]-.5)>.004;return (b&&h?"bent, heavier one end":b?"bent":h?"heavier one end":"balanced")+" · "+short}
+  if(mode===1){const a=g[19]-.5;return ((Math.abs(a)<.06?"":a>0?"wider":"taller")+(g[20]>.2?(Math.abs(a)<.06?"":", ")+"squarer":"")||"round")+" · "+short}
   return ""}
 const ro=document.createElement("div");ro.className="readout out";document.body.append(ro);
 // colour turns as one: every hue moves by the same angle and keeps its lightness, so the set stays in tune, and its
@@ -1039,30 +1051,66 @@ const leant=()=>lw.some(v=>v>.002);
    pointed frame leave it one mirror at most; both together leave it free. The ghost above always steps one rung
    toward balance, the ghost below one rung toward motion, so either way can be walked as far as you like */
 const SYMW=.11; // within this of the middle a twist doesn't show, so the mark is mirrored
+/* A bend, a heavy end, a stretch, a fan or bars each keep a mirror only along their own axis: a bend along the
+   level line, the others along the upright one. The petals keep theirs only where a petal or a gap lies, so a bent
+   mark has its one mirror only when the petals are turned to meet the bend's axis. Off it, the mark is free */
+const onAxis=(g,n,ax)=>{const s=Math.PI/n,a=((ax+g[1]*Math.PI*2/n)%s+s)%s;return Math.min(a,s-a)<.03},
+  // the smallest turn of the petals that puts a mirror line on one of these axes (level is 0, upright is π/2)
+  alignTo=(g,n,axes)=>{let best=g[1],bd=9;for(const ax of axes){const b0=((-ax*n/(Math.PI*2))%.5+.5)%.5;for(let j=-2;j<=2;j++){const v=b0+j*.5;if(v<0||v>1)continue;const d=Math.abs(v-g[1]);if(d<bd){bd=d;best=v}}}g[1]=best};
 function symOf(m){const g=m.g,n=m.s>.5?m.n1:m.n0;
   const turn=Math.max(Math.max(Math.abs(g[6]-.5)-SYMW,0)*2.5,g[16]>.6?1:0), // twisted or hooked one way round
+    bd=Math.abs(g[21]-.5)>.02,hv=Math.abs(g[22]-.5)>.02,
     bent=Math.max(Math.abs(g[21]-.5),Math.abs(g[22]-.5))*2,                  // leaned or heavier at one end
     kind=Math.max(g[17]>.6?1:0,g[18]>.6?1:0,g[14]>.74&&g[24]>.06?.6:0),     // a fan, bars or a pointed frame
     wide=Math.abs(g[19]-.5)*2;
-  const mirrors=turn>.02?0:bent>.04||kind?1:wide>.04?(n%2?1:2):n;
-  return {n,turn,bent,kind,wide,mirrors,free:turn>.02&&(bent>.04||kind>0)}}
-function towardBalance(){const d=new Float32Array(NG),g=cur.g,S=symOf(cur);let say="";
-  if(S.turn>.02){if(Math.abs(g[6]-.5)>SYMW)d[6]=.5-g[6];if(g[16]>.6)d[16]=.38-g[16];say=S.bent>.04||S.kind?"untwisted":"mirrored"}
-  else if(S.bent>.04){d[21]=.5-g[21];d[22]=.5-g[22];say="balanced"}
-  else if(S.wide>.04){d[19]=.5-g[19];say="round again"}
-  else if(S.kind){if(g[17]>.6)d[17]=.38-g[17];if(g[18]>.6)d[18]=.38-g[18];if(g[14]>.74&&g[24]>.06)d[24]=-g[24];say="whole again"}
+  let mirrors;
+  if(turn>.02||(bd&&(hv||kind)))mirrors=0;                    // two axes that disagree leave none
+  else if(bd)mirrors=onAxis(g,n,0)?1:0;
+  else if(hv||kind)mirrors=onAxis(g,n,Math.PI/2)?1:0;
+  else if(wide>.04)mirrors=(onAxis(g,n,0)?1:0)+(onAxis(g,n,Math.PI/2)?1:0);
+  else mirrors=n;
+  const turns=bent>.04||kind?1:wide>.04?(n%2?1:2):n;
+  return {n,turn,bent,kind,wide,mirrors,turns,free:!mirrors&&turns<2}}
+// the axis a mark's lean or kind needs its petals on, if it has one
+const axisOf=(g)=>Math.abs(g[21]-.5)>.02?0:Math.abs(g[22]-.5)>.02||g[17]>.6||g[18]>.6||(g[14]>.74&&g[24]>.06)?Math.PI/2:null;
+/* where the mark lands for each kind of symmetry, changing as little as it can: what it already has is kept
+   (its twist, its lean, its fan), what's missing is added at a strength that clearly shows, and what breaks the
+   choice is taken off. A mark asked for one mirror has its petals turned the little it takes to meet the axis */
+function symTo(kind,m){const g=Float32Array.from(m.g),n=m.s>.5?m.n1:m.n0,sg=Math.sign(g[6]-.5)||1;
+  const unturn=()=>{if(Math.abs(g[6]-.5)>=SYMW*.9)g[6]=.5;if(g[16]>.5)g[16]=.38},
+    twist=()=>{if(Math.abs(g[6]-.5)<.27&&g[16]<.6)g[6]=.5+sg*.34},
+    unlean=()=>{g[21]=g[22]=.5},unkind=()=>{if(g[17]>.5)g[17]=.38;if(g[18]>.5)g[18]=.38;if(g[14]>.7&&g[24]>.002)g[24]=0},
+    leans=()=>Math.abs(g[21]-.5)>.02||Math.abs(g[22]-.5)>.02,
+    lean=(any)=>{if(!leans()&&(any||axisOf(g)===null))g[22]=.5+(Math.sign(g[22]-.5)||1)*.36};
+  if(kind==="mirrored"){unturn();unlean();unkind();if(Math.abs(g[19]-.5)>.02)alignTo(g,n,n%2?[0,Math.PI/2]:[0]);
+    else if(g[14]>.69&&g[12]>.47)alignTo(g,n,[0,Math.PI/4,Math.PI/2,Math.PI*.75])} // a square badge mirrors only on its own four lines
+  else if(kind==="one"){unturn();
+    if(Math.abs(g[21]-.5)>.02&&(Math.abs(g[22]-.5)>.02||axisOf({...g,21:.5})!==null))g[21]=.5; // a bend and an upright axis disagree: the bend goes
+    lean();alignTo(g,n,[axisOf(g)]);if(scan({...m,g}).mirrors>1&&!leans())g[22]=.86} // bars level and upright keep two: a heavy end leaves one
+  else if(kind==="turning"){unlean();unkind();twist();if(n%2&&Math.abs(g[19]-.5)>.02)g[19]=.5}
+  else{twist();lean()}
+  return g}
+function towardBalance(){const g=cur.g,S=symOf(cur),t=Float32Array.from(g);let say="";
+  if(S.turn>.02||(!S.mirrors&&axisOf(g)!==null)){t.set(symTo("one",cur));const s=symOf({...cur,g:t});
+    if(axisOf(g)===null){t.set(symTo("mirrored",cur));say="mirrored"}else say=s.mirrors?"one mirror":"untwisted"}
+  else if(S.bent>.04){t[21]=t[22]=.5;say="balanced"}
+  else if(S.wide>.04){t[19]=.5;say="round again"}
+  else if(S.kind){t.set(symTo("mirrored",cur));t[19]=g[19];say="whole again"}
   else return null; // already as balanced as it gets: this ghost is an ordinary cousin
-  return {d,pet:0,far:false,sym:1,say}}
-function towardMotion(){const d=new Float32Array(NG),g=cur.g,S=symOf(cur),side=()=>Math.random()<.5?-1:1;let say="";
+  return {d:Float32Array.from(t,(v,i)=>v-g[i]),pet:0,far:false,sym:1,say}}
+function towardMotion(){const d=new Float32Array(NG),g=cur.g,S=symOf(cur),side=()=>Math.random()<.5?-1:1,n=S.n;let say="";
   const twist=()=>{const sg=Math.sign(g[6]-.5)||side();d[6]=clamp(.5+sg*(.36+Math.random()*.1))-g[6];say="turning"},
-    lean=()=>{if(Math.random()<.5){d[22]=clamp(.5+side()*(.34+Math.random()*.1))-g[22];say="heavier one end"}else{d[21]=clamp(.5+side()*(.38+Math.random()*.1))-g[21];say="bent"}};
+    // a lean from a mirrored mark keeps one mirror: the petals turn the little it takes to meet its axis
+    lean=(keep)=>{const t=Float32Array.from(g);if(Math.random()<.5){t[22]=clamp(.5+side()*(.34+Math.random()*.1));say="heavier one end"}else{t[21]=clamp(.5+side()*(.38+Math.random()*.1));say="bent"}
+      if(keep)alignTo(t,n,[axisOf(t)]);for(let k=0;k<NG;k++)d[k]=t[k]-g[k]};
   if(S.free){ // already free: go further the way it's already going
     if(Math.abs(g[6]-.5)>SYMW&&Math.abs(g[6]-.5)<.45){d[6]=Math.sign(g[6]-.5)*Math.min(.16,.5-Math.abs(g[6]-.5))}
-    const k=Math.abs(g[22]-.5)>Math.abs(g[21]-.5)?22:21;if(Math.abs(g[k]-.5)<.45)d[k]=Math.sign(g[k]-.5)*Math.min(.14,.5-Math.abs(g[k]-.5));
+    else if(S.turn<=.02)twist();
+    const k=Math.abs(g[22]-.5)>Math.abs(g[21]-.5)?22:21;if(Math.abs(g[k]-.5)>.02&&Math.abs(g[k]-.5)<.45)d[k]=Math.sign(g[k]-.5)*Math.min(.14,.5-Math.abs(g[k]-.5));
     if(!d.some(v=>Math.abs(v)>.02))return null;say="wilder"}
-  else if(S.turn>.02)lean();                       // turning only: lean it too, and it's free
-  else if(S.bent>.04||S.kind)twist();              // one mirror: twist it too, and it's free
-  else{const r=Math.random();if(r<.45)twist();else if(r<.62&&g[16]<.6){d[16]=.86-g[16];say="hooked"}else lean()} // fully balanced: break it one way
+  else if(S.turn>.02)lean(false);                  // turning only: lean it too, and it's free
+  else if(S.mirrors===1||axisOf(g)!==null){twist();say="free"} // one mirror: twist it too, and it's free
+  else{const r=Math.random();if(r<.45)twist();else if(r<.62&&g[16]<.6){d[16]=.86-g[16];say="hooked"}else lean(true)} // fully balanced: break it one way
   return {d,pet:0,far:false,sym:-1,say}}
 function makeGhosts(){
   let list=Array.from({length:GN},(_,i)=>roll(i%2===1));
@@ -1089,15 +1137,107 @@ function layoutHalo(){
   big.style.width=big.style.height=2*h+"px";big.style.margin=narrow?Math.round(.44*h)+"px auto":"0";
   const br=big.getBoundingClientRect(),sr=stage.getBoundingClientRect(),gs=Math.round(.42*h);
   gLay={cx:br.left-sr.left+br.width/2,cy:br.top-sr.top+br.height/2,R:1.2*h,gs};
+  Object.assign(mirC.style,{left:br.left-sr.left+"px",top:br.top-sr.top+"px",width:br.width+"px",height:br.height+"px"});{const px=Math.round(br.width*Math.min(devicePixelRatio||1,2));if(mirC.width!==px)mirC.width=mirC.height=px}
   [...halo.children].forEach((b,i)=>{const a=-Math.PI/2+i*Math.PI*2/GN;
     b.style.left=Math.round(gLay.cx+gLay.R*Math.cos(a)-gs/2)+"px";b.style.top=Math.round(gLay.cy+gLay.R*Math.sin(a)-gs/2)+"px";
     const c=b.firstChild,px=Math.round(gs*Math.min(devicePixelRatio||1,2));c.width=c.height=px;c.style.width=c.style.height=gs+"px"});
 }
 function drawBig(){
   const bs=Math.min(1100,Math.round(big.clientWidth*Math.min(devicePixelRatio||1,2)))||900;
-  const m=leant()?mix(lw):cur;
+  const m=peek?{...cur,g:peek.g}:leant()?mix(lw):cur;
   if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal,cur));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(tiny,0,0);
+  if(mirOn())drawMirrors(m);else mirC.classList.remove("on");
 }
+/* ---------- the mark's own symmetry ----------
+   Which mirror lines a mark holds is worked out from how it's drawn: the petals offer a line through every petal and
+   every gap, and each thing that bends the mark keeps only the lines on its own axis. Each line fades as the trait
+   that breaks it grows, so while you drag a line thins away instead of vanishing. A planted letter can't be read
+   that way, so then the drawn mark itself is folded over each line and turned by a petal to see what still holds */
+const SP=96,scv=document.createElement("canvas");scv.width=scv.height=SP;const scx=scv.getContext("2d",{willReadFrequently:true});
+const ss=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)},gcd=(a,b)=>b?gcd(b,a%b):a;
+let scanKey="",scanned=null;
+function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,key=Array.from(g,v=>v.toFixed(3)).join()+n+m.s.toFixed(2)+letters;
+  if(key===scanKey)return scanned;
+  const PI=Math.PI,near=(th,ax)=>{const d=Math.abs(((th-ax)%PI+PI)%PI);return Math.min(d,PI-d)<.01};
+  const tw=Math.max(Math.abs(g[6]-.5)-SYMW,0),spin=ss(.5,.85,g[16]),fan=ss(.5,.85,g[17]),stk=ss(.5,.85,g[18]),
+    bd=Math.abs(g[21]-.5),hv=Math.abs(g[22]-.5),wd=Math.abs(g[19]-.5),frm=g[14]>.7?ss(0,.12,g[24]):0,
+    sqb=ss(.67,.73,g[14])*ss(.47,.53,g[12]),mid=Math.min(m.s,1-m.s);
+  // what's left of every line once the twist, a pinwheel or a half-made petal count has had its way
+  const all=clamp(1-tw/.025)*clamp(1-spin/.12);
+  // a mark melting between two petal counts keeps only the lines both counts share
+  const linesFor=(c)=>{const o=[],ph=g[1]*PI*2/c;for(let k=0;k<c;k++)o.push(((-ph+k*PI/c)%PI+PI)%PI);return o};
+  let cand=linesFor(n);if(mid>.01&&m.n0!==m.n1){const other=linesFor(n===m.n0?m.n1:m.n0);cand=cand.filter(t=>other.some(o=>near(t,o)))}
+  // a whole fan or whole bars are mirrored upright whatever the petals do
+  if((fan>.99||stk>.99)&&!cand.some(t=>near(t,PI/2)))cand.push(PI/2);
+  const lines=[];
+  for(const th of cand){const up=near(th,PI/2),lv=near(th,0);let al=all;
+    if(!lv)al*=clamp(1-bd/.025);                                    // a bend keeps the level line
+    if(!up)al*=clamp(1-hv/.025)*clamp(1-fan/.12)*clamp(1-stk/.12)*clamp(1-frm/.2); // the rest keep the upright one
+    if(!up&&!lv)al*=clamp(1-wd/.025);                               // a stretch keeps both
+    if(stk>.01&&lv)al*=clamp(1-Math.abs(g[1]-.5)/.02*stk);          // chevrons tip the bars off the level line
+    if(sqb>.01){const q=((th%(PI/4))+PI/4)%(PI/4);if(Math.min(q,PI/4-q)>.01)al*=clamp(1-sqb/.15)} // a square badge keeps its four
+    if(al>.01)lines.push({th,al})}
+  let turns=bd>.02||hv>.02||fan>.01||stk>.01||frm>.01?1:wd>.02?(n%2?1:2):sqb>.1?gcd(n,4):n;if(mid>.01&&m.n0!==m.n1)turns=gcd(turns,n===m.n0?m.n1:m.n0);
+  if(letters&&lines.length+turns>1){ // fold the drawn mark over each line and turn it, and keep only what holds
+    paint(m,SP,0,{i:K("#000000"),a:K("#000000")});scx.clearRect(0,0,SP,SP);scx.drawImage(tiny,0,0);
+    const px=scx.getImageData(0,0,SP,SP).data;let a=new Float32Array(SP*SP);for(let i=0;i<SP*SP;i++)a[i]=px[i*4+3]/255;
+    for(let pass=0;pass<2;pass++){const b=new Float32Array(SP*SP);for(let y=1;y<SP-1;y++)for(let x=1;x<SP-1;x++){let s=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)s+=a[(y+j)*SP+x+i];b[y*SP+x]=s/9}a=b}
+    const at=(x,y)=>{const x0=Math.floor(x),y0=Math.floor(y),fx=x-x0,fy=y-y0,G=(X,Y)=>X<0||Y<0||X>=SP||Y>=SP?0:a[Y*SP+X];
+      return G(x0,y0)*(1-fx)*(1-fy)+G(x0+1,y0)*fx*(1-fy)+G(x0,y0+1)*(1-fx)*fy+G(x0+1,y0+1)*fx*fy};
+    const off=(f)=>{let s=0,t=0;const c=SP/2;for(let y=0;y<SP;y+=2)for(let x=(y>>1)&1;x<SP;x+=2){const v=a[y*SP+x],q=f(x+.5-c,y+.5-c);s+=Math.abs(v-at(q[0]+c-.5,q[1]+c-.5));t+=v}return s/Math.max(t,1)};
+    for(const l of lines){const u=Math.cos(l.th),v=Math.sin(l.th);l.al*=clamp((.09-off((x,y)=>{const d=x*u+y*v;return [2*d*u-x,2*d*v-y]}))/.04)}
+    const spun=(t)=>{const c=Math.cos(t),s=Math.sin(t);return off((x,y)=>[c*x-s*y,s*x+c*y])<.07};
+    if(turns>1&&!spun(PI*2/turns))turns=turns%2===0&&spun(PI)?2:1}
+  const kept=lines.filter(l=>l.al>.01);
+  scanKey=key;scanned={lines:kept,turns,n,mirrors:kept.filter(l=>l.al>.5).length};return scanned}
+const SHAPES={mirrored:"Mirrored",one:"One mirror",turning:"Turning",free:"Free"};
+const kindOfScan=(s)=>s.mirrors>=2?"mirrored":s.mirrors===1?"one":s.turns>1?"turning":"free";
+function sayScan(s){const k=kindOfScan(s);return k==="mirrored"?(s.mirrors===s.n?"mirrored on all "+s.n+" lines":"mirrored on "+s.mirrors+" lines"):k==="one"?"one mirror":k==="turning"?"turning, no mirror":"free"}
+// the lines are shown only while symmetry is what you're changing: dragging a twist, a stretch or a lean, choosing
+// from the symmetry word, or leaning toward the calmer or wilder ghost
+let mirShow=false;
+const mirOn=()=>mirShow||!!(tune&&tune.moved&&mode<3)||(ghosts[0]&&ghosts[0].sym&&lw[0]>.35)||(ghosts[4]&&ghosts[4].sym&&lw[4]>.35);
+const mirC=$("mirrors");
+function drawMirrors(m){const s=scan(m),px=mirC.width,c=px/2,R=px*.5,g=mirC.getContext("2d");g.clearRect(0,0,px,px);mirC.classList.add("on");
+  const acc=accOf(cur),lw2=Math.max(1,px/420);
+  for(const l of s.lines){const u=Math.cos(l.th),v=Math.sin(l.th),gr=g.createLinearGradient(c-u*R,c-v*R,c+u*R,c+v*R);
+    gr.addColorStop(0,"transparent");gr.addColorStop(.14,acc);gr.addColorStop(.86,acc);gr.addColorStop(1,"transparent");
+    g.globalAlpha=.8*l.al;g.strokeStyle=gr;g.lineWidth=lw2;g.setLineDash([px/90,px/110]);g.beginPath();g.moveTo(c-u*R,c-v*R);g.lineTo(c+u*R,c+v*R);g.stroke()}
+  g.globalAlpha=1}
+// a choice from the symmetry word is previewed on the mark before it's made: the mark glides to it, and back
+let peek=null,peekRaf=0,peekMs=0;
+function peekTo(t){if(!cur)return;if(!peek)peek={g:Float32Array.from(cur.g)};peek.t=Float32Array.from(t||cur.g);peek.home=!t;
+  if(!peekRaf){peekMs=performance.now();peekRaf=requestAnimationFrame(peekStep)}}
+function peekStep(ms){peekRaf=0;if(!cur||!peek)return;const dt=Math.min(.05,Math.max(0,ms-peekMs)/1000);peekMs=ms;const a=calm?1:1-Math.exp(-dt*10);let far=0;
+  for(let k=0;k<NG;k++){peek.g[k]+=(peek.t[k]-peek.g[k])*a;far=Math.max(far,Math.abs(peek.t[k]-peek.g[k]))}
+  if(far<.002){peek.g.set(peek.t);if(peek.home){peek=null}}
+  drawBig();if(peek&&far>=.002)peekRaf=requestAnimationFrame(peekStep)}
+function shapeWord(anim){if(!cur)return;const w=$("shapeword"),k=kindOfScan(scan(cur)),t=SHAPES[k].toLowerCase();if(w.textContent===t)return;w.textContent=t;
+  if(anim&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"})}
+const SHAPE_SAY={mirrored:"every petal alike",one:"left matches right, like a leaf",turning:"every petal turns one way",free:"it turns and it leans"};
+function popShape(on){const p=$("shapepop");if(on===!p.hidden)return;p.hidden=!on;$("shapeword").setAttribute("aria-expanded",on);mirShow=on;
+  if(!on){peekTo(null);if(!mirOn())mirC.classList.remove("on");return}
+  tw.fill(0);lw.fill(0);[...halo.children].forEach(b=>b.style.opacity="");
+  const now=kindOfScan(scan(cur)),c=colours(cur.pal,cur);p.innerHTML="";
+  for(const k of Object.keys(SHAPES)){const t=symTo(k,cur),m={...cur,g:t},s=scan(m),b=document.createElement("button");
+    b.setAttribute("role","menuitemradio");b.setAttribute("aria-checked",k===now);
+    const cv=document.createElement("canvas"),r=Math.round(30*Math.min(devicePixelRatio||1,2));cv.width=cv.height=r;paint(m,r,lens,c);cv.getContext("2d").drawImage(tiny,0,0);
+    const got=kindOfScan(s),hint=got===k?(k==="mirrored"?(s.mirrors===s.n?"all "+s.n+" mirror lines":s.mirrors+" mirror lines, as it's stretched"):SHAPE_SAY[k]):"not with "+(letters?"a letter in it":"this shape");
+    b.append(cv);b.insertAdjacentHTML("beforeend",`<b>${SHAPES[k]}</b><small>${hint}</small>`);
+    b.onpointerenter=b.onfocus=()=>peekTo(t);b.onclick=()=>{popShape(false);setShape(t)};p.append(b)}
+  drawBig();p.querySelector("[aria-checked=true]")?.focus({preventScroll:true})}
+function setShape(t){if(cur.g.every((v,i)=>Math.abs(v-t[i])<1e-4))return;remember();
+  // the shown mark keeps gliding from wherever the preview had it, so choosing never jumps
+  if(!peek)peek={g:Float32Array.from(cur.g)};cur.g=Float32Array.from(t);peek.t=Float32Array.from(t);peek.home=true;if(!peekRaf){peekMs=performance.now();peekRaf=requestAnimationFrame(peekStep)}
+  told();makeGhosts();drawGhosts();queue();mirShow=true;clearTimeout(mirT2);mirT2=setTimeout(()=>{mirShow=false;drawBig()},1100)}
+let mirT2=0;
+$("shapeword").onclick=(e)=>{e.stopPropagation();popShape($("shapepop").hidden)};
+$("shapeword").onpointerenter=()=>{if($("shapepop").hidden){mirShow=true;drawBig()}};
+$("shapeword").onpointerleave=()=>{if($("shapepop").hidden){mirShow=false;drawBig()}};
+$("shapepop").onpointerleave=()=>peekTo(null);
+addEventListener("pointerdown",(e)=>{if(!$("shapepop").hidden&&!e.target.closest("#shapepop,#shapeword"))popShape(false)});
+$("shapepop").addEventListener("keydown",(e)=>{e.stopPropagation();if(e.key==="Escape"){popShape(false);$("shapeword").focus()}else menuKeys(e,$("shapepop"))});
+function menuKeys(e,p){if(e.key!=="ArrowDown"&&e.key!=="ArrowUp")return;e.preventDefault();const k=[...p.children],j=k.indexOf(document.activeElement);k[(j+(e.key==="ArrowDown"?1:k.length-1))%k.length].focus()}
 // in a word or two, what stepping to a ghost would change, said under it while you hover
 const SAYS={2:["rounder","sharper"],3:["closer in","further out"],4:["shorter","longer"],5:["finer","fuller"],7:["tighter","looser"],12:["crisp joins","soft joins"],13:["lighter","bolder"],1:["turned","turned"],6:["untwisted","twisted"],
   8:["no ring","a ring"],9:["no hole","a hole"],10:["whole","bitten"],11:["no dot","a dot"],15:["plain","striped"],16:["","a pinwheel"],17:["","a fan"],18:["","bars"]};
@@ -1122,10 +1262,10 @@ function leanStep(ms){
   if(moving)requestAnimationFrame(leanStep);else leaning=false;
 }
 const ghostPath=(t)=>{const v=clamp((t-.04)/.92);return v+(v*v*(3-2*v)-v)*.25}; // nearly even, with the slightest rest at each ghost
-function settle(){lw.fill(0);tw.fill(0);pending=-1;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
+function settle(){lw.fill(0);tw.fill(0);pending=-1;peek=null;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
 // round the ring, the mark leans toward the ghost you're near; between two, it leans toward both at once
 stage.addEventListener("pointermove",(e)=>{
-  if(tune||pending>=0||!gLay||unf>0||e.pointerType!=="mouse")return;
+  if(tune||pending>=0||!gLay||unf>0||e.pointerType!=="mouse"||!$("shapepop").hidden)return;
   const sr=stage.getBoundingClientRect(),dx=e.clientX-sr.left-gLay.cx,dy=e.clientY-sr.top-gLay.cy,arc=Math.PI*2/GN;
   // between two ghosts the mark walks a straight line from one to the other, at an even pace under the pointer:
   // exactly half of each at the midpoint. (It used to linger by each ghost and rush across the middle.)
@@ -1158,7 +1298,7 @@ function stepBack(){if(!hist.length||drop)return;fut.push(snapOf());restore(hist
 function stepAgain(){if(!fut.length||drop)return;hist.push(snapOf());restore(fut.pop())}
 function told(){const n=hist.length;if(!$("hexes").contains(document.activeElement))hexes();$("latin").textContent=latin(cur);$("keep").textContent=isKept()?"Kept ✓":"Keep it";$("undo").disabled=!n;$("redo").disabled=!fut.length;$("wash").hidden=!cur.dye.length;
   const pn=cur.s>.5?cur.n1:cur.n0;$("petn").textContent=pn+" petals";$("fewer").disabled=pn===SYM[0]&&cur.s%1===0;$("more").disabled=pn===SYM[SYM.length-1]&&cur.s%1===0;
-  $("found").textContent=foundAt+(cur.note||"");
+  $("found").textContent=foundAt+(cur.note||"");shapeWord(true);
   // the link carries every change, so a shared mark arrives exactly as it was left
   const url=cur.at+(n||cur.dye.length||cur.edited||symI!==2?"&"+codeOf(cur):""); // under another symmetry setting the spot alone would grow a different mark
   if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}}
@@ -1335,7 +1475,7 @@ PSTYLES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttri
 function popStyle(on){const p=$("stylepop");p.hidden=!on;$("styleword").setAttribute("aria-expanded",on);if(on)p.children[pstyle].focus()}
 $("styleword").onclick=(e)=>{e.stopPropagation();popStyle($("stylepop").hidden)};
 addEventListener("pointerdown",(e)=>{if(!$("stylepop").hidden&&!e.target.closest("#stylepop,#styleword"))popStyle(false)});
-$("stylepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropagation();popStyle(false);$("styleword").focus()}});
+$("stylepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropagation();popStyle(false);$("styleword").focus()}else menuKeys(e,$("stylepop"))});
 function pplan(){const [,Wp,Hp]=FMT[fmt],m=.06*Wp,det=.021*Wp,name=.074*Wp,kin=(Wp-2*m)/8*.64,top=m+det*2.4,st=pstyle;
   const P={Wp,Hp,m,det,name,kin,st};
   if(st===1){const bot=name*1.3+det*2.2,area=Hp-top-bot-m;P.H0=top+area*.52;P.hs=Math.min(Wp*.5,area*.44);P.hx=Wp/2;P.hy=P.H0-P.hs*.6;P.kin=kin*.62;P.water=Hp-m-bot-P.H0+det}
