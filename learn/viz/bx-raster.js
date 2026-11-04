@@ -1,279 +1,144 @@
-/* Build your own X, chapter 11: a 3D graphics engine.
-   An eye, an image plane made of pixel voxels, and an object made of triangles.
-   Rays from the eye through each vertex land on the plane (divide by depth), the rasterizer fills
-   the pixels inside each triangle, and a z-buffer decides who wins each pixel.
-   The "why": sorting whole triangles (painter's algorithm) can't handle triangles that cross. */
+/* Build your own X, chapter 49: turning a letter into pixels.
+   The outline is exact, and the screen is a coarse grid. Testing only the centre of each pixel gives
+   jagged steps. Measuring how much of each pixel the shape covers, and using grey for the part-way
+   ones, tricks your eye into seeing edges that fall between pixels.
+   The "why": at small sizes coverage alone goes soft, because a stem can straddle two pixels and
+   turn into two grey columns. Nudging the outline so that stems land on whole pixels is called
+   hinting. And the hole in the letter comes from counting crossings with direction: filling between
+   the outer edges would plug it. */
 VIZ.register("bx-raster", async (api) => {
-  const W = await api.world3d();
-  const T = W.THREE;
-  const EYE = 7, F = 3.5, PZ = EYE - F, N = 20, PITCH = 0.14;
-  W.camera({ target: [0, 0, 2.2], dist: 13.5, theta: 0.42, phi: 1.28, instant: true });
-
-  // ---- scenes: lists of triangles [a, b, c] in model space, wound counter-clockwise from the front
-  function cubeTris() {
-    const q = [
-      [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1], "c2"],
-      [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1], "c1"],
-      [[1, -1, 1], [1, -1, -1], [1, 1, -1], [1, 1, 1], "c3"],
-      [[-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1], "c4"],
-      [[-1, 1, 1], [1, 1, 1], [1, 1, -1], [-1, 1, -1], "c5"],
-      [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1], "c1"],
-    ];
-    const out = [];
-    for (const [a, b, c, d, col] of q) { out.push({ v: [a, b, c], color: col }, { v: [a, c, d], color: col }); }
-    // make sure every normal points outwards (so culling is honest)
-    for (const t of out) {
-      const n = cross(sub(t.v[1], t.v[0]), sub(t.v[2], t.v[0]));
-      const ctr = t.v.reduce((s, p) => add(s, p), [0, 0, 0]);
-      if (dot(n, ctr) < 0) t.v = [t.v[0], t.v[2], t.v[1]];
+  const OUTER = [[12, 0], [55, 0], ["q", 88, 0, 88, 28], ["q", 88, 52, 62, 56], [90, 100], [66, 100], [40, 58], [34, 58], [34, 100], [12, 100]];
+  const INNER = [[34, 18], [34, 41], [52, 41], ["q", 66, 41, 66, 29], ["q", 66, 18, 52, 18]];
+  function flat(c) {
+    const pts = [];
+    let last = null;
+    for (const s of c) {
+      if (s[0] === "q") {
+        for (let i = 1; i <= 8; i++) { const u = i / 8, v = 1 - u; pts.push([v * v * last[0] + 2 * v * u * s[1] + u * u * s[3], v * v * last[1] + 2 * v * u * s[2] + u * u * s[4]]); }
+        last = [s[3], s[4]];
+      } else { pts.push(s); last = s; }
     }
-    return out;
+    return pts;
   }
-  const SCENES = {
-    cube: { tris: cubeTris(), twoSided: false, name: "cube (12 triangles)" },
-    cards: { tris: [
-      { v: [[-1.3, -1.1, -0.9], [1.3, -1.1, -0.9], [0, 1.2, 0.9]], color: "c1" },
-      { v: [[1.3, 1.1, -0.9], [-1.3, 1.1, -0.9], [0, -1.2, 0.9]], color: "c2" },
-    ], twoSided: true, name: "two crossing cards" },
-  };
+  const PATHS = [flat(OUTER), flat(INNER)];
+  let rows = 28, mode = "centre", hole = "wind", hint = false, shift = 0, reached = api.wasDone, sawCentre = false, sawSoft = false;
 
-  // ---- tiny vector maths (the same as the numpy you write in the chapter)
-  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
-  function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
-  function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
-  function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
-  function norm(a) { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
-  function rot(p, yaw, pitch) {
-    const [x, y, z] = p;
-    const y1 = y * Math.cos(pitch) - z * Math.sin(pitch), z1 = y * Math.sin(pitch) + z * Math.cos(pitch);
-    return [x * Math.cos(yaw) + z1 * Math.sin(yaw), y1, -x * Math.sin(yaw) + z1 * Math.cos(yaw)];
+  // Maps the letter's own units (0 to 100 tall) onto pixels. Hinting moves the stem onto whole pixels.
+  function mapper() {
+    const s = rows / 100;
+    if (!hint) return { sx: s, ox: shift + 1, sy: s };
+    const stem = Math.max(1, Math.round(22 * s)), sx = stem / 22;
+    return { sx, ox: Math.round(shift + 1 + 12 * s) - 12 * sx, sy: s };
   }
-  const project = (p) => { const d = EYE - p[2]; return { u: (F * p[0]) / d, v: (F * p[1]) / d, d }; };
-
-  // ---- state
-  let scene = "cube", mode = "z", colorBy = "shade", cull = true;
-  let yaw = 0.6, pitch = 0.45, light = 0.9;
-  let tris = [], buf = null, ref = null, wrong = 0, culled = 0, runId = 0;
-
-  function lightDir() { return norm([Math.sin(light), 0.55, Math.cos(light)]); }
-  function prepare() {
-    const L = lightDir();
-    tris = SCENES[scene].tris.map((t, id) => {
-      const w = t.v.map((p) => rot(p, yaw, pitch));
-      const s = w.map(project);
-      const area = (s[1].u - s[0].u) * (s[2].v - s[0].v) - (s[1].v - s[0].v) * (s[2].u - s[0].u);
-      let n = norm(cross(sub(w[1], w[0]), sub(w[2], w[0])));
-      const facing = area > 0;
-      if (!facing && SCENES[scene].twoSided) n = [-n[0], -n[1], -n[2]];
-      const lambert = Math.max(0, dot(n, L));
-      return { id, w, s, area, facing, color: t.color, light: 0.18 + 0.82 * lambert, lambert, avgD: (s[0].d + s[1].d + s[2].d) / 3 };
-    });
-  }
-  function drawOrder(m) {
-    let list = tris.filter((t) => Math.abs(t.area) > 1e-9 && (t.facing || SCENES[scene].twoSided || !cull));
-    if (m === "painter") list = [...list].sort((a, b) => b.avgD - a.avgD); // far first, near last
-    return list;
-  }
-  const pixU = (i) => (i - (N - 1) / 2) * PITCH;
-  function emptyBuf() { return { owner: new Int16Array(N * N).fill(-1), depth: new Float64Array(N * N).fill(Infinity) }; }
-  // Rasterize one triangle row by row; onRow(j) lets the animation pause between rows.
-  function rasterTri(t, b, m, onRow) {
-    const [A, B, C] = t.s;
-    const E = (a, c, pu, pv) => (c.u - a.u) * (pv - a.v) - (c.v - a.v) * (pu - a.u);
-    const area = E(A, B, C.u, C.v);
-    const i0 = Math.max(0, Math.floor(Math.min(A.u, B.u, C.u) / PITCH + (N - 1) / 2)), i1 = Math.min(N - 1, Math.ceil(Math.max(A.u, B.u, C.u) / PITCH + (N - 1) / 2));
-    const j0 = Math.max(0, Math.floor(Math.min(A.v, B.v, C.v) / PITCH + (N - 1) / 2)), j1 = Math.min(N - 1, Math.ceil(Math.max(A.v, B.v, C.v) / PITCH + (N - 1) / 2));
-    const rows = [];
-    for (let j = j0; j <= j1; j++) {
-      const touched = [];
-      for (let i = i0; i <= i1; i++) {
-        const pu = pixU(i), pv = pixU(j);
-        const w0 = E(B, C, pu, pv) / area, w1 = E(C, A, pu, pv) / area, w2 = E(A, B, pu, pv) / area;
-        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
-        const d = 1 / (w0 / A.d + w1 / B.d + w2 / C.d); // 1/depth is what's linear on screen
-        const k = j * N + i;
-        if (m === "z" && d >= b.depth[k]) continue; // something nearer is already here
-        b.owner[k] = t.id; b.depth[k] = d;
-        touched.push(k);
-      }
-      rows.push({ j, touched });
-    }
-    return rows;
-  }
-  function rasterAll(m) { const b = emptyBuf(); for (const t of drawOrder(m)) rasterTri(t, b, m); return b; }
-  function countWrong() {
+  function winding(x, y) {
     let w = 0;
-    for (let k = 0; k < N * N; k++) {
-      if (buf.owner[k] === -1 && ref.owner[k] === -1) continue;
-      if (Math.abs(buf.depth[k] - ref.depth[k]) > 1e-6) w++;
+    for (const p of PATHS) for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      if ((a[1] <= y) !== (b[1] <= y)) {
+        const cx = a[0] + ((y - a[1]) / (b[1] - a[1])) * (b[0] - a[0]);
+        if (cx > x) w += b[1] > a[1] ? 1 : -1;
+      }
     }
     return w;
   }
+  function inside(x, y) {
+    if (hole === "wind") return winding(x, y) !== 0;
+    // the naive fill: anything between the outer contour's edges, so the hole is lost
+    let c = 0; const p = PATHS[0];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length];
+      if ((a[1] <= y) !== (b[1] <= y)) { const cx = a[0] + ((y - a[1]) / (b[1] - a[1])) * (b[0] - a[0]); if (cx > x) c++; }
+    }
+    return c % 2 === 1;
+  }
+  function sample(px, py, m, n) { // share of this pixel (or of part of it) inside the letter
+    let hit = 0;
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      if (inside((px + (i + 0.5) / n - m.ox) / m.sx, (py + (j + 0.5) / n) / m.sy)) hit++;
+    }
+    return hit / (n * n);
+  }
+  function stripe(px, py, m, k) { // one third of a pixel, for the coloured stripes
+    let hit = 0;
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 2; i++) {
+      if (inside((px + (k + (i + 0.5) / 2) / 3 - m.ox) / m.sx, (py + (j + 0.5) / 4) / m.sy)) hit++;
+    }
+    return hit / 8;
+  }
+  const shade = (v) => Math.round(255 * (1 - v));
+  function pixel(px, py, m) {
+    if (mode === "centre") { const v = inside((px + 0.5 - m.ox) / m.sx, (py + 0.5) / m.sy) ? 1 : 0; return [shade(v), shade(v), shade(v)]; }
+    if (mode === "cover") { const c = shade(sample(px, py, m, 4)); return [c, c, c]; }
+    return [shade(stripe(px, py, m, 0)), shade(stripe(px, py, m, 1)), shade(stripe(px, py, m, 2))];
+  }
 
-  // ---- colours
-  const cache = new Map();
-  function shade(name, k) {
-    const key = name + Math.round(k * 12);
-    if (!cache.has(key)) { const c = new T.Color(api.color(name)); c.multiplyScalar(Math.round(k * 12) / 12); cache.set(key, "#" + c.getHexString()); }
-    return cache.get(key);
-  }
-  function mix(a, b, t) {
-    const q = Math.round(Math.max(0, Math.min(1, t)) * 10) / 10, key = a + b + q;
-    if (!cache.has(key)) { const c = new T.Color(api.color(a)).lerp(new T.Color(api.color(b)), q); cache.set(key, "#" + c.getHexString()); }
-    return cache.get(key);
-  }
-  function pixColor(k, b) {
-    const o = b.owner[k];
-    if (o < 0) return { color: "c5", opacity: 0.18 };
-    if (colorBy === "depth") return { color: mix("c4", "c2", (b.depth[k] - (EYE - 1.8)) / 3.6) };
-    if (colorBy === "errors") return Math.abs(b.depth[k] - ref.depth[k]) > 1e-6 ? { color: "bad", glow: 0.3 } : { color: "c5", opacity: 0.55 };
-    return { color: shade(tris[o].color, tris[o].light) };
-  }
-  function paint(k, b) {
-    const c = pixColor(k, b);
-    W.box("p" + k, { color: c.color, opacity: c.opacity ?? 1, glow: c.glow || 0 });
-  }
-
-  // ---- static parts of the scene
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    W.box("p" + (j * N + i), { x: pixU(i), y: pixU(j), z: PZ, sx: PITCH * 0.86, sy: PITCH * 0.86, sz: 0.03, color: "c5", opacity: 0.18, instant: true });
-  }
-  W.box("eye", { x: 0, y: 0, z: EYE, s: 0.32, color: "ink", label: "eye", labelSize: 0.32,
-    info: { title: "The eye (camera)", html: "<p>Every ray starts here. A point at depth <b>d</b> lands on the image plane at <code>(f·x/d, f·y/d)</code>.</p><p>That <b>divide by depth</b> is all perspective is: twice as far away means half as big on screen. Without it (just dropping z) you get an orthographic drawing where far rails never meet.</p>" } });
-  const half = (N / 2) * PITCH;
-  const corners = [[-half, -half], [half, -half], [half, half], [-half, half]];
-  corners.forEach(([u, v], i) => {
-    const [u2, v2] = corners[(i + 1) % 4];
-    W.line("frame" + i, [u, v, PZ], [u2, v2, PZ], { color: "muted" });
-    const far = (EYE + 2.2) / F; // stretch the frustum edge out past the object
-    W.line("fr" + i, [0, 0, EYE], [u * far, v * far, EYE - F * far], { color: "line", opacity: 0.6 });
+  api.wide();
+  const cv = api.canvas2d((g, w, h) => {
+    const m = mapper(), cols = Math.ceil(rows * 0.98) + 3, top = 26, previewW = w < 560 ? 0 : Math.min(150, w * 0.22);
+    const space = w - previewW - (previewW ? 20 : 0), cell = Math.min((h - top - (previewW ? 8 : 58)) / rows, space / cols);
+    const gw = cell * cols, gh = cell * rows, gx = (space - gw) / 2, gy = top;
+    const muted = api.color("muted");
+    const data = [];
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const c = pixel(x, y, m); data.push(c);
+      g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      g.fillRect(gx + x * cell, gy + y * cell, cell + 0.5, cell + 0.5);
+    }
+    if (cell >= 7) {
+      g.strokeStyle = "rgba(128,128,128,.35)"; g.lineWidth = 1; g.beginPath();
+      for (let x = 0; x <= cols; x++) { g.moveTo(gx + x * cell, gy); g.lineTo(gx + x * cell, gy + gh); }
+      for (let y = 0; y <= rows; y++) { g.moveTo(gx, gy + y * cell); g.lineTo(gx + gw, gy + y * cell); }
+      g.stroke();
+    }
+    // the true outline, on top
+    g.strokeStyle = api.color("c1"); g.lineWidth = 1.6;
+    for (const p of PATHS) {
+      g.beginPath();
+      p.forEach((q, i) => { const X = gx + (q[0] * m.sx + m.ox) * cell, Y = gy + q[1] * m.sy * cell; i ? g.lineTo(X, Y) : g.moveTo(X, Y); });
+      g.closePath(); g.stroke();
+    }
+    // true size: one screen dot per pixel
+    const bx = previewW ? space + 20 : (w - cols * 3) / 2, by = previewW ? top + 16 : gy + gh + 22;
+    g.fillStyle = "#fff"; g.fillRect(bx - 6, by - 6, cols * 3 + 12, rows + 12);
+    for (let r = 0; r < 3; r++) for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const c = data[y * cols + x];
+      g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+      g.fillRect(bx + r * cols + x, by + y, 1, 1);
+    }
+    g.fillStyle = muted; g.font = "11px 'IBM Plex Mono', monospace"; g.textAlign = "left";
+    g.fillText("at real size", bx - 6, by - 11);
+    api.hud(`<b>${rows}</b> pixels tall`);
   });
-  W.label("planeL", "image plane (pixels)", [0, half + 0.35, PZ], { color: "muted", size: 0.3 });
-  W.box("light", { s: 0.3, color: "c4", glow: 0.6, label: "light", labelSize: 0.3,
-    info: { title: "The light", html: "<p>Lambert shading: brightness = <code>max(0, n · L)</code>, the dot product of the face's normal <b>n</b> with the direction to the light <b>L</b>.</p><p>Why the dot product? It's cos(angle): a face pointing straight at the light gets the full amount, a face edge-on gets none. That's how much light lands per square of surface. Move the light slider and watch faces brighten and darken.</p>" } });
-
-  // the object itself as a translucent three.js mesh, plus vertex voxels you can click
-  const geo = new T.BufferGeometry();
-  const mesh = new T.Mesh(geo, new T.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.45, side: T.DoubleSide, depthWrite: false }));
-  W.scene.add(mesh);
-  const wire = new T.LineSegments(new T.BufferGeometry(), new T.LineBasicMaterial({ color: new T.Color(api.color("ink")), transparent: true, opacity: 0.5 }));
-  W.scene.add(wire);
-  function updateMesh() {
-    const pos = [], col = [], wl = [];
-    for (const t of tris) {
-      const c = new T.Color(api.color(t.color));
-      for (const p of t.w) { pos.push(...p); col.push(c.r, c.g, c.b); }
-      for (let e = 0; e < 3; e++) wl.push(...t.w[e], ...t.w[(e + 1) % 3]);
+  let first = true;
+  api.loop(() => { if (cv.w && first) { first = false; cv.redraw(); } });
+  function judge() {
+    if (rows <= 12 && mode === "centre") sawCentre = true;
+    if (rows <= 12 && mode === "cover" && !hint) sawSoft = true;
+    if (!reached && sawCentre && sawSoft && rows <= 12 && mode === "cover" && hint) {
+      reached = true;
+      api.done("Crisp at 12 pixels. A readable small letter is a negotiation between the true shape and the grid");
+      api.explain("Hinting", "<p>The stem now fills whole pixels instead of smearing across two, so it stays dark and sharp. The letter is very slightly the wrong shape, on purpose. At this size being readable beats being accurate, and designers spent years writing these adjustments by hand.</p>");
     }
-    geo.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
-    geo.setAttribute("color", new T.Float32BufferAttribute(col, 3));
-    geo.computeBoundingSphere();
-    wire.geometry.setAttribute("position", new T.Float32BufferAttribute(wl, 3));
-    wire.geometry.computeBoundingSphere();
-    const verts = [];
-    for (const t of tris) for (const p of t.w) if (!verts.some((q) => Math.hypot(...sub(p, q)) < 1e-6)) verts.push(p);
-    for (let i = 0; i < 8; i++) {
-      if (i < verts.length) {
-        const p = verts[i], s = project(p);
-        W.box("v" + i, { x: p[0], y: p[1], z: p[2], s: 0.14, color: "c2", visible: true, info: { title: `Vertex ${i}`, html: `<p>World position (${p.map((x) => x.toFixed(2)).join(", ")}), depth from the eye <b>d = ${s.d.toFixed(2)}</b>.</p><p>On screen: <code>u = f·x/d = ${s.u.toFixed(2)}</code>, <code>v = f·y/d = ${s.v.toFixed(2)}</code>.</p><p>Only the 3 corners are projected. Everything inside a triangle is filled in afterwards by the rasterizer, which is why GPUs love triangles: 3 points, always flat, always convex.</p>` } });
-      } else W.box("v" + i, { visible: false });
-    }
-    const L = lightDir();
-    W.box("light", { x: L[0] * 3.2, y: L[1] * 3.2, z: L[2] * 3.2 });
-    W.line("lightray", "light", [0, 0, 0], { color: "c4", opacity: 0.5 });
+    cv.redraw();
   }
-  function showRays(t) {
-    for (let e = 0; e < 3; e++) {
-      if (!t) { W.unline("ray" + e); W.box("hit" + e, { visible: false }); continue; }
-      W.line("ray" + e, "eye", t.w[e], { color: "c4" });
-      const s = t.s[e];
-      W.box("hit" + e, { x: s.u, y: s.v, z: PZ + 0.05, s: 0.09, color: "c4", glow: 0.5, visible: true, instant: true,
-        info: { title: "Where the ray hits the plane", html: `<p>The ray from the eye to this corner crosses the image plane here: <code>(${s.u.toFixed(2)}, ${s.v.toFixed(2)})</code>.</p><p>Similar triangles: the plane is f = ${F} from the eye, the corner is d = ${s.d.toFixed(2)} away, so everything shrinks by f/d = ${(F / s.d).toFixed(2)}.</p>` } });
-    }
-  }
-
-  // ---- rendering
-  function hud() {
-    const label = { z: "z-buffer", painter: "painter's (sort far → near)", none: "no depth test (list order)" }[mode];
-    api.hud(`${SCENES[scene].name} · ${label}<br>culled: ${culled} · wrong pixels: <b>${wrong}</b>`);
-  }
-  function finish() {
-    wrong = countWrong();
-    hud();
-    const shown = drawOrder(mode).length;
-    api.status(`${shown} triangles drawn, ${culled} culled (facing away).\n` +
-      `Pixels covered: ${buf.owner.filter((o) => o >= 0).length} of ${N * N}.\n` +
-      (mode === "z" ? "z-buffer: every pixel keeps the nearest surface." : `Wrong pixels compared with the z-buffer: ${wrong}`));
-    if (mode !== "z" && wrong > 0) {
-      api.explain("The wrong surface won", `<p><b>${wrong}</b> pixels show something that is actually <i>behind</i> something else. Switch colour to <b>errors</b> to see exactly which.</p>` +
-        (scene === "cards" ? "<p>The two cards cross each other, so <b>neither</b> is in front everywhere. Sorting whole triangles can't fix that: whichever goes last covers the other completely. The z-buffer decides <i>per pixel</i>, so it gets the crossing line right.</p>"
-          : "<p>With culling off, the back faces get drawn too, and without a per-pixel depth test whatever is drawn last wins.</p>"));
-      api.done("You caught the painter drawing the wrong thing");
-    }
-  }
-  function renderNow() {
-    runId++;
-    prepare();
-    culled = SCENES[scene].twoSided || !cull ? 0 : tris.filter((t) => !t.facing).length;
-    ref = rasterAll("z");
-    buf = rasterAll(mode);
-    for (let k = 0; k < N * N; k++) paint(k, buf);
-    updateMesh();
-    showRays(drawOrder(mode)[0]);
-    finish();
-  }
-  async function scan(one) {
-    const my = ++runId;
-    prepare();
-    ref = rasterAll("z");
-    updateMesh();
-    if (!one || !scanState || scanState.done) {
-      buf = emptyBuf();
-      for (let k = 0; k < N * N; k++) paint(k, buf);
-      scanState = { list: drawOrder(mode), i: 0 };
-    }
-    while (scanState.i < scanState.list.length) {
-      const t = scanState.list[scanState.i++];
-      showRays(t);
-      api.status(`Triangle ${scanState.i}/${scanState.list.length} (${t.color} face, depth ≈ ${t.avgD.toFixed(2)})\nEdge test: a pixel is inside if it's on the left of all 3 edges.` + (mode === "z" ? "\nz-test: keep it only if nearer than what's stored." : "\nNo depth test: it simply overwrites."));
-      const rows = rasterTri(t, buf, mode);
-      for (const r of rows) {
-        for (const k of r.touched) paint(k, buf);
-        if (r.touched.length) await api.sleep(one ? 30 : 14);
-        if (my !== runId) return;
-      }
-      if (one) break;
-      await api.sleep(120);
-      if (my !== runId) return;
-    }
-    if (scanState.i >= scanState.list.length) { scanState.done = true; culled = SCENES[scene].twoSided || !cull ? 0 : tris.filter((x) => !x.facing).length; finish(); }
-  }
-  let scanState = null;
-
-  // ---- controls
-  api.seg([{ label: "Cube", value: "cube" }, { label: "Crossing cards", value: "cards" }], scene, (v) => { scene = v; scanState = null; renderNow(); });
-  api.seg([{ label: "z-buffer", value: "z" }, { label: "Painter's", value: "painter" }, { label: "No depth", value: "none" }], mode, (v) => {
-    mode = v; scanState = null; renderNow();
-    if (v === "painter") api.explain("Painter's algorithm", "<p>Sort triangles by their <b>average</b> depth and draw the farthest first, like a painter doing the sky before the trees. No depth memory needed.</p><p>It works for lots of scenes. Try the crossing cards to see where it can't.</p>");
-    if (v === "z") api.explain("The z-buffer", "<p>Next to the colour of each pixel, also store the <b>depth</b> of whatever is drawn there. A new pixel only wins if it's <i>nearer</i>.</p><p>It costs one number per pixel, but now draw order doesn't matter at all, and crossing triangles are right to the pixel. Every GPU does this in hardware.</p>");
+  api.seg([{ label: "Test the centre", value: "centre" }, { label: "Measure coverage", value: "cover" }, { label: "Coloured stripes", value: "stripes" }], "centre", (v) => {
+    mode = v; judge();
+    if (v === "centre") api.explain("Yes or no", "<p>Each pixel asks one question: is my centre inside the letter? Every pixel is black or white, so diagonals and curves turn into stairs. It's aliasing again, the same thing as the sound that folded down in chapter 46.</p>");
+    if (v === "cover") api.explain("How much?", "<p>Each pixel asks how much of it is covered, and goes that shade of grey. An edge that lands 30% of the way across a pixel is drawn as 30% grey, so your eye places it <b>between</b> the pixels. Grey buys you position you don't have.</p>");
+    if (v === "stripes") api.explain("Three lights per pixel", "<p>Each pixel on many screens is a red, a green and a blue stripe, side by side. Light them separately and you get three times the sideways detail. Zoomed in it's full of coloured fringes, but at real size your eye blends them. This is how text got sharper on flat screens, before pixels got small enough to make it matter less.</p>");
   });
-  api.seg([{ label: "Colour: shading", value: "shade" }, { label: "depth", value: "depth" }, { label: "errors", value: "errors" }], colorBy, (v) => { colorBy = v; if (buf) for (let k = 0; k < N * N; k++) paint(k, buf); });
-  api.seg([{ label: "Back-face culling on", value: true }, { label: "off", value: false }], cull, (v) => { cull = v; scanState = null; renderNow(); });
-  api.slider("Turn object", { min: -3.14, max: 3.14, step: 0.02, value: yaw, format: (v) => Math.round((v * 180) / Math.PI) + "°" }, (v) => { yaw = v; scanState = null; renderNow(); });
-  api.slider("Tilt object", { min: -1.5, max: 1.5, step: 0.02, value: pitch, format: (v) => Math.round((v * 180) / Math.PI) + "°" }, (v) => { pitch = v; scanState = null; renderNow(); });
-  api.slider("Light direction", { min: -3.14, max: 3.14, step: 0.02, value: light, format: (v) => Math.round((v * 180) / Math.PI) + "°" }, (v) => { light = v; scanState = null; renderNow(); });
-  api.button("Step (one triangle)", () => scan(true), { primary: true });
-  api.button("Scan all", () => { scanState = null; scan(false); });
-  W.onPick((key) => {
-    if (key[0] !== "p" || !buf) return true;
-    const k = +key.slice(1), o = buf.owner[k];
-    const i = k % N, j = Math.floor(k / N);
-    if (o < 0) { api.explain(`Pixel (${i}, ${j})`, "<p>No triangle covers this pixel's centre, so it keeps the background.</p><p>We test the pixel's <b>centre</b> only. That's why edges look jagged (aliasing); anti-aliasing tests several points per pixel.</p>"); return false; }
-    const t = tris[o], r = ref.owner[k];
-    api.explain(`Pixel (${i}, ${j})`, `<p>Owned by triangle <b>${o}</b> (${t.color}), depth <b>${buf.depth[k].toFixed(3)}</b>, light ${(t.lambert).toFixed(2)} → brightness ${t.light.toFixed(2)}.</p>` +
-      (Math.abs(buf.depth[k] - ref.depth[k]) > 1e-6 ? `<p style="color:var(--bad)"><b>Wrong!</b> Triangle ${r} is nearer here (depth ${ref.depth[k].toFixed(3)}), but it was drawn earlier and got painted over.</p>` : "<p>That's the nearest surface along this pixel's ray. ✓</p>"));
-    return false;
+  api.seg([{ label: "True outline", value: 0 }, { label: "Snap to pixels", value: 1 }], 0, (v) => {
+    hint = !!v; judge();
+    api.status(v ? "The stem's edges are now moved onto whole pixels." : "The outline is exact, wherever it falls.");
   });
-  api.explain("How to read this", "<p>The <b>eye</b> looks through the <b>image plane</b> (a 20×20 grid of pixels) at a cube. Amber rays go from the eye to the corners of the triangle being drawn.</p><p>Press <b>Step</b> to rasterize one triangle at a time. Then try <b>Painter's</b> or <b>No depth</b> and hunt for wrong pixels. Click any pixel or corner to ask why.</p>");
-  renderNow();
+  api.seg([{ label: "Count crossings", value: "wind" }, { label: "Outer edge only", value: "outer" }], "wind", (v) => {
+    hole = v; cv.redraw();
+    api.explain(v === "wind" ? "Count crossings" : "Outer edge only", v === "wind"
+      ? "<p>From a point, look to the right and count the outline's crossings: +1 for one direction and −1 for the other. The hole's outline runs the opposite way, so inside it the count returns to 0.</p>"
+      : "<p>Fill everything inside the outer shape and the hole is gone. That's why an inner outline in a font has to run the opposite way round.</p>");
+  });
+  api.slider("Pixels tall", { min: 8, max: 40, step: 1, value: rows }, (v) => { rows = v; judge(); });
+  api.slider("Slide the letter sideways", { min: 0, max: 1, step: 0.05, value: 0, format: (v) => `${v.toFixed(2)} px` }, (v) => { shift = v; cv.redraw(); });
+  api.explain("A curve meets a grid", "<p>The red line is the letter's exact outline. Your screen can only light up squares. Bring <b>Pixels tall</b> down to 12 and see what's left of it.</p>");
+  api.status("Bring the letter down to 12 pixels tall.");
 });
