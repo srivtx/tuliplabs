@@ -137,7 +137,7 @@ window.TLMARK = (() => {
   const f = document.createElement("footer");
   const logo = `<span class="logo" aria-hidden="true">${"<i></i>".repeat(9)}</span>`;
   const base = `<div class="gf-base"><span class="gf-brand">${logo}<b>Tulip Labs</b><em>· a product by ${SVX}</em></span>
-    <a class="gf-news" href="${root}news/">news</a><a class="gf-news" href="${root}pricing/">pricing</a><a class="gf-news" href="${root}privacy/">privacy</a><a class="gf-news" href="${root}terms/">terms</a><span class="gf-keep">free to learn</span><a class="gf-top" href="#">↑ top</a></div>`;
+    <a class="gf-news" href="${root}meadow/">meadow</a><a class="gf-news" href="${root}news/">news</a><a class="gf-news" href="${root}pricing/">pricing</a><a class="gf-news" href="${root}privacy/">privacy</a><a class="gf-news" href="${root}terms/">terms</a><span class="gf-keep">free to learn</span><a class="gf-top" href="#">↑ top</a></div>`;
   // Lesson pages keep it quiet: one line of grass and one line of text. The garden lives on the home page.
   if (document.querySelector("#side, .studio")) {
     f.className = "foot sfoot";

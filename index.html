@@ -650,7 +650,7 @@ function chState(id, blocks) {
   const by = Object.fromEntries(TRACKS.map((t) => [t.k, t]));
   let h = '<summary aria-label="Switch section"><i class="sq"></i><span>Home</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections">';
   h += '<a class="home k-home" href="./" aria-current="page"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a>';
-  for (const [g, ks] of G) { h += `<h6>${g}</h6>`; for (const k of ks) h += `<a class="k-${k}" href="${by[k].href}"><i class="sq"></i><b>${by[k].name}</b><small>${sub[k]}</small></a>`; }
+  for (const [g, ks] of G) { h += `<h6>${g}</h6>`; for (const k of ks) h += `<a class="k-${k}" href="${by[k].href}"><i class="sq"></i><b>${by[k].name}</b><small>${sub[k]}</small></a>`; if (g === "Play") h += '<a style="--kc:#e8476a" href="meadow/"><i class="sq"></i><b>Meadow</b><small>An endless map of marks to wander</small></a>'; }
   $(".sw").innerHTML = h + "</nav>";
 })();
 
