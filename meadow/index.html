@@ -29,7 +29,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 button:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-offset:3px}
 
 .tag{position:fixed;z-index:3;left:max(16px,env(safe-area-inset-left,0px));top:calc(14px + env(safe-area-inset-top,0px));
-  display:flex;align-items:baseline;gap:14px;background:var(--ground);padding:7px 12px 8px;max-width:calc(100vw - 32px);transition:background .5s,color .5s}
+  display:flex;align-items:baseline;gap:14px;background:var(--ground);padding:7px 12px 8px;max-width:calc(100vw - 32px)}
 .tag b{font-family:var(--f-pixel);font-weight:700;font-size:17px;letter-spacing:.01em}
 .tag a{color:inherit;opacity:.82;text-underline-offset:3px;white-space:nowrap}.tag a:hover{opacity:1}
 .tag span{opacity:.82;line-height:1.5;transition:opacity .6s}
@@ -37,7 +37,8 @@ button:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-
 
 .foot{position:fixed;z-index:3;left:0;right:0;bottom:0;background:var(--ground);border-top:1px solid color-mix(in srgb,var(--ink) 45%,transparent);
   display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:20px;min-height:62px;
-  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));transition:background .5s,color .5s}
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .place{min-width:0}
 .place strong{display:block;font-family:var(--f-serif);font-weight:400;font-size:23px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .place small{font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}
@@ -266,8 +267,10 @@ vec2 markN(vec2 p0,float n){
  w=min(w,sin(PI/n)*max(r1,.14)*1.1);l=max(l,w);
  float k=mix(.006,.17,g_k);
  float d=shape(q-vec2(r1,0.),l,w,g_pr);
+ float inv=step(.7,g_inv);
  float ring=smoothstep(.56,.68,g_ring);
- float rr=mix(.38,.86,g_rr),rw=mix(.022,.075,g_ring);
+ // inside a badge the ring stays well clear of the rim, or it leaves thin slivers
+ float rr=mix(.38,.86,g_rr)*mix(1.,.74,inv),rw=mix(.022,.075,g_ring);
  d=mix(d,smin(d,abs(r-rr)-rw,k),ring);
  float bite=smoothstep(.6,.72,g_bite)*smoothstep(.12,.42,g_w);
  vec2 q2=fold(p,n,ph+PI/n);
@@ -278,17 +281,16 @@ vec2 markN(vec2 p0,float n){
  float st=smoothstep(.7,.78,g_st)*smoothstep(.3,.5,g_w),f=mix(4.,7.5,fract(g_st*7.));
  d=mix(d,max(d,-(abs(fract(r*f)-.5)/f-.13/f*2.)),st);
  float accOn=smoothstep(.56,.64,g_acc);
- float ac=mix(length(p)-mix(.06,.17,g_rr),length(q-vec2(mix(.3,.84,g_r),0.))-mix(.03,.075,g_w),step(.8,g_acc));
+ float ac=mix(length(p)-mix(.06,.17,g_rr),length(q-vec2(mix(.3,.84,g_r),0.))-mix(.05,.085,g_w),step(.8,g_acc));
  float b=mix(1.,ac,accOn);
  d=max(d,-(b-.034));
- float inv=step(.7,g_inv);
  vec2 sq=abs(p0)-.68;float bx=length(max(sq,0.))+min(max(sq.x,sq.y),0.)-.24;
  float badge=mix(r-.92,bx,step(.5,g_k));
  d=mix(d,smax(badge,-d,.012),inv);
  if(uHasL==1){
   if(g_inv<.46){float L=letter(p0/.74)*.74;d=max(d,-(L-.05));b=L-(g_wt-.5)*.04;}
-  else if(g_inv<.76){vec2 u=wheel(p0,n,ph)-vec2(mix(.42,.6,g_r),0.);float sc=min(.5,sin(PI/n)*.72);u=rot(u,PI*.5);d=letter(u/sc)*sc-(g_wt-.5)*.03;b=1.;}
-  else{float sc=mix(.8,1.2,g_r);d=letter((fold(p,n,ph)-vec2(.32,0.))/sc)*sc-(g_wt-.5)*.04;b=1.;}
+  else if(g_inv<.76){vec2 u=wheel(p0,n,ph)-vec2(mix(.42,.6,g_r),0.);float sc=min(.5,sin(PI/n)*.72);u=rot(u,PI*.5);d=letter(u/sc)*sc-(g_wt-.5)*.03-.024;b=1.;}
+  else{float sc=mix(.8,1.2,g_r);d=letter((fold(p,n,ph)-vec2(.32,0.))/sc)*sc-(g_wt-.5)*.04-.016;b=1.;}
  }
  d=max(d,r-.97);b=max(b,r-.97);
  return vec2(d,b);
@@ -354,7 +356,7 @@ function makeR(canvas,alpha){
       gl.disableVertexAttribArray(1);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.enableVertexAttribArray(1);gl.bindVertexArray(null)},
     marks(data,n,w,h,cam,ppw,fix,out){gl.viewport(0,0,w,h);
       if(out)gl.disable(gl.BLEND);else{gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA)}
-      view(pM,w,h,cam,ppw);gl.uniform1i(U(pM,"uFix"),fix?1:0);gl.uniform1i(U(pM,"uOut"),out?1:0);gl.uniform1i(U(pM,"uHasL"),hasL);gl.uniform1i(U(pM,"uL"),0);
+      view(pM,w,h,cam,ppw);gl.uniform1i(U(pM,"uFix"),fix?1:0);gl.uniform1i(U(pM,"uOut"),out?1:0);gl.uniform1i(U(pM,"uHasL"),out===2?0:hasL);gl.uniform1i(U(pM,"uL"),0);
       if(fix){gl.uniform3fv(U(pM,"uInk"),fix.i);gl.uniform3fv(U(pM,"uAcc"),fix.a)}
       gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferSubData(gl.ARRAY_BUFFER,0,data.subarray(0,n*STRIDE));
       gl.bindVertexArray(vao);gl.drawArraysInstanced(gl.TRIANGLE_STRIP,0,4,n);gl.bindVertexArray(null)},
@@ -371,14 +373,14 @@ const R=makeR(field,false);
 const tiny=document.createElement("canvas"),T=R&&makeR(tiny,true);
 if(!R||!T){document.body.insertAdjacentHTML("beforeend",'<div id="nogl">This field needs a browser that can draw with the graphics card.</div>');throw new Error("no webgl2")}
 const buf=new Float32Array(R.MAX*R.STRIDE),one=new Float32Array(R.STRIDE);
-let W=0,H=0,dpr=1,base=100;
+let W=0,H=0,dpr=1,base=100,sharp=2,slow=0,ema=16;
 const cam={x:.55,y:.35,z:0,zt:0,vx:0,vy:0,ax:0,ay:0};
 let lens=0,lensPrev=0,lensAt=-9,lensO=[0,0];
 let growAt=performance.now()/1000,growO=[0,0],prevKeyMs=0;
 let letters="",hover=null,tiles=[],pointer={x:-1e4,y:-1e4,in:false};
 let shelf=[];try{shelf=JSON.parse(localStorage.getItem("meadow-shelf")||"[]")}catch(e){}
 
-function resize(){dpr=Math.min(devicePixelRatio||1,2);W=Math.round(innerWidth*dpr);H=Math.round(innerHeight*dpr);field.width=W;field.height=H;
+function resize(){dpr=Math.min(devicePixelRatio||1,sharp);W=Math.round(innerWidth*dpr);H=Math.round(innerHeight*dpr);field.width=W;field.height=H;
   base=clamp(Math.min(innerWidth,innerHeight)/6.2,76,132)*dpr}
 addEventListener("resize",resize);resize();
 
@@ -386,7 +388,9 @@ const ppw=()=>base/S0*2**cam.z;
 function frame(ms){
   requestAnimationFrame(frame);
   if(!$("studio").hidden)return;
-  const t=ms/1000,dt=Math.min(.05,(ms-prevKeyMs)/1000||.016);prevKeyMs=ms;
+  const t=ms/1000,gapMs=ms-prevKeyMs,dt=Math.min(.05,gapMs/1000||.016);prevKeyMs=ms;
+  // if this device can't keep up, draw a little softer rather than stutter
+  if(gapMs<120&&document.visibilityState==="visible"){ema=lerp(ema,gapMs,.06);slow=ema>30?slow+1:0;if(slow>90&&sharp>1){sharp=Math.max(1,sharp-.5);slow=0;ema=16;resize()}}
   // ease the zoom about the pointer, keep the throw going after a drag
   const dz=cam.zt-cam.z;
   if(Math.abs(dz)>1e-4){const s0=ppw();const nz=cam.z+dz*(1-Math.exp(-dt*11));const wx=cam.x+(cam.ax-W/2)/s0,wy=cam.y+(cam.ay-H/2)/s0;cam.z=nz;const s1=ppw();cam.x=wx-(cam.ax-W/2)/s1;cam.y=wy-(cam.ay-H/2)/s1}
@@ -396,7 +400,7 @@ function frame(ms){
   const i0=Math.floor((cam.x-W/2/sc)/sp)-1,i1=Math.ceil((cam.x+W/2/sc)/sp)+1,j0=Math.floor((cam.y-H/2/sc)/sp)-1,j1=Math.ceil((cam.y+H/2/sc)/sp)+1;
   const size=base*.86,born=sstep(.08,.86,f),speed=Math.hypot(cam.vx,cam.vy)*sc;
   const reach=Math.hypot(W,H)*.6,pX=pointer.x*dpr,pY=pointer.y*dpr,bulge=base*1.5;
-  let n=0;tiles.length=0;hover=null;let bestD=1e18;
+  let n=0;tiles.length=0;hover=null;let bestD=1e18;const fresh=[],freshAt=[];
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
     if(n>=R.MAX)break;
     const even=!(i&1)&&!(j&1);if(!even&&born<.02)continue;
@@ -410,9 +414,11 @@ function frame(ms){
     if(pointer.in&&!drag){const dx=sx-pX,dy=sy-pY,d2=dx*dx+dy*dy,b=Math.exp(-d2/(bulge*bulge));s*=1+.34*b;const d=Math.sqrt(d2)||1;const push=b*base*.2*Math.min(1,d/base);sx+=dx/d*push;sy+=dy/d*push}
     const dl=Math.hypot(sx-lensO[0],sy-lensO[1]),lensHere=calm||(t-lensAt)*1.5*reach>dl?lens:lensPrev;
     if(!calm&&lensHere!==2){const ph=sx*.0052/dpr+sy*.0034/dpr-t*.8;rotn=Math.sin(ph)*(.035+Math.min(.3,speed/9000))}
+    if(!m.ok){fresh.push(m);freshAt.push(n)}
     put(buf,n*R.STRIDE,sx,sy,s,rotn,g,m,lensHere);n++;
     const hd=(sx-pX)**2+(sy-pY)**2;if(g>.6&&hd<bestD&&hd<(s*.55)**2){bestD=hd;hover=m}
   }
+  if(fresh.length){tend(fresh);fresh.forEach((m,k)=>{const o=freshAt[k]*R.STRIDE;buf[o+5]=m.n0;buf[o+6]=m.n1;buf[o+7]=m.s;buf.set(m.g,o+9)})}
   R.ground(W,H,[cam.x,cam.y],sc);
   R.marks(buf,n,W,H,[cam.x,cam.y],sc,null,false);
   field.classList.toggle("over",!!hover&&!drag);
@@ -426,6 +432,54 @@ function chrome(){
     $("place").textContent="The "+p.place+" "+SUFFIX[h3(b.bx,b.by,7)%8]}
   const d=Math.round(cam.z*4)/4,txt="1 : "+Math.round(1000*2**-d*8).toLocaleString("en")+" · depth "+Math.max(0,Math.floor(cam.z)+3);
   if($("scale").textContent!==txt)$("scale").textContent=txt;
+}
+
+/* ---------- tending the field ----------
+   Before a new mark is ever shown, it is drawn small and judged: enough ink, no stray specks, still
+   readable at icon size. Weak ones are nudged and judged again. Letters don't count, and nothing
+   depends on the route you took, so a mark is the same for everyone. */
+const AC=16,AS=48,AN=AC*AS,atlas=new Float32Array(AC*AC*T.STRIDE),atlasPx=new Uint8Array(AN*AN*4);
+const seenCell=new Int32Array(AS*AS),stack=new Int32Array(AS*AS),cellMask=new Uint8Array(AS*AS);
+let atlasFB=null;
+function judgeAll(list){
+  const gl=T.gl;
+  if(!atlasFB){atlasFB=gl.createFramebuffer();const tx=gl.createTexture();gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,tx);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,AN,AN,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,atlasFB);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tx,0);gl.activeTexture(gl.TEXTURE0)}
+  gl.bindFramebuffer(gl.FRAMEBUFFER,atlasFB);
+  list.forEach((m,i)=>put(atlas,i*T.STRIDE,(i%AC+.5)*AS,(((i/AC)|0)+.5)*AS,AS,0,1,m,0));
+  T.marks(atlas,list.length,AN,AN,[0,0],1,{i:K("#000000"),a:K("#000000")},2);
+  const used=Math.ceil(list.length/AC)*AS;gl.readPixels(0,AN-used,AN,used,gl.RGBA,gl.UNSIGNED_BYTE,atlasPx);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  return list.map((m,i)=>judge(i%AC,(i/AC)|0,used));
+}
+function judge(cx,cy,used){
+  let ink=0;const B=3,C=AS/B;
+  for(let y=0;y<AS;y++){const row=used-1-(cy*AS+y);for(let x=0;x<AS;x++){const o=(row*AN+cx*AS+x)*4,v=atlasPx[o]<127||atlasPx[o+2]<127?1:0;cellMask[y*AS+x]=v;ink+=v}}
+  seenCell.fill(0);let specks=0;
+  for(let i=0;i<AS*AS;i++){if(!cellMask[i]||seenCell[i])continue;let top=0,size=0;stack[top++]=i;seenCell[i]=1;
+    while(top){const q=stack[--top];size++;const x=q%AS,y=(q/AS)|0;
+      if(x>0&&cellMask[q-1]&&!seenCell[q-1]){seenCell[q-1]=1;stack[top++]=q-1}
+      if(x<AS-1&&cellMask[q+1]&&!seenCell[q+1]){seenCell[q+1]=1;stack[top++]=q+1}
+      if(y>0&&cellMask[q-AS]&&!seenCell[q-AS]){seenCell[q-AS]=1;stack[top++]=q-AS}
+      if(y<AS-1&&cellMask[q+AS]&&!seenCell[q+AS]){seenCell[q+AS]=1;stack[top++]=q+AS}}
+    if(size<5)specks++}
+  let sum=0,cells=0;
+  for(let j=0;j<C;j++)for(let i=0;i<C;i++){let c=0;for(let y=0;y<B;y++)for(let x=0;x<B;x++)c+=cellMask[(j*B+y)*AS+i*B+x];if(c){sum+=Math.abs(2*c/(B*B)-1);cells++}}
+  return {ink:ink/(AS*AS),specks,crisp:cells?sum/cells:0};
+}
+function nudge(m,r){const g=m.g;m.s=0;m.n1=m.n0;
+  if(r.specks>=2||r.crisp<.56){g[15]=Math.min(g[15],.6);g[10]=Math.min(g[10],.5);if(g[11]>=.8)g[11]=.72}
+  if(r.ink<.1){g[13]=clamp(g[13]+.24);g[5]=clamp(g[5]+.2);g[4]=clamp(g[4]+.1)}
+  if(r.crisp<.56){g[13]=clamp(g[13]+.14);g[6]=lerp(g[6],.5,.45);const i=SYM.indexOf(m.n0);if(i>0)m.n0=m.n1=SYM[i-1]}
+}
+const weak=(r)=>r.ink<.1||r.specks>=2||r.crisp<.56;
+function tend(list){
+  let todo=list.slice(0,AC*AC);
+  for(let pass=0;pass<4&&todo.length;pass++){
+    const rs=judgeAll(todo),next=[];
+    todo.forEach((m,i)=>{if(weak(rs[i])&&pass<3){nudge(m,rs[i]);next.push(m)}else m.ok=true});
+    todo=next;
+  }
 }
 
 /* ---------- moving through it ---------- */
@@ -455,7 +509,7 @@ field.addEventListener("dblclick",(e)=>{cam.zt=clamp(cam.zt+1,ZMIN,ZMAX);cam.ax=
 
 /* ---------- lenses ---------- */
 LENSES.forEach((name,i)=>{const b=document.createElement("button");b.textContent=name;b.setAttribute("aria-pressed",i===lens);b.onclick=()=>setLens(i,true);$("lenses").append(b)});
-function setLens(i,wave){if(i===lens)return;lensPrev=lens;lens=i;lensAt=performance.now()/1000;lensO=wave&&pointer.in?[W/2,H]:[W/2,H];
+function setLens(i,wave){if(i===lens)return;lensPrev=lens;lens=i;lensAt=performance.now()/1000;lensO=[W/2,H];
   [...$("lenses").children].forEach((b,k)=>b.setAttribute("aria-pressed",k===i));if(!$("studio").hidden)drawStudio()}
 
 /* ---------- planting letters ---------- */
@@ -483,7 +537,7 @@ async function plant(str){
 }
 addEventListener("keydown",(e)=>{
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.key==="Escape")closeStudio();return}
+  if(!$("studio").hidden){if(e.key==="Escape")leave();return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -526,19 +580,23 @@ function drawStudio(){
   PAL.forEach((p,i)=>{const b=document.createElement("button");b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");b.onclick=()=>{cur.pal=i;drawStudio()};$("swatches").append(b)});
 })();
 function openStudio(m){
+  if(!m.ok)tend([m]);
   cur={...m,g:Float32Array.from(m.g)};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
   $("latin").textContent=latin(cur);
   const home=biome(cur.x,cur.y);$("found").textContent=`Found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}, in The ${PAL[home.id].place} ${SUFFIX[h3(home.bx,home.by,7)%8]}.`;
   $("keep").textContent="Keep it";
-  try{location.hash="at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)}catch(e){}
+  const url="#at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)+(letters?"-"+encodeURIComponent(letters):"");
+  try{history.pushState({mark:1},"",url)}catch(e){}
   drawStudio();
 }
-const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e6).toString(36);
-const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e6;
+const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
+const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
 function closeStudio(){$("studio").hidden=true;cur=null}
-$("back").onclick=closeStudio;
-$("deeper").onclick=()=>{const m=cur;closeStudio();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.ay=H/2;cam.vx=cam.vy=0;cam.zt=clamp(Math.floor(cam.z)+3,ZMIN,ZMAX)};
+function leave(){closeStudio();if(history.state&&history.state.mark)history.back();else try{history.replaceState(null,"",location.pathname)}catch(e){}}
+addEventListener("popstate",()=>{if(!location.hash.startsWith("#at-")&&!$("studio").hidden)closeStudio()});
+$("back").onclick=leave;
+$("deeper").onclick=()=>{const m=cur;leave();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.ay=H/2;cam.vx=cam.vy=0;cam.zt=clamp(Math.floor(cam.z)+3,ZMIN,ZMAX)};
 // tuning happens on the mark itself
 let tune=null;
 const big=$("big");
@@ -554,7 +612,7 @@ big.addEventListener("wheel",(e)=>{e.preventDefault();if(Math.abs(e.deltaY)>6)pe
 /* ---------- keeping ---------- */
 function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal));const u=tiny.toDataURL("image/png");cur=keep;return u}
 function drawShelf(){$("shelf").innerHTML="";shelf.forEach((k,i)=>{const b=document.createElement("button");b.setAttribute("aria-label","Open kept mark "+(i+1));
-  b.style.background=PAL[k.pal].g;const im=new Image();im.alt="";im.src=k.thumb;b.append(im);b.onclick=async()=>{if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,g:Float32Array.from(k.g)})};$("shelf").append(b)})}
+  b.style.background=PAL[k.pal].g;const im=new Image();im.alt="";im.src=k.thumb;b.append(im);b.onclick=async()=>{if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,ok:true,g:Float32Array.from(k.g)})};$("shelf").append(b)})}
 $("keep").onclick=()=>{const m={x:cur.x,y:cur.y,pal:cur.pal,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters};m.thumb=thumb({...m,g:Float32Array.from(m.g)});
   shelf.unshift(m);shelf=shelf.slice(0,24);try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf))}catch(e){}drawShelf();$("keep").textContent="Kept";$("say").textContent="It's on your shelf at the bottom of the field."};
 drawShelf();
@@ -625,25 +683,25 @@ function svgText(){
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><title>${name}</title>${body}</svg>`;
 }
 async function saveFile(name,blob){
-  let d=null;if(window.claude&&window.claude.use){try{d=await window.claude.use("downloads")}catch(e){}}
-  if(d){await d.save({filename:name,data:blob});return}
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
 const slug=()=>latin(cur).toLowerCase().replace(/\s+/g,"-");
 const note=()=>lens>=3?" Dots and Soft are PNG looks, so the SVG holds the plain shape.":"";
-$("svg").onclick=async()=>{try{await saveFile(slug()+".svg",new Blob([svgText()],{type:"image/svg+xml"}));$("say").textContent="Saved."+note()}catch(e){$("say").textContent=e&&e.code==="declined"?"Not saved.":"That didn't save. Try Copy SVG."}};
+$("svg").onclick=async()=>{try{await saveFile(slug()+".svg",new Blob([svgText()],{type:"image/svg+xml"}));$("say").textContent="Saved."+note()}catch(e){$("say").textContent="That didn't save. Try Copy SVG."}};
 $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(svgText());$("say").textContent="Copied."+note()}catch(e){$("say").textContent="Your browser blocked copying here. Try Save SVG."}};
 $("png").onclick=async()=>{const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=PAL[cur.pal].g;g.fillRect(0,0,1024,1024);
   paint(cur,900,lens,colours(cur.pal));g.drawImage(tiny,62,62);
-  c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent=e&&e.code==="declined"?"Not saved.":"That didn't save."}},"image/png")};
+  c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
 /* ---------- start ---------- */
 if(matchMedia("(pointer:coarse)").matches)$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";
-function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)$/.exec(location.hash);if(!m)return false;
-  cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);return true}
-fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;
-window.__meadow={cam,setLens,plant,openStudio,specimen,svgText,get cur(){return cur},get tiles(){return tiles}};
+function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-(.+))?$/.exec(location.hash);if(!m)return null;
+  cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3)}}
+const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
+window.__meadow={cam,setLens,plant,openStudio,specimen,svgText,tend,probe(m,n){const k=cur;cur=m;const r=readField(n,0);cur=k;return r},get cur(){return cur},get tiles(){return tiles}};
 requestAnimationFrame(frame);
+setTimeout(()=>document.body.classList.add("live"),400);
+if(landed)(async()=>{if(landed.letters)await plant(landed.letters);const m=specimen(cam.x,cam.y);if(!m.ok)tend([m]);const here=location.hash;openStudio(m);try{history.replaceState(null,"",here)}catch(e){}})();
 </script>
 </body>
 </html>
