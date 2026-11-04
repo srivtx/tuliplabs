@@ -262,7 +262,8 @@ const LENSES=["Ink","Line","Pixel","Dots","Soft"];
 const BC=1.7, S0=.1, F0=2, ZMIN=-3, ZMAX=11, LIMIT=32;
 // sixteen traits shape a mark; three more say what kind of mark it is: pinwheel, winged fan, stacked bars (all off is a flower)
 // and four more bend the whole mark out of the round: wide or tall, round or soft-square, bent, heavier at one end
-const NG=23,DEF=[...Array(19).fill(0),.5,0,.5,.5],genes=(g)=>{const o=new Float32Array(NG);for(let k=0;k<NG;k++)o[k]=g&&g[k]!=null?g[k]:DEF[k];return o};
+// and two more: the petal's outline beyond the first five, and the frame a badge sits in beyond circle and square
+const NG=25,DEF=[...Array(19).fill(0),.5,0,.5,.5,0,0],genes=(g)=>{const o=new Float32Array(NG);for(let k=0;k<NG;k++)o[k]=g&&g[k]!=null?g[k]:DEF[k];return o};
 const hex=(h)=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
 const lerp=(a,b,t)=>a+(b-a)*t, clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
 const sstep=(a,b,v)=>{const t=clamp((v-a)/(b-a));return t*t*(3-2*t)};
@@ -334,14 +335,14 @@ void main(){vec2 w=worldAt(gl_FragCoord.xy);int a,b;float e;country(w,a,b,e);
  o=vec4(c,1.);}`;
 const VS_M=`#version 300 es
 precision highp float;
-in vec2 aQ;in vec4 i0;in vec4 i1;in float i2;in vec4 g0;in vec4 g1;in vec4 g2;in vec4 g3;in vec3 g4;in vec4 g5;
+in vec2 aQ;in vec4 i0;in vec4 i1;in float i2;in vec4 g0;in vec4 g1;in vec4 g2;in vec4 g3;in vec3 g4;in vec4 g5;in vec2 g6;
 uniform vec2 uRes;
-out vec2 vP;out vec4 vI;flat out float vL;out float vS;out vec4 vG0;out vec4 vG1;out vec4 vG2;out vec4 vG3;out vec3 vG4;out vec4 vG5;
+out vec2 vP;out vec4 vI;flat out float vL;out float vS;out vec4 vG0;out vec4 vG1;out vec4 vG2;out vec4 vG3;out vec3 vG4;out vec4 vG5;out vec2 vG6;
 void main(){float c=cos(i0.w),s=sin(i0.w);vec2 q=mat2(c,s,-s,c)*aQ*i0.z*.5;vec2 px=i0.xy+q;
  gl_Position=vec4(px.x/uRes.x*2.-1.,1.-px.y/uRes.y*2.,0.,1.);
- vP=aQ;vI=i1;vL=i2;vS=i0.z;vG0=g0;vG1=g1;vG2=g2;vG3=g3;vG4=g4;vG5=g5;}`;
+ vP=aQ;vI=i1;vL=i2;vS=i0.z;vG0=g0;vG1=g1;vG2=g2;vG3=g3;vG4=g4;vG5=g5;vG6=g6;}`;
 const FS_M=COMMON+`
-in vec2 vP;in vec4 vI;flat in float vL;in float vS;in vec4 vG0;in vec4 vG1;in vec4 vG2;in vec4 vG3;in vec3 vG4;in vec4 vG5;
+in vec2 vP;in vec4 vI;flat in float vL;in float vS;in vec4 vG0;in vec4 vG1;in vec4 vG2;in vec4 vG3;in vec3 vG4;in vec4 vG5;in vec2 vG6;
 out vec4 o;
 uniform int uFix;uniform vec3 uInk;uniform vec3 uAcc;uniform int uOut;uniform int uHasL;uniform sampler2D uL;uniform sampler2D uL0;uniform float uLm;uniform vec3 uLo;
 uniform vec4 uD[2];uniform vec3 uDC[2];
@@ -364,6 +365,23 @@ vec4 fontW(float x){float f=clamp(x,0.,1.)*3.;int i=int(min(floor(f),2.));float 
  return i==0?vec4(1.-t,t,0.,0.):i==1?vec4(0.,1.-t,t,0.):vec4(0.,0.,1.-t,t);}
 float letter(vec2 p){vec2 u=p*.5+.5;if(u.x<0.||u.y<0.||u.x>1.||u.y>1.)return .31;
  float v=dot(texture(uL,u),gFW);if(gLt<1.)v=mix(dot(texture(uL0,u),gFW),v,gLt);return (v-.5)/1.6;}
+float dot2(vec2 v){return dot(v,v);}
+float uneven(vec2 p,float r1,float r2,float h){p.x=abs(p.x);float b=(r1-r2)/h,a=sqrt(max(1.-b*b,0.)),k=dot(p,vec2(-b,a));
+ if(k<0.)return length(p)-r1;if(k>a*h)return length(p-vec2(0.,h))-r2;return dot(p,vec2(a,b))-r1;}
+float heart(vec2 p){p.x=abs(p.x);if(p.y+p.x>1.)return sqrt(dot2(p-vec2(.25,.75)))-sqrt(2.)/4.;
+ return sqrt(min(dot2(p-vec2(0.,1.)),dot2(p-.5*max(p.x+p.y,0.))))*sign(p.x-p.y);}
+float star4(vec2 p){const float an=PI/4.,en=PI/3.2;vec2 acs=vec2(cos(an),sin(an)),ecs=vec2(cos(en),sin(en));
+ float bn=mod(atan(p.x,p.y),2.*an)-an;p=length(p)*vec2(cos(bn),abs(sin(bn)));p-=acs;p+=ecs*clamp(-dot(p,ecs),0.,acs.y/ecs.y);return length(p)*sign(p.x);}
+// five more petal outlines, laid along the petal so each fits the same length and width:
+// teardrop (point inward), heart (tip inward), crescent (open outward), four-pointed star, flame (point outward).
+// each petal is mirrored about its own axis, so these are all mirror-shaped; a one-way hook comes from the pinwheel kind
+float outline(vec2 c,float l,float w,int i){
+ if(i==0){float r1=w*.16,r2=w,h=max(2.*l-r1-r2,(r2-r1)*1.05+.001);return uneven(vec2(c.y,c.x+l-r1),r1,r2,h);}
+ if(i==1){float S=min(2.*l/1.05,w*1.7);return heart(vec2(c.y/S,c.x/S+.53))*S;}
+ if(i==2){float r=max(w*.9,min(l*.8,w*1.15));return max(length(c)-r,-(length(c-vec2(r*.58,0.))-r*.74));}
+ if(i==3){vec2 s=vec2(l,w*1.5);return star4(c/s)*min(s.x,s.y);}
+ float r1=w,r2=w*.08,h=max(2.*l-r1-r2,(r1-r2)*1.05+.001);return uneven(vec2(c.y,c.x+l-r1),r1,r2,h)-w*.04*sin(clamp((c.x+l)/(2.*l),0.,1.)*PI);}
+float gPO=0.;
 float shape(vec2 c,float l,float w,float t){
  float s=clamp(t,0.,1.)*4.,f=smoothstep(.3,.7,fract(s));int k=int(min(floor(s),3.));
  float A,B;
@@ -373,9 +391,21 @@ float shape(vec2 c,float l,float w,float t){
  float dia=(abs(c.x)*w+abs(c.y)*l-l*w)/length(vec2(l,w));
  vec2 q=abs(c)-vec2(l,w)+.015;float box=length(max(q,0.))+min(max(q.x,q.y),0.)-.015;
  if(k==0){A=circ;B=cap;}else if(k==1){A=cap;B=lens;}else if(k==2){A=lens;B=dia;}else{A=dia;B=box;}
- return mix(A,B,f);
+ float d0=mix(A,B,f);if(gPO<.002)return d0;
+ // past the box, the outline carries on through the five newer ones, melting from each into the next
+ float u=min(clamp((gPO-.12)/.88,0.,1.)*4.,3.999),g=smoothstep(.3,.7,fract(u));int j=int(floor(u));
+ return mix(d0,mix(outline(c,l,w,j),outline(c,l,w,j+1),g),smoothstep(0.,.12,gPO));
 }
+float hexa(vec2 p,float r){const vec3 k=vec3(-.866025404,.5,.577350269);p=abs(p);p-=2.*min(dot(k.xy,p),0.)*k.xy;p-=vec2(clamp(p.x,-k.z*r,k.z*r),r);return length(p)*sign(p.y);}
+float boxd(vec2 p,vec2 b){vec2 d=abs(p)-b;return length(max(d,0.))+min(max(d.x,d.y),0.);}
+// four frames a badge can sit in, each filling about the same room as the circle: hexagon, shield (point down), drop (point up), arch
+float frameOf(vec2 p,int i){
+ if(i==0)return hexa(p,.74)-.08;
+ if(i==1)return smax(max(length(p-vec2(-.5,-.3))-1.25,length(p-vec2(.5,-.3))-1.25),-(p.y+.85),.06);
+ if(i==2)return uneven(vec2(p.x,p.y+.87),.03,.7,1.09);
+ return min(boxd(p-vec2(0.,.375),vec2(.6,.465))-.06,length(p-vec2(0.,-.15))-.66);}
 vec2 markN(vec2 p0,float n){
+ gPO=vG6.x;
  float g_ph=vG0.y,g_pr=vG0.z,g_r=vG0.w,g_l=vG1.x,g_w=vG1.y,g_tw=vG1.z,g_rr=vG1.w,
   g_ring=vG2.x,g_hole=vG2.y,g_bite=vG2.z,g_acc=vG2.w,g_k=vG3.x,g_wt=vG3.y,g_inv=vG3.z,g_st=vG3.w;
  float r=length(p0);
@@ -424,6 +454,8 @@ vec2 markN(vec2 p0,float n){
  d=max(d,-(b-.034));
  vec2 sq=abs(p0)-.68;float bx=length(max(sq,0.))+min(max(sq.x,sq.y),0.)-.24;
  float badge=mix(r-.92,bx,smoothstep(.47,.53,g_k));
+ float fz=vG6.y;if(fz>.002){float u=min(clamp((fz-.12)/.88,0.,1.)*3.,2.999),t=smoothstep(.3,.7,fract(u));int j=int(floor(u));
+  badge=mix(badge,mix(frameOf(p0,j),frameOf(p0,j+1),t),smoothstep(0.,.12,fz));}
  d=mix(d,smax(badge,-d,.012),inv);
  if(uHasL==1){gFW=fontW(g_l);
   // three ways a letter lives in a mark; near the border between two, both are drawn and melt together
@@ -483,15 +515,15 @@ function makeR(canvas,alpha){
   const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x};
   const prog=(v,f,binds)=>{const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,v));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,f));
     binds.forEach((b,i)=>gl.bindAttribLocation(p,i,b));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p};
-  const ATTR=["aQ","i0","i1","i2","g0","g1","g2","g3","g4","g5"];
+  const ATTR=["aQ","i0","i1","i2","g0","g1","g2","g3","g4","g5","g6"];
   const pG=prog(VS_G,FS_G,["aQ"]),pM=prog(VS_M,FS_M,ATTR);
   const U=(p,n)=>gl.getUniformLocation(p,n);
   const quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-  const STRIDE=32,MAX=3500,inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,MAX*STRIDE*4,gl.DYNAMIC_DRAW);
+  const STRIDE=34,MAX=3500,inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,MAX*STRIDE*4,gl.DYNAMIC_DRAW);
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
   gl.bindBuffer(gl.ARRAY_BUFFER,inst);
-  [[1,4,0],[2,4,4],[3,1,8],[4,4,9],[5,4,13],[6,4,17],[7,4,21],[8,3,25],[9,4,28]].forEach(([l,n,o])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(l,1)});
+  [[1,4,0],[2,4,4],[3,1,8],[4,4,9],[5,4,13],[6,4,17],[7,4,21],[8,3,25],[9,4,28],[10,2,32]].forEach(([l,n,o])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(l,1)});
   gl.bindVertexArray(null);
   const flat=(k)=>new Float32Array(PAL.flatMap(p=>hex(p[k])));
   const palette=(p)=>{gl.useProgram(p);gl.uniform3fv(U(p,"uG"),flat("g"));gl.uniform3fv(U(p,"uI"),flat("i"));gl.uniform3fv(U(p,"uA"),flat("a"))};
@@ -718,7 +750,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^[1-4]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^[1-6]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -820,16 +852,22 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
   if(mode===0){cur.g[6]=clamp(cur.g[6]+dx*.0028);cur.g[13]=clamp(cur.g[13]-dy*.0034)}
   else if(mode===1){cur.g[19]=clamp(cur.g[19]+dx*.0026);cur.g[20]=clamp(cur.g[20]-dy*.003)}
   else if(mode===2){cur.g[21]=clamp(cur.g[21]+dx*.0026);cur.g[22]=clamp(cur.g[22]-dy*.0026)}
-  else{if(!tune.tint)tune.tint={gr:groundOf(cur),ink:inkOf(cur),acc:accOf(cur),dye:cur.dye.map(d=>d.h),dh:0,cf:1};
+  else if(mode===3){ // one line through all ten outlines: circle, capsule, lens, diamond, box, then teardrop, heart, crescent, star, hook
+    let P=cur.g[23]>0?1+cur.g[23]:cur.g[2];P=clamp(P+dx*.0024,0,2);cur.g[2]=Math.min(P,1);cur.g[23]=Math.max(P-1,0);cur.g[5]=clamp(cur.g[5]-dy*.003)}
+  else if(mode===4){if(!tune.framed){tune.framed=true;if(cur.g[14]<.74&&Math.abs(dx)>=Math.abs(dy))cur.g[14]=.8} // a frame only shows round a badge, so it puts one on
+    cur.g[24]=clamp(cur.g[24]+dx*.0024);cur.g[14]=clamp(cur.g[14]-dy*.003)}
+  else if(mode===5){if(!tune.tint)tune.tint={gr:groundOf(cur),ink:inkOf(cur),acc:accOf(cur),dye:cur.dye.map(d=>d.h),dh:0,cf:1};
     const t=tune.tint;t.dh+=dx*.0065;t.cf=clamp(t.cf*Math.exp(-dy*.0045),.22,1.7);retint(t)}
   queue()});
 const end=()=>{if(tune&&tune.moved)told();tune=null};
 /* what dragging the mark changes. Each mode is the same gesture, sideways and up-down, on two traits that belong together */
 const MODES=[["Twist","Drag the mark: sideways twists, up and down thickens."],["Stretch","Drag the mark: sideways makes it wide or tall, up squares it softly."],
-  ["Lean","Drag the mark: sideways bends it, up and down weights one end."],["Colour","Drag the mark: sideways turns all its colours, up is vivid, down is calm."]];
+  ["Lean","Drag the mark: sideways bends it, up and down weights one end."],
+  ["Petal","Drag the mark: sideways changes the petal's outline, up and down makes it fuller or finer."],
+  ["Frame","Drag the mark: sideways changes the frame, up sets it in one, down takes it out."],["Colour","Drag the mark: sideways turns all its colours, up is vivid, down is calm."]];
 let mode=0;
 function setMode(i){mode=i;[...$("modes").children].forEach((b,k)=>b.setAttribute("aria-pressed",k===i));$("modehint").textContent=MODES[i][1];
-  big.className=["","m-stretch","m-lean","m-colour"][i];big.setAttribute("aria-label","Your mark. "+MODES[i][1])}
+  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour"][i];big.setAttribute("aria-label","Your mark. "+MODES[i][1])}
 MODES.forEach(([n],i)=>{const b=document.createElement("button");b.textContent=n;b.title=n+"  ("+(i+1)+")";b.onclick=()=>setMode(i);$("modes").append(b)});setMode(0);
 // colour turns as one: every hue moves by the same angle and keeps its lightness, so the set stays in tune, and its
 // strength rises or falls together; nothing can drift into a colour that fights the others
@@ -851,7 +889,7 @@ const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15],FAMS=[16,17,18];
 const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74,16:.6,17:.6,18:.6}; // traits that are either there or not
 function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
   const d=new Float32Array(NG),pool=TRAITS.slice().sort(()=>Math.random()-.5),k=2;let pet=0;
-  if(Math.random()<.2)pool[0]=FAMS[Math.floor(Math.random()*3)]; // now and then a ghost is another kind of mark altogether
+  if(Math.random()<.24)pool[0]=[...FAMS,23][Math.floor(Math.random()*4)]; // now and then a ghost is another kind of mark altogether
   if(far){ // a stranger from somewhere else in the meadow wanders in and they meet halfway
     const s=specimen(Math.round((cur.x+(Math.random()-.5)*9)*40)/40,Math.round((cur.y+(Math.random()-.5)*9)*40)/40),mix=.42+Math.random()*.2;
     TRAITS.forEach(t=>{d[t]=(s.g[t]-cur.g[t])*mix});pet=s.s>.5?s.n1:s.n0;
@@ -1094,12 +1132,13 @@ function codeOf(m){let s=m.pal.toString(36)+SYM.indexOf(m.n0).toString(36)+SYM.i
   for(const [k,v] of [["g",m.gr],["i",m.ink],["a",m.acc]])if(v)s+=k+v.slice(1).toLowerCase();
   if(m.g.length>16&&(m.g[16]>.01||m.g[17]>.01||m.g[18]>.01))s+="f"+B36(m.g[16],2)+B36(m.g[17],2)+B36(m.g[18],2);
   if(m.g.length>19&&[19,20,21,22].some(k=>Math.abs(m.g[k]-DEF[k])>.01))s+="t"+B36(m.g[19],2)+B36(m.g[20],2)+B36(m.g[21],2)+"u"+B36(m.g[22],2)+"0000";
+  if(m.g.length>23&&(m.g[23]>.01||m.g[24]>.01))s+="v"+B36(m.g[23],2)+B36(m.g[24],2)+"00";
   return s}
-function readCode(s){const rest=s.length-37,ex={};let t=[0,1,2,3,4,5,6].find(t=>rest-7*t>=0&&(rest-7*t)%12===0&&(rest-7*t)/12<=2);if(t===undefined)return null;
-  for(;t>0;t--){const tok=s.slice(-7);if(/^[ftu][0-9a-z]{6}$/.test(tok))ex[tok[0]]=tok.slice(1);else if(/^[gia][0-9a-f]{6}$/.test(tok))ex[tok[0]]="#"+tok.slice(1);else return null;s=s.slice(0,-7)}
+function readCode(s){const rest=s.length-37,ex={};let t=[0,1,2,3,4,5,6,7].find(t=>rest-7*t>=0&&(rest-7*t)%12===0&&(rest-7*t)/12<=2);if(t===undefined)return null;
+  for(;t>0;t--){const tok=s.slice(-7);if(/^[ftuv][0-9a-z]{6}$/.test(tok))ex[tok[0]]=tok.slice(1);else if(/^[gia][0-9a-f]{6}$/.test(tok))ex[tok[0]]="#"+tok.slice(1);else return null;s=s.slice(0,-7)}
   if(!/^[0-9a-z]{37}([0-9a-z]{6}[0-9a-f]{6}){0,2}$/.test(s))return null;
   const pal=parseInt(s[0],36),n0=SYM[parseInt(s[1],36)],n1=SYM[parseInt(s[2],36)];if(!(pal<8)||!n0||!n1)return null;
-  const g=new Float32Array(NG);for(let k=0;k<16;k++)g[k]=U36(s.substr(5+k*2,2));for(let k=16;k<NG;k++)g[k]=DEF[k];if(ex.f)for(let f=0;f<3;f++)g[16+f]=U36(ex.f.substr(f*2,2));if(ex.t)for(let f=0;f<3;f++)g[19+f]=U36(ex.t.substr(f*2,2));if(ex.u)g[22]=U36(ex.u.substr(0,2));
+  const g=new Float32Array(NG);for(let k=0;k<16;k++)g[k]=U36(s.substr(5+k*2,2));for(let k=16;k<NG;k++)g[k]=DEF[k];if(ex.f)for(let f=0;f<3;f++)g[16+f]=U36(ex.f.substr(f*2,2));if(ex.t)for(let f=0;f<3;f++)g[19+f]=U36(ex.t.substr(f*2,2));if(ex.u)g[22]=U36(ex.u.substr(0,2));if(ex.v){g[23]=U36(ex.v.substr(0,2));g[24]=U36(ex.v.substr(2,2))}
   const dye=[];for(let o=37;o<s.length;o+=12)dye.push({x:U36(s.substr(o,2))*2-1,y:U36(s.substr(o+2,2))*2-1,r:U36(s.substr(o+4,2))*2,h:"#"+s.substr(o+6,6),w:0});
   return {pal,n0,n1,s:U36(s.substr(3,2)),g,dye,gr:ex.g||null,ink:ex.i||null,acc:ex.a||null}}
 
