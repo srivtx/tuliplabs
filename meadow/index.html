@@ -922,7 +922,7 @@ function openStudio(m,from){ftag.classList.add("out");
   // the mark lifts out of the field and grows into place while the studio fades up round it
   if(!calm){const st=$("studio");st.animate([{opacity:0},{opacity:1}],{duration:240,easing:"ease-out"});
     st.querySelector(".sheet").animate([{opacity:0,translate:"24px 0"},{opacity:1,translate:"0 0"}],{duration:480,delay:70,easing:"cubic-bezier(.2,.8,.3,1)",fill:"backwards"});
-    const r=big.getBoundingClientRect();if(from&&r.width){const k=from.s/r.width,dx=from.x-(r.left+r.width/2),dy=from.y-(r.top+r.height/2);
+    big.getAnimations().forEach(a=>a.cancel());const r=big.getBoundingClientRect();if(from&&r.width){const k=from.s/r.width,dx=from.x-(r.left+r.width/2),dy=from.y-(r.top+r.height/2);
       big.animate([{transform:`translate(${dx}px,${dy}px) scale(${k})`},{transform:"none"}],{duration:560,easing:"cubic-bezier(.2,.85,.25,1)"})}}
 }
 let foundAt="";
@@ -1135,9 +1135,11 @@ function layoutHalo(){
   const foot=Math.max(64,(stage.querySelector(".tunehint").offsetHeight||40)+30);
   let h=narrow?Math.min(sw/2.84,innerHeight*.29):Math.min(sw/2.84,(stage.clientHeight/2-foot)/1.42);h=Math.max(70,Math.floor(h));
   big.style.width=big.style.height=2*h+"px";big.style.margin=narrow?Math.round(.44*h)+"px auto":"0";
-  const br=big.getBoundingClientRect(),sr=stage.getBoundingClientRect(),gs=Math.round(.42*h);
-  gLay={cx:br.left-sr.left+br.width/2,cy:br.top-sr.top+br.height/2,R:1.2*h,gs};
-  Object.assign(mirC.style,{left:br.left-sr.left+"px",top:br.top-sr.top+"px",width:br.width+"px",height:br.height+"px"});{const px=Math.round(br.width*Math.min(devicePixelRatio||1,2));if(mirC.width!==px)mirC.width=mirC.height=px}
+  // where the mark rests, read from its layout box rather than its on-screen box: the mark flies in from the field
+  // and swells when you keep a shape, and measuring it mid-flight used to put the whole ring of ghosts off-centre
+  const bx=big.offsetLeft,by=big.offsetTop,bw=big.offsetWidth,gs=Math.round(.42*h);
+  gLay={cx:bx+bw/2,cy:by+bw/2,R:1.2*h,gs};
+  Object.assign(mirC.style,{left:bx+"px",top:by+"px",width:bw+"px",height:bw+"px"});{const px=Math.round(bw*Math.min(devicePixelRatio||1,2));if(mirC.width!==px)mirC.width=mirC.height=px}
   [...halo.children].forEach((b,i)=>{const a=-Math.PI/2+i*Math.PI*2/GN;
     b.style.left=Math.round(gLay.cx+gLay.R*Math.cos(a)-gs/2)+"px";b.style.top=Math.round(gLay.cy+gLay.R*Math.sin(a)-gs/2)+"px";
     const c=b.firstChild,px=Math.round(gs*Math.min(devicePixelRatio||1,2));c.width=c.height=px;c.style.width=c.style.height=gs+"px"});
@@ -1489,7 +1491,7 @@ function kinItems(P){const L=ghosts.map(G=>blend(G,1)),W=P.Wp-2*P.m;
   return L.map((m,i)=>({m,x:P.m+W/8*(i+.5),y:P.kinY,s:P.kin}))}
 function pbuild(){
   const key=codeOf(cur)+"/"+lens+"/"+fmt+"/"+gen+"/"+pstyle;if(key===pk&&pc)return;pk=key;
-  const P=pplan(),c=colours(cur.pal,cur),bsz=Math.round(big.getBoundingClientRect().width*Math.min(devicePixelRatio||1,2));
+  const P=pplan(),c=colours(cur.pal,cur),bsz=Math.round(big.offsetWidth*Math.min(devicePixelRatio||1,2));
   pc={hero:snap(cur,Math.min(1400,Math.max(Math.round(P.hs),bsz)),lens,c),line:snap(cur,1100,1,c),field:null,pad:Math.round(P.Wp*.12),items:kinItems(P)};
   if(pstyle===2)pc.acc=snap(cur,360,lens,{i:K(accOf(cur)),a:K(inkOf(cur)),d:[]}),pc.ink=snap(cur,360,lens,{i:K(inkOf(cur)),a:K(accOf(cur)),d:[]});
   pc.kin=sheet(pc.items,P.Wp,P.Hp,lens,c);
@@ -1582,7 +1584,7 @@ function prender(){
   const th=stage.querySelector(".tunehint").getBoundingClientRect(),room=Math.min(sr.height,th.top-sr.top)-14;
   const P=pplan(),fit=Math.max(.05,Math.min((sr.width-48)/P.Wp,(room-20)/P.Hp)),dw=P.Wp*fit,dh=P.Hp*fit,dx=(sr.width-dw)/2,dy=Math.max(16,(room-dh)/2+4);
   // at the start the sheet is so close that its mark is the big mark; it pulls back from there
-  const br=big.getBoundingClientRect(),bx=br.left-sr.left+br.width/2,by=br.top-sr.top+br.height/2;
+  const br={width:big.offsetWidth},bx=big.offsetLeft+br.width/2,by=big.offsetTop+br.width/2; // its resting box, as for the ghosts
   const hx=dx+(P.hx+off[0])*fit,hy=dy+(P.hy+off[1])*fit,e=sstep(0,1,Math.min(1,unf)),s0=br.width/(P.hs*fit),S=s0**(1-e);
   const cx=lerp(bx,hx,e),cy=lerp(by,hy,e),f=fit*S,ox=cx-(P.hx+off[0])*f,oy=cy-(P.hy+off[1])*f;
   const g=pv.getContext("2d");g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cw,ch);
