@@ -136,7 +136,7 @@ Where the stories quote a result, it is computed live from your own run. One hon
 The 3D lab is a single self-contained HTML file. The code tracks are static too; lessons are prebuilt into `content/*.json`.
 
 ```bash
-git clone https://github.com/srivtx/voxel-network-lab.git
+git clone https://github.com/srivtx/tuliplabs.git
 cd voxel-network-lab
 python3 -m http.server          # then open / (home), /worlds/, /code/, /modsim/, /build/, /stats/, /dsa/ or /ods/
 ```
