@@ -29,7 +29,7 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
 button:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-offset:3px}
 
 .tag{position:fixed;z-index:3;left:max(16px,env(safe-area-inset-left,0px));top:calc(14px + env(safe-area-inset-top,0px));
-  display:flex;align-items:baseline;gap:14px;background:var(--ground);padding:7px 12px 8px;max-width:calc(100vw - 32px)}
+  display:flex;align-items:baseline;gap:14px;background:var(--ground);padding:7px 14px 8px;border-radius:12px;max-width:calc(100vw - 32px)}
 .tag b{font-family:var(--f-pixel);font-weight:700;font-size:17px;letter-spacing:.01em}
 .tag a{color:inherit;opacity:.82;text-underline-offset:3px;white-space:nowrap}.tag a:hover{opacity:1}
 .tag span{opacity:.82;line-height:1.5;transition:opacity .6s}
@@ -181,9 +181,18 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .drop.in{scale:.3;opacity:0}.drop.gone{scale:0;opacity:0}
 @keyframes wob{0%,100%{border-radius:50% 46% 52% 48%}33%{border-radius:44% 54% 47% 53%}66%{border-radius:53% 47% 56% 44%}}
 @media (prefers-reduced-motion:reduce){.drop{animation:none;transition:none}}
-.acts{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin-top:auto;padding-top:8px}
-.acts button{padding:8px 0;border-bottom:1px solid currentColor}
-.acts .primary{background:var(--ink);color:var(--ground);padding:9px 14px;border:0;font-weight:600}
+/* what to do with it, then how to take it away: two quiet lines */
+.acts{display:grid;gap:14px;margin-top:auto;padding-top:8px}
+.acts .do{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.acts .do button{padding:6px 0;border-bottom:1px solid color-mix(in srgb,currentColor 55%,transparent);transition:border-color .2s}
+.acts .do button:hover{border-bottom-color:currentColor}
+.acts .do .primary{background:var(--ink);color:var(--ground);padding:9px 18px;border:0!important;border-radius:999px;font-weight:600;transition:scale .25s cubic-bezier(.2,.9,.3,1.4),box-shadow .25s}
+.acts .do .primary:hover{scale:1.04;box-shadow:0 6px 18px -8px rgba(0,0,0,.45)}
+.acts .do .primary:active{scale:.97}
+.acts .save{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;opacity:.82}
+.acts .save span{opacity:.75}.acts .save .dot{opacity:.4}
+.acts .save button{text-decoration:underline;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);text-underline-offset:3px;transition:text-decoration-color .2s}
+.acts .save button:hover{text-decoration-color:currentColor}
 #say{min-height:18px;margin:0;opacity:.85}
 
 #nogl{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font-family:var(--f-serif);font-size:24px}
@@ -237,12 +246,8 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div><h2>Out in the world</h2><div class="worlds" id="worlds"></div></div>
     <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="tray" id="tray"><span class="trayset" id="trayset"></span><span class="mine" id="mine" aria-label="Colours you made"></span></div><div class="hexes" id="hexes" aria-label="This mark's colours"></div><p class="dyehint">Drag any colour onto the mark, its accents, or the ground around it. Pass it over other colours to mix.</p></div>
     <div class="acts">
-      <button class="primary" id="keep">Keep it</button>
-      <button id="deeper">Grow from here</button>
-      <button id="svg">Save SVG</button>
-      <button id="png">Save PNG</button>
-      <button id="unfold">Make a poster</button>
-      <button id="copy">Copy SVG</button>
+      <div class="do"><button class="primary" id="keep">Keep it</button><button id="deeper">Grow from here</button><button id="unfold">Make a poster</button></div>
+      <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
     </div>
     <p id="say" role="status"></p>
     <div class="kept" id="kept" hidden><span class="kl">Your shelf</span><div class="keptrow" id="keptrow" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span></div>
@@ -473,7 +478,11 @@ vec2 markN(vec2 p0,float n){
  float badge=mix(r-.92,bx,smoothstep(.47,.53,g_k));
  float fz=vG6.y;if(fz>.002){float u=min(clamp((fz-.12)/.88,0.,1.)*3.,2.999),t=smoothstep(.3,.7,fract(u));int j=int(floor(u));
   badge=mix(badge,mix(frameOf(p0,j),frameOf(p0,j+1),t),smoothstep(0.,.12,fz));}
- d=mix(d,smax(badge,-d,.012),inv);
+ // into a badge, the cut-out floods out from the middle: inside a growing disc the mark is inverted, outside it is
+ // still petals. Blending a shape with its own negative would cancel to a blur halfway, so this never does
+ // in a frame, the cut-outs stop short of the edge, so a shield or drop keeps a whole rim instead of thin wedges
+ if(inv>0.){float dI=fz>.002?mix(d,smax(d,badge+.065,.03),smoothstep(0.,.12,fz)):d,D=max(badge,r-inv*1.45+.03);
+  d=max(smax(min(dI,D),-max(dI,D),.012),mix(-1.,badge,inv*inv*inv));}
  if(uHasL==1){gFW=fontW(g_l);
   // three ways a letter lives in a mark; near the border between two, both are drawn and melt together
   float dA=d,bA=b,dB=d,dC=d;
@@ -517,7 +526,9 @@ void main(){
   vec2 m=mark(p);
   if(L==1){m=abs(m)-.017;}
   if(uOut==1){vec2 v=clamp(m*.5+.5,0.,1.);vec2 hi=floor(v*255.)/255.,lo=fract(v*255.);o=vec4(hi.x,lo.x,hi.y,lo.y);return;}
-  ca=clamp(.5-m.x/px,0.,1.);cb=clamp(.5-m.y/px,0.,1.);
+  // the edge is one screen pixel wide however the shape was bent or blended, so nothing goes soft or jagged
+  vec2 e=clamp(sqrt(dFdx(m)*dFdx(m)+dFdy(m)*dFdy(m)),vec2(px*.25),vec2(px*1.5));
+  ca=clamp(.5-m.x/e.x,0.,1.);cb=clamp(.5-m.y/e.y,0.,1.);
   if(L==4){float dd=min(m.x,m.y),h=clamp(-dd/.2,0.,1.);h=sqrt(1.-(1.-h)*(1.-h))*.2;
    vec2 gr=vec2(dFdx(h),dFdy(h))/px;vec3 nn=normalize(vec3(-gr*1.25,1.));vec3 Ld=normalize(vec3(-.5,.6,.72));
    float df=max(dot(nn,Ld),0.);shade=.56+.62*df;spec=pow(max(dot(reflect(-Ld,nn),vec3(0.,0.,1.)),0.),26.)*.55;}
@@ -585,7 +596,9 @@ const buf=new Float32Array(R.MAX*R.STRIDE),one=new Float32Array(R.STRIDE);
 let W=0,H=0,dpr=1,base=100,sharp=2,slow=0,ema=16;
 const cam={x:.55,y:.35,z:0,zt:0,vx:0,vy:0,ax:0,ay:0};
 let lens=0,lensPrev=0,lensAt=-9,lensO=[0,0];
-let growAt=performance.now()/1000,growO=[0,0],prevKeyMs=0;
+let growAt=performance.now()/1000,growO=[0,0],growK=1.9,prevKeyMs=0;
+// the field grows back from one spot outward; k is how fast the wave spreads
+const regrow=(o,k=1.9)=>{growAt=performance.now()/1000;growO=o;growK=k};
 let letters="",hover=null,tiles=[],pointer={x:-1e4,y:-1e4,in:false};
 let shelf=[];try{shelf=JSON.parse(localStorage.getItem("meadow-shelf")||"[]")}catch(e){}
 
@@ -616,7 +629,7 @@ function frame(ms){
     const x=i*sp,y=j*sp,m=world(x,y);
     let sx=(x-cam.x)*sc+W/2,sy=(y-cam.y)*sc+H/2;
     let s=even?size:size*(.25+.75*born),g=even?1:born;
-    const rip=calm?1:clamp((t-growAt)*1.9-Math.hypot(sx-growO[0],sy-growO[1])/reach*1.1);
+    const rip=calm?1:clamp((t-growAt)*growK-Math.hypot(sx-growO[0],sy-growO[1])/reach*1.1);
     g*=rip*rip*(3-2*rip);
     // the field leans toward the pointer
     let rotn=0;
@@ -708,10 +721,12 @@ field.addEventListener("pointermove",(e)=>{pointer.x=e.clientX;pointer.y=e.clien
   drag.x=e.clientX;drag.y=e.clientY;drag.t=now});
 function lift(e){const had=pts.size;pts.delete(e.pointerId);field.classList.remove("dragging");
   if(had===1&&drag){const still=performance.now()-drag.t>120;if(still)cam.vx=cam.vy=0;drag=null;
-    if(moved<7){pointer.x=e.clientX;pointer.y=e.clientY;const m=hover||nearest(e.clientX,e.clientY);if(m)openStudio(m)}}
+    if(moved<7){pointer.x=e.clientX;pointer.y=e.clientY;const m=hover||nearest(e.clientX,e.clientY);if(m)openStudio(m,onField(m))}}
   if(pts.size<2)pinch=0}
 field.addEventListener("pointerup",lift);field.addEventListener("pointercancel",lift);
 field.addEventListener("pointerleave",()=>{pointer.in=false});
+// where a mark sits on screen, in page pixels, and about how big it's drawn there
+const onField=(m)=>{const sc=ppw();return {x:((m.x-cam.x)*sc+W/2)/dpr,y:((m.y-cam.y)*sc+H/2)/dpr,s:base*.86*1.3/dpr}};
 function nearest(px,py){const sc=ppw(),L=Math.floor(cam.z),sp=S0*2**-L,wx=cam.x+(px*dpr-W/2)/sc,wy=cam.y+(py*dpr-H/2)/sc;
   return world(Math.round(wx/sp)*sp,Math.round(wy/sp)*sp)}
 field.addEventListener("wheel",(e)=>{e.preventDefault();
@@ -750,7 +765,7 @@ function fieldDid(step){fieldUndo.push(step);if(fieldUndo.length>40)fieldUndo.sh
 async function plant(str,undoing){
   if(!undoing&&str!==letters){const was=letters,now=str;fieldDid({undo:()=>plant(was,true),redo:()=>plant(now,true)})}
   letters=str;$("letters").value=str;$("plant").textContent=str?`Planted: ${str}`:"Plant a letter";const tok=++glyphTok;
-  if(!str){lastGlyph=null;R.glyph(null);T.glyph(null);growAt=performance.now()/1000;growO=[W/2,H/2];return}
+  if(!str){lastGlyph=null;R.glyph(null);T.glyph(null);regrow([W/2,H/2]);return}
   try{await Promise.all(FACES.map(f=>document.fonts.load(f.replace("P","300px"))))}catch(e){}
   if(tok!==glyphTok)return;
   const n=384,tex=new Uint8Array(n*n*4);
@@ -758,7 +773,7 @@ async function plant(str,undoing){
   const prev=lastGlyph;lastGlyph=tex;
   R.glyph(tex,n,prev);T.glyph(tex,n,null);
   // from no letter the field regrows; from one letter to the next it melts
-  if(prev){meltAt=performance.now()/1000;meltO=pointer.in?[pointer.x*dpr,H-pointer.y*dpr]:[W/2,H/2]}else{growAt=performance.now()/1000;growO=[W/2,H/2]}
+  if(prev){meltAt=performance.now()/1000;meltO=pointer.in?[pointer.x*dpr,H-pointer.y*dpr]:[W/2,H/2]}else{regrow([W/2,H/2])}
   $("tag").classList.add("quiet");
 }
 addEventListener("keydown",(e)=>{
@@ -836,7 +851,7 @@ function showTray(i){if(i===trayAt||drop)return;trayAt=i;const p=PAL[i],el=$("tr
   [...$("swatches").children].forEach((b,k)=>b.classList.toggle("shown",k===i))}
 function setRole(r,h){if(!cur)return;const now=r==="gr"?groundOf(cur):r==="ink"?inkOf(cur):accOf(cur);if(now===h)return;remember();cur[r]=h;told();drawStudio();warnRead()}
 function warnRead(){const s=$("say"),low=contrast(inkOf(cur),groundOf(cur))<1.6,t="The ink barely shows on this ground.";if(low)s.textContent=t;else if(s.textContent===t)s.textContent=""}
-function openStudio(m){
+function openStudio(m,from){
   if(!m.ok)tend([m]);
   cur={...m,g:genes(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
@@ -847,18 +862,24 @@ function openStudio(m){
   try{history.pushState({mark:1},"",cur.at)}catch(e){}
   hist=[];fut=[];lw.fill(0);tw.fill(0);pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
   layoutHalo();makeGhosts();drawStudio();trayAt=-1;showTray(cur.pal);
+  // the mark lifts out of the field and grows into place while the studio fades up round it
+  if(!calm){const st=$("studio");st.animate([{opacity:0},{opacity:1}],{duration:240,easing:"ease-out"});
+    st.querySelector(".sheet").animate([{opacity:0,translate:"24px 0"},{opacity:1,translate:"0 0"}],{duration:480,delay:70,easing:"cubic-bezier(.2,.8,.3,1)",fill:"backwards"});
+    const r=big.getBoundingClientRect();if(from&&r.width){const k=from.s/r.width,dx=from.x-(r.left+r.width/2),dy=from.y-(r.top+r.height/2);
+      big.animate([{transform:`translate(${dx}px,${dy}px) scale(${k})`},{transform:"none"}],{duration:560,easing:"cubic-bezier(.2,.85,.25,1)"})}}
 }
 let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
-function closeStudio(){$("studio").hidden=true;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
+function closeStudio(){if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
+  $("studio").hidden=true;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 let keptNow=false;
 function leave(){closeStudio();
   if(keptNow){keptNow=false;let seen=false;try{seen=!!localStorage.getItem("meadow-shelf-told");localStorage.setItem("meadow-shelf-told","1")}catch(e){}
     if(!seen)say2("Your kept marks wait at the bottom right. Drag one onto any mark to breed the two, or into the circle beside them to let it go.")}if(history.state&&history.state.mark)history.back();else try{history.replaceState(null,"",location.pathname)}catch(e){}}
 addEventListener("popstate",()=>{if(!location.hash.startsWith("#at-")&&!$("studio").hidden)closeStudio()});
 $("back").onclick=leave;
-$("deeper").onclick=()=>{const m=cur;leave();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.ay=H/2;cam.vx=cam.vy=0;cam.zt=clamp(Math.floor(cam.z)+3,ZMIN,ZMAX)};
+$("deeper").onclick=()=>{const m=cur;leave();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.ay=H/2;cam.vx=cam.vy=0;regrow([W/2,H/2],3.4);cam.zt=clamp(Math.floor(cam.z)+3,ZMIN,ZMAX)};
 // tuning happens on the mark itself
 let tune=null;
 const big=$("big");
@@ -883,7 +904,8 @@ const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
   ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"]];
 let mode=0;
-function setMode(i){mode=i;$("modeword").textContent=MODES[i][0];[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
+function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];
+  if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
   big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
 MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
   b.onclick=()=>{setMode(i);popMode(false)};$("modepop").append(b)});setMode(0);
@@ -906,7 +928,15 @@ function retint(t){const f=(h)=>{const [L,a,b]=oklab(h),C=Math.hypot(a,b)*t.cf,H
 // the look, chosen here as well as in the field, so you can see the mark in each before saving it
 LENSES.forEach((n,i)=>{const b=document.createElement("button");b.textContent=n;b.setAttribute("aria-pressed",i===lens);b.onclick=()=>setLens(i,true);$("looks").append(b)});big.addEventListener("pointerup",end);big.addEventListener("pointercancel",end);
 let queued=false;const queue=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;drawStudio()})};
-function petals(dir){const n=cur.s>.5?cur.n1:cur.n0,i=clamp(SYM.indexOf(n)+dir,0,SYM.length-1);if(SYM[i]===n&&cur.s%1===0)return;remember();cur.n0=cur.n1=SYM[i];cur.s=0;told();queue()}
+// a new petal count melts in over a moment: the mark is drawn between the two counts, then settles on the new one
+let petT=0,petTo=0;
+function petals(dir){if(petT){cancelAnimationFrame(petT);petT=0;cur.n0=cur.n1=petTo;cur.s=0} // a quick second click finishes the first
+  const n=cur.s>.5?cur.n1:cur.n0,i=clamp(SYM.indexOf(n)+dir,0,SYM.length-1);if(SYM[i]===n&&cur.s%1===0)return;remember();
+  const to=SYM[i],me=cur;if(calm){cur.n0=cur.n1=to;cur.s=0;told();queue();return}
+  cur.n0=n;cur.n1=to;cur.s=0;petTo=to;const t0=performance.now();
+  const step=(ms)=>{if(cur!==me){petT=0;return}const k=clamp((ms-t0)/280);cur.s=k*k*(3-2*k);
+    if(k<1){drawBig();petT=requestAnimationFrame(step)}else{petT=0;cur.n0=cur.n1=to;cur.s=0;told();queue()}};
+  $("petn").textContent=to+" petals";petT=requestAnimationFrame(step)}
 
 /* ---------- ghosts ----------
    Eight possible next selves float round the mark, each a clear step away in two or three traits.
@@ -1016,7 +1046,7 @@ function commit(i){
 }
 const snapOf=()=>({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0})),gh:ghosts});
 function remember(){hist.push(snapOf());if(hist.length>80)hist.shift();fut=[]}
-function restore(h){cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();
+function restore(h){if(petT){cancelAnimationFrame(petT);petT=0}cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();
   // the ring you had then comes back with it
   if(h.gh&&h.gh!==ghosts){ghosts=h.gh;gen++;[...halo.children].forEach((b,i)=>{b.classList.add("fresh");setTimeout(()=>b.classList.remove("fresh"),calm?0:60+i*30)})}
   told();drawGhosts();queue()}
@@ -1225,7 +1255,7 @@ function pdraw(g,P,a){
 const layers=()=>({t:sstep(.5,1,unf),e:clamp(unf-1),k:clamp(unf-2),f:clamp(unf-3)});
 function prender(){
   const on=!!cur&&unf>.001;pv.hidden=!on;big.style.visibility=on?"hidden":"";halo.style.visibility=on?"hidden":"";stage.classList.toggle("unfolded",on);
-  $("markhint").hidden=$("leanhint").hidden=unf>=.5;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Save poster":"Save PNG";
+  $("markhint").hidden=$("leanhint").hidden=unf>=.5;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Poster PNG":"PNG";
   if(!on)return;pbuild();
   const sr=stage.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2),cw=Math.round(sr.width*dp),ch=Math.round(sr.height*dp);
   if(pv.width!==cw||pv.height!==ch){pv.width=cw;pv.height=ch}
@@ -1302,11 +1332,11 @@ function breed(a,b){
   nur={A,B,home,roots,genus:cross(roots),from:A.name+" × "+B.name};hyCache.clear();
   if(!$("studio").hidden)leave();
   R.nursery(true,A.pal,B.pal);cam.x=0;cam.y=0;cam.vx=cam.vy=0;cam.z=cam.zt=innerWidth<1100?-1.1:-.9;cam.ax=W/2;cam.ay=H/2;
-  growAt=performance.now()/1000;growO=[W/2,H/2];lastPlace="";$("home").hidden=false;
+  regrow([W/2,H/2]);lastPlace="";$("home").hidden=false;
   say2(`${A.name} on the left, ${B.name} on the right. Up grows wilder, down bolder.`);
 }
 function leaveNursery(){if(!nur)return;const h=nur.home;nur=null;hyCache.clear();R.nursery(false);
-  cam.x=h.x;cam.y=h.y;cam.z=cam.zt=h.z;cam.vx=cam.vy=0;growAt=performance.now()/1000;growO=[W/2,H/2];lastPlace="";$("home").hidden=true;
+  cam.x=h.x;cam.y=h.y;cam.z=cam.zt=h.z;cam.vx=cam.vy=0;regrow([W/2,H/2]);lastPlace="";$("home").hidden=true;
   say2("Back in the meadow.")}
 $("home").onclick=leaveNursery;
 /* a kept mark can be carried anywhere: onto a mark in the field, onto another kept mark, or onto the mark
@@ -1354,7 +1384,7 @@ function drawShelf(fresh){
     if(fresh&&k.key===fresh)b.classList.add("pop");
     const x=document.createElement("span");x.className="x";x.textContent="×";x.title="Let go of this one";x.setAttribute("aria-hidden","true");
     x.addEventListener("pointerdown",(e)=>e.stopPropagation());x.addEventListener("click",(e)=>{e.stopPropagation();letGo(k)});b.append(x);
-    breeder(b,k);b.onclick=async()=>{if(performance.now()-shelfEnd<350)return;if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,ok:true,g:Float32Array.from(k.g),edited:true})};row.append(b)}))}
+    breeder(b,k);b.onclick=async()=>{if(performance.now()-shelfEnd<350)return;if(k.letters!==letters)await plant(k.letters||"");const r=b.getBoundingClientRect();openStudio({...k,ok:true,g:Float32Array.from(k.g),edited:true},{x:r.left+r.width/2,y:r.top+r.height/2,s:r.width})};row.append(b)}))}
 function flashKept(key){document.querySelectorAll(".shelf button,.keptrow button").forEach(b=>{if(shelf[+b.dataset.i]&&shelf[+b.dataset.i].key===key){b.classList.remove("flash");void b.offsetWidth;b.classList.add("flash")}})}
 const isKept=()=>cur&&shelf.some(k=>k.key===keyOf({...cur,letters}));
 $("keep").onclick=()=>{
