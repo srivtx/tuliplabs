@@ -105,6 +105,21 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .grp>span{padding:0 6px;opacity:.85;font-variant-numeric:tabular-nums;white-space:nowrap}
 .grp button[aria-pressed=true]{background:var(--ink);color:var(--ground)}
 .stage{user-select:none;-webkit-user-select:none}
+/* the mode is a word in the hint; clicking it opens a small menu just above */
+.word{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:600;opacity:1}
+.word::after{content:" ▾";font-size:9px;opacity:.7}
+.tunehint .hint{opacity:.82}
+.modepop{position:absolute;left:0;bottom:calc(100% + 8px);display:grid;gap:2px;padding:6px;border-radius:14px;background:var(--ground);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 25%,transparent),0 14px 30px -14px rgba(0,0,0,.5);min-width:250px;transform-origin:20% 100%;animation:popin .22s cubic-bezier(.2,.9,.3,1.3)}
+@keyframes popin{from{opacity:0;scale:.92}to{opacity:1;scale:1}}
+.modepop button{display:grid;grid-template-columns:18px 1fr;gap:0 8px;text-align:left;padding:7px 10px;border-radius:9px;transition:background .15s}
+.modepop button:hover,.modepop button:focus-visible{background:color-mix(in srgb,var(--ink) 10%,transparent);outline:none}
+.modepop button[aria-checked=true]{background:color-mix(in srgb,var(--ink) 16%,transparent)}
+.modepop kbd{font:10px var(--f-mono);opacity:.5;grid-row:1/3;align-self:center}
+.modepop b{font-weight:600}.modepop small{opacity:.65;font-size:10.5px;line-height:1.35}
+/* while you drag, a small label beside the pointer names what you're making */
+.readout{position:fixed;z-index:9;pointer-events:none;font:11px var(--f-mono);background:var(--ink);color:var(--ground);padding:3px 9px;border-radius:999px;translate:14px -28px;transition:opacity .2s}
+.readout.out{opacity:0}
 .sheet h2 .looks{float:right;margin-top:-5px;font-weight:400;letter-spacing:0}.looks button{padding:2px 9px;font-size:11px}
 #big.m-stretch,#big.m-lean{cursor:move}#big.m-colour{cursor:crosshair}
 /* the mark's possible next selves, floating round it */
@@ -206,9 +221,10 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div id="halo" aria-label="Ways your mark could grow"></div>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
-      <p class="hint"><span id="leanhint"><span id="modehint">Drag the mark: sideways twists, up and down thickens.</span> Between two ghosts it blends; double-click to keep.</span><span id="posternote" hidden>Scroll to add layers or peel them off. Drag the mark and its echoes follow.</span></p>
+      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–6)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="posternote" hidden>Scroll to add layers or peel them off. Drag the mark and its echoes follow.</span></p>
+      <div class="modepop" id="modepop" hidden role="menu" aria-label="What dragging the mark changes"></div>
       <div class="tools">
-        <span class="tools" id="markhint"><span class="grp" id="modes" role="group" aria-label="What dragging the mark changes"></span><span class="grp" role="group" aria-label="Petals"><button id="fewer" aria-label="Fewer petals" title="Fewer petals (scroll down)">−</button><span id="petn">6 petals</span><button id="more" aria-label="More petals" title="More petals (scroll up)">+</button></span><button class="chip" id="unfold">Poster</button></span>
+        <span class="tools" id="markhint"><span class="grp" role="group" aria-label="Petals"><button id="fewer" aria-label="Fewer petals" title="Fewer petals (scroll down)">−</button><span id="petn">6 petals</span><button id="more" aria-label="More petals" title="More petals (scroll up)">+</button></span></span>
         <span class="tools" id="posterhint" hidden><span class="grp" id="fmts" role="group" aria-label="Poster shape"></span><button class="chip" id="layer">Another layer</button><button class="chip" id="fold">Back to the mark</button></span>
         <span class="grp" id="undoWrap" role="group" aria-label="History"><button id="undo" aria-label="Step back" title="Step back  ⌘Z">↶</button><button id="redo" aria-label="Step forward" title="Step forward  ⇧⌘Z">↷</button></span>
       </div>
@@ -225,6 +241,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
       <button id="deeper">Grow from here</button>
       <button id="svg">Save SVG</button>
       <button id="png">Save PNG</button>
+      <button id="unfold">Make a poster</button>
       <button id="copy">Copy SVG</button>
     </div>
     <p id="say" role="status"></p>
@@ -858,17 +875,30 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
     cur.g[24]=clamp(cur.g[24]+dx*.0024);cur.g[14]=clamp(cur.g[14]-dy*.003)}
   else if(mode===5){if(!tune.tint)tune.tint={gr:groundOf(cur),ink:inkOf(cur),acc:accOf(cur),dye:cur.dye.map(d=>d.h),dh:0,cf:1};
     const t=tune.tint;t.dh+=dx*.0065;t.cf=clamp(t.cf*Math.exp(-dy*.0045),.22,1.7);retint(t)}
+  const said=nameNow();ro.textContent=said;ro.classList.toggle("out",!said);ro.style.left=e.clientX+"px";ro.style.top=e.clientY+"px";
   queue()});
-const end=()=>{if(tune&&tune.moved)told();tune=null};
+const end=()=>{if(tune&&tune.moved)told();tune=null;ro.classList.add("out")};
 /* what dragging the mark changes. Each mode is the same gesture, sideways and up-down, on two traits that belong together */
-const MODES=[["Twist","Drag the mark: sideways twists, up and down thickens."],["Stretch","Drag the mark: sideways makes it wide or tall, up squares it softly."],
-  ["Lean","Drag the mark: sideways bends it, up and down weights one end."],
-  ["Petal","Drag the mark: sideways changes the petal's outline, up and down makes it fuller or finer."],
-  ["Frame","Drag the mark: sideways changes the frame, up sets it in one, down takes it out."],["Colour","Drag the mark: sideways turns all its colours, up is vivid, down is calm."]];
+const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],["stretch it","Stretch","wide or tall, and up to square it off softly"],
+  ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
+  ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"]];
 let mode=0;
-function setMode(i){mode=i;[...$("modes").children].forEach((b,k)=>b.setAttribute("aria-pressed",k===i));$("modehint").textContent=MODES[i][1];
-  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour"][i];big.setAttribute("aria-label","Your mark. "+MODES[i][1])}
-MODES.forEach(([n],i)=>{const b=document.createElement("button");b.textContent=n;b.title=n+"  ("+(i+1)+")";b.onclick=()=>setMode(i);$("modes").append(b)});setMode(0);
+function setMode(i){mode=i;$("modeword").textContent=MODES[i][0];[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
+  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
+MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
+  b.onclick=()=>{setMode(i);popMode(false)};$("modepop").append(b)});setMode(0);
+function popMode(on){const p=$("modepop");p.hidden=!on;$("modeword").setAttribute("aria-expanded",on);if(on)p.children[mode].focus()}
+$("modeword").onclick=(e)=>{e.stopPropagation();popMode($("modepop").hidden)};
+addEventListener("pointerdown",(e)=>{if(!$("modepop").hidden&&!e.target.closest("#modepop,#modeword"))popMode(false)});
+$("modepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropagation();popMode(false);$("modeword").focus()}});
+// the names a drag passes through, said beside the pointer so you know what you're getting
+const OUTLINES=["circle","capsule","lens","diamond","box","teardrop","heart","crescent","star","flame"],FRAMES=["hexagon","shield","drop","arch"];
+function nameNow(){const g=cur.g;
+  if(mode===3)return g[23]<.06?OUTLINES[Math.round(g[2]*4)]:OUTLINES[5+Math.round(clamp((g[23]-.12)/.88)*4)];
+  if(mode===4)return g[14]<.7?"no frame":g[24]<.06?(g[12]>.5?"rounded square":"circle"):FRAMES[Math.round(clamp((g[24]-.12)/.88)*3)];
+  if(mode===1){const a=g[19]-.5;return (Math.abs(a)<.06?"":a>0?"wider":"taller")+(g[20]>.2?(Math.abs(a)<.06?"":", ")+"squarer":"")||"round"}
+  return ""}
+const ro=document.createElement("div");ro.className="readout out";document.body.append(ro);
 // colour turns as one: every hue moves by the same angle and keeps its lightness, so the set stays in tune, and its
 // strength rises or falls together; nothing can drift into a colour that fights the others
 function retint(t){const f=(h)=>{const [L,a,b]=oklab(h),C=Math.hypot(a,b)*t.cf,H=Math.atan2(b,a)+t.dh;return fromLab([L,C*Math.cos(H),C*Math.sin(H)])};
@@ -889,7 +919,7 @@ const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15],FAMS=[16,17,18];
 const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74,16:.6,17:.6,18:.6}; // traits that are either there or not
 function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
   const d=new Float32Array(NG),pool=TRAITS.slice().sort(()=>Math.random()-.5),k=2;let pet=0;
-  if(Math.random()<.24)pool[0]=[...FAMS,23][Math.floor(Math.random()*4)]; // now and then a ghost is another kind of mark altogether
+  if(Math.random()<.26){const more=[...FAMS,23,...(cur.g[14]>.74?[24,24]:[])];pool[0]=more[Math.floor(Math.random()*more.length)]} // now and then a ghost is another kind of mark altogether
   if(far){ // a stranger from somewhere else in the meadow wanders in and they meet halfway
     const s=specimen(Math.round((cur.x+(Math.random()-.5)*9)*40)/40,Math.round((cur.y+(Math.random()-.5)*9)*40)/40),mix=.42+Math.random()*.2;
     TRAITS.forEach(t=>{d[t]=(s.g[t]-cur.g[t])*mix});pet=s.s>.5?s.n1:s.n0;
@@ -1432,7 +1462,7 @@ $("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.crea
   c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
 /* ---------- start ---------- */
-if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";$("leanhint").textContent="Drag the mark to twist it. Tap a ghost and your mark melts into it."}
+if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";$("ghosthint").textContent="Tap a ghost and your mark melts into it."}
 function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^&]+))?(?:&([0-9a-z]+))?$/.exec(location.hash);if(!m)return null;
   cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3),code:m[5]}}
 const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
