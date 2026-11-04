@@ -35,7 +35,34 @@ button:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-
 .tag span{opacity:.82;line-height:1.5;transition:opacity .6s}
 .tag.quiet span{opacity:0;width:0;overflow:hidden;white-space:nowrap}
 .tag #home{text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
-.drop.mark{width:56px;height:56px;margin:-28px 0 0 -28px;background-size:cover!important;background-position:center!important}
+.drop.mark{width:56px;height:56px;margin:-28px 0 0 -28px;background-size:cover!important;background-position:center!important;animation:none;border-radius:10px;transition:scale .25s cubic-bezier(.2,.9,.3,1.4),opacity .25s,border-radius .25s}
+/* a word under a carried mark says what letting go there will do */
+.drop.mark::after{content:attr(data-say);position:absolute;left:50%;top:calc(100% + 7px);translate:-50% 0;white-space:nowrap;font:11px var(--f-mono);
+  background:var(--ink);color:var(--ground);padding:2px 8px;border-radius:999px;opacity:1;transition:opacity .2s}
+.drop.mark[data-say=""]::after{opacity:0}
+.drop.mark.going{scale:.62;opacity:.55;border-radius:50%}
+/* the soft circle a kept mark can be let go into; it only shows while you carry one */
+.letgo{display:grid;place-items:center;flex:none;width:62px;height:38px;border-radius:999px;font-size:10px;opacity:0;scale:.7;white-space:nowrap;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 50%,transparent);transition:scale .3s cubic-bezier(.2,.9,.3,1.4),opacity .25s,background .2s;pointer-events:none}
+.shelf:empty+.letgo{display:none}
+body.carrying-kept .letgo{scale:1;opacity:.85;pointer-events:auto;background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.letgo:hover{background:color-mix(in srgb,var(--ink) 16%,transparent)}
+.shelf button,.keptrow button{transition:scale .25s cubic-bezier(.2,.9,.3,1.4),opacity .25s,outline-color .2s;outline:2px solid transparent;outline-offset:2px;touch-action:none}
+.shelf button:hover,.keptrow button:hover{scale:1.06}
+.shelf button.over,.keptrow button.over{outline-color:currentColor;scale:1.12}
+.shelf button.lifted,.keptrow button.lifted{opacity:.3}
+.pop{animation:pop .5s cubic-bezier(.2,.9,.3,1.5)}@keyframes pop{0%{scale:.4}100%{scale:1}}
+.flash{animation:flash .9s ease-out}@keyframes flash{0%,40%{outline-color:currentColor;scale:1.14}100%{outline-color:transparent;scale:1}}
+.fly{position:fixed;z-index:9;pointer-events:none;transform-origin:0 0}
+.stage.breeding #big{outline:2px dashed color-mix(in srgb,var(--ink) 60%,transparent);outline-offset:10px;border-radius:50%}
+.toast{position:fixed;z-index:8;left:50%;bottom:78px;translate:-50% 0;display:flex;gap:14px;align-items:center;background:var(--ink);color:var(--ground);padding:8px 10px 8px 16px;border-radius:999px;
+  box-shadow:0 8px 24px -10px rgba(0,0,0,.45);transition:opacity .4s,translate .4s cubic-bezier(.2,.8,.3,1)}
+.toast.out{opacity:0;translate:-50% 10px;pointer-events:none}
+.toast button{background:var(--ground);color:var(--ink);padding:4px 12px;border-radius:999px;font-weight:600}
+.kept{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kept .kl{opacity:.65;font-size:11px;margin-right:2px}
+.keptrow{display:flex;gap:6px;flex-wrap:wrap}
+.keptrow button{width:34px;height:34px;border-radius:8px;overflow:hidden;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 30%,transparent)}.keptrow img{width:100%;height:100%;display:block}
 
 .foot{position:fixed;z-index:3;left:0;right:0;bottom:0;background:var(--ground);border-top:1px solid color-mix(in srgb,var(--ink) 45%,transparent);
   display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:20px;min-height:62px;
@@ -159,8 +186,9 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 <div class="foot">
   <div class="place"><strong id="place">Meadow</strong><small id="scale"></small></div>
   <div class="lenses" id="lenses" role="group" aria-label="Look at the field as"></div>
-  <div class="right"><div class="shelf" id="shelf" aria-label="Marks you kept"></div><button class="plant" id="plant">Plant a letter</button></div>
+  <div class="right"><div class="shelf" id="shelf" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span><button class="plant" id="plant">Plant a letter</button></div>
 </div>
+<div class="toast out" id="toast" hidden role="status"><span id="toastmsg"></span><button id="toastundo">Undo</button></div>
 <input id="letters" aria-label="Letters to plant" maxlength="3" autocomplete="off" autocapitalize="off" spellcheck="false">
 
 <section id="studio" hidden aria-label="The mark you picked">
@@ -191,6 +219,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
       <button id="copy">Copy SVG</button>
     </div>
     <p id="say" role="status"></p>
+    <div class="kept" id="kept" hidden><span class="kl">Your shelf</span><div class="keptrow" id="keptrow" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span></div>
   </aside>
 </section>
 
@@ -222,6 +251,8 @@ const SYM=[2,3,4,5,6,8,10,12];
 const SPECIES={2:"bifolia",3:"trifolia",4:"quadrifolia",5:"quinquefolia",6:"sexfolia",8:"octofolia",10:"decafolia",12:"dodecafolia"};
 const LENSES=["Ink","Line","Pixel","Dots","Soft"];
 const BC=1.7, S0=.1, F0=2, ZMIN=-3, ZMAX=11, LIMIT=32;
+// sixteen traits shape a mark; three more say what kind of mark it is: pinwheel, winged fan, stacked bars (all off is a flower)
+const NG=19,genes=(g)=>{const o=new Float32Array(NG);for(let k=0;k<NG;k++)o[k]=g&&g[k]!=null?g[k]:0;return o};
 const hex=(h)=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
 const lerp=(a,b,t)=>a+(b-a)*t, clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
 const sstep=(a,b,v)=>{const t=clamp((v-a)/(b-a));return t*t*(3-2*t)};
@@ -244,9 +275,12 @@ function fbm(x,y,k){let s=0,a=1,f=F0,t=0;for(let o=0;o<13;o++){s+=a*(vn(x*f,y*f,
 const cache=new Map();
 function specimen(x,y){
   const key=x+"|"+y;let m=cache.get(key);if(m)return m;
-  const b=biome(x,y),g=new Float32Array(16);
+  const b=biome(x,y),g=new Float32Array(NG);
   for(let k=0;k<16;k++)g[k]=1/(1+Math.exp(-fbm(x,y,k)*24));
   for(const k in CLIMATE[b.id]){const c=CLIMATE[b.id][k];g[k]=lerp(g[k],c[0],c[1])}
+  // wide stretches of the meadow grow other kinds of mark, fading in across their edges; the land round home stays flowers
+  const far=sstep(BC*2,BC*3.5,Math.hypot(x,y));
+  for(let f=0;f<3;f++)g[16+f]=far*.95*sstep(.66,.84,vn(x/(BC*2.3)+f*7.31,y/(BC*2.3)-f*3.17,70+f));
   m={x,y,pal:b.id,g};setSym(m);
   if(cache.size>9000)cache.clear();
   cache.set(key,m);return m;
@@ -289,14 +323,14 @@ void main(){vec2 w=worldAt(gl_FragCoord.xy);int a,b;float e;country(w,a,b,e);
  o=vec4(c,1.);}`;
 const VS_M=`#version 300 es
 precision highp float;
-in vec2 aQ;in vec4 i0;in vec4 i1;in float i2;in vec4 g0;in vec4 g1;in vec4 g2;in vec4 g3;
+in vec2 aQ;in vec4 i0;in vec4 i1;in float i2;in vec4 g0;in vec4 g1;in vec4 g2;in vec4 g3;in vec3 g4;
 uniform vec2 uRes;
-out vec2 vP;out vec4 vI;flat out float vL;out float vS;out vec4 vG0;out vec4 vG1;out vec4 vG2;out vec4 vG3;
+out vec2 vP;out vec4 vI;flat out float vL;out float vS;out vec4 vG0;out vec4 vG1;out vec4 vG2;out vec4 vG3;out vec3 vG4;
 void main(){float c=cos(i0.w),s=sin(i0.w);vec2 q=mat2(c,s,-s,c)*aQ*i0.z*.5;vec2 px=i0.xy+q;
  gl_Position=vec4(px.x/uRes.x*2.-1.,1.-px.y/uRes.y*2.,0.,1.);
- vP=aQ;vI=i1;vL=i2;vS=i0.z;vG0=g0;vG1=g1;vG2=g2;vG3=g3;}`;
+ vP=aQ;vI=i1;vL=i2;vS=i0.z;vG0=g0;vG1=g1;vG2=g2;vG3=g3;vG4=g4;}`;
 const FS_M=COMMON+`
-in vec2 vP;in vec4 vI;flat in float vL;in float vS;in vec4 vG0;in vec4 vG1;in vec4 vG2;in vec4 vG3;
+in vec2 vP;in vec4 vI;flat in float vL;in float vS;in vec4 vG0;in vec4 vG1;in vec4 vG2;in vec4 vG3;in vec3 vG4;
 out vec4 o;
 uniform int uFix;uniform vec3 uInk;uniform vec3 uAcc;uniform int uOut;uniform int uHasL;uniform sampler2D uL;uniform sampler2D uL0;uniform float uLm;uniform vec3 uLo;
 uniform vec4 uD[2];uniform vec3 uDC[2];
@@ -341,7 +375,23 @@ vec2 markN(vec2 p0,float n){
  float r1=mix(.2,.62,g_r),l=mix(.13,.4,g_l),w=mix(.058,.24,g_w);
  w=min(w,sin(PI/n)*max(r1,.14)*1.1);l=max(l,w);
  float k=mix(.006,.17,g_k);
- float d=shape(q-vec2(r1,0.),l,w,g_pr);
+ float spin=smoothstep(.5,.85,vG4.x),fan=smoothstep(.5,.85,vG4.y),stk=smoothstep(.5,.85,vG4.z);
+ float d;
+ if(spin>0.){ // a pinwheel: each petal hooks one way round; its neighbours are checked too, so a hook is never cut off
+  vec2 q0=wheel(p,n,ph);d=1e9;
+  for(int j=-1;j<=1;j++){vec2 c=rot(q0,float(j)*TAU/n);float x=max(c.x-r1*.3,0.);c.y-=spin*.8*x*x;d=min(d,shape(c-vec2(r1,0.),l,w,g_pr));}}
+ else d=shape(q-vec2(r1,0.),l,w,g_pr);
+ if(fan>0.){ // a winged fan: the petals gather into one half and mirror, longest in the middle, like a crown, a leaf or a tail; it opens upward
+  vec2 a=vec2(abs(p.x),fan*.16-p.y);float spread=mix(TAU,PI*1.1,fan),wf=min(w,sin(spread/(2.*n))*max(r1,.14)*1.35),df=1e9;
+  for(int j=0;j<12;j++){float fj=float(j);if(fj>=n)break;float th=(fj+.5)/n*spread-spread*.5;if(th<-.001)continue;
+   vec2 dir=vec2(sin(th),cos(th)),c=vec2(dot(a,dir),dot(a,vec2(dir.y,-dir.x)));
+   df=min(df,shape(c-vec2(r1,0.),max(l*(1.+fan*.45*cos(th*1.2)),wf),wf,g_pr));}
+  d=mix(d,df,smoothstep(0.,.3,fan));}
+ if(stk>0.){ // stacked bars: rows of the petal laid flat, bent into chevrons and tapered into a diamond or an hourglass
+  float R=clamp(floor(n*.5+.5),2.,6.),h=1.46/R,L=mix(.36,.72,g_l),ws=min(w*.9,h*.4),c0=floor(p.y/h+(R-1.)*.5+.5),ds=1e9;
+  for(int j=-1;j<=1;j++){float c=clamp(c0+float(j),0.,R-1.),off=c-(R-1.)*.5,yy=p.y-off*h-abs(p.x)*(g_ph-.5)*1.3;
+   float Lk=L*(1.-(g_r-.5)*.9*abs(off/((R-1.)*.5)));ds=min(ds,shape(vec2(p.x,yy),max(Lk,ws),ws,g_pr));}
+  d=mix(d,ds,stk);}
  float inv=smoothstep(.67,.73,g_inv); // switches ease over a short ramp, so a shape melts through them instead of jumping
  float ring=smoothstep(.56,.68,g_ring);
  // inside a badge the ring stays well clear of the rim, or it leaves thin slivers
@@ -413,15 +463,15 @@ function makeR(canvas,alpha){
   const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x};
   const prog=(v,f,binds)=>{const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,v));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,f));
     binds.forEach((b,i)=>gl.bindAttribLocation(p,i,b));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p};
-  const ATTR=["aQ","i0","i1","i2","g0","g1","g2","g3"];
+  const ATTR=["aQ","i0","i1","i2","g0","g1","g2","g3","g4"];
   const pG=prog(VS_G,FS_G,["aQ"]),pM=prog(VS_M,FS_M,ATTR);
   const U=(p,n)=>gl.getUniformLocation(p,n);
   const quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-  const STRIDE=25,MAX=3500,inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,MAX*STRIDE*4,gl.DYNAMIC_DRAW);
+  const STRIDE=28,MAX=3500,inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,MAX*STRIDE*4,gl.DYNAMIC_DRAW);
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
   gl.bindBuffer(gl.ARRAY_BUFFER,inst);
-  [[1,4,0],[2,4,4],[3,1,8],[4,4,9],[5,4,13],[6,4,17],[7,4,21]].forEach(([l,n,o])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(l,1)});
+  [[1,4,0],[2,4,4],[3,1,8],[4,4,9],[5,4,13],[6,4,17],[7,4,21],[8,3,25]].forEach(([l,n,o])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(l,1)});
   gl.bindVertexArray(null);
   const flat=(k)=>new Float32Array(PAL.flatMap(p=>hex(p[k])));
   const palette=(p)=>{gl.useProgram(p);gl.uniform3fv(U(p,"uG"),flat("g"));gl.uniform3fv(U(p,"uI"),flat("i"));gl.uniform3fv(U(p,"uA"),flat("a"))};
@@ -454,7 +504,7 @@ function makeR(canvas,alpha){
 }
 function put(buf,o,x,y,size,rotn,grow,m,lens){
   buf[o]=x;buf[o+1]=y;buf[o+2]=size;buf[o+3]=rotn;buf[o+4]=grow;buf[o+5]=m.n0;buf[o+6]=m.n1;buf[o+7]=m.s;buf[o+8]=lens;
-  buf.set(m.g,o+9);
+  for(let k=0;k<NG;k++)buf[o+9+k]=m.g[k]||0;
 }
 
 /* ---------- state ---------- */
@@ -508,7 +558,7 @@ function frame(ms){
     put(buf,n*R.STRIDE,sx,sy,s,rotn,g,m,lensHere);n++;
     const hd=(sx-pX)**2+(sy-pY)**2;if(g>.6&&hd<bestD&&hd<(s*.55)**2){bestD=hd;hover=m}
   }
-  if(fresh.length){tend(fresh);fresh.forEach((m,k)=>{const o=freshAt[k]*R.STRIDE;buf[o+5]=m.n0;buf[o+6]=m.n1;buf[o+7]=m.s;buf.set(m.g,o+9)})}
+  if(fresh.length){tend(fresh);fresh.forEach((m,k)=>{const o=freshAt[k]*R.STRIDE;buf[o+5]=m.n0;buf[o+6]=m.n1;buf[o+7]=m.s;for(let q=0;q<NG;q++)buf[o+9+q]=m.g[q]||0})}
   R.melt(clamp((t-meltAt)/1.2),[meltO[0],meltO[1],reach]);
   R.ground(W,H,[cam.x,cam.y],sc);
   R.marks(buf,n,W,H,[cam.x,cam.y],sc,null,false);
@@ -625,9 +675,11 @@ function face(str,f,n){ // one typeface's letter as a signed distance field
   const out=dist2(mask,n,1),inn=dist2(mask,n,0),d=new Float32Array(n*n),k=2/n;
   for(let i=0;i<n*n;i++)d[i]=(Math.sqrt(out[i])-Math.sqrt(inn[i]))*k;return d;
 }
-let plantHist=[],plantFut=[];
+// out in the field, ⌘Z steps back through planted letters and marks let go from the shelf
+let fieldUndo=[],fieldRedo=[];
+function fieldDid(step){fieldUndo.push(step);if(fieldUndo.length>40)fieldUndo.shift();fieldRedo=[]}
 async function plant(str,undoing){
-  if(!undoing&&str!==letters){plantHist.push(letters);if(plantHist.length>40)plantHist.shift();plantFut=[]}
+  if(!undoing&&str!==letters){const was=letters,now=str;fieldDid({undo:()=>plant(was,true),redo:()=>plant(now,true)})}
   letters=str;$("letters").value=str;$("plant").textContent=str?`Planted: ${str}`:"Plant a letter";const tok=++glyphTok;
   if(!str){lastGlyph=null;R.glyph(null);T.glyph(null);growAt=performance.now()/1000;growO=[W/2,H/2];return}
   try{await Promise.all(FACES.map(f=>document.fonts.load(f.replace("P","300px"))))}catch(e){}
@@ -644,7 +696,7 @@ addEventListener("keydown",(e)=>{
   // ⌘Z / Ctrl+Z steps back, ⇧⌘Z / Ctrl+Y steps forward again; while typing a colour the text field keeps its own
   if((e.metaKey||e.ctrlKey)&&!e.altKey&&!e.target.isContentEditable&&e.target!==$("letters")){const k=e.key.toLowerCase();
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
-      if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?plantFut:plantHist,o=again?plantHist:plantFut;if(t.length){o.push(letters);plant(t.pop(),true)}}return}}
+      if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}return}
   if(e.target===$("letters"))return;
@@ -673,7 +725,8 @@ function theme(p){const s=$("studio").style,gr=cur?groundOf(cur):PAL[p].g,ink=cu
   // the page wears the mark's colours, unless its ink is too faint on its ground to read words by
   s.setProperty("--ground",gr);s.setProperty("--ink",contrast(ink,gr)>=3?ink:lum(gr)>.3?"#151515":"#f4f1ea");s.setProperty("--accent",cur?accOf(cur):PAL[p].a)}
 function latin(m){const n=m.s>.5?m.n1:m.n0;let name=(m.genus||PAL[biome(m.x,m.y).id].genus)+" "+SPECIES[n];
-  if(Math.abs(m.g[6]-.5)>.26)name+=" torta";else if(m.g[14]>.72)name+=" inversa";return name}
+  const fam=[16,17,18].map(k=>m.g[k]||0),top=fam.indexOf(Math.max(...fam));
+  if(fam[top]>.68)name+=" "+["rotata","alata","gradata"][top];else if(Math.abs(m.g[6]-.5)>.26)name+=" torta";else if(m.g[14]>.72)name+=" inversa";return name}
 function drawStudio(){
   if(!cur)return;theme(cur.pal);const c=colours(cur.pal,cur);
   drawBig();drawGhosts();
@@ -716,7 +769,7 @@ function setRole(r,h){if(!cur)return;const now=r==="gr"?groundOf(cur):r==="ink"?
 function warnRead(){const s=$("say"),low=contrast(inkOf(cur),groundOf(cur))<1.6,t="The ink barely shows on this ground.";if(low)s.textContent=t;else if(s.textContent===t)s.textContent=""}
 function openStudio(m){
   if(!m.ok)tend([m]);
-  cur={...m,g:Float32Array.from(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
+  cur={...m,g:genes(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
   $("latin").textContent=latin(cur);
   const home=biome(cur.x,cur.y);foundAt=cur.from?`Bred from ${cur.from}.`:`Found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}, in The ${PAL[home.id].place} ${SUFFIX[h3(home.bx,home.by,7)%8]}.`;if(cur.from)cur.edited=true;
@@ -730,7 +783,10 @@ let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
 function closeStudio(){$("studio").hidden=true;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
-function leave(){closeStudio();if(history.state&&history.state.mark)history.back();else try{history.replaceState(null,"",location.pathname)}catch(e){}}
+let keptNow=false;
+function leave(){closeStudio();
+  if(keptNow){keptNow=false;let seen=false;try{seen=!!localStorage.getItem("meadow-shelf-told");localStorage.setItem("meadow-shelf-told","1")}catch(e){}
+    if(!seen)say2("Your kept marks wait at the bottom right. Drag one onto any mark to breed the two, or into the circle beside them to let it go.")}if(history.state&&history.state.mark)history.back();else try{history.replaceState(null,"",location.pathname)}catch(e){}}
 addEventListener("popstate",()=>{if(!location.hash.startsWith("#at-")&&!$("studio").hidden)closeStudio()});
 $("back").onclick=leave;
 $("deeper").onclick=()=>{const m=cur;leave();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.ay=H/2;cam.vx=cam.vy=0;cam.zt=clamp(Math.floor(cam.z)+3,ZMIN,ZMAX)};
@@ -753,10 +809,11 @@ function petals(dir){const n=cur.s>.5?cur.n1:cur.n0,i=clamp(SYM.indexOf(n)+dir,0
 const GN=8,halo=$("halo"),stage=big.parentElement;
 let gen=0,ghosts=[],hist=[],fut=[],pending=-1,leaning=false,leanMs=0,gLay=null;
 const lw=new Float32Array(GN),tw=new Float32Array(GN); // how far the mark leans toward each ghost, now and where it's heading
-const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15];
-const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74}; // traits that are either there or not
+const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15],FAMS=[16,17,18];
+const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74,16:.6,17:.6,18:.6}; // traits that are either there or not
 function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
-  const d=new Float32Array(16),pool=TRAITS.slice().sort(()=>Math.random()-.5),k=2;let pet=0;
+  const d=new Float32Array(NG),pool=TRAITS.slice().sort(()=>Math.random()-.5),k=2;let pet=0;
+  if(Math.random()<.2)pool[0]=FAMS[Math.floor(Math.random()*3)]; // now and then a ghost is another kind of mark altogether
   if(far){ // a stranger from somewhere else in the meadow wanders in and they meet halfway
     const s=specimen(Math.round((cur.x+(Math.random()-.5)*9)*40)/40,Math.round((cur.y+(Math.random()-.5)*9)*40)/40),mix=.42+Math.random()*.2;
     TRAITS.forEach(t=>{d[t]=(s.g[t]-cur.g[t])*mix});pet=s.s>.5?s.n1:s.n0;
@@ -773,11 +830,11 @@ function blend(G,w){
 }
 // the mark leaning toward one ghost, or toward two neighbours at once: the shapes between them are real shapes too
 function mix(w){
-  const g=Float32Array.from(cur.g),sum=new Float32Array(16),most=new Float32Array(16);let top=-1,tv=0;
+  const g=Float32Array.from(cur.g),sum=new Float32Array(NG),most=new Float32Array(NG);let top=-1,tv=0;
   for(let i=0;i<GN;i++){if(w[i]<.002||!ghosts[i])continue;const d=ghosts[i].d;
-    for(let k=0;k<16;k++){sum[k]+=d[k]*w[i];most[k]=Math.max(most[k],Math.abs(d[k]))}if(ghosts[i].pet&&w[i]>tv){tv=w[i];top=i}}
+    for(let k=0;k<NG;k++){sum[k]+=d[k]*w[i];most[k]=Math.max(most[k],Math.abs(d[k]))}if(ghosts[i].pet&&w[i]>tv){tv=w[i];top=i}}
   // where both ghosts push one trait the same way, the blend never goes further than either would alone
-  for(let k=0;k<16;k++)g[k]=clamp(g[k]+Math.sign(sum[k])*Math.min(Math.abs(sum[k]),most[k]));
+  for(let k=0;k<NG;k++)g[k]=clamp(g[k]+Math.sign(sum[k])*Math.min(Math.abs(sum[k]),most[k]));
   let n0=cur.n0,n1=cur.n1,s=cur.s;const cn=cur.s>.5?cur.n1:cur.n0;
   if(top>=0&&ghosts[top].pet!==cn){n0=cn;n1=ghosts[top].pet;s=Math.min(1,tv)}
   return {...cur,g,n0,n1,s};
@@ -859,7 +916,7 @@ function restore(h){cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cu
   told();drawGhosts();queue()}
 function stepBack(){if(!hist.length||drop)return;fut.push(snapOf());restore(hist.pop())}
 function stepAgain(){if(!fut.length||drop)return;hist.push(snapOf());restore(fut.pop())}
-function told(){const n=hist.length;if(!$("hexes").contains(document.activeElement))hexes();$("latin").textContent=latin(cur);$("keep").textContent="Keep it";$("undo").disabled=!n;$("redo").disabled=!fut.length;$("wash").hidden=!cur.dye.length;
+function told(){const n=hist.length;if(!$("hexes").contains(document.activeElement))hexes();$("latin").textContent=latin(cur);$("keep").textContent=isKept()?"Kept ✓":"Keep it";$("undo").disabled=!n;$("redo").disabled=!fut.length;$("wash").hidden=!cur.dye.length;
   const pn=cur.s>.5?cur.n1:cur.n0;$("petn").textContent=pn+" petals";$("fewer").disabled=pn===SYM[0]&&cur.s%1===0;$("more").disabled=pn===SYM[SYM.length-1]&&cur.s%1===0;
   $("found").textContent=foundAt+(cur.note||"");
   // the link carries every change, so a shared mark arrives exactly as it was left
@@ -997,12 +1054,13 @@ function codeOf(m){let s=m.pal.toString(36)+SYM.indexOf(m.n0).toString(36)+SYM.i
   for(let k=0;k<16;k++)s+=B36(m.g[k],2);
   for(const d of m.dye.slice(-2))s+=B36(d.x*.5+.5,2)+B36(d.y*.5+.5,2)+B36(d.r/2,2)+d.h.slice(1).toLowerCase();
   for(const [k,v] of [["g",m.gr],["i",m.ink],["a",m.acc]])if(v)s+=k+v.slice(1).toLowerCase();
+  if(m.g.length>16&&(m.g[16]>.01||m.g[17]>.01||m.g[18]>.01))s+="f"+B36(m.g[16],2)+B36(m.g[17],2)+B36(m.g[18],2);
   return s}
-function readCode(s){const rest=s.length-37,ex={};let t=[0,1,2,3].find(t=>rest-7*t>=0&&(rest-7*t)%12===0&&(rest-7*t)/12<=2);if(t===undefined)return null;
-  for(;t>0;t--){const tok=s.slice(-7);if(!/^[gia][0-9a-f]{6}$/.test(tok))return null;ex[tok[0]]="#"+tok.slice(1);s=s.slice(0,-7)}
+function readCode(s){const rest=s.length-37,ex={};let t=[0,1,2,3,4].find(t=>rest-7*t>=0&&(rest-7*t)%12===0&&(rest-7*t)/12<=2);if(t===undefined)return null;
+  for(;t>0;t--){const tok=s.slice(-7);if(/^f[0-9a-z]{6}$/.test(tok))ex.f=tok.slice(1);else if(/^[gia][0-9a-f]{6}$/.test(tok))ex[tok[0]]="#"+tok.slice(1);else return null;s=s.slice(0,-7)}
   if(!/^[0-9a-z]{37}([0-9a-z]{6}[0-9a-f]{6}){0,2}$/.test(s))return null;
   const pal=parseInt(s[0],36),n0=SYM[parseInt(s[1],36)],n1=SYM[parseInt(s[2],36)];if(!(pal<8)||!n0||!n1)return null;
-  const g=new Float32Array(16);for(let k=0;k<16;k++)g[k]=U36(s.substr(5+k*2,2));
+  const g=new Float32Array(NG);for(let k=0;k<16;k++)g[k]=U36(s.substr(5+k*2,2));if(ex.f)for(let f=0;f<3;f++)g[16+f]=U36(ex.f.substr(f*2,2));
   const dye=[];for(let o=37;o<s.length;o+=12)dye.push({x:U36(s.substr(o,2))*2-1,y:U36(s.substr(o+2,2))*2-1,r:U36(s.substr(o+4,2))*2,h:"#"+s.substr(o+6,6),w:0});
   return {pal,n0,n1,s:U36(s.substr(3,2)),g,dye,gr:ex.g||null,ink:ex.i||null,acc:ex.a||null}}
 
@@ -1120,9 +1178,9 @@ function hybrid(x,y){
   const key=x+"|"+y;let m=hyCache.get(key);if(m)return m;
   const {A,B}=nur,u=clamp(x+.5,-.6,1.6),up=clamp(-y*.9,0,1),down=clamp(y*.9,0,1.4);
   const at=Math.abs(y)<1e-9&&(Math.abs(u)<1e-9||Math.abs(u-1)<1e-9);
-  if(at){const P=u<.5?A:B;m={x,y,pal:P.pal,g:Float32Array.from(P.g),n0:P.n0,n1:P.n1,s:P.s,genus:P.genus,roots:P.roots,from:P.from,ok:true,parent:true}}
-  else{const g=new Float32Array(16);
-    for(let k=0;k<16;k++){let v=A.g[k]+(B.g[k]-A.g[k])*u;
+  if(at){const P=u<.5?A:B;m={x,y,pal:P.pal,g:genes(P.g),n0:P.n0,n1:P.n1,s:P.s,genus:P.genus,roots:P.roots,from:P.from,ok:true,parent:true}}
+  else{const g=new Float32Array(NG);
+    for(let k=0;k<NG;k++){let v=A.g[k]+(B.g[k]-A.g[k])*u;
       if(up>0)v=lerp(v,1/(1+Math.exp(-fbm(x*3,y*3,k)*24)),up*.85);
       if(down>0)v=.5+(v-.5)*(1+down*1.8);
       g[k]=clamp(v)}
@@ -1131,7 +1189,7 @@ function hybrid(x,y){
   if(hyCache.size>9000)hyCache.clear();hyCache.set(key,m);return m;
 }
 function breed(a,b){
-  const P=(m)=>({g:Float32Array.from(m.g),n0:m.n0,n1:m.n1,s:m.s,pal:m.pal,genus:genusOf(m),roots:rootsOf(m),from:m.from,name:latin(m)});
+  const P=(m)=>({g:genes(m.g),n0:m.n0,n1:m.n1,s:m.s,pal:m.pal,genus:genusOf(m),roots:rootsOf(m),from:m.from,name:latin(m)});
   const A=P(a),B=P(b),home=nur?nur.home:{x:cam.x,y:cam.y,z:cam.zt},roots=[A.roots[0],B.roots[B.roots.length-1]];
   nur={A,B,home,roots,genus:cross(roots),from:A.name+" × "+B.name};hyCache.clear();
   if(!$("studio").hidden)leave();
@@ -1143,26 +1201,73 @@ function leaveNursery(){if(!nur)return;const h=nur.home;nur=null;hyCache.clear()
   cam.x=h.x;cam.y=h.y;cam.z=cam.zt=h.z;cam.vx=cam.vy=0;growAt=performance.now()/1000;growO=[W/2,H/2];lastPlace="";$("home").hidden=true;
   say2("Back in the meadow.")}
 $("home").onclick=leaveNursery;
-function breeder(b,k){ // carry a kept mark out of the shelf; the field leans toward it as it goes
+/* a kept mark can be carried anywhere: onto a mark in the field, onto another kept mark, or onto the mark
+   you're working on, and the two are bred; into the soft circle beside the shelf, and it's let go. While you
+   carry it, a word under it says what letting go there will do. */
+function breeder(b,k){
   let st=null;
-  b.addEventListener("pointerdown",(e)=>{if(e.button)return;st={x:e.clientX,y:e.clientY,id:e.pointerId,on:false,el:null}});
+  const target=(x,y)=>{const t=document.elementFromPoint(x,y);if(!t)return {};
+    const zone=t.closest(".letgo");if(zone)return {go:true,say:"let go"};
+    const other=t.closest(".shelf button,.keptrow button");if(other&&other.dataset.i!==b.dataset.i)return {k:shelf[+other.dataset.i],el:other,say:"breed"};
+    if(!$("studio").hidden){if(t===big||t.closest("#halo"))return {cur:true,say:"breed with this"};return {}}
+    if(t===field)return {field:true,say:"breed"};return {}};
+  b.addEventListener("pointerdown",(e)=>{if(e.button)return;st={x:e.clientX,y:e.clientY,id:e.pointerId,on:false,el:null,t:{}}});
   b.addEventListener("pointermove",(e)=>{if(!st)return;
     if(!st.on){if(Math.hypot(e.clientX-st.x,e.clientY-st.y)<6)return;st.on=true;try{b.setPointerCapture(st.id)}catch(_){}
-      const el=document.createElement("div");el.className="drop mark";el.style.background=`${groundOf(k)} url(${k.thumb})`;document.body.append(el);st.el=el}
-    st.el.style.translate=e.clientX+"px "+e.clientY+"px";pointer.x=e.clientX;pointer.y=e.clientY;pointer.in=true});
-  const up=(e)=>{if(!st)return;const s0=st;st=null;if(!s0.on)return;shelfEnd=performance.now();s0.el.classList.add("gone");setTimeout(()=>s0.el.remove(),320);
-    const t=document.elementFromPoint(e.clientX,e.clientY),other=t&&t.closest(".shelf button");
-    if(other&&other!==b){breed(k,shelf[+other.dataset.i]);return}
-    if(t===field){const m=hover||nearest(e.clientX,e.clientY);if(m)breed(k,m)}};
-  b.addEventListener("pointerup",up);b.addEventListener("pointercancel",()=>{if(st&&st.el)st.el.remove();st=null});
+      const el=document.createElement("div");el.className="drop mark";el.style.background=`${groundOf(k)} url(${k.thumb})`;document.body.append(el);st.el=el;
+      document.body.classList.add("carrying-kept");b.classList.add("lifted")}
+    st.el.style.translate=e.clientX+"px "+e.clientY+"px";
+    const t=target(e.clientX,e.clientY);if(st.t.el&&st.t.el!==t.el)st.t.el.classList.remove("over");if(t.el)t.el.classList.add("over");
+    st.t=t;st.el.dataset.say=t.say||"";st.el.classList.toggle("going",!!t.go);stage.classList.toggle("breeding",!!t.cur);
+    if(t.field){pointer.x=e.clientX;pointer.y=e.clientY;pointer.in=true}});
+  const done=()=>{document.body.classList.remove("carrying-kept");b.classList.remove("lifted");stage.classList.remove("breeding");if(st&&st.t.el)st.t.el.classList.remove("over")};
+  const up=(e)=>{if(!st)return;const s0=st,t=s0.on?target(e.clientX,e.clientY):{};done();st=null;if(!s0.on)return;shelfEnd=performance.now();
+    const el=s0.el;
+    if(t.go){el.classList.add("gone");setTimeout(()=>el.remove(),320);letGo(k);return}
+    const m=t.k||(t.cur&&cur)||(t.field&&(hover||nearest(e.clientX,e.clientY)));
+    if(m){el.classList.add("gone");setTimeout(()=>el.remove(),320);breed(k,m);return}
+    // nowhere to land: it floats home, so nothing is lost
+    const r=b.getBoundingClientRect();el.style.transition="translate .38s cubic-bezier(.2,.8,.3,1),opacity .38s";el.dataset.say="";
+    requestAnimationFrame(()=>{el.style.translate=(r.left+r.width/2)+"px "+(r.top+r.height/2)+"px";el.style.opacity=".2"});setTimeout(()=>el.remove(),400)};
+  b.addEventListener("pointerup",up);b.addEventListener("pointercancel",()=>{done();if(st&&st.el)st.el.remove();st=null});
+  b.addEventListener("keydown",(e)=>{if(e.key==="Delete"||e.key==="Backspace"){e.preventDefault();e.stopPropagation();letGo(k)}});
 }
 
 /* ---------- keeping ---------- */
 function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal,m));const u=tiny.toDataURL("image/png");cur=keep;return u}
-function drawShelf(){$("shelf").innerHTML="";shelf.forEach((k,i)=>{const b=document.createElement("button");b.setAttribute("aria-label","Open kept mark "+(i+1));
-  b.style.background=groundOf(k);b.title="Click to open. Drag onto another mark to breed them.";b.dataset.i=i;const im=new Image();im.alt="";im.src=k.thumb;b.append(im);breeder(b,k);b.onclick=async()=>{if(performance.now()-shelfEnd<350)return;if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,ok:true,g:Float32Array.from(k.g),edited:true})};$("shelf").append(b)})}
-$("keep").onclick=()=>{const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,ink:cur.ink||undefined,acc:cur.acc||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h}))};m.thumb=thumb({...m,g:Float32Array.from(m.g)});
-  shelf.unshift(m);shelf=shelf.slice(0,24);try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf))}catch(e){}drawShelf();$("keep").textContent="Kept";$("say").textContent="It's on your shelf at the bottom of the field. Drag it onto another mark to breed them."};
+// the same mark, in the same colours and letters, is only kept once
+const keyOf=(m)=>codeOf({...m,g:Float32Array.from(m.g),dye:m.dye||[],gr:m.gr||null,ink:m.ink||null,acc:m.acc||null})+"|"+(m.letters||"");
+shelf.forEach(k=>{if(!k.key)k.key=keyOf(k)});
+const saveShelf=()=>{try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf));return true}catch(e){return false}};
+function drawShelf(fresh){
+  const rows=[$("shelf"),$("keptrow")];rows.forEach(r=>r.innerHTML="");$("kept").hidden=!shelf.length;
+  rows.forEach(row=>shelf.forEach((k,i)=>{const b=document.createElement("button");b.setAttribute("aria-label",`Kept mark ${i+1}. Click to open, drag onto another mark to breed, Delete to let go.`);
+    b.style.background=groundOf(k);b.title="Click to open · drag onto another mark to breed";b.dataset.i=i;const im=new Image();im.alt="";im.src=k.thumb;b.append(im);
+    if(fresh&&k.key===fresh)b.classList.add("pop");
+    breeder(b,k);b.onclick=async()=>{if(performance.now()-shelfEnd<350)return;if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,ok:true,g:Float32Array.from(k.g),edited:true})};row.append(b)}))}
+function flashKept(key){document.querySelectorAll(".shelf button,.keptrow button").forEach(b=>{if(shelf[+b.dataset.i]&&shelf[+b.dataset.i].key===key){b.classList.remove("flash");void b.offsetWidth;b.classList.add("flash")}})}
+const isKept=()=>cur&&shelf.some(k=>k.key===keyOf({...cur,letters}));
+$("keep").onclick=()=>{
+  const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,ink:cur.ink||undefined,acc:cur.acc||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h}))};
+  m.key=keyOf(m);const at=shelf.findIndex(k=>k.key===m.key);
+  if(at>=0){if(at>0){shelf.unshift(shelf.splice(at,1)[0]);saveShelf();drawShelf()}flashKept(m.key);$("say").textContent="That one's already on your shelf.";return}
+  m.thumb=thumb({...m,g:Float32Array.from(m.g)});shelf.unshift(m);
+  const gone=shelf.length>24?shelf.pop():null;const ok=saveShelf();drawShelf(m.key);flyIn(m);keptNow=true;
+  $("keep").textContent="Kept ✓";
+  $("say").textContent=!ok?"Kept for now, but your browser wouldn't store it for next time.":gone?"Kept. The oldest one made room for it.":shelf.length===1?"Kept. Drag it onto any mark, or onto this one, to breed the two.":"Kept."};
+// the kept mark flies from the stage into its place on the shelf, so you see where it went
+function flyIn(m){const slot=$("keptrow").firstChild;if(!slot||calm)return;const a=big.getBoundingClientRect(),b=slot.getBoundingClientRect();
+  const el=document.createElement("div");el.className="fly";el.style.background=`${groundOf(m)} url(${m.thumb}) center/cover`;
+  Object.assign(el.style,{left:a.left+"px",top:a.top+"px",width:a.width+"px",height:a.height+"px"});document.body.append(el);slot.style.opacity="0";
+  el.animate([{transform:"none",borderRadius:"0",opacity:.95},{transform:`translate(${b.left-a.left}px,${b.top-a.top}px) scale(${b.width/a.width})`,borderRadius:"0",opacity:1}],
+    {duration:620,easing:"cubic-bezier(.5,0,.2,1)"}).onfinish=()=>{el.remove();slot.style.opacity="";slot.classList.add("pop")}}
+// letting go: gone from the shelf, with a moment to change your mind
+let goneOne=null,goneT=0;
+function letGo(k){const i=shelf.indexOf(k);if(i<0)return;shelf.splice(i,1);saveShelf();drawShelf();goneOne={k,i};
+  fieldDid({undo:()=>{if(shelf.includes(k))return;shelf.splice(Math.min(i,shelf.length),0,k);saveShelf();drawShelf(k.key);goneOne=null;$("toast").classList.add("out")},redo:()=>{const j=shelf.indexOf(k);if(j>=0){shelf.splice(j,1);saveShelf();drawShelf()}}});
+  const t=$("toast");t.hidden=false;$("toastmsg").textContent="Let go of "+latin({...k,g:Float32Array.from(k.g)})+".";t.classList.remove("out");clearTimeout(goneT);goneT=setTimeout(()=>t.classList.add("out"),5200);
+  if(cur)$("keep").textContent=isKept()?"Kept ✓":"Keep it"}
+$("toastundo").onclick=()=>{if(!goneOne)return;const {k,i}=goneOne;goneOne=null;if(!shelf.includes(k)){shelf.splice(Math.min(i,shelf.length),0,k);saveShelf();drawShelf(k.key)}$("toast").classList.add("out");if(cur)$("keep").textContent=isKept()?"Kept ✓":"Keep it"};
 drawShelf();drawMine();
 
 /* ---------- saving ---------- */
