@@ -75,7 +75,8 @@ body.carrying-kept .letgo{scale:1;opacity:.85;pointer-events:auto;background:col
   display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:20px;min-height:62px;
   padding:8px max(16px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 body.live .tag,body.live .foot{transition:background .5s,color .5s}
-.place{min-width:0}
+.place{min-width:0;position:relative}.symline{font-size:11px;opacity:.75}.symline .word{opacity:1}.symline:has(.word:hover){opacity:1}
+#sympop{min-width:280px}#sympop button{grid-template-columns:34px 1fr}#sympop small b{font-weight:600;opacity:1}
 .place strong{display:block;font-family:var(--f-serif);font-weight:400;font-size:23px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .place small{font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}
 .lenses{display:flex;gap:16px}
@@ -221,7 +222,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 <div class="tag" id="tag"><b>Meadow</b><a href="../">Tulip Labs</a><button id="home" hidden>← Back to the meadow</button><span id="hint">Drag to wander. Scroll to go deeper. Type a letter to plant it. Click a mark to pick it.</span></div>
 
 <div class="foot">
-  <div class="place"><strong id="place">Meadow</strong><small id="scale"></small></div>
+  <div class="place"><strong id="place">Meadow</strong><small id="scale"></small><small class="symline"> · <button class="word" id="symword" aria-haspopup="true" aria-expanded="false" title="How much of the meadow grows mirror-shaped">half mirrored</button></small><div class="modepop" id="sympop" hidden role="menu" aria-label="How much of the meadow grows mirrored"></div></div>
   <div class="lenses" id="lenses" role="group" aria-label="Look at the field as"></div>
   <div class="right"><div class="shelf" id="shelf" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span><button class="plant" id="plant">Plant a letter</button></div>
 </div>
@@ -310,16 +311,35 @@ function biome(x,y){
 function vn(x,y,k){const i=Math.floor(x),j=Math.floor(y);let u=x-i,v=y-j;u=u*u*u*(u*(u*6-15)+10);v=v*v*v*(v*(v*6-15)+10);
   return lerp(lerp(r01(i,j,k),r01(i+1,j,k),u),lerp(r01(i,j+1,k),r01(i+1,j+1,k),u),v)}
 function fbm(x,y,k){let s=0,a=1,f=F0,t=0;for(let o=0;o<13;o++){s+=a*(vn(x*f,y*f,k*16+o+40)-.5);t+=a;a*=.72;f*=2}return s/t}
+/* how much of the meadow grows mirror-shaped. Left alone it is about half, as the land decides. Any other share is
+   met by ranking every mark by how strongly it already turns, so the spiral country spreads or shrinks like a
+   tide instead of marks flipping one by one; those that keep a mirror lie still, the rest turn, and at the free end
+   some lean as well, so nothing is left with a mirror line */
+const SYMS=[["all mirrored",1,"every mark has a mirror line"],["mostly mirrored",.75,"three in four lie still"],["half mirrored",null,"about half, as the land grows them"],
+  ["mostly free",.25,"one in four keeps a mirror"],["all free",0,"every mark turns, and some lean too"]];
+let symI=2,symQs=null;try{const v=+localStorage.getItem("meadow-sym");if(v>=0&&v<=4&&localStorage.getItem("meadow-sym")!==null)symI=v}catch(e){}
+function symQ(p){ // the twist below which a share p of the meadow's marks fall, sampled once from the meadow as it grows by itself
+  if(!symQs){const was=symI;symI=2;const q=[];for(let i=0;i<2400;i++){const m=specimen(Math.round((r01(i,7,81)-.5)*16*40)/40,Math.round((r01(i,7,82)-.5)*16*40)/40);q.push(m.g[16]>.6?1:Math.abs(m.g[6]-.5))}
+    symI=was;cache.clear();symQs=q.sort((a,b)=>a-b)}
+  return p>=1?1:p<=0?-1:symQs[Math.floor(p*(symQs.length-1))]}
+function shapeSym(g,x,y){const p=SYMS[symI][1],Q=symQ(p),X=Math.round(x*1e4),Y=Math.round(y*1e4),q=g[16]>.6?1:Math.abs(g[6]-.5),sg=Math.sign(g[6]-.5)||(r01(X,Y,90)<.5?-1:1);
+  if(q<=Q){g[6]=.5+sg*(Q>0?Math.min(q,.5)/Q:0)*.1;if(g[16]>.5)g[16]=.45;return}
+  if(q<1)g[6]=.5+sg*clamp(.27+(q-Math.max(Q,0))/Math.max(.5-Math.max(Q,0),.01)*.23,.27,.5); // never less than a twist you can see
+  const lean=symI===4?.5:symI===3?.2:0;if(lean&&r01(X,Y,91)<lean)g[r01(X,Y,92)<.5?21:22]=.5+(r01(X,Y,93)<.5?-1:1)*(.3+r01(X,Y,94)*.14)}
 const cache=new Map();
 function specimen(x,y){
   const key=x+"|"+y;let m=cache.get(key);if(m)return m;
   const b=biome(x,y),g=new Float32Array(NG);
   for(let k=0;k<16;k++)g[k]=1/(1+Math.exp(-fbm(x,y,k)*24));
+  // left alone, nearly nine marks in ten came out twisted, so almost nothing in the meadow was mirror-shaped.
+  // the gentler half of the twists now lie still (they read as mirrored); the strong ones keep their full spiral
+  {const d=g[6]-.5,a=Math.abs(d);g[6]=.5+Math.sign(d)*(a<.34?a*.3:.102+(a-.34)*2.49)}
   for(const k in CLIMATE[b.id]){const c=CLIMATE[b.id][k];g[k]=lerp(g[k],c[0],c[1])}
   // wide stretches of the meadow grow other kinds of mark, fading in across their edges; the land round home stays flowers
   const far=sstep(BC*2,BC*3.5,Math.hypot(x,y));
   for(let f=0;f<3;f++)g[16+f]=far*.95*sstep(.66,.84,vn(x/(BC*2.3)+f*7.31,y/(BC*2.3)-f*3.17,70+f));
   for(let k=19;k<NG;k++)g[k]=DEF[k];
+  if(symI!==2)shapeSym(g,x,y);
   m={x,y,pal:b.id,g};setSym(m);
   if(cache.size>9000)cache.clear();
   cache.set(key,m);return m;
@@ -454,7 +474,7 @@ vec2 markN(vec2 p0,float n){
   for(int j=0;j<12;j++){float fj=float(j);if(fj>=n)break;float th=(fj+.5)/n*spread-spread*.5;if(th<-.001)continue;
    vec2 dir=vec2(sin(th),cos(th)),c=vec2(dot(a,dir),dot(a,vec2(dir.y,-dir.x)));
    df=min(df,shape(c-vec2(r1,0.),max(l*(1.+fan*.45*cos(th*1.2)),wf),wf,g_pr));}
-  d=mix(d,df,smoothstep(0.,.3,fan));}
+  d=mix(d,df,fan);} // spread over the whole ramp, so a flower gathers into a fan gradually
  if(stk>0.){ // stacked bars: rows of the petal laid flat, bent into chevrons and tapered into a diamond or an hourglass
   float R=clamp(floor(n*.5+.5),2.,6.),h=1.46/R,L=mix(.36,.72,g_l),ws=min(w*.9,h*.4),c0=floor(p.y/h+(R-1.)*.5+.5),ds=1e9;
   for(int j=-1;j<=1;j++){float c=clamp(c0+float(j),0.,R-1.),off=c-(R-1.)*.5,yy=p.y-off*h-abs(p.x)*(g_ph-.5)*1.3;
@@ -464,17 +484,18 @@ vec2 markN(vec2 p0,float n){
  float ring=smoothstep(.56,.68,g_ring);
  // inside a badge the ring stays well clear of the rim, or it leaves thin slivers
  float rr=mix(.38,.86,g_rr)*mix(1.,.74,inv),rw=mix(.022,.075,g_ring);
- d=mix(d,smin(d,abs(r-rr)-rw,k),ring);
+ // the ring grows from a hairline instead of popping in at full width near the end of its ramp
+ if(ring>0.)d=smin(d,abs(r-rr)-rw*ring+(1.-ring)*.1,k*ring+1e-4); // .1 clears the boldness added below, or a bold mark would flood
  float bite=smoothstep(.6,.72,g_bite)*smoothstep(.12,.42,g_w);
  vec2 q2=fold(p,n,ph+PI/n);
  d=mix(d,smax(d,-shape(q2-vec2(r1*.9+.14,0.),l*.62,w*.7,g_pr),k*.5),bite);
  float hole=smoothstep(.62,.72,g_hole),rh=mix(.07,.26,g_hole);
  d=mix(d,smax(d,-(r-rh),k*.5),hole);
  d-=(g_wt-.5)*.1;
- float st=smoothstep(.7,.78,g_st)*smoothstep(.3,.5,g_w),fr=fract(g_st*7.),f=mix(4.,7.5,fr);
- // where the stripe count wraps round it fades from the old count into the new one instead of snapping
- float sA=-(abs(fract(r*f)-.5)/f-.13/f*2.),sB=-(abs(fract(r*7.5)-.5)/7.5-.13/7.5*2.);
- d=mix(d,max(d,mix(sA,sB,1.-smoothstep(0.,.06,fr))),st);
+ // the stripe spacing rises and falls with the trait instead of wrapping round, so it never jumps
+ float st=smoothstep(.7,.78,g_st)*smoothstep(.3,.5,g_w),fr=1.-abs(fract(g_st*3.5)*2.-1.),f=mix(4.,7.5,fr);
+ // and the gaps open from nothing, so stripes arrive gradually rather than all at once
+ if(st>0.)d=max(d,(.26*st-abs(fract(r*f)-.5))/f);
  float accOn=smoothstep(.56,.64,g_acc);
  float ac=mix(length(p)-mix(.06,.17,g_rr),length(q-vec2(mix(.3,.84,g_r),0.))-mix(.05,.085,g_w),smoothstep(.77,.83,g_acc));
  float b=mix(1.,ac,accOn);
@@ -660,6 +681,19 @@ function nameTag(m,t){if(m!==tagM){tagM=m;tagT=t;ftag.classList.add("out")}
   const still=Math.hypot(cam.vx,cam.vy)*ppw()<30&&Math.abs(cam.zt-cam.z)<.02,show=!!m&&!drag&&pointer.in&&still&&t-tagT>.55;
   if(show){if(ftag.classList.contains("out")){ftag.textContent=latin(m);ftag.classList.remove("out")}ftag.style.left=pointer.x+"px";ftag.style.top=pointer.y+"px"}
   else ftag.classList.add("out")}
+// the symmetry word in the footer: the meadow regrows from the middle of the view with the new share
+function setSymI(i,undoing){if(i===symI)return;const was=symI;if(!undoing)fieldDid({undo:()=>setSymI(was,true),redo:()=>setSymI(i,true)});
+  symI=i;try{localStorage.setItem("meadow-sym",i)}catch(e){}cache.clear();regrow([W/2,H/2],2.6);symWord(true)}
+function symWord(anim){const w=$("symword");w.textContent=SYMS[symI][0];[...$("sympop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===symI));
+  if(anim&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"})}
+SYMS.forEach(([n,p,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");
+  b.innerHTML=`<kbd>${p==null?"≈45":Math.round(p*100)}%</kbd><b>${n[0].toUpperCase()+n.slice(1)}</b><small>${d}</small>`;b.onclick=()=>{setSymI(i);popSym(false)};$("sympop").append(b)});
+function popSym(on){const p=$("sympop");p.hidden=!on;$("symword").setAttribute("aria-expanded",on);if(on)p.children[symI].focus()}
+$("symword").onclick=(e)=>{e.stopPropagation();popSym($("sympop").hidden)};
+addEventListener("pointerdown",(e)=>{if(!$("sympop").hidden&&!e.target.closest("#sympop,#symword"))popSym(false)});
+$("sympop").addEventListener("keydown",(e)=>{e.stopPropagation();if(e.key==="Escape"){popSym(false);$("symword").focus()}
+  else if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();const k=[...$("sympop").children],j=k.indexOf(document.activeElement);k[(j+(e.key==="ArrowDown"?1:k.length-1))%k.length].focus()}});
+symWord(false);
 let lastPlace="";
 function chrome(){
   const b=biome(cam.x,cam.y),id=nur?(cam.x<0?nur.A.pal:nur.B.pal):b.id,key=nur?"n"+id+nur.genus:b.bx+","+b.by;
@@ -901,8 +935,8 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
   if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
   tune.x=e.clientX;tune.y=e.clientY;
   if(mode===0){cur.g[6]=clamp(cur.g[6]+dx*.0028);cur.g[13]=clamp(cur.g[13]-dy*.0034)}
-  else if(mode===1){cur.g[19]=clamp(cur.g[19]+dx*.0026);cur.g[20]=clamp(cur.g[20]-dy*.003)}
-  else if(mode===2){cur.g[21]=clamp(cur.g[21]+dx*.0026);cur.g[22]=clamp(cur.g[22]-dy*.0026)}
+  else if(mode===1){slide(19,dx*.0026);cur.g[20]=clamp(cur.g[20]-dy*.003)}
+  else if(mode===2){slide(21,dx*.0026);slide(22,-dy*.0026)}
   else if(mode===3){ // one line through all ten outlines: circle, capsule, lens, diamond, box, then teardrop, heart, crescent, star, hook
     let P=cur.g[23]>0?1+cur.g[23]:cur.g[2];P=clamp(P+dx*.0024,0,2);cur.g[2]=Math.min(P,1);cur.g[23]=Math.max(P-1,0);cur.g[5]=clamp(cur.g[5]-dy*.003)}
   else if(mode===4){if(!tune.framed){tune.framed=true;if(cur.g[14]<.74&&Math.abs(dx)>=Math.abs(dy))cur.g[14]=.8} // a frame only shows round a badge, so it puts one on
@@ -911,6 +945,11 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
     const t=tune.tint;t.dh+=dx*.0065;t.cf=clamp(t.cf*Math.exp(-dy*.0045),.22,1.7);retint(t)}
   const said=nameNow();ro.textContent=said;ro.classList.toggle("out",!said);ro.style.left=e.clientX+"px";ro.style.top=e.clientY+"px";
   queue()});
+// stretch, bend and weight each have a soft stop at the middle, where the mark is in balance again: the drag
+// carries on underneath, so it rests there for a moment and then moves on without a jump
+const DET=.035,toRaw=(v)=>{const a=v-.5;return a?.5+Math.sign(a)*(Math.abs(a)*(.5-DET)/.5+DET):.5},
+  fromRaw=(r)=>{const a=r-.5;return .5+Math.sign(a)*Math.max(Math.abs(a)-DET,0)*.5/(.5-DET)};
+function slide(k,dv){const raw=tune.raw||(tune.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
 const end=()=>{if(tune&&tune.moved)told();tune=null;ro.classList.add("out")};
 /* what dragging the mark changes. Each mode is the same gesture, sideways and up-down, on two traits that belong together */
 const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],["stretch it","Stretch","wide or tall, and up to square it off softly"],
@@ -931,6 +970,8 @@ const OUTLINES=["circle","capsule","lens","diamond","box","teardrop","heart","cr
 function nameNow(){const g=cur.g;
   if(mode===3)return g[23]<.06?OUTLINES[Math.round(g[2]*4)]:OUTLINES[5+Math.round(clamp((g[23]-.12)/.88)*4)];
   if(mode===4)return g[14]<.7?"no frame":g[24]<.06?(g[12]>.5?"rounded square":"circle"):FRAMES[Math.round(clamp((g[24]-.12)/.88)*3)];
+  if(mode===0)return Math.abs(g[6]-.5)<SYMW?"mirrored":"turning";
+  if(mode===2){const b=Math.abs(g[21]-.5)>.004,h=Math.abs(g[22]-.5)>.004;return b&&h?"bent, heavier one end":b?"bent":h?"heavier one end":"balanced"}
   if(mode===1){const a=g[19]-.5;return (Math.abs(a)<.06?"":a>0?"wider":"taller")+(g[20]>.2?(Math.abs(a)<.06?"":", ")+"squarer":"")||"round"}
   return ""}
 const ro=document.createElement("div");ro.className="readout out";document.body.append(ro);
@@ -962,7 +1003,7 @@ const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15],FAMS=[16,17,18];
 const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74,16:.6,17:.6,18:.6}; // traits that are either there or not
 function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
   const d=new Float32Array(NG),pool=TRAITS.slice().sort(()=>Math.random()-.5),k=2;let pet=0;
-  if(Math.random()<.26){const more=[...FAMS,23,...(cur.g[14]>.74?[24,24]:[])];pool[0]=more[Math.floor(Math.random()*more.length)]} // now and then a ghost is another kind of mark altogether
+  if(Math.random()<.26){const more=[...FAMS.filter(f=>f!==16||symI!==0),23,...(cur.g[14]>.74?[24,24]:[])];pool[0]=more[Math.floor(Math.random()*more.length)]} // now and then a ghost is another kind of mark altogether
   if(far){ // a stranger from somewhere else in the meadow wanders in and they meet halfway
     const s=specimen(Math.round((cur.x+(Math.random()-.5)*9)*40)/40,Math.round((cur.y+(Math.random()-.5)*9)*40)/40),mix=.42+Math.random()*.2;
     TRAITS.forEach(t=>{d[t]=(s.g[t]-cur.g[t])*mix});pet=s.s>.5?s.n1:s.n0;
@@ -979,23 +1020,60 @@ function blend(G,w){
 }
 // the mark leaning toward one ghost, or toward two neighbours at once: the shapes between them are real shapes too
 function mix(w){
-  const g=Float32Array.from(cur.g),sum=new Float32Array(NG),most=new Float32Array(NG);let top=-1,tv=0;
+  const g=Float32Array.from(cur.g),sum=new Float32Array(NG),most=new Float32Array(NG);let top=-1,tv=0;const cn=cur.s>.5?cur.n1:cur.n0;
   for(let i=0;i<GN;i++){if(w[i]<.002||!ghosts[i])continue;const d=ghosts[i].d;
-    for(let k=0;k<NG;k++){sum[k]+=d[k]*w[i];most[k]=Math.max(most[k],Math.abs(d[k]))}if(ghosts[i].pet&&w[i]>tv){tv=w[i];top=i}}
+    for(let k=0;k<NG;k++){sum[k]+=d[k]*w[i];most[k]=Math.max(most[k],Math.abs(d[k]))}if(ghosts[i].pet&&ghosts[i].pet!==cn&&w[i]>tv){tv=w[i];top=i}}
+  // a mark can only morph toward one petal count at a time. Between two ghosts that want different counts it used
+  // to snap from one to the other at the halfway point; now the pull of the other count is taken off first, so the
+  // mark passes back through its own count at the crossing and grows into the next one, with no jump anywhere
+  let rival=0;if(top>=0)for(let i=0;i<GN;i++)if(i!==top&&ghosts[i]&&ghosts[i].pet&&ghosts[i].pet!==cn&&ghosts[i].pet!==ghosts[top].pet)rival=Math.max(rival,w[i]);
   // where both ghosts push one trait the same way, the blend never goes further than either would alone
   for(let k=0;k<NG;k++)g[k]=clamp(g[k]+Math.sign(sum[k])*Math.min(Math.abs(sum[k]),most[k]));
-  let n0=cur.n0,n1=cur.n1,s=cur.s;const cn=cur.s>.5?cur.n1:cur.n0;
-  if(top>=0&&ghosts[top].pet!==cn){n0=cn;n1=ghosts[top].pet;s=Math.min(1,tv)}
+  let n0=cur.n0,n1=cur.n1,s=cur.s;
+  if(top>=0){n0=cn;n1=ghosts[top].pet;s=clamp(tv-rival)}
   return {...cur,g,n0,n1,s};
 }
 const leant=()=>lw.some(v=>v>.002);
+/* symmetry is a direction of its own, both ways. A mark's symmetry is read from what breaks it:
+   a twist or a pinwheel turns it (it keeps its turns but loses its mirrors); a bend or a heavy end, a fan, bars or a
+   pointed frame leave it one mirror at most; both together leave it free. The ghost above always steps one rung
+   toward balance, the ghost below one rung toward motion, so either way can be walked as far as you like */
+const SYMW=.11; // within this of the middle a twist doesn't show, so the mark is mirrored
+function symOf(m){const g=m.g,n=m.s>.5?m.n1:m.n0;
+  const turn=Math.max(Math.max(Math.abs(g[6]-.5)-SYMW,0)*2.5,g[16]>.6?1:0), // twisted or hooked one way round
+    bent=Math.max(Math.abs(g[21]-.5),Math.abs(g[22]-.5))*2,                  // leaned or heavier at one end
+    kind=Math.max(g[17]>.6?1:0,g[18]>.6?1:0,g[14]>.74&&g[24]>.06?.6:0),     // a fan, bars or a pointed frame
+    wide=Math.abs(g[19]-.5)*2;
+  const mirrors=turn>.02?0:bent>.04||kind?1:wide>.04?(n%2?1:2):n;
+  return {n,turn,bent,kind,wide,mirrors,free:turn>.02&&(bent>.04||kind>0)}}
+function towardBalance(){const d=new Float32Array(NG),g=cur.g,S=symOf(cur);let say="";
+  if(S.turn>.02){if(Math.abs(g[6]-.5)>SYMW)d[6]=.5-g[6];if(g[16]>.6)d[16]=.38-g[16];say=S.bent>.04||S.kind?"untwisted":"mirrored"}
+  else if(S.bent>.04){d[21]=.5-g[21];d[22]=.5-g[22];say="balanced"}
+  else if(S.wide>.04){d[19]=.5-g[19];say="round again"}
+  else if(S.kind){if(g[17]>.6)d[17]=.38-g[17];if(g[18]>.6)d[18]=.38-g[18];if(g[14]>.74&&g[24]>.06)d[24]=-g[24];say="whole again"}
+  else return null; // already as balanced as it gets: this ghost is an ordinary cousin
+  return {d,pet:0,far:false,sym:1,say}}
+function towardMotion(){const d=new Float32Array(NG),g=cur.g,S=symOf(cur),side=()=>Math.random()<.5?-1:1;let say="";
+  const twist=()=>{const sg=Math.sign(g[6]-.5)||side();d[6]=clamp(.5+sg*(.36+Math.random()*.1))-g[6];say="turning"},
+    lean=()=>{if(Math.random()<.5){d[22]=clamp(.5+side()*(.34+Math.random()*.1))-g[22];say="heavier one end"}else{d[21]=clamp(.5+side()*(.38+Math.random()*.1))-g[21];say="bent"}};
+  if(S.free){ // already free: go further the way it's already going
+    if(Math.abs(g[6]-.5)>SYMW&&Math.abs(g[6]-.5)<.45){d[6]=Math.sign(g[6]-.5)*Math.min(.16,.5-Math.abs(g[6]-.5))}
+    const k=Math.abs(g[22]-.5)>Math.abs(g[21]-.5)?22:21;if(Math.abs(g[k]-.5)<.45)d[k]=Math.sign(g[k]-.5)*Math.min(.14,.5-Math.abs(g[k]-.5));
+    if(!d.some(v=>Math.abs(v)>.02))return null;say="wilder"}
+  else if(S.turn>.02)lean();                       // turning only: lean it too, and it's free
+  else if(S.bent>.04||S.kind)twist();              // one mirror: twist it too, and it's free
+  else{const r=Math.random();if(r<.45)twist();else if(r<.62&&g[16]<.6){d[16]=.86-g[16];say="hooked"}else lean()} // fully balanced: break it one way
+  return {d,pet:0,far:false,sym:-1,say}}
 function makeGhosts(){
   let list=Array.from({length:GN},(_,i)=>roll(i%2===1));
   const pure=cur.s<.02||cur.s>.98,cn=cur.s>.5?cur.n1:cur.n0,ci=SYM.indexOf(cn);
   if(pure){list[2].pet=SYM[Math.min(SYM.length-1,ci+1)];list[6].pet=SYM[Math.max(0,ci-1)]}else list.forEach(G=>G.pet=0);
+  // the cross is a compass: right more petals, left fewer, above calmer, below wilder; the diagonals are strangers
+  const up=towardBalance(),dn=towardMotion();if(up)list[0]=up;if(dn)list[4]=dn;
+  if(!up){const keep=symOf(cur).mirrors;for(let t=0;t<8&&symOf(blend(list[0],1)).mirrors<keep;t++)list[0]=roll(false)} // a balanced mark's calmer neighbour stays balanced
   for(let pass=0;pass<3;pass++){ // a ghost that would fall apart at icon size is rolled again
     const rs=judgeAll(list.map(G=>blend(G,1)));let again=false;
-    list=list.map((G,i)=>{if(!weak(rs[i]))return G;again=true;const n=roll(G.far);if(!G.far||!pure)n.pet=pure?G.pet:0;return n});
+    list=list.map((G,i)=>{if(!weak(rs[i])||G.sym)return G;again=true;const n=roll(G.far);if(!G.far||!pure)n.pet=pure?G.pet:0;return n});
     if(!again)break;
   }
   ghosts=list;gen++;
@@ -1023,7 +1101,7 @@ function drawBig(){
 // in a word or two, what stepping to a ghost would change, said under it while you hover
 const SAYS={2:["rounder","sharper"],3:["closer in","further out"],4:["shorter","longer"],5:["finer","fuller"],7:["tighter","looser"],12:["crisp joins","soft joins"],13:["lighter","bolder"],1:["turned","turned"],6:["untwisted","twisted"],
   8:["no ring","a ring"],9:["no hole","a hole"],10:["whole","bitten"],11:["no dot","a dot"],15:["plain","striped"],16:["","a pinwheel"],17:["","a fan"],18:["","bars"]};
-function ghostSay(G){if(G.far)return "a stranger"+(G.pet?", "+G.pet+" petals":"");
+function ghostSay(G){if(G.say)return G.say;if(G.far)return "a stranger"+(G.pet?", "+G.pet+" petals":"");
   const w=[];if(G.pet)w.push(G.pet+" petals");
   const ks=[...G.d.keys()].filter(k=>Math.abs(G.d[k])>.04).sort((a,b)=>Math.abs(G.d[b])-Math.abs(G.d[a]));
   for(const k of ks){if(w.length>=2)break;const to=clamp(cur.g[k]+G.d[k]);let t="";
@@ -1043,14 +1121,17 @@ function leanStep(ms){
   if(pending>=0&&lw[pending]>.985){commit(pending);leaning=false;return}
   if(moving)requestAnimationFrame(leanStep);else leaning=false;
 }
+const ghostPath=(t)=>{const v=clamp((t-.04)/.92);return v+(v*v*(3-2*v)-v)*.25}; // nearly even, with the slightest rest at each ghost
 function settle(){lw.fill(0);tw.fill(0);pending=-1;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
 // round the ring, the mark leans toward the ghost you're near; between two, it leans toward both at once
 stage.addEventListener("pointermove",(e)=>{
   if(tune||pending>=0||!gLay||unf>0||e.pointerType!=="mouse")return;
   const sr=stage.getBoundingClientRect(),dx=e.clientX-sr.left-gLay.cx,dy=e.clientY-sr.top-gLay.cy,arc=Math.PI*2/GN;
-  const f=(((Math.atan2(dy,dx)+Math.PI/2)/arc)%GN+GN)%GN,i=Math.floor(f)%GN,j=(i+1)%GN,u=sstep(.1,.9,f-Math.floor(f));
+  // between two ghosts the mark walks a straight line from one to the other, at an even pace under the pointer:
+  // exactly half of each at the midpoint. (It used to linger by each ghost and rush across the middle.)
+  const f=(((Math.atan2(dy,dx)+Math.PI/2)/arc)%GN+GN)%GN,i=Math.floor(f)%GN,j=(i+1)%GN,u=ghostPath(f-Math.floor(f));
   const near=1-sstep(gLay.gs*.45,gLay.gs*1.15,Math.abs(Math.hypot(dx,dy)-gLay.R));
-  tw.fill(0);if(near>.004){tw[i]=near*Math.cos(u*Math.PI/2);tw[j]=near*Math.sin(u*Math.PI/2)}leanTo()});
+  tw.fill(0);if(near>.004){tw[i]=near*(1-u);tw[j]=near*u}leanTo()});
 stage.addEventListener("pointerleave",()=>{if(pending<0){tw.fill(0);leanTo()}});
 // double-click keeps the shape you're looking at, even one caught halfway between two ghosts; a new ring grows round it
 stage.addEventListener("dblclick",(e)=>{if(!cur||unf>0||pending>=0||e.target.closest(".ghost,.tunehint")||!leant())return;e.preventDefault();keepLive()});
@@ -1079,7 +1160,7 @@ function told(){const n=hist.length;if(!$("hexes").contains(document.activeEleme
   const pn=cur.s>.5?cur.n1:cur.n0;$("petn").textContent=pn+" petals";$("fewer").disabled=pn===SYM[0]&&cur.s%1===0;$("more").disabled=pn===SYM[SYM.length-1]&&cur.s%1===0;
   $("found").textContent=foundAt+(cur.note||"");
   // the link carries every change, so a shared mark arrives exactly as it was left
-  const url=cur.at+(n||cur.dye.length||cur.edited?"&"+codeOf(cur):"");
+  const url=cur.at+(n||cur.dye.length||cur.edited||symI!==2?"&"+codeOf(cur):""); // under another symmetry setting the spot alone would grow a different mark
   if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}}
 $("undo").onclick=stepBack;$("redo").onclick=stepAgain;
 addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio();prender()}});
