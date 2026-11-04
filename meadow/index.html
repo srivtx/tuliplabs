@@ -259,7 +259,7 @@ void main(){float c=cos(i0.w),s=sin(i0.w);vec2 q=mat2(c,s,-s,c)*aQ*i0.z*.5;vec2 
 const FS_M=COMMON+`
 in vec2 vP;in vec4 vI;flat in float vL;in float vS;in vec4 vG0;in vec4 vG1;in vec4 vG2;in vec4 vG3;
 out vec4 o;
-uniform int uFix;uniform vec3 uInk;uniform vec3 uAcc;uniform int uOut;uniform int uHasL;uniform sampler2D uL;
+uniform int uFix;uniform vec3 uInk;uniform vec3 uAcc;uniform int uOut;uniform int uHasL;uniform sampler2D uL;uniform sampler2D uL0;uniform float uLm;uniform vec3 uLo;
 uniform vec4 uD[2];uniform vec3 uDC[2];
 const float PI=3.14159265,TAU=6.2831853;
 // dye dropped on the mark soaks out from where it landed; while it is still wet its edge wavers
@@ -273,7 +273,13 @@ float smax(float a,float b,float k){return -smin(-a,-b,k);}
 vec2 rot(vec2 p,float a){float c=cos(a),s=sin(a);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);}
 vec2 fold(vec2 p,float n,float ph){float r=length(p),a=atan(p.y,p.x)+ph,s=TAU/n;a=mod(a+s*.5,s)-s*.5;a=abs(a);return r*vec2(cos(a),sin(a));}
 vec2 wheel(vec2 p,float n,float ph){float r=length(p),a=atan(p.y,p.x)+ph,s=TAU/n;a=mod(a+s*.5,s)-s*.5;return r*vec2(cos(a),sin(a));}
-float letter(vec2 p){vec2 u=p*.5+.5;if(u.x<0.||u.y<0.||u.x>1.||u.y>1.)return .31;return (texture(uL,u).r-.5)/1.6;}
+// a letter is held in four typefaces at once (serif, italic, mono, pixel); each mark leans to its own blend,
+// and when the letters change the old one melts into the new, rippling out from where you typed
+float gLt=1.;vec4 gFW=vec4(1.,0.,0.,0.);
+vec4 fontW(float x){float f=clamp(x,0.,1.)*3.;int i=int(min(floor(f),2.));float t=smoothstep(.2,.8,f-float(i));
+ return i==0?vec4(1.-t,t,0.,0.):i==1?vec4(0.,1.-t,t,0.):vec4(0.,0.,1.-t,t);}
+float letter(vec2 p){vec2 u=p*.5+.5;if(u.x<0.||u.y<0.||u.x>1.||u.y>1.)return .31;
+ float v=dot(texture(uL,u),gFW);if(gLt<1.)v=mix(dot(texture(uL0,u),gFW),v,gLt);return (v-.5)/1.6;}
 float shape(vec2 c,float l,float w,float t){
  float s=clamp(t,0.,1.)*4.,f=smoothstep(.3,.7,fract(s));int k=int(min(floor(s),3.));
  float A,B;
@@ -317,8 +323,8 @@ vec2 markN(vec2 p0,float n){
  vec2 sq=abs(p0)-.68;float bx=length(max(sq,0.))+min(max(sq.x,sq.y),0.)-.24;
  float badge=mix(r-.92,bx,step(.5,g_k));
  d=mix(d,smax(badge,-d,.012),inv);
- if(uHasL==1){
-  if(g_inv<.46){float L=letter(p0/.74)*.74;d=max(d,-(L-.05));b=L-(g_wt-.5)*.04;}
+ if(uHasL==1){gFW=fontW(g_l);
+  if(g_inv<.46){vec2 lp=p;lp.x+=lp.y*(g_ph-.5)*.45;float L=letter(lp/.74)*.74;d=max(d,-(L-.05));b=L-(g_wt-.5)*.04;}
   else if(g_inv<.76){vec2 u=wheel(p0,n,ph)-vec2(mix(.42,.6,g_r),0.);float sc=min(.5,sin(PI/n)*.72);u=rot(u,PI*.5);d=letter(u/sc)*sc-(g_wt-.5)*.03-.024;b=1.;}
   else{float sc=mix(.8,1.2,g_r);d=letter((fold(p,n,ph)-vec2(.32,0.))/sc)*sc-(g_wt-.5)*.04-.016;b=1.;}
  }
@@ -329,6 +335,7 @@ vec2 mark(vec2 p){vec2 a=markN(p,vI.y);if(vI.w>.002)a=mix(a,markN(p,vI.z),vI.w);
  float grown=(1.-vI.x);return a+grown*1.05;}
 void main(){
  vec3 ink,acc;
+ if(uLm<1.){float t=clamp(uLm*1.9-length(gl_FragCoord.xy-uLo.xy)/max(uLo.z,1.)*.9,0.,1.);gLt=t*t*(3.-2.*t);}
  if(uFix==1){ink=uInk;acc=uAcc;}else{
   vec2 w=worldAt(gl_FragCoord.xy);int a,b;float e;country(w,a,b,e);float t=clamp(.5+e*uPPW,0.,1.);
   ink=mix(uI[b],uI[a],t);acc=mix(uA[b],uA[a],t);}
@@ -376,18 +383,22 @@ function makeR(canvas,alpha){
   palette(pG);palette(pM);
   const tex=gl.createTexture();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,1,1,0,gl.RED,gl.UNSIGNED_BYTE,new Uint8Array([255]));
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-  let hasL=0;const D4=new Float32Array(8),D3=new Float32Array(6);
+  const texSet=(t,u)=>{gl.activeTexture(u);gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,255,255,255]));
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE)};
+  const tex0=gl.createTexture();texSet(tex0,gl.TEXTURE2);texSet(tex,gl.TEXTURE0);
+  let hasL=0,lm=1,lo=[0,0,1];const D4=new Float32Array(8),D3=new Float32Array(6);
   const view=(p,w,h,cam,ppw)=>{gl.useProgram(p);gl.uniform2f(U(p,"uRes"),w,h);gl.uniform2f(U(p,"uCam"),cam[0],cam[1]);gl.uniform1f(U(p,"uPPW"),ppw)};
   return {gl,STRIDE,MAX,
-    glyph(data,n){hasL=data?1:0;gl.bindTexture(gl.TEXTURE_2D,tex);if(data)gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,n,n,0,gl.RED,gl.UNSIGNED_BYTE,data)},
+    glyph(data,n,prev){hasL=data?1:0;
+      if(prev){gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,tex0);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,prev)}
+      gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);if(data)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,data)},
+    melt(v,o){lm=v;if(o)lo=o},
     ground(w,h,cam,ppw){gl.viewport(0,0,w,h);gl.disable(gl.BLEND);view(pG,w,h,cam,ppw);gl.bindVertexArray(vao);
       gl.disableVertexAttribArray(1);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.enableVertexAttribArray(1);gl.bindVertexArray(null)},
     marks(data,n,w,h,cam,ppw,fix,out){gl.viewport(0,0,w,h);
       if(out)gl.disable(gl.BLEND);else{gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA)}
-      view(pM,w,h,cam,ppw);gl.uniform1i(U(pM,"uFix"),fix?1:0);gl.uniform1i(U(pM,"uOut"),out?1:0);gl.uniform1i(U(pM,"uHasL"),out===2?0:hasL);gl.uniform1i(U(pM,"uL"),0);
+      view(pM,w,h,cam,ppw);gl.uniform1i(U(pM,"uFix"),fix?1:0);gl.uniform1i(U(pM,"uOut"),out?1:0);gl.uniform1i(U(pM,"uHasL"),out===2?0:hasL);gl.uniform1i(U(pM,"uL"),0);gl.uniform1i(U(pM,"uL0"),2);gl.uniform1f(U(pM,"uLm"),out?1:lm);gl.uniform3f(U(pM,"uLo"),lo[0],lo[1],lo[2]);
       if(fix){gl.uniform3fv(U(pM,"uInk"),fix.i);gl.uniform3fv(U(pM,"uAcc"),fix.a);
         D4.fill(0);D3.fill(0);(fix.d||[]).slice(-2).forEach((d,k)=>{D4.set([d.x,d.y,d.r,d.w||0],k*4);D3.set(hex(d.h),k*3)});
         gl.uniform4fv(U(pM,"uD"),D4);gl.uniform3fv(U(pM,"uDC"),D3)}
@@ -452,6 +463,7 @@ function frame(ms){
     const hd=(sx-pX)**2+(sy-pY)**2;if(g>.6&&hd<bestD&&hd<(s*.55)**2){bestD=hd;hover=m}
   }
   if(fresh.length){tend(fresh);fresh.forEach((m,k)=>{const o=freshAt[k]*R.STRIDE;buf[o+5]=m.n0;buf[o+6]=m.n1;buf[o+7]=m.s;buf.set(m.g,o+9)})}
+  R.melt(clamp((t-meltAt)/1.2),[meltO[0],meltO[1],reach]);
   R.ground(W,H,[cam.x,cam.y],sc);
   R.marks(buf,n,W,H,[cam.x,cam.y],sc,null,false);
   field.classList.toggle("over",!!hover&&!drag);
@@ -554,19 +566,30 @@ function dist2(mask,n,want){const g=new Float64Array(n*n),col=new Float64Array(n
   for(let i=0;i<n*n;i++)g[i]=mask[i]===want?0:1e20;
   for(let x=0;x<n;x++){for(let y=0;y<n;y++)col[y]=g[y*n+x];const d=edt(col,n);for(let y=0;y<n;y++)g[y*n+x]=d[y]}
   const row=new Float64Array(n);for(let y=0;y<n;y++){row.set(g.subarray(y*n,y*n+n));g.set(edt(row,n),y*n)}return g}
-async function plant(str){
-  letters=str;$("letters").value=str;$("plant").textContent=str?`Planted: ${str}`:"Plant a letter";
-  if(!str){R.glyph(null);T.glyph(null);growAt=performance.now()/1000;growO=[W/2,H/2];return}
-  try{await document.fonts.load('400 300px "Instrument Serif"')}catch(e){}
-  const n=512,c=document.createElement("canvas");c.width=c.height=n;const g=c.getContext("2d",{willReadFrequently:true});
+const FACES=['400 P "Instrument Serif",Georgia,serif','italic 400 P "Instrument Serif",Georgia,serif','600 P "IBM Plex Mono",ui-monospace,monospace','700 P "Pixelify Sans",ui-monospace,monospace'];
+let glyphTok=0,lastGlyph=null,meltAt=-9,meltO=[0,0];
+function face(str,f,n){ // one typeface's letter as a signed distance field
+  const c=document.createElement("canvas");c.width=c.height=n;const g=c.getContext("2d",{willReadFrequently:true});
   g.fillStyle="#000";g.fillRect(0,0,n,n);g.fillStyle="#fff";g.textAlign="center";g.textBaseline="alphabetic";
-  let px=n*.9;g.font=`400 ${px}px "Instrument Serif",Georgia,serif`;let m=g.measureText(str);
-  const fit=Math.min(n*.8/m.width,n*.74/(m.actualBoundingBoxAscent+m.actualBoundingBoxDescent));px*=fit;g.font=`400 ${px}px "Instrument Serif",Georgia,serif`;m=g.measureText(str);
+  let px=n*.9;g.font=f.replace("P",px+"px");let m=g.measureText(str);
+  const fit=Math.min(n*.8/m.width,n*.74/((m.actualBoundingBoxAscent+m.actualBoundingBoxDescent)||1));px*=fit;g.font=f.replace("P",px+"px");m=g.measureText(str);
   g.fillText(str,n/2+(m.actualBoundingBoxLeft-m.actualBoundingBoxRight)/2,n/2+(m.actualBoundingBoxAscent-m.actualBoundingBoxDescent)/2);
   const px_=g.getImageData(0,0,n,n).data,mask=new Uint8Array(n*n);for(let i=0;i<n*n;i++)mask[i]=px_[i*4]>127?1:0;
-  const out=dist2(mask,n,1),inn=dist2(mask,n,0),tex=new Uint8Array(n*n),k=2/n;
-  for(let i=0;i<n*n;i++){const d=(Math.sqrt(out[i])-Math.sqrt(inn[i]))*k;tex[i]=clamp(d*1.6+.5)*255}
-  R.glyph(tex,n);T.glyph(tex,n);growAt=performance.now()/1000;growO=[W/2,H/2];$("tag").classList.add("quiet");
+  const out=dist2(mask,n,1),inn=dist2(mask,n,0),d=new Float32Array(n*n),k=2/n;
+  for(let i=0;i<n*n;i++)d[i]=(Math.sqrt(out[i])-Math.sqrt(inn[i]))*k;return d;
+}
+async function plant(str){
+  letters=str;$("letters").value=str;$("plant").textContent=str?`Planted: ${str}`:"Plant a letter";const tok=++glyphTok;
+  if(!str){lastGlyph=null;R.glyph(null);T.glyph(null);growAt=performance.now()/1000;growO=[W/2,H/2];return}
+  try{await Promise.all(FACES.map(f=>document.fonts.load(f.replace("P","300px"))))}catch(e){}
+  if(tok!==glyphTok)return;
+  const n=384,tex=new Uint8Array(n*n*4);
+  FACES.forEach((f,c)=>{const d=face(str,f,n);for(let i=0;i<n*n;i++)tex[i*4+c]=clamp(d[i]*1.6+.5)*255});
+  const prev=lastGlyph;lastGlyph=tex;
+  R.glyph(tex,n,prev);T.glyph(tex,n,null);
+  // from no letter the field regrows; from one letter to the next it melts
+  if(prev){meltAt=performance.now()/1000;meltO=pointer.in?[pointer.x*dpr,H-pointer.y*dpr]:[W/2,H/2]}else{growAt=performance.now()/1000;growO=[W/2,H/2]}
+  $("tag").classList.add("quiet");
 }
 addEventListener("keydown",(e)=>{
   if(e.metaKey||e.ctrlKey||e.altKey)return;
