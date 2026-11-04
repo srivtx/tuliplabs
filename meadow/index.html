@@ -120,6 +120,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 /* while you drag, a small label beside the pointer names what you're making */
 .readout{position:fixed;z-index:9;pointer-events:none;font:11px var(--f-mono);background:var(--ink);color:var(--ground);padding:3px 9px;border-radius:999px;translate:14px -28px;transition:opacity .2s}
 .readout.out{opacity:0}
+.readout.fieldname{font:italic 15px/1.2 var(--f-serif);padding:2px 10px 3px;translate:16px -34px;transition:opacity .25s,scale .3s cubic-bezier(.2,.9,.3,1.4)}.readout.fieldname.out{scale:.92}
 .sheet h2 .looks{float:right;margin-top:-5px;font-weight:400;letter-spacing:0}.looks button{padding:2px 9px;font-size:11px}
 #big.m-stretch,#big.m-lean{cursor:move}#big.m-colour{cursor:crosshair}
 /* the mark's possible next selves, floating round it */
@@ -128,6 +129,9 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .ghost canvas{display:block}
 .ghost:hover,.ghost:focus-visible{opacity:1;transform:scale(1.08)}
 .ghost.fresh{opacity:0;transform:scale(.4)}
+.ghost::after{content:attr(data-say);position:absolute;left:50%;top:calc(100% + 4px);translate:-50% 0;white-space:nowrap;font:10.5px var(--f-mono);background:var(--ink);color:var(--ground);
+  padding:2px 8px;border-radius:999px;opacity:0;scale:.9;transition:opacity .2s,scale .25s cubic-bezier(.2,.9,.3,1.4);pointer-events:none}
+.ghost:hover::after,.ghost:focus-visible::after{opacity:1;scale:1}.ghost[data-say=""]::after{display:none}
 @keyframes drift{0%,100%{translate:0 0}50%{translate:0 -5px}}
 @media (prefers-reduced-motion:reduce){.ghost{animation:none;transition:none}}
 /* unfolding: the mark pulls back onto a sheet */
@@ -230,8 +234,9 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div id="halo" aria-label="Ways your mark could grow"></div>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
-      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–6)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="posternote" hidden>Scroll to add layers or peel them off. Drag the mark and its echoes follow.</span></p>
+      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–6)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll to add layers or peel them off; drag the mark to move it.</span></p>
       <div class="modepop" id="modepop" hidden role="menu" aria-label="What dragging the mark changes"></div>
+      <div class="modepop" id="stylepop" hidden role="menu" aria-label="How the poster sets the mark"></div>
       <div class="tools">
         <span class="tools" id="markhint"><span class="grp" role="group" aria-label="Petals"><button id="fewer" aria-label="Fewer petals" title="Fewer petals (scroll down)">−</button><span id="petn">6 petals</span><button id="more" aria-label="More petals" title="More petals (scroll up)">+</button></span></span>
         <span class="tools" id="posterhint" hidden><span class="grp" id="fmts" role="group" aria-label="Poster shape"></span><button class="chip" id="layer">Another layer</button><button class="chip" id="fold">Back to the mark</button></span>
@@ -645,8 +650,16 @@ function frame(ms){
   R.ground(W,H,[cam.x,cam.y],sc);
   R.marks(buf,n,W,H,[cam.x,cam.y],sc,null,false);
   field.classList.toggle("over",!!hover&&!drag);
+  nameTag(hover,t);
   chrome();
 }
+// rest on a mark for a moment and its name appears beside the pointer, so you know what you'd be picking
+const ftag=document.createElement("div");ftag.className="readout fieldname out";ftag.setAttribute("aria-hidden","true");document.body.append(ftag);
+let tagM=null,tagT=0;
+function nameTag(m,t){if(m!==tagM){tagM=m;tagT=t;ftag.classList.add("out")}
+  const still=Math.hypot(cam.vx,cam.vy)*ppw()<30&&Math.abs(cam.zt-cam.z)<.02,show=!!m&&!drag&&pointer.in&&still&&t-tagT>.55;
+  if(show){if(ftag.classList.contains("out")){ftag.textContent=latin(m);ftag.classList.remove("out")}ftag.style.left=pointer.x+"px";ftag.style.top=pointer.y+"px"}
+  else ftag.classList.add("out")}
 let lastPlace="";
 function chrome(){
   const b=biome(cam.x,cam.y),id=nur?(cam.x<0?nur.A.pal:nur.B.pal):b.id,key=nur?"n"+id+nur.genus:b.bx+","+b.by;
@@ -782,7 +795,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^[1-6]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-6]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -851,7 +864,7 @@ function showTray(i){if(i===trayAt||drop)return;trayAt=i;const p=PAL[i],el=$("tr
   [...$("swatches").children].forEach((b,k)=>b.classList.toggle("shown",k===i))}
 function setRole(r,h){if(!cur)return;const now=r==="gr"?groundOf(cur):r==="ink"?inkOf(cur):accOf(cur);if(now===h)return;remember();cur[r]=h;told();drawStudio();warnRead()}
 function warnRead(){const s=$("say"),low=contrast(inkOf(cur),groundOf(cur))<1.6,t="The ink barely shows on this ground.";if(low)s.textContent=t;else if(s.textContent===t)s.textContent=""}
-function openStudio(m,from){
+function openStudio(m,from){ftag.classList.add("out");
   if(!m.ok)tend([m]);
   cur={...m,g:genes(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
@@ -1007,7 +1020,17 @@ function drawBig(){
   const m=leant()?mix(lw):cur;
   if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal,cur));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(tiny,0,0);
 }
-function drawGhosts(){if(!ghosts.length)return;const c=colours(cur.pal,cur);
+// in a word or two, what stepping to a ghost would change, said under it while you hover
+const SAYS={2:["rounder","sharper"],3:["closer in","further out"],4:["shorter","longer"],5:["finer","fuller"],7:["tighter","looser"],12:["crisp joins","soft joins"],13:["lighter","bolder"],1:["turned","turned"],6:["untwisted","twisted"],
+  8:["no ring","a ring"],9:["no hole","a hole"],10:["whole","bitten"],11:["no dot","a dot"],15:["plain","striped"],16:["","a pinwheel"],17:["","a fan"],18:["","bars"]};
+function ghostSay(G){if(G.far)return "a stranger"+(G.pet?", "+G.pet+" petals":"");
+  const w=[];if(G.pet)w.push(G.pet+" petals");
+  const ks=[...G.d.keys()].filter(k=>Math.abs(G.d[k])>.04).sort((a,b)=>Math.abs(G.d[b])-Math.abs(G.d[a]));
+  for(const k of ks){if(w.length>=2)break;const to=clamp(cur.g[k]+G.d[k]);let t="";
+    if(k===23)t=to<.06?"":OUTLINES[5+Math.round(clamp((to-.12)/.88)*4)];else if(k===24)t=FRAMES[Math.round(clamp((to-.12)/.88)*3)]+" frame";
+    else if(k in TOGGLE)t=SAYS[k]?SAYS[k][to>TOGGLE[k]?1:0]:"";else if(SAYS[k])t=SAYS[k][G.d[k]>0?1:0];if(t&&!w.includes(t))w.push(t)}
+  return w.join(" · ")}
+function drawGhosts(){if(!ghosts.length)return;const c=colours(cur.pal,cur);[...halo.children].forEach((b,i)=>{if(ghosts[i])b.dataset.say=ghostSay(ghosts[i])});
   [...halo.children].forEach((b,i)=>{const cv=b.firstChild;paint(blend(ghosts[i],1),cv.width,lens,c);const g=cv.getContext("2d");g.clearRect(0,0,cv.width,cv.width);g.drawImage(tiny,0,0)})}
 function leanTo(){if(!leaning){leaning=true;leanMs=performance.now();requestAnimationFrame(leanStep)}}
 function leanOne(k,w){tw.fill(0);if(k>=0)tw[k]=w;leanTo()}
@@ -1216,14 +1239,37 @@ function sheet(items,w,h,l,fix){ // many marks in one draw
   const b=new Float32Array(items.length*T.STRIDE);items.forEach((it,k)=>put(b,k*T.STRIDE,it.x,it.y,it.s,it.r||0,1,it.m,l));
   T.marks(b,items.length,w,h,[0,0],1,fix,false);
   const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(tiny,0,0);return c}
-function pplan(){const [,Wp,Hp]=FMT[fmt],m=.06*Wp,det=.021*Wp,name=.074*Wp,kin=(Wp-2*m)/8*.64;
-  const top=m+det*2.4,bottom=name*1.3+det*2.2+kin*1.5,area=Hp-top-bottom-m,hs=Math.min(Wp*.58,area*.9);
-  return {Wp,Hp,m,det,name,kin,hs,hx:Wp/2,hy:top+area/2,kinY:Hp-m-det*2.2-name*1.15-kin*.62}}
+/* four ways to set the mark on a sheet. Each uses the same four layers you scroll through: the words, the
+   style's own effect, the mark's kin, and the field it grew in */
+const PSTYLES=[["echoes it","Echo","rings of it spin out from the middle"],["reflects it","Reflect","it rises like a sun over its own rippling water"],
+  ["repeats it","Repeat","a turning wallpaper of it, with a window for the real one"],["presses it","Plate","pressed and labelled like a page from an old flora"]];
+let pstyle=0;
+function setStyle(i){const w=$("styleword"),was=w.textContent;pstyle=i;w.textContent=PSTYLES[i][0];[...$("stylepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
+  if(was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});
+  off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";if(cur&&unf>0){if(unfT<4)foldTo(Math.max(unfT,2));prender()}}
+PSTYLES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.setAttribute("aria-checked",i===0);b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
+  b.onclick=()=>{setStyle(i);popStyle(false)};$("stylepop").append(b)});
+function popStyle(on){const p=$("stylepop");p.hidden=!on;$("styleword").setAttribute("aria-expanded",on);if(on)p.children[pstyle].focus()}
+$("styleword").onclick=(e)=>{e.stopPropagation();popStyle($("stylepop").hidden)};
+addEventListener("pointerdown",(e)=>{if(!$("stylepop").hidden&&!e.target.closest("#stylepop,#styleword"))popStyle(false)});
+$("stylepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropagation();popStyle(false);$("styleword").focus()}});
+function pplan(){const [,Wp,Hp]=FMT[fmt],m=.06*Wp,det=.021*Wp,name=.074*Wp,kin=(Wp-2*m)/8*.64,top=m+det*2.4,st=pstyle;
+  const P={Wp,Hp,m,det,name,kin,st};
+  if(st===1){const bot=name*1.3+det*2.2,area=Hp-top-bot-m;P.H0=top+area*.52;P.hs=Math.min(Wp*.5,area*.44);P.hx=Wp/2;P.hy=P.H0-P.hs*.6;P.kin=kin*.62;P.water=Hp-m-bot-P.H0+det}
+  else if(st===3){const bot=name*1.4+det*3.2,area=Hp-top-bot-m-det*2;P.kin=Math.min((Wp-2*m)/4*.4,area*.12);const ha=area-P.kin*3.9;
+    P.hs=Math.min(Wp*.6,ha*.8);P.hx=Wp/2;const blk=P.hs*1.14+P.kin*3.4,y0=top+det*2+(area-blk)/2;P.hy=y0+P.hs/2;P.kinY=y0+P.hs*1.14+P.kin*.9}
+  else{const bot=name*1.3+det*2.2+kin*1.5,area=Hp-top-bot-m;P.hs=Math.min(Wp*(st===2?.5:.58),area*(st===2?.82:.9));P.hx=Wp/2;P.hy=top+area/2;P.kinY=Hp-m-det*2.2-name*1.15-kin*.62}
+  return P}
+function kinItems(P){const L=ghosts.map(G=>blend(G,1)),W=P.Wp-2*P.m;
+  if(P.st===1)return L.map((m,i)=>({m,x:P.m+W/8*(i+.5),y:P.H0-P.kin*.42,s:P.kin})).filter(it=>Math.abs(it.x-P.hx)>P.hs*.46);
+  if(P.st===3)return L.map((m,i)=>({m,x:P.m+W/4*(i%4+.5),y:P.kinY+(i>>2)*P.kin*1.75,s:P.kin}));
+  return L.map((m,i)=>({m,x:P.m+W/8*(i+.5),y:P.kinY,s:P.kin}))}
 function pbuild(){
-  const key=codeOf(cur)+"/"+lens+"/"+fmt+"/"+gen;if(key===pk&&pc)return;pk=key;
+  const key=codeOf(cur)+"/"+lens+"/"+fmt+"/"+gen+"/"+pstyle;if(key===pk&&pc)return;pk=key;
   const P=pplan(),c=colours(cur.pal,cur),bsz=Math.round(big.getBoundingClientRect().width*Math.min(devicePixelRatio||1,2));
-  pc={hero:snap(cur,Math.min(1400,Math.max(Math.round(P.hs),bsz)),lens,c),line:snap(cur,1100,1,c),field:null,pad:Math.round(P.Wp*.12)};
-  pc.kin=sheet(ghosts.map((G,i)=>({m:blend(G,1),x:P.m+(P.Wp-2*P.m)/8*(i+.5),y:P.kinY,s:P.kin})),P.Wp,P.Hp,lens,c);
+  pc={hero:snap(cur,Math.min(1400,Math.max(Math.round(P.hs),bsz)),lens,c),line:snap(cur,1100,1,c),field:null,pad:Math.round(P.Wp*.12),items:kinItems(P)};
+  if(pstyle===2)pc.acc=snap(cur,360,lens,{i:K(accOf(cur)),a:K(inkOf(cur)),d:[]}),pc.ink=snap(cur,360,lens,{i:K(inkOf(cur)),a:K(accOf(cur)),d:[]});
+  pc.kin=sheet(pc.items,P.Wp,P.Hp,lens,c);
   const mine=pc;setTimeout(()=>{if(pc===mine&&cur){mine.field=pfield(P,mine.pad);prender()}},30);
 }
 function pfield(P,pad){ // its neighbours, as they grow round the spot it was found, with a gap where it stood
@@ -1234,21 +1280,57 @@ function pfield(P,pad){ // its neighbours, as they grow round the spot it was fo
   return sheet(items,P.Wp+pad*2,P.Hp+pad*2,lens,colours(cur.pal));
 }
 function fitText(g,t,font,size,max){g.font=font(size);const w=g.measureText(t).width;if(w>max){size*=max/w;g.font=font(size)}return size}
+const roman=(n)=>[[50,"L"],[40,"XL"],[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]].reduce((s,[v,r])=>{while(n>=v){s+=r;n-=v}return s},"");
+const mix2=(a,b,t)=>{const x=hex(a),y=hex(b);return "#"+x.map((v,i)=>Math.round(lerp(v,y[i],t)*255).toString(16).padStart(2,"0")).join("")};
 function pdraw(g,P,a){
-  const C=PAL[cur.pal];g.save();g.beginPath();g.rect(0,0,P.Wp,P.Hp);g.clip();
-  g.globalAlpha=1;g.fillStyle=groundOf(cur);g.fillRect(0,0,P.Wp,P.Hp);
-  if(pc.field&&a.f>0){g.globalAlpha=a.f*.17;g.drawImage(pc.field,-pc.pad-off[0]*.12,-pc.pad-off[1]*.12)}
-  const tw=Math.sign(cur.g[6]-.5)||1;
-  for(let k=EN-1;k>=0&&a.e>0;k--){const sc=1+.42*(k+1)**1.25,r=(k+1)*.11*tw,x=P.hx+echo[k][0],y=P.hy+echo[k][1],h=P.hs*sc;
-    g.globalAlpha=a.e*(.3-.05*k);g.save();g.translate(x,y);g.rotate(r);g.drawImage(pc.line,-h/2,-h/2,h,h);g.restore()}
-  g.globalAlpha=1;g.drawImage(pc.hero,P.hx+off[0]-P.hs/2,P.hy+off[1]-P.hs/2,P.hs,P.hs);
-  if(a.k>0){g.globalAlpha=a.k;g.drawImage(pc.kin,0,0)}
-  if(a.t>0){g.globalAlpha=a.t;g.fillStyle=inkOf(cur);g.textBaseline="alphabetic";
+  const ink=inkOf(cur),gr=groundOf(cur),st=P.st,tw=Math.sign(cur.g[6]-.5)||1,hx=P.hx+off[0],hy=P.hy+off[1],hs=P.hs;
+  g.save();g.beginPath();g.rect(0,0,P.Wp,P.Hp);g.clip();
+  g.globalAlpha=1;g.fillStyle=gr;g.fillRect(0,0,P.Wp,P.Hp);
+  const field=(al)=>{if(pc.field&&a.f>0){g.globalAlpha=a.f*al;g.drawImage(pc.field,-pc.pad-off[0]*.12,-pc.pad-off[1]*.12)}};
+  if(st===0){field(.17);
+    for(let k=EN-1;k>=0&&a.e>0;k--){const sc=1+.42*(k+1)**1.25,r=(k+1)*.11*tw,x=P.hx+echo[k][0],y=P.hy+echo[k][1],h=hs*sc;
+      g.globalAlpha=a.e*(.3-.05*k);g.save();g.translate(x,y);g.rotate(r);g.drawImage(pc.line,-h/2,-h/2,h,h);g.restore()}}
+  else if(st===1){ // dusk: the field is the sky, the lower half is still water holding the mark upside down
+    const H0=P.H0;g.save();g.beginPath();g.rect(0,0,P.Wp,H0);g.clip();field(.14);g.restore();
+    g.globalAlpha=1;g.fillStyle=mix2(gr,ink,.07);g.fillRect(0,H0,P.Wp,P.Hp-H0);
+    if(a.e>0){ // the reflection, in thin bands that slide sideways more the deeper they lie, laid down whole and then faded
+      const deep=Math.ceil(P.Hp-H0),key=[hx,hy,hs,P.Wp,P.Hp].map(v=>Math.round(v)).join();
+      if(!pc.refl||pc.refl.key!==key){const c=document.createElement("canvas");c.width=Math.ceil(P.Wp);c.height=Math.max(1,deep);const q=c.getContext("2d"),img=pc.hero,top=hy-hs/2,step=Math.max(1,Math.round(P.Wp/540));
+        for(let y=0;y<deep;y+=step){const sy=H0-y-top;if(sy<0)break;if(sy>hs)continue;const k=y/deep,wv=Math.sin(y*.05/(P.Wp/1080)+k*7)*P.Wp*.006*(.15+k*1.8);
+          q.drawImage(img,0,(sy/hs)*img.height,img.width,Math.max(1,step/hs*img.height),hx-hs/2+wv,y,hs,step)}
+        const fade=q.createLinearGradient(0,0,0,deep);fade.addColorStop(0,"rgba(0,0,0,1)");fade.addColorStop(.75,"rgba(0,0,0,.12)");fade.addColorStop(1,"rgba(0,0,0,0)");
+        q.globalCompositeOperation="destination-in";q.fillStyle=fade;q.fillRect(0,0,c.width,deep);pc.refl={key,c}}
+      g.globalAlpha=a.e*.5;g.drawImage(pc.refl.c,0,H0);
+      g.fillStyle=ink;for(let k=1;k<9;k++){const y=H0+deep*(k/9)**1.7,h=P.Wp*.0012*(1+k*.5);g.globalAlpha=a.e*(.05+k*.012);g.fillRect(0,y,P.Wp,h)}}
+    g.globalAlpha=Math.max(a.e,a.t)*.5;g.fillStyle=ink;g.fillRect(0,H0-P.Wp*.001,P.Wp,P.Wp*.002)}
+  else if(st===2){field(.05);
+    if(a.e>0){const T=P.Wp/4.4;let n=0;for(let j=-1;j*T*.86<P.Hp+T;j++)for(let i=-1;i*T<P.Wp+T;i++,n++){const x=(i+(j&1)*.5)*T,y=j*T*.86,s=T*.6,r=((i*7+j*3)%5-2)*.3*tw+j*.4*tw;
+      g.globalAlpha=a.e*.26;g.save();g.translate(x,y);g.rotate(r);g.drawImage((i+j)&1?pc.acc:pc.ink,-s/2,-s/2,s,s);g.restore()}
+      g.globalAlpha=a.e;g.fillStyle=gr;g.beginPath();g.arc(hx,hy,hs*.62,0,Math.PI*2);g.fill();
+      g.globalAlpha=a.e*.4;g.strokeStyle=ink;g.lineWidth=P.Wp*.0018;g.beginPath();g.arc(hx,hy,hs*.62,0,Math.PI*2);g.stroke()}}
+  else{field(.06);
+    if(a.e>0){ // a draughtsman's guides: the mark's circle, its axes with ticks, and its measure
+      g.globalAlpha=a.e*.45;g.strokeStyle=ink;g.lineWidth=P.Wp*.0011;const R=hs*.53,L=hs*.66;
+      g.beginPath();g.arc(hx,hy,R,0,Math.PI*2);g.moveTo(hx-L,hy);g.lineTo(hx+L,hy);g.moveTo(hx,hy-L);g.lineTo(hx,hy+L);g.stroke();
+      g.beginPath();for(let k=-12;k<=12;k++){const t=k/12*L,q=k%4?P.Wp*.004:P.Wp*.009;g.moveTo(hx+t,hy-q);g.lineTo(hx+t,hy+q);g.moveTo(hx-q,hy+t);g.lineTo(hx+q,hy+t)}g.stroke();
+      g.globalAlpha=a.e*.7;g.fillStyle=ink;g.font=`400 ${P.det*.8}px "IBM Plex Mono",ui-monospace,monospace`;g.textAlign="left";g.fillText("nat. size",hx+R*.74+P.det*.4,hy-R*.74)}}
+  g.globalAlpha=1;g.drawImage(pc.hero,hx-hs/2,hy-hs/2,hs,hs);
+  if(a.k>0){g.globalAlpha=a.k;g.drawImage(pc.kin,0,0);
+    if(st===3){g.fillStyle=ink;g.font=`400 ${P.det*.75}px "IBM Plex Mono",ui-monospace,monospace`;g.textAlign="center";
+      pc.items.forEach((it,i)=>{g.globalAlpha=a.k*.75;g.fillText("fig. "+(i+2),it.x,it.y+it.s*.62+P.det*.4)})}}
+  if(a.t>0){g.globalAlpha=a.t;g.fillStyle=ink;g.textBaseline="alphabetic";
     const mono=(z)=>`400 ${z}px "IBM Plex Mono",ui-monospace,monospace`,serif=(z)=>`italic 400 ${z}px "Instrument Serif",Georgia,serif`;
     const home=biome(cur.x,cur.y),place="The "+PAL[home.id].place+" "+SUFFIX[h3(home.bx,home.by,7)%8];
-    g.font=mono(P.det);g.textAlign="left";g.fillText(place,P.m,P.m+P.det);g.textAlign="right";g.fillText("Meadow",P.Wp-P.m,P.m+P.det);
-    g.textAlign="left";fitText(g,latin(cur),serif,P.name,P.Wp-2*P.m);g.fillText(latin(cur),P.m-P.name*.03,P.Hp-P.m-P.det*2.2);
-    g.font=mono(P.det);g.fillText(`found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}`,P.m,P.Hp-P.m);
+    if(st===3){ // a plate: a hairline border, its number, everything centred
+      g.strokeStyle=ink;g.lineWidth=P.Wp*.0014;g.globalAlpha=a.t*.6;g.strokeRect(P.m*.5,P.m*.5,P.Wp-P.m,P.Hp-P.m);g.globalAlpha=a.t;
+      const no=1+h3(Math.round(cur.x*1e4),Math.round(cur.y*1e4),11)%48;g.textAlign="center";g.font=mono(P.det);
+      g.fillText("PLATE "+roman(no)+"  ·  "+place.toUpperCase(),P.Wp/2,P.m+P.det*1.2);
+      g.font=mono(P.det*.75);g.globalAlpha=a.t*.75;g.fillText("fig. 1",hx,hy+hs*.56+P.det);g.globalAlpha=a.t;
+      fitText(g,latin(cur),serif,P.name,P.Wp-3*P.m);g.fillText(latin(cur),P.Wp/2,P.Hp-P.m-P.det*2.6);
+      g.font=mono(P.det);g.fillText(`found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}  ·  Meadow`,P.Wp/2,P.Hp-P.m-P.det*.4)}
+    else{g.font=mono(P.det);g.textAlign="left";g.fillText(place,P.m,P.m+P.det);g.textAlign="right";g.fillText("Meadow",P.Wp-P.m,P.m+P.det);
+      g.textAlign="left";fitText(g,latin(cur),serif,P.name,P.Wp-2*P.m);g.fillText(latin(cur),P.m-P.name*.03,P.Hp-P.m-P.det*2.2);
+      g.font=mono(P.det);g.fillText(`found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}`,P.m,P.Hp-P.m)}
   }
   g.restore();
 }
@@ -1256,6 +1338,7 @@ const layers=()=>({t:sstep(.5,1,unf),e:clamp(unf-1),k:clamp(unf-2),f:clamp(unf-3
 function prender(){
   const on=!!cur&&unf>.001;pv.hidden=!on;big.style.visibility=on?"hidden":"";halo.style.visibility=on?"hidden":"";stage.classList.toggle("unfolded",on);
   $("markhint").hidden=$("leanhint").hidden=unf>=.5;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Poster PNG":"PNG";
+  $("unfold").hidden=unf>=.5;{const n=Math.floor(unfT+1e-3);$("layer").textContent=n>=4?"Peel back to the words":n===3?"Add the "+["field","sky","field","field"][pstyle]:n===2?"Add its kin":"Add the "+["echoes","reflection","wallpaper","guides"][pstyle]}
   if(!on)return;pbuild();
   const sr=stage.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2),cw=Math.round(sr.width*dp),ch=Math.round(sr.height*dp);
   if(pv.width!==cw||pv.height!==ch){pv.width=cw;pv.height=ch}
@@ -1285,7 +1368,7 @@ stage.addEventListener("wheel",(e)=>{if(!cur||drop)return;e.preventDefault();con
   if(unfT>=1){foldTo(Math.max(1,unfT+d*.0032));return}
   const now=performance.now();if(now-wheelAt>400)wheelAcc=0;wheelAt=now;wheelAcc+=d;
   if(Math.abs(wheelAcc)>=60){petals(wheelAcc>0?-1:1);wheelAcc=0}},{passive:false});
-$("unfold").onclick=()=>foldTo(1);$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
+$("unfold").onclick=()=>foldTo(2);$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
 (function buildFmts(){$("fmts").innerHTML=FMT.map((f,i)=>`<button data-f="${i}" aria-pressed="${!i}">${f[0]}</button>`).join("");
   $("fmts").onclick=(e)=>{const b=e.target.closest("button");if(!b)return;fmt=+b.dataset.f;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";
     [...$("fmts").children].forEach(x=>x.setAttribute("aria-pressed",x===b));prender()}})();
