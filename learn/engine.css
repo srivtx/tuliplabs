@@ -280,7 +280,7 @@ th{background:var(--soft)}
 .vz-ctl label{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .vz-ctl input[type=range]{accent-color:var(--c2);width:100%}
 .vz-ctl input[type=text]{font:13px var(--f-mono);border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--card);color:var(--ink);width:100%}
-.vz-seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.vz-seg{display:inline-flex;flex-wrap:wrap;max-width:100%;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .vz-seg button{border:0;background:var(--card);padding:5px 10px;font-size:12.5px;cursor:pointer}
 .vz-seg button+button{border-left:1px solid var(--line)}
 .vz-seg button.on{background:var(--c2);color:#fff}
@@ -290,7 +290,10 @@ th{background:var(--soft)}
 .vz-status{font:12.5px/1.5 var(--f-mono);background:var(--soft);border-radius:7px;padding:8px 10px;white-space:pre-wrap;word-break:break-word}
 .vz-status:empty{display:none}
 .vz-2d{width:100%;display:block;border:1px solid var(--line);border-radius:8px;background:var(--card)}
-@media (max-width: 860px){.vz{grid-template-columns:1fr}}
+.vz.wide{grid-template-columns:minmax(0,1fr)}
+.vz.wide .vz-side{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 14px;align-items:start}
+.vz.wide .vz-ctl{grid-row:span 2}
+@media (max-width: 860px){.vz{grid-template-columns:1fr}.vz.wide .vz-side{grid-template-columns:minmax(0,1fr)}}
 
 /* real-world projects */
 .projblk{border-width:2px;border-color:color-mix(in srgb,var(--c4) 55%,var(--line))}

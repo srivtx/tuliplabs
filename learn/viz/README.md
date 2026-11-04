@@ -44,6 +44,7 @@ Convention: **c2 = data/values, c1 = operations/active, c3 = done/correct, c4 = 
 |---|---|
 | `await api.world3d()` | A 3D voxel world in the view (drag to orbit, wheel/pinch to zoom, click picks). Returns `W`. |
 | `api.canvas2d(draw)` | A 2-D canvas filling the view instead. `draw(g, w, h)` runs on resize and on `cv.redraw()`. Returns `cv = {canvas, g, w, h, redraw}`. Use for charts, histograms, pixel grids. |
+| `api.wide()` | Puts the controls under the view, so a world you paint on or watch gets the whole width. |
 | `api.button(label, fn, {primary, row})` | A button; buttons share a row until another control is added. |
 | `api.row()` | Start a new row of buttons; pass it as `{row}` to place buttons in it. |
 | `api.slider(label, {min, max, step, value, format}, fn)` | Returns `{el, get, set}`. |

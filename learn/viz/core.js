@@ -308,7 +308,8 @@
     const explainEl = h("div", { class: "vz-explain", hidden: true });
     const statusEl = h("div", { class: "vz-status" });
     const side = h("div", { class: "vz-side" }, ctl, statusEl, explainEl);
-    stage.append(h("div", { class: "vz" }, view, side));
+    const shell = h("div", { class: "vz" }, view, side);
+    stage.append(shell);
     let row = null;
     const loops = [];
     let visible = true;
@@ -327,6 +328,7 @@
       color: cssColor,
       done(msg) { opts.done && opts.done(msg); },
       row() { row = h("div", { class: "row" }); ctl.append(row); return row; },
+      wide() { shell.classList.add("wide"); },
       button(label, fn, o = {}) {
         const b = h("button", { class: "btn small" + (o.primary ? " primary" : "") }, label);
         b.onclick = () => fn(b);
