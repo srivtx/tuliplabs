@@ -90,10 +90,23 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .w-tab{background:#dfe1e5;align-items:end;justify-items:start;padding:0}
 .w-tab div{background:#fff;color:#222;font:11px system-ui,sans-serif;display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:7px 7px 0 0;margin-left:6px;width:calc(100% - 12px);white-space:nowrap;overflow:hidden}
 .swatches{display:flex;gap:8px;flex-wrap:wrap}
-.swatches button{width:26px;height:26px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);position:relative;overflow:hidden}
-.swatches button::after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--dot)}
-.swatches button[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:2px}
-.swatches button{touch-action:none;cursor:grab}
+.swatches .sw{width:26px;height:26px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);position:relative;overflow:hidden;display:block}
+.swatches .sw::after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--dot)}
+.swatches .sw[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:2px}
+.sw,.pip,.mine button{touch-action:none;cursor:grab}
+/* each set holds three colours; they bloom out of it when you reach for it */
+.well{position:relative;display:block}
+.pip{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);
+  opacity:0;scale:.2;pointer-events:none;z-index:2;transition:translate .34s cubic-bezier(.2,.9,.3,1.45),scale .34s cubic-bezier(.2,.9,.3,1.45),opacity .18s}
+.well:hover .pip,.well:focus-within .pip,.swatches.carrying .pip{opacity:1;scale:1;pointer-events:auto;translate:var(--tx) var(--ty)}
+.pip:hover{scale:1.25}
+.swatches.carrying .pip.over,.mine button.over,.sw.over{scale:1.35}
+.mine{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.mine:empty{display:none}
+.mine button{width:18px;height:18px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);transition:scale .25s cubic-bezier(.2,.9,.3,1.45)}
+.hexes{margin:8px 0 0;line-height:1.9;font-variant-numeric:tabular-nums}
+.hexes .hx{white-space:nowrap;margin-right:12px;opacity:.85}
+.hexes i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 50%,transparent)}
+.hexes [contenteditable]{border-bottom:1px dotted currentColor;outline:none;cursor:text}.hexes [contenteditable]:focus{border-bottom-style:solid}
 .dyehint{margin:9px 0 0;opacity:.7;line-height:1.5}
 .sheet h2 #wash{float:right;font-weight:400;letter-spacing:0;text-decoration:underline;text-underline-offset:3px;opacity:.8}.sheet h2 #wash:hover{opacity:1}
 /* a drop of colour carried from the swatches; it sinks into the mark when it reaches it */
@@ -147,7 +160,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div><p class="latin" id="latin"></p><p class="found" id="found"></p></div>
     <div><h2>At real size</h2><div id="sizes"></div></div>
     <div><h2>Out in the world</h2><div class="worlds" id="worlds"></div></div>
-    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><p class="dyehint">Click one for a new set. Drag one onto the mark and hold: the colour soaks in. Drop it on the space around the mark to change the ground.</p></div>
+    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="mine" id="mine" aria-label="Colours you made"></div><p class="dyehint">Click a set to wear it, or a single colour to paint the whole mark. Drag a colour onto the mark and hold to soak it in, onto its accent bits to swap them, or onto the space around it for a new ground. Carry it over other colours first to mix them.</p><p class="hexes" id="hexes"></p></div>
     <div class="acts">
       <button class="primary" id="keep">Keep it</button>
       <button id="deeper">Grow from here</button>
@@ -599,7 +612,7 @@ async function plant(str){
 }
 addEventListener("keydown",(e)=>{
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -616,12 +629,15 @@ function say2(t){$("hint").textContent=t;$("tag").classList.remove("quiet")}
 let cur=null;
 const paint=(m,px,l,fix)=>{tiny.width=tiny.height=px;const gl=T.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
   put(one,0,px/2,px/2,px,0,1,m,l);T.marks(one,1,px,px,[0,0],1,fix,false)};
-const colours=(p,m)=>({i:new Float32Array(hex(PAL[p].i)),a:new Float32Array(hex(PAL[p].a)),d:m&&m.dye});
+const colours=(p,m)=>({i:new Float32Array(hex(m&&m.ink||PAL[p].i)),a:new Float32Array(hex(m&&m.acc||PAL[p].a)),d:m&&m.dye});
+const inkOf=(m)=>m.ink||PAL[m.pal].i,accOf=(m)=>m.acc||PAL[m.pal].a;
 const K=(c)=>new Float32Array(hex(c));
 function copyTo(cv,size,l,fix,scale){const r=scale||(devicePixelRatio||1);const px=Math.round(size*r);if(cv.width!==px){cv.width=cv.height=px;cv.style.width=cv.style.height=size+"px"}
   paint(cur,px,l,fix);const g=cv.getContext("2d");g.clearRect(0,0,px,px);g.drawImage(tiny,0,0)}
 const groundOf=(m)=>m.gr||PAL[m.pal].g;
-function theme(p){const s=$("studio").style;s.setProperty("--ground",cur?groundOf(cur):PAL[p].g);s.setProperty("--ink",PAL[p].i);s.setProperty("--accent",PAL[p].a)}
+function theme(p){const s=$("studio").style,gr=cur?groundOf(cur):PAL[p].g,ink=cur?inkOf(cur):PAL[p].i;
+  // the page wears the mark's colours, unless its ink is too faint on its ground to read words by
+  s.setProperty("--ground",gr);s.setProperty("--ink",contrast(ink,gr)>=3?ink:lum(gr)>.3?"#151515":"#f4f1ea");s.setProperty("--accent",cur?accOf(cur):PAL[p].a)}
 function latin(m){const n=m.s>.5?m.n1:m.n0;let name=(m.genus||PAL[biome(m.x,m.y).id].genus)+" "+SPECIES[n];
   if(Math.abs(m.g[6]-.5)>.26)name+=" torta";else if(m.g[14]>.72)name+=" inversa";return name}
 function drawStudio(){
@@ -634,13 +650,20 @@ function drawStudio(){
   const app=$("wApp"),r=devicePixelRatio||1,px=Math.round(46*r);app.width=app.height=px;app.style.width=app.style.height="46px";const g=app.getContext("2d");
   g.fillStyle=groundOf(cur);g.fillRect(0,0,px,px);paint(cur,Math.round(px*.82),lens,c);g.drawImage(tiny,px*.09,px*.09);
   copyTo($("wTab"),16,lens,c);
-  [...$("swatches").children].forEach((b,i)=>b.setAttribute("aria-pressed",i===cur.pal));
+  [...$("swatches").children].forEach((w,i)=>w.firstChild.setAttribute("aria-pressed",i===cur.pal&&!cur.ink&&!cur.gr));
   if(unf>0)prender();
 }
 (function buildSheet(){
   $("sizes").innerHTML=[16,24,32,48,64].map(s=>`<figure><canvas id="sz${s}"></canvas><figcaption>${s}</figcaption></figure>`).join("");
   $("worlds").innerHTML=`<div class="world w-tab" title="In a browser tab"><div><canvas id="wTab"></canvas>Your site</div></div><div class="world w-app" title="On a phone"><canvas id="wApp"></canvas></div><div class="world w-paper" title="Printed in black"><canvas id="wPaper"></canvas></div><div class="world w-night" title="On black"><canvas id="wNight"></canvas></div>`;
-  PAL.forEach((p,i)=>{const b=document.createElement("button");b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");b.onclick=()=>{if(performance.now()-dropEnd<350||cur.pal===i)return;remember();cur.pal=i;cur.gr=null;told();drawStudio()};carry(b,i);$("swatches").append(b)});
+  PAL.forEach((p,i)=>{const w=document.createElement("span");w.className="well";
+    const b=document.createElement("button");b.className="sw";b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");
+    b.onclick=()=>{if(performance.now()-dropEnd<350||(cur.pal===i&&!cur.gr&&!cur.ink&&!cur.acc))return;remember();cur.pal=i;cur.gr=cur.ink=cur.acc=null;told();drawStudio()};
+    carry(b,{set:i});w.append(b);
+    [p.g,p.i,p.a].forEach((h,k)=>{const d=document.createElement("button");d.className="pip";d.dataset.h=h;d.style.background=h;
+      const a=(-150+k*60)*Math.PI/180;d.style.setProperty("--tx",Math.round(Math.cos(a)*23)+"px");d.style.setProperty("--ty",Math.round(Math.sin(a)*23)+"px");
+      d.setAttribute("aria-label",`${p.place} ${["ground","ink","accent"][k]}, ${h}`);d.onclick=()=>{if(performance.now()-dropEnd>350)paintAll(h)};carry(d,{hex:h});w.append(d)});
+    $("swatches").append(w)});
 })();
 function openStudio(m){
   if(!m.ok)tend([m]);
@@ -753,9 +776,9 @@ function commit(i){
   leanK=tgtK=-1;leanW=tgtW=0;pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
   told();drawBig();makeGhosts();drawGhosts();queue(); // the mark first, the sheet on the next frame
 }
-function remember(){hist.push({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,dye:cur.dye.map(d=>({...d,w:0}))});if(hist.length>60)hist.shift()}
-function stepBack(){if(!hist.length||drop)return;const h=hist.pop();cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.dye=h.dye;wet=null;settle();told();makeGhosts();drawGhosts();queue()}
-function told(){const n=hist.length;$("latin").textContent=latin(cur);$("keep").textContent="Keep it";$("undoWrap").hidden=!n;$("wash").hidden=!cur.dye.length;
+function remember(){hist.push({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0}))});if(hist.length>60)hist.shift()}
+function stepBack(){if(!hist.length||drop)return;const h=hist.pop();cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();told();makeGhosts();drawGhosts();queue()}
+function told(){const n=hist.length;if(!$("hexes").contains(document.activeElement))hexes();$("latin").textContent=latin(cur);$("keep").textContent="Keep it";$("undoWrap").hidden=!n;$("wash").hidden=!cur.dye.length;
   $("found").textContent=foundAt+(cur.note||"");
   // the link carries every change, so a shared mark arrives exactly as it was left
   const url=cur.at+(n||cur.dye.length||cur.edited?"&"+codeOf(cur):"");
@@ -773,35 +796,82 @@ const contrast=(a,b)=>{const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.
 const apart=(a,b)=>{const x=hex(a),y=hex(b);return Math.hypot(x[0]-y[0],x[1]-y[1],x[2]-y[2])};
 function dyeFor(j){ // of a set's three colours, the one that shows best on this ground and isn't the ink already
   const P=PAL[cur.pal];let best=PAL[j].a,bs=-1;
-  for(const h of [PAL[j].a,PAL[j].i,PAL[j].g]){const s=contrast(h,P.g)*Math.min(1,apart(h,P.i)/.45);if(s>bs){bs=s;best=h}}
+  const G=groundOf(cur),I=inkOf(cur);for(const h of [PAL[j].a,PAL[j].i,PAL[j].g]){const s=contrast(h,G)*Math.min(1,apart(h,I)/.45);if(s>bs){bs=s;best=h}}
   return best}
 function groundFor(j){ // of a set's colours, the one the mark's ink reads best on, and not the ground already
-  const ink=PAL[cur.pal].i,now=groundOf(cur);let best=PAL[j].g,bs=-1;
+  const ink=inkOf(cur),now=groundOf(cur);let best=PAL[j].g,bs=-1;
   for(const h of [PAL[j].g,PAL[j].a,PAL[j].i]){const s=contrast(h,ink)*Math.min(1,apart(h,now)/.3);if(s>bs){bs=s;best=h}}
   return best}
 function dyeAt(x,y,h){let c=hex(h);
   for(const d of cur.dye.slice(-2)){const w=1-sstep(d.r*.35,d.r,Math.hypot(x-d.x,y-d.y)),e=hex(d.h);c=c.map((v,i)=>v+(e[i]-v)*w)}
   return "#"+c.map(v=>Math.round(v*255).toString(16).padStart(2,"0")).join("")}
 let drop=null,wet=null,dropEnd=0,dyeOn=false,dyeMs=0,washing=false;
-function carry(b,j){
-  b.addEventListener("pointerdown",(e)=>{if(e.button||!cur||drop)return;if(wet){wet.w=0;wet=null}try{b.setPointerCapture(e.pointerId)}catch(_){}drop={j,b,x:e.clientX,y:e.clientY,on:false,in:false,age:0,el:null}});
+function carry(b,src){
+  b.addEventListener("pointerdown",(e)=>{if(e.button||!cur||drop)return;if(wet){wet.w=0;wet=null}try{b.setPointerCapture(e.pointerId)}catch(_){}drop={src,b,x:e.clientX,y:e.clientY,on:false,in:false,age:0,el:null}});
   b.addEventListener("pointermove",(e)=>{if(!drop||drop.b!==b)return;
-    if(!drop.on){if(Math.hypot(e.clientX-drop.x,e.clientY-drop.y)<6)return;drop.on=true;
-      const el=document.createElement("div");el.className="drop";el.style.background=dyeFor(j);document.body.append(el);drop.el=el;drop.h=dyeFor(j)}
+    if(!drop.on){if(Math.hypot(e.clientX-drop.x,e.clientY-drop.y)<6)return;drop.on=true;drop.exact=!!src.hex;drop.h=src.hex||dyeFor(src.set);
+      const el=document.createElement("div");el.className="drop";el.style.background=drop.h;document.body.append(el);drop.el=el;$("swatches").classList.add("carrying");mixing()}
     drop.x=e.clientX;drop.y=e.clientY;drop.el.style.translate=drop.x+"px "+drop.y+"px";
+    // over another colour, the drop drinks some of it in
+    const t=document.elementFromPoint(drop.x,drop.y),o=t&&t.closest(".pip,.mine button,.sw");if(drop.over&&drop.over!==o)drop.over.classList.remove("over");
+    drop.over=o&&o!==b?o:null;if(drop.over)drop.over.classList.add("over");
     const r=big.getBoundingClientRect(),px=(drop.x-r.left)/r.width*2-1,py=(drop.y-r.top)/r.height*2-1;
     drop.in=unf<.01&&Math.hypot(px,py)<.98;drop.el.classList.toggle("in",drop.in);
+    accentAt(px,py);
     const sr=stage.getBoundingClientRect(),bg=unf<.01&&!drop.in&&!wet&&Math.hypot(px,py)>1.05&&drop.x>sr.left&&drop.x<sr.right&&drop.y>sr.top&&drop.y<sr.bottom;
-    if(bg!==!!drop.bg){drop.bg=bg;drop.gh=drop.gh||groundFor(j);$("studio").style.setProperty("--ground",bg?drop.gh:groundOf(cur))}
+    if(bg!==!!drop.bg){drop.bg=bg;$("studio").style.setProperty("--ground",bg?groundPick():groundOf(cur))}
     drop.px=px;drop.py=py;
-    if(drop.in){if(!drop.inAt)drop.inAt=performance.now();if(wet){wet.x=px;wet.y=py} // still wet, so it smears
+    if(drop.in&&!drop.acc){if(!drop.inAt)drop.inAt=performance.now();if(wet){wet.x=px;wet.y=py} // still wet, so it smears
       soak()}else drop.inAt=0});
-  const up=()=>{if(!drop||drop.b!==b)return;const d=drop;drop=null;if(!d.on)return;dropEnd=performance.now();
-    if(d.bg){remember();cur.gr=d.gh;told();queue()}
-    else if(d.in&&!wet){remember();settle();wet={x:d.px,y:d.py,r:.55,h:d.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift()} // a quick drop leaves a spot
+  const up=()=>{if(!drop||drop.b!==b)return;const d=drop;drop=null;$("swatches").classList.remove("carrying");if(d.over)d.over.classList.remove("over");if(!d.on)return;dropEnd=performance.now();
+    if(d.acc){const now=cur.acc;cur.acc=d.acc0;remember();cur.acc=now;keepColour(d);told();queue()}
+    else if(d.bg){remember();cur.gr=groundPick(d);keepColour(d);told();queue()}
+    else if(d.in&&!wet){remember();settle();wet={x:d.px,y:d.py,r:.55,h:d.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();keepColour(d)} // a quick drop leaves a spot
+    else if(d.in)keepColour(d);
     if(d.el){d.el.classList.add(d.in?"in":"gone");setTimeout(()=>d.el.remove(),320)}soak()};
   b.addEventListener("pointerup",up);b.addEventListener("pointercancel",up);
 }
+// a set offers whichever of its colours suits the job; a single colour or a mixed one is taken as it is
+function groundPick(d){d=d||drop;return d.exact||d.mixed?d.h:groundFor(d.src.set)}
+function accentAt(px,py){ // over the mark's accent bits, a drop recolours them instead of dyeing the ink
+  if(!drop.in||wet){if(drop.acc){cur.acc=drop.acc0;drop.acc=false;drawBig()}return}
+  const g=big.getContext("2d"),x=Math.round((px*.5+.5)*big.width),y=Math.round((py*.5+.5)*big.height);let on=false;
+  try{const p=g.getImageData(x,y,1,1).data,a=hex(drop.acc?drop.h:accOf(cur));on=p[3]>200&&Math.hypot(p[0]/255-a[0],p[1]/255-a[1],p[2]/255-a[2])<.1&&apart(accOf(cur),inkOf(cur))>.12}catch(e){}
+  if(on&&!drop.acc){drop.acc=true;drop.acc0=cur.acc;cur.acc=drop.h;drawBig()}
+  else if(!on&&drop.acc){drop.acc=false;cur.acc=drop.acc0;drawBig()}
+}
+function mixing(){let last=performance.now();
+  const step=(ms)=>{if(!drop||!drop.on)return;const dt=Math.min(.05,(ms-last)/1000);last=ms;
+    if(drop.over){const h=drop.over.dataset.h||dyeFor(+[...$("swatches").children].indexOf(drop.over.parentElement));
+      const k=1-Math.exp(-dt*1.7);drop.lab=drop.lab||oklab(drop.h);const t=oklab(h);drop.lab=drop.lab.map((v,i)=>v+(t[i]-v)*k);
+      drop.h=fromLab(drop.lab);drop.mixed=true;drop.el.style.background=drop.h;if(wet)wet.h=drop.h;if(drop.acc){cur.acc=drop.h;drawBig()}}
+    requestAnimationFrame(step)};
+  requestAnimationFrame(step)}
+// colours mixed or typed are kept, so they're there next time
+let mine=[];try{mine=JSON.parse(localStorage.getItem("meadow-colours")||"[]")}catch(e){}
+const known=new Set(PAL.flatMap(p=>[p.g,p.i,p.a]));
+function keepColour(d){if(d.mixed)addMine(d.h)}
+function addMine(h){h=h.toLowerCase();if(known.has(h)||mine.includes(h))return;mine.unshift(h);mine=mine.slice(0,14);try{localStorage.setItem("meadow-colours",JSON.stringify(mine))}catch(e){}drawMine()}
+function drawMine(){const el=$("mine");el.innerHTML="";mine.forEach(h=>{const b=document.createElement("button");b.dataset.h=h;b.style.background=h;b.setAttribute("aria-label","Your colour "+h);
+  b.onclick=()=>{if(performance.now()-dropEnd>350)paintAll(h)};carry(b,{hex:h});el.append(b)})}
+function paintAll(h){if(!cur||inkOf(cur)===h)return;remember();cur.ink=h;told();drawStudio()}
+const toLin=(v)=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4,toS=(v)=>v<=.0031308?v*12.92:1.055*v**(1/2.4)-.055;
+function oklab(h){const [r,g,b]=hex(h).map(toLin),l=Math.cbrt(.4122214708*r+.5363325363*g+.0514459929*b),m=Math.cbrt(.2119034982*r+.6806995451*g+.1073969566*b),s=Math.cbrt(.0883024619*r+.2817188376*g+.6299787005*b);
+  return [.2104542553*l+.793617785*m-.0040720468*s,1.9779984951*l-2.428592205*m+.4505937099*s,.0259040371*l+.7827717662*m-.808675766*s]}
+function fromLab([L,a,b]){const l=(L+.3963377774*a+.2158037573*b)**3,m=(L-.1055613458*a-.0638541728*b)**3,s=(L-.0894841775*a-1.291485548*b)**3;
+  return "#"+[4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.707614701*s]
+    .map(v=>Math.round(clamp(toS(clamp(v)))*255).toString(16).padStart(2,"0")).join("")}
+// the mark's colours, written out; click one and type to set it exactly
+function hexes(){if(!cur)return;const el=$("hexes"),rows=[["ground",groundOf(cur)],["ink",inkOf(cur)],["accent",accOf(cur)],...cur.dye.slice(-2).map((d,k)=>["dye"+(cur.dye.length>1?" "+(k+1):""),d.h,k])];
+  el.innerHTML=rows.map(([n,h],i)=>`<span class="hx"><i style="background:${h}"></i>${n} <span contenteditable="true" spellcheck="false" data-i="${i}" aria-label="${n} colour">${h}</span></span>`).join("");
+  el.querySelectorAll("[contenteditable]").forEach(x=>{const [n,h,k]=rows[+x.dataset.i];
+    let done=false;
+    const set=()=>{if(done)return;done=true;let v=x.textContent.trim().replace(/^#/,"").toLowerCase();if(/^[0-9a-f]{3}$/.test(v))v=[...v].map(c=>c+c).join("");
+      if(!/^[0-9a-f]{6}$/.test(v)||"#"+v===h){hexes();return}v="#"+v;remember();
+      if(n==="ground")cur.gr=v;else if(n==="ink")cur.ink=v;else if(n==="accent")cur.acc=v;else cur.dye[cur.dye.length>1?k:0].h=v;
+      addMine(v);told();hexes();drawStudio()};
+    x.onkeydown=(e)=>{if(e.key==="Enter"){e.preventDefault();set();x.blur()}else if(e.key==="Escape"){done=true;x.textContent=h;x.blur();hexes()}};
+    x.onblur=set})}
 function soak(){if(!dyeOn){dyeOn=true;dyeMs=performance.now();requestAnimationFrame(dyeStep)}}
 function dyeStep(ms){
   if(!cur){dyeOn=false;drop=wet=null;return}
@@ -825,14 +895,15 @@ const U36=(s)=>parseInt(s,36)/(36**s.length-1);
 function codeOf(m){let s=m.pal.toString(36)+SYM.indexOf(m.n0).toString(36)+SYM.indexOf(m.n1).toString(36)+B36(m.s,2);
   for(let k=0;k<16;k++)s+=B36(m.g[k],2);
   for(const d of m.dye.slice(-2))s+=B36(d.x*.5+.5,2)+B36(d.y*.5+.5,2)+B36(d.r/2,2)+d.h.slice(1).toLowerCase();
-  if(m.gr)s+="g"+m.gr.slice(1).toLowerCase();
+  for(const [k,v] of [["g",m.gr],["i",m.ink],["a",m.acc]])if(v)s+=k+v.slice(1).toLowerCase();
   return s}
-function readCode(s){let gr=null;if((s.length-37)%12===7){gr="#"+s.slice(-6);s=s.slice(0,-7)}
-  if(!/^[0-9a-z]{37}([0-9a-z]{6}[0-9a-f]{6}){0,2}$/.test(s)||(gr&&!/^#[0-9a-f]{6}$/.test(gr)))return null;
+function readCode(s){const rest=s.length-37,ex={};let t=[0,1,2,3].find(t=>rest-7*t>=0&&(rest-7*t)%12===0&&(rest-7*t)/12<=2);if(t===undefined)return null;
+  for(;t>0;t--){const tok=s.slice(-7);if(!/^[gia][0-9a-f]{6}$/.test(tok))return null;ex[tok[0]]="#"+tok.slice(1);s=s.slice(0,-7)}
+  if(!/^[0-9a-z]{37}([0-9a-z]{6}[0-9a-f]{6}){0,2}$/.test(s))return null;
   const pal=parseInt(s[0],36),n0=SYM[parseInt(s[1],36)],n1=SYM[parseInt(s[2],36)];if(!(pal<8)||!n0||!n1)return null;
   const g=new Float32Array(16);for(let k=0;k<16;k++)g[k]=U36(s.substr(5+k*2,2));
   const dye=[];for(let o=37;o<s.length;o+=12)dye.push({x:U36(s.substr(o,2))*2-1,y:U36(s.substr(o+2,2))*2-1,r:U36(s.substr(o+4,2))*2,h:"#"+s.substr(o+6,6),w:0});
-  return {pal,n0,n1,s:U36(s.substr(3,2)),g,dye,gr}}
+  return {pal,n0,n1,s:U36(s.substr(3,2)),g,dye,gr:ex.g||null,ink:ex.i||null,acc:ex.a||null}}
 
 /* ---------- unfolding ----------
    Scroll out on the mark and it pulls back onto a sheet. Keep scrolling and layers arrive one at a time:
@@ -875,7 +946,7 @@ function pdraw(g,P,a){
     g.globalAlpha=a.e*(.3-.05*k);g.save();g.translate(x,y);g.rotate(r);g.drawImage(pc.line,-h/2,-h/2,h,h);g.restore()}
   g.globalAlpha=1;g.drawImage(pc.hero,P.hx+off[0]-P.hs/2,P.hy+off[1]-P.hs/2,P.hs,P.hs);
   if(a.k>0){g.globalAlpha=a.k;g.drawImage(pc.kin,0,0)}
-  if(a.t>0){g.globalAlpha=a.t;g.fillStyle=C.i;g.textBaseline="alphabetic";
+  if(a.t>0){g.globalAlpha=a.t;g.fillStyle=inkOf(cur);g.textBaseline="alphabetic";
     const mono=(z)=>`400 ${z}px "IBM Plex Mono",ui-monospace,monospace`,serif=(z)=>`italic 400 ${z}px "Instrument Serif",Georgia,serif`;
     const home=biome(cur.x,cur.y),place="The "+PAL[home.id].place+" "+SUFFIX[h3(home.bx,home.by,7)%8];
     g.font=mono(P.det);g.textAlign="left";g.fillText(place,P.m,P.m+P.det);g.textAlign="right";g.fillText("Meadow",P.Wp-P.m,P.m+P.det);
@@ -898,7 +969,7 @@ function prender(){
   const cx=lerp(bx,hx,e),cy=lerp(by,hy,e),f=fit*S,ox=cx-(P.hx+off[0])*f,oy=cy-(P.hy+off[1])*f;
   const g=pv.getContext("2d");g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cw,ch);
   g.setTransform(f*dp,0,0,f*dp,ox*dp,oy*dp);pdraw(g,P,layers());
-  g.globalAlpha=sstep(.05,.7,unf)*.45;g.strokeStyle=PAL[cur.pal].i;g.lineWidth=1/f;g.strokeRect(0,0,P.Wp,P.Hp);g.globalAlpha=1;
+  g.globalAlpha=sstep(.05,.7,unf)*.45;g.strokeStyle=inkOf(cur);g.lineWidth=1/f;g.strokeRect(0,0,P.Wp,P.Hp);g.globalAlpha=1;
   pgeo={f,ox,oy,P};
 }
 function pframe(ms){
@@ -989,9 +1060,9 @@ function breeder(b,k){ // carry a kept mark out of the shelf; the field leans to
 function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal,m));const u=tiny.toDataURL("image/png");cur=keep;return u}
 function drawShelf(){$("shelf").innerHTML="";shelf.forEach((k,i)=>{const b=document.createElement("button");b.setAttribute("aria-label","Open kept mark "+(i+1));
   b.style.background=groundOf(k);b.title="Click to open. Drag onto another mark to breed them.";b.dataset.i=i;const im=new Image();im.alt="";im.src=k.thumb;b.append(im);breeder(b,k);b.onclick=async()=>{if(performance.now()-shelfEnd<350)return;if(k.letters!==letters)await plant(k.letters||"");openStudio({...k,ok:true,g:Float32Array.from(k.g),edited:true})};$("shelf").append(b)})}
-$("keep").onclick=()=>{const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h}))};m.thumb=thumb({...m,g:Float32Array.from(m.g)});
+$("keep").onclick=()=>{const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,ink:cur.ink||undefined,acc:cur.acc||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h}))};m.thumb=thumb({...m,g:Float32Array.from(m.g)});
   shelf.unshift(m);shelf=shelf.slice(0,24);try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf))}catch(e){}drawShelf();$("keep").textContent="Kept";$("say").textContent="It's on your shelf at the bottom of the field. Drag it onto another mark to breed them."};
-drawShelf();
+drawShelf();drawMine();
 
 /* ---------- saving ---------- */
 function readField(n,l){ // the mark's outline as numbers, read back from the graphics card
@@ -1052,14 +1123,14 @@ function svgText(){
     const rows=(v,col)=>{const by={};for(let y=0;y<N;y++){let x=0;while(x<N){if(cell(v,x,y)){const c=col(x,y);let e=x;while(e+1<N&&cell(v,e+1,y)&&col(e+1,y)===c)e++;
         (by[c]=by[c]||[]).push(`<rect x="${x*sz}" y="${y*sz}" width="${(e-x+1)*sz}" height="${sz}"/>`);x=e+1}else x++}}
       return Object.entries(by).map(([c,r])=>`<g fill="${c}" shape-rendering="crispEdges">${r.join("")}</g>`).join("")};
-    body=rows(a,(x,y)=>dyeAt((x+.5)/N*2-1,(y+.5)/N*2-1,P.i))+rows(b,()=>P.a);
+    body=rows(a,(x,y)=>dyeAt((x+.5)/N*2-1,(y+.5)/N*2-1,inkOf(cur)))+rows(b,()=>accOf(cur));
   }else{
     const G=720,[a,b]=readField(G,lens===1?1:0),s=1024/G;
     const pa=pathOf(contours(a,G),s),pb=pathOf(contours(b,G),s);
     // each dye is the same outline again, filled with a soft round gradient, laid over the ink
     const dy=cur.dye.slice(-2),grads=dy.map((d,k)=>`<radialGradient id="dye${k}" gradientUnits="userSpaceOnUse" cx="${((d.x*.5+.5)*1024).toFixed(1)}" cy="${((d.y*.5+.5)*1024).toFixed(1)}" r="${(d.r*512).toFixed(1)}">`+
       [0,.35,.45,.55,.65,.75,.85,.93,1].map(t=>`<stop offset="${t}" stop-color="${d.h}" stop-opacity="${(1-sstep(.35,1,t)).toFixed(3)}"/>`).join("")+`</radialGradient>`).join("");
-    body=(grads?`<defs>${grads}</defs>`:"")+(pa?`<path fill="${P.i}" fill-rule="evenodd" d="${pa}"/>`+dy.map((d,k)=>`<path fill="url(#dye${k})" fill-rule="evenodd" d="${pa}"/>`).join(""):"")+(pb?`<path fill="${P.a}" fill-rule="evenodd" d="${pb}"/>`:"");
+    body=(grads?`<defs>${grads}</defs>`:"")+(pa?`<path fill="${inkOf(cur)}" fill-rule="evenodd" d="${pa}"/>`+dy.map((d,k)=>`<path fill="url(#dye${k})" fill-rule="evenodd" d="${pa}"/>`).join(""):"")+(pb?`<path fill="${accOf(cur)}" fill-rule="evenodd" d="${pb}"/>`:"");
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><title>${name}</title>${body}</svg>`;
 }
@@ -1083,7 +1154,7 @@ window.__meadow={cam,setLens,plant,openStudio,specimen,world:(x,y)=>world(x,y),b
 requestAnimationFrame(frame);
 setTimeout(()=>document.body.classList.add("live"),400);
 if(landed)(async()=>{if(landed.letters)await plant(landed.letters);const m=specimen(cam.x,cam.y);if(!m.ok)tend([m]);openStudio(m);const e=landed.code&&readCode(landed.code);
-  if(e){Object.assign(cur,{pal:e.pal,gr:e.gr,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:""});told();makeGhosts();drawStudio()}
+  if(e){Object.assign(cur,{pal:e.pal,gr:e.gr,ink:e.ink,acc:e.acc,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:""});told();makeGhosts();drawStudio()}
   try{history.replaceState(null,"",location.hash)}catch(e){}})();
 </script>
 </body>
