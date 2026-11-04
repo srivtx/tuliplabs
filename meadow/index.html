@@ -58,8 +58,19 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #studio{position:fixed;inset:0;z-index:5;background:var(--ground);color:var(--ink);display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,1fr);transition:background .3s,color .3s;overflow:auto;overscroll-behavior:contain}
 .stage{position:relative;display:grid;place-items:center;padding:28px max(16px,env(safe-area-inset-left,0px));min-height:0;min-width:0}
 #big{width:min(100%,74vh);aspect-ratio:1;max-width:100%;touch-action:none;cursor:ew-resize;display:block}
-.tunehint{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:16px;bottom:16px;opacity:.8;line-height:1.5}
-.tunehint button{text-decoration:underline;text-underline-offset:3px}
+.tunehint{position:absolute;left:max(16px,env(safe-area-inset-left,0px));right:16px;bottom:14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 18px}
+.tunehint .hint{margin:0;opacity:.66;line-height:1.45;flex:1 1 280px;min-width:0;max-width:52ch}
+/* soft controls: rounded, quiet until touched */
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip,.grp{border-radius:999px;background:color-mix(in srgb,var(--ink) 7%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 24%,transparent);transition:background .25s,box-shadow .25s}
+.chip{padding:6px 13px}.chip:hover{background:color-mix(in srgb,var(--ink) 15%,transparent)}
+.grp{display:inline-flex;align-items:center;padding:2px}
+.grp button{padding:4px 10px;border-radius:999px;min-width:28px;line-height:1.35;transition:background .2s,color .2s,opacity .2s}
+.grp button:hover:not(:disabled){background:color-mix(in srgb,var(--ink) 14%,transparent)}
+.grp button:disabled{opacity:.28;cursor:default}
+.grp>span{padding:0 6px;opacity:.85;font-variant-numeric:tabular-nums;white-space:nowrap}
+.grp button[aria-pressed=true]{background:var(--ink);color:var(--ground)}
+.stage{user-select:none;-webkit-user-select:none}
 /* the mark's possible next selves, floating round it */
 #halo{position:absolute;inset:0;pointer-events:none}
 .ghost{position:absolute;pointer-events:auto;opacity:.5;transition:opacity .45s,transform .45s cubic-bezier(.2,.9,.3,1.3);animation:drift 7s ease-in-out infinite}
@@ -71,7 +82,6 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 /* unfolding: the mark pulls back onto a sheet */
 #poster{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .stage.unfolded{overflow:hidden}
-.tunehint button[aria-pressed=true]{font-weight:600;text-decoration-thickness:2px}
 .sheet{border-left:1px solid color-mix(in srgb,var(--ink) 40%,transparent);padding:26px max(16px,env(safe-area-inset-right,0px)) 26px 24px;display:flex;flex-direction:column;gap:20px;min-width:0;overflow:auto}
 .back{align-self:flex-start;opacity:.8}.back:hover{opacity:1}
 .latin{font-family:var(--f-serif);font-style:italic;font-size:clamp(32px,3.4vw,46px);line-height:1;margin:0;text-wrap:balance}
@@ -93,20 +103,25 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .swatches .sw{width:26px;height:26px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);position:relative;overflow:hidden;display:block}
 .swatches .sw::after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--dot)}
 .swatches .sw[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:2px}
-.sw,.pip,.mine button{touch-action:none;cursor:grab}
-/* each set holds three colours; they bloom out of it when you reach for it */
-.well{position:relative;display:block}
-.pip{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);
-  opacity:0;scale:.2;pointer-events:none;z-index:2;transition:translate .34s cubic-bezier(.2,.9,.3,1.45),scale .34s cubic-bezier(.2,.9,.3,1.45),opacity .18s}
-.well:hover .pip,.well:focus-within .pip,.swatches.carrying .pip{opacity:1;scale:1;pointer-events:auto;translate:var(--tx) var(--ty)}
-.pip:hover{scale:1.25}
-.swatches.carrying .pip.over,.mine button.over,.sw.over{scale:1.35}
-.mine{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.mine:empty{display:none}
-.mine button{width:18px;height:18px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);transition:scale .25s cubic-bezier(.2,.9,.3,1.45)}
-.hexes{margin:8px 0 0;line-height:1.9;font-variant-numeric:tabular-nums}
-.hexes .hx{white-space:nowrap;margin-right:12px;opacity:.85}
-.hexes i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 50%,transparent)}
-.hexes [contenteditable]{border-bottom:1px dotted currentColor;outline:none;cursor:text}.hexes [contenteditable]:focus{border-bottom-style:solid}
+.swatches .sw{transition:translate .3s cubic-bezier(.2,.9,.3,1.4),scale .25s cubic-bezier(.2,.9,.3,1.45)}
+.swatches .sw.shown{translate:0 -3px}
+.sw,.tray button,.hexes i{touch-action:none;cursor:grab}
+/* the tray holds the three colours of whichever set you last rested on, so they never jump away from the pointer */
+.tray{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px;min-height:30px}
+.trayset{display:flex;align-items:center;gap:9px}
+.trayset em{font:italic 18px/1 var(--f-serif);min-width:3.6em;opacity:.9}
+.tray button{width:24px;height:24px;border-radius:50%;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 50%,transparent);transition:scale .25s cubic-bezier(.2,.9,.3,1.45),background-color .3s}
+.tray button:hover{scale:1.14}
+.mine{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-left:14px;border-left:1px solid color-mix(in srgb,var(--ink) 28%,transparent)}.mine:empty{display:none}
+.mine button{width:20px;height:20px}
+.tray button.over,.sw.over,.hexes i.over{scale:1.3}
+/* this mark's own colours, as soft chips; click the code to type an exact one */
+.hexes{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+.hexes .hx{display:inline-flex;align-items:center;gap:7px;padding:4px 11px 4px 4px;border-radius:999px;background:color-mix(in srgb,var(--ink) 7%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 20%,transparent);font-variant-numeric:tabular-nums;transition:background .2s}
+.hexes .hx:focus-within{background:color-mix(in srgb,var(--ink) 15%,transparent)}
+.hexes i{width:18px;height:18px;border-radius:50%;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 50%,transparent);transition:scale .25s cubic-bezier(.2,.9,.3,1.45)}
+.hexes small{opacity:.55;font-size:10px}
+.hexes [contenteditable]{outline:none;cursor:text;opacity:.9}.hexes [contenteditable]:focus{opacity:1}
 .dyehint{margin:9px 0 0;opacity:.7;line-height:1.5}
 .sheet h2 #wash{float:right;font-weight:400;letter-spacing:0;text-decoration:underline;text-underline-offset:3px;opacity:.8}.sheet h2 #wash:hover{opacity:1}
 /* a drop of colour carried from the swatches; it sinks into the mark when it reaches it */
@@ -153,14 +168,21 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <canvas id="big" width="900" height="900" aria-label="Your mark. Drag sideways to twist it, up and down to thicken it."></canvas>
     <div id="halo" aria-label="Ways your mark could grow"></div>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
-    <p class="tunehint"><span id="markhint"><span id="leanhint">Lean toward a ghost to see it, click to become it.</span> Drag the mark to twist and thicken. Petals: <button id="fewer">fewer</button> / <button id="more">more</button> · <button id="unfold">make a poster</button></span><span id="posterhint" hidden>Scroll to add layers or peel them off. Drag the mark and its echoes follow. <span id="fmts"></span> · <button id="layer">another layer</button> · <button id="fold">back to the mark</button></span><span id="undoWrap" hidden> · <button id="undo">step back</button></span></p>
+    <div class="tunehint">
+      <p class="hint"><span id="leanhint">Drag the mark to twist it. Move between two ghosts to blend them, and double-click the shape you like.</span><span id="posternote" hidden>Scroll to add layers or peel them off. Drag the mark and its echoes follow.</span></p>
+      <div class="tools">
+        <span class="tools" id="markhint"><span class="grp" role="group" aria-label="Petals"><button id="fewer" aria-label="Fewer petals" title="Fewer petals (scroll down)">−</button><span id="petn">6 petals</span><button id="more" aria-label="More petals" title="More petals (scroll up)">+</button></span><button class="chip" id="unfold">Poster</button></span>
+        <span class="tools" id="posterhint" hidden><span class="grp" id="fmts" role="group" aria-label="Poster shape"></span><button class="chip" id="layer">Another layer</button><button class="chip" id="fold">Back to the mark</button></span>
+        <span class="grp" id="undoWrap" role="group" aria-label="History"><button id="undo" aria-label="Step back" title="Step back  ⌘Z">↶</button><button id="redo" aria-label="Step forward" title="Step forward  ⇧⌘Z">↷</button></span>
+      </div>
+    </div>
   </div>
   <aside class="sheet">
     <button class="back" id="back">← Back to the field</button>
     <div><p class="latin" id="latin"></p><p class="found" id="found"></p></div>
     <div><h2>At real size</h2><div id="sizes"></div></div>
     <div><h2>Out in the world</h2><div class="worlds" id="worlds"></div></div>
-    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="mine" id="mine" aria-label="Colours you made"></div><p class="dyehint">Click a set to wear it, or a single colour to paint the whole mark. Drag a colour onto the mark and hold to soak it in, onto its accent bits to swap them, or onto the space around it for a new ground. Carry it over other colours first to mix them.</p><p class="hexes" id="hexes"></p></div>
+    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="tray" id="tray"><span class="trayset" id="trayset"></span><span class="mine" id="mine" aria-label="Colours you made"></span></div><div class="hexes" id="hexes" aria-label="This mark's colours"></div><p class="dyehint">Drag any colour onto the mark, its accents, or the ground around it. Pass it over other colours to mix.</p></div>
     <div class="acts">
       <button class="primary" id="keep">Keep it</button>
       <button id="deeper">Grow from here</button>
@@ -320,7 +342,7 @@ vec2 markN(vec2 p0,float n){
  w=min(w,sin(PI/n)*max(r1,.14)*1.1);l=max(l,w);
  float k=mix(.006,.17,g_k);
  float d=shape(q-vec2(r1,0.),l,w,g_pr);
- float inv=step(.7,g_inv);
+ float inv=smoothstep(.67,.73,g_inv); // switches ease over a short ramp, so a shape melts through them instead of jumping
  float ring=smoothstep(.56,.68,g_ring);
  // inside a badge the ring stays well clear of the rim, or it leaves thin slivers
  float rr=mix(.38,.86,g_rr)*mix(1.,.74,inv),rw=mix(.022,.075,g_ring);
@@ -331,19 +353,25 @@ vec2 markN(vec2 p0,float n){
  float hole=smoothstep(.62,.72,g_hole),rh=mix(.07,.26,g_hole);
  d=mix(d,smax(d,-(r-rh),k*.5),hole);
  d-=(g_wt-.5)*.1;
- float st=smoothstep(.7,.78,g_st)*smoothstep(.3,.5,g_w),f=mix(4.,7.5,fract(g_st*7.));
- d=mix(d,max(d,-(abs(fract(r*f)-.5)/f-.13/f*2.)),st);
+ float st=smoothstep(.7,.78,g_st)*smoothstep(.3,.5,g_w),fr=fract(g_st*7.),f=mix(4.,7.5,fr);
+ // where the stripe count wraps round it fades from the old count into the new one instead of snapping
+ float sA=-(abs(fract(r*f)-.5)/f-.13/f*2.),sB=-(abs(fract(r*7.5)-.5)/7.5-.13/7.5*2.);
+ d=mix(d,max(d,mix(sA,sB,1.-smoothstep(0.,.06,fr))),st);
  float accOn=smoothstep(.56,.64,g_acc);
- float ac=mix(length(p)-mix(.06,.17,g_rr),length(q-vec2(mix(.3,.84,g_r),0.))-mix(.05,.085,g_w),step(.8,g_acc));
+ float ac=mix(length(p)-mix(.06,.17,g_rr),length(q-vec2(mix(.3,.84,g_r),0.))-mix(.05,.085,g_w),smoothstep(.77,.83,g_acc));
  float b=mix(1.,ac,accOn);
  d=max(d,-(b-.034));
  vec2 sq=abs(p0)-.68;float bx=length(max(sq,0.))+min(max(sq.x,sq.y),0.)-.24;
- float badge=mix(r-.92,bx,step(.5,g_k));
+ float badge=mix(r-.92,bx,smoothstep(.47,.53,g_k));
  d=mix(d,smax(badge,-d,.012),inv);
  if(uHasL==1){gFW=fontW(g_l);
-  if(g_inv<.46){vec2 lp=p;lp.x+=lp.y*(g_ph-.5)*.45;float L=letter(lp/.74)*.74;d=max(d,-(L-.05));b=L-(g_wt-.5)*.04;}
-  else if(g_inv<.76){vec2 u=wheel(p0,n,ph)-vec2(mix(.42,.6,g_r),0.);float sc=min(.5,sin(PI/n)*.72);u=rot(u,PI*.5);d=letter(u/sc)*sc-(g_wt-.5)*.03-.024;b=1.;}
-  else{float sc=mix(.8,1.2,g_r);d=letter((fold(p,n,ph)-vec2(.32,0.))/sc)*sc-(g_wt-.5)*.04-.016;b=1.;}
+  // three ways a letter lives in a mark; near the border between two, both are drawn and melt together
+  float dA=d,bA=b,dB=d,dC=d;
+  if(g_inv<.49){vec2 lp=p;lp.x+=lp.y*(g_ph-.5)*.45;float L=letter(lp/.74)*.74;dA=max(d,-(L-.05));bA=L-(g_wt-.5)*.04;}
+  if(g_inv>.43&&g_inv<.79){vec2 u=wheel(p0,n,ph)-vec2(mix(.42,.6,g_r),0.);float sc=min(.5,sin(PI/n)*.72);u=rot(u,PI*.5);dB=letter(u/sc)*sc-(g_wt-.5)*.03-.024;}
+  if(g_inv>.73){float sc=mix(.8,1.2,g_r);dC=letter((fold(p,n,ph)-vec2(.32,0.))/sc)*sc-(g_wt-.5)*.04-.016;}
+  if(g_inv<.61){float t=smoothstep(.43,.49,g_inv);d=mix(dA,dB,t);b=mix(bA,1.,t);}
+  else{d=mix(dB,dC,smoothstep(.73,.79,g_inv));b=1.;}
  }
  d=max(d,r-.97);b=max(b,r-.97);
  return vec2(d,b);
@@ -597,7 +625,9 @@ function face(str,f,n){ // one typeface's letter as a signed distance field
   const out=dist2(mask,n,1),inn=dist2(mask,n,0),d=new Float32Array(n*n),k=2/n;
   for(let i=0;i<n*n;i++)d[i]=(Math.sqrt(out[i])-Math.sqrt(inn[i]))*k;return d;
 }
-async function plant(str){
+let plantHist=[],plantFut=[];
+async function plant(str,undoing){
+  if(!undoing&&str!==letters){plantHist.push(letters);if(plantHist.length>40)plantHist.shift();plantFut=[]}
   letters=str;$("letters").value=str;$("plant").textContent=str?`Planted: ${str}`:"Plant a letter";const tok=++glyphTok;
   if(!str){lastGlyph=null;R.glyph(null);T.glyph(null);growAt=performance.now()/1000;growO=[W/2,H/2];return}
   try{await Promise.all(FACES.map(f=>document.fonts.load(f.replace("P","300px"))))}catch(e){}
@@ -611,6 +641,10 @@ async function plant(str){
   $("tag").classList.add("quiet");
 }
 addEventListener("keydown",(e)=>{
+  // ⌘Z / Ctrl+Z steps back, ⇧⌘Z / Ctrl+Y steps forward again; while typing a colour the text field keeps its own
+  if((e.metaKey||e.ctrlKey)&&!e.altKey&&!e.target.isContentEditable&&e.target!==$("letters")){const k=e.key.toLowerCase();
+    if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
+      if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?plantFut:plantHist,o=again?plantHist:plantFut;if(t.length){o.push(letters);plant(t.pop(),true)}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}return}
   if(e.target===$("letters"))return;
@@ -644,27 +678,42 @@ function drawStudio(){
   if(!cur)return;theme(cur.pal);const c=colours(cur.pal,cur);
   drawBig();drawGhosts();
   [16,24,32,48,64].forEach((s)=>copyTo($("sz"+s),s,lens,c));
+  worlds(c);
+  [...$("swatches").children].forEach((w,i)=>w.setAttribute("aria-pressed",i===cur.pal&&!cur.ink&&!cur.gr));
+  if(unf>0)prender();
+}
+// a mark set on its own ground, for the places that give it a tile or a circle
+function onGround(cv,size,c,inset){const r=devicePixelRatio||1,px=Math.round(size*r);if(cv.width!==px){cv.width=cv.height=px;cv.style.width=cv.style.height=size+"px"}
+  const g=cv.getContext("2d");g.fillStyle=groundOf(cur);g.fillRect(0,0,px,px);const m=Math.round(px*(1-2*inset));paint(cur,m,lens,c);g.drawImage(tiny,(px-m)/2,(px-m)/2)}
+function worlds(c){
   copyTo($("wPaper"),56,lens,{i:K("#111111"),a:K("#111111")});
   copyTo($("wNight"),56,lens,{i:K("#f5f5f5"),a:K("#f5f5f5")});
   // the phone icon gets its own ground, the way a home screen shows it
-  const app=$("wApp"),r=devicePixelRatio||1,px=Math.round(46*r);app.width=app.height=px;app.style.width=app.style.height="46px";const g=app.getContext("2d");
-  g.fillStyle=groundOf(cur);g.fillRect(0,0,px,px);paint(cur,Math.round(px*.82),lens,c);g.drawImage(tiny,px*.09,px*.09);
-  copyTo($("wTab"),16,lens,c);
-  [...$("swatches").children].forEach((w,i)=>w.firstChild.setAttribute("aria-pressed",i===cur.pal&&!cur.ink&&!cur.gr));
-  if(unf>0)prender();
-}
+  onGround($("wApp"),46,c,.09);
+  // a tab is white, so a pale mark sits on a little tile of its ground there, or it would vanish
+  const pale=contrast(inkOf(cur),"#ffffff")<1.9;
+  if(pale)onGround($("wTab"),16,c,.1);else copyTo($("wTab"),16,lens,c);$("wTab").style.borderRadius=pale?"4px":""}
 (function buildSheet(){
   $("sizes").innerHTML=[16,24,32,48,64].map(s=>`<figure><canvas id="sz${s}"></canvas><figcaption>${s}</figcaption></figure>`).join("");
   $("worlds").innerHTML=`<div class="world w-tab" title="In a browser tab"><div><canvas id="wTab"></canvas>Your site</div></div><div class="world w-app" title="On a phone"><canvas id="wApp"></canvas></div><div class="world w-paper" title="Printed in black"><canvas id="wPaper"></canvas></div><div class="world w-night" title="On black"><canvas id="wNight"></canvas></div>`;
-  PAL.forEach((p,i)=>{const w=document.createElement("span");w.className="well";
-    const b=document.createElement("button");b.className="sw";b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");
-    b.onclick=()=>{if(performance.now()-dropEnd<350||(cur.pal===i&&!cur.gr&&!cur.ink&&!cur.acc))return;remember();cur.pal=i;cur.gr=cur.ink=cur.acc=null;told();drawStudio()};
-    carry(b,{set:i});w.append(b);
-    [p.g,p.i,p.a].forEach((h,k)=>{const d=document.createElement("button");d.className="pip";d.dataset.h=h;d.style.background=h;
-      const a=(-150+k*60)*Math.PI/180;d.style.setProperty("--tx",Math.round(Math.cos(a)*23)+"px");d.style.setProperty("--ty",Math.round(Math.sin(a)*23)+"px");
-      d.setAttribute("aria-label",`${p.place} ${["ground","ink","accent"][k]}, ${h}`);d.onclick=()=>{if(performance.now()-dropEnd>350)paintAll(h)};carry(d,{hex:h});w.append(d)});
-    $("swatches").append(w)});
+  PAL.forEach((p,i)=>{
+    const b=document.createElement("button");b.className="sw";b.dataset.set=i;b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");
+    b.onclick=()=>{if(performance.now()-dropEnd<350||(cur.pal===i&&!cur.gr&&!cur.ink&&!cur.acc))return;remember();cur.pal=i;cur.gr=cur.ink=cur.acc=null;showTray(i);told();drawStudio()};
+    // rest on a set and the tray below shows its three colours; passing over on the way doesn't change it
+    b.addEventListener("pointerenter",()=>{clearTimeout(trayT);trayT=setTimeout(()=>showTray(i),130)});b.addEventListener("pointerleave",()=>clearTimeout(trayT));b.addEventListener("focus",()=>showTray(i));
+    carry(b,{set:i});$("swatches").append(b)});
+  const box=$("swatches").parentElement;
+  box.addEventListener("pointerenter",()=>clearTimeout(trayT));
+  box.addEventListener("pointerleave",()=>{clearTimeout(trayT);trayT=setTimeout(()=>{if(cur&&!drop)showTray(cur.pal)},900)});
 })();
+let trayAt=-1,trayT=0;
+function showTray(i){if(i===trayAt||drop)return;trayAt=i;const p=PAL[i],el=$("trayset");el.innerHTML=`<em>${p.place}</em>`;
+  [["gr",p.g,"ground"],["ink",p.i,"ink"],["acc",p.a,"accent"]].forEach(([r,h,n])=>{const d=document.createElement("button");d.dataset.h=h;d.style.background=h;d.title=`${n}  ${h}`;
+    d.setAttribute("aria-label",`${p.place} ${n}, ${h}. Click to use it as this mark's ${n}, or drag it.`);d.onclick=()=>{if(performance.now()-dropEnd>350)setRole(r,h)};carry(d,{hex:h});el.append(d)});
+  if(!calm)el.animate([{opacity:.25,translate:"0 3px"},{opacity:1,translate:"0 0"}],{duration:280,easing:"cubic-bezier(.2,.8,.3,1)"});
+  [...$("swatches").children].forEach((b,k)=>b.classList.toggle("shown",k===i))}
+function setRole(r,h){if(!cur)return;const now=r==="gr"?groundOf(cur):r==="ink"?inkOf(cur):accOf(cur);if(now===h)return;remember();cur[r]=h;told();drawStudio();warnRead()}
+function warnRead(){const s=$("say"),low=contrast(inkOf(cur),groundOf(cur))<1.6,t="The ink barely shows on this ground.";if(low)s.textContent=t;else if(s.textContent===t)s.textContent=""}
 function openStudio(m){
   if(!m.ok)tend([m]);
   cur={...m,g:Float32Array.from(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
@@ -674,8 +723,8 @@ function openStudio(m){
   $("keep").textContent="Keep it";
   cur.at="#at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)+(letters?"-"+encodeURIComponent(letters):"");
   try{history.pushState({mark:1},"",cur.at)}catch(e){}
-  hist=[];leanK=tgtK=-1;leanW=tgtW=0;pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
-  layoutHalo();makeGhosts();drawStudio();
+  hist=[];fut=[];lw.fill(0);tw.fill(0);pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
+  layoutHalo();makeGhosts();drawStudio();trayAt=-1;showTray(cur.pal);
 }
 let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
@@ -688,9 +737,9 @@ $("deeper").onclick=()=>{const m=cur;leave();cam.x=m.x;cam.y=m.y;cam.ax=W/2;cam.
 // tuning happens on the mark itself
 let tune=null;
 const big=$("big");
-big.addEventListener("pointerdown",(e)=>{big.setPointerCapture(e.pointerId);tune={x:e.clientX,y:e.clientY,moved:false};settle()});
+big.addEventListener("pointerdown",(e)=>{try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false}});
 big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
-  if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;remember()}
+  if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
   tune.x=e.clientX;tune.y=e.clientY;
   cur.g[6]=clamp(cur.g[6]+dx*.0028);cur.g[13]=clamp(cur.g[13]-dy*.0034);queue()});
 const end=()=>{if(tune&&tune.moved)told();tune=null};big.addEventListener("pointerup",end);big.addEventListener("pointercancel",end);
@@ -702,7 +751,8 @@ function petals(dir){const n=cur.s>.5?cur.n1:cur.n0,i=clamp(SYM.indexOf(n)+dir,0
    Move toward one and the mark melts into it; click and it becomes it, and a new ring grows.
    A ghost is stored as a change, not a shape, so twisting or recolouring the mark carries them along. */
 const GN=8,halo=$("halo"),stage=big.parentElement;
-let gen=0,ghosts=[],hist=[],leanK=-1,leanW=0,tgtK=-1,tgtW=0,pending=-1,leaning=false,leanMs=0,gLay=null;
+let gen=0,ghosts=[],hist=[],fut=[],pending=-1,leaning=false,leanMs=0,gLay=null;
+const lw=new Float32Array(GN),tw=new Float32Array(GN); // how far the mark leans toward each ghost, now and where it's heading
 const TRAITS=[1,2,3,4,5,7,8,9,10,11,12,13,15];
 const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74}; // traits that are either there or not
 function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
@@ -721,6 +771,18 @@ function blend(G,w){
   const cn=cur.s>.5?cur.n1:cur.n0;if(G.pet&&G.pet!==cn){n0=cn;n1=G.pet;s=w}
   return {...cur,g,n0,n1,s};
 }
+// the mark leaning toward one ghost, or toward two neighbours at once: the shapes between them are real shapes too
+function mix(w){
+  const g=Float32Array.from(cur.g),sum=new Float32Array(16),most=new Float32Array(16);let top=-1,tv=0;
+  for(let i=0;i<GN;i++){if(w[i]<.002||!ghosts[i])continue;const d=ghosts[i].d;
+    for(let k=0;k<16;k++){sum[k]+=d[k]*w[i];most[k]=Math.max(most[k],Math.abs(d[k]))}if(ghosts[i].pet&&w[i]>tv){tv=w[i];top=i}}
+  // where both ghosts push one trait the same way, the blend never goes further than either would alone
+  for(let k=0;k<16;k++)g[k]=clamp(g[k]+Math.sign(sum[k])*Math.min(Math.abs(sum[k]),most[k]));
+  let n0=cur.n0,n1=cur.n1,s=cur.s;const cn=cur.s>.5?cur.n1:cur.n0;
+  if(top>=0&&ghosts[top].pet!==cn){n0=cn;n1=ghosts[top].pet;s=Math.min(1,tv)}
+  return {...cur,g,n0,n1,s};
+}
+const leant=()=>lw.some(v=>v>.002);
 function makeGhosts(){
   let list=Array.from({length:GN},(_,i)=>roll(i%2===1));
   const pure=cur.s<.02||cur.s>.98,cn=cur.s>.5?cur.n1:cur.n0,ci=SYM.indexOf(cn);
@@ -735,10 +797,11 @@ function makeGhosts(){
 }
 (function buildHalo(){for(let i=0;i<GN;i++){const b=document.createElement("button");b.className="ghost";b.setAttribute("aria-label","Become this one");
   b.style.animationDelay=(-i*.9)+"s";b.append(document.createElement("canvas"));
-  b.onclick=()=>become(i);b.onfocus=()=>{if(!b.matches(":hover"))leanTo(i,1)};b.onblur=()=>leanTo(-1,0);halo.append(b)}})();
+  b.onclick=()=>become(i);b.onfocus=()=>{if(!b.matches(":hover"))leanOne(i,1)};b.onblur=()=>leanOne(-1,0);halo.append(b)}})();
 function layoutHalo(){
   const narrow=matchMedia("(max-width:820px)").matches,sw=stage.clientWidth-32;
-  let h=narrow?Math.min(sw/2.84,innerHeight*.29):Math.min(sw/2.84,(stage.clientHeight/2-64)/1.42);h=Math.max(70,Math.floor(h));
+  const foot=Math.max(64,(stage.querySelector(".tunehint").offsetHeight||40)+30);
+  let h=narrow?Math.min(sw/2.84,innerHeight*.29):Math.min(sw/2.84,(stage.clientHeight/2-foot)/1.42);h=Math.max(70,Math.floor(h));
   big.style.width=big.style.height=2*h+"px";big.style.margin=narrow?Math.round(.44*h)+"px auto":"0";
   const br=big.getBoundingClientRect(),sr=stage.getBoundingClientRect(),gs=Math.round(.42*h);
   gLay={cx:br.left-sr.left+br.width/2,cy:br.top-sr.top+br.height/2,R:1.2*h,gs};
@@ -748,42 +811,61 @@ function layoutHalo(){
 }
 function drawBig(){
   const bs=Math.min(1100,Math.round(big.clientWidth*Math.min(devicePixelRatio||1,2)))||900;
-  const m=leanK>=0&&leanW>.002?blend(ghosts[leanK],leanW):cur;
+  const m=leant()?mix(lw):cur;
   if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal,cur));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(tiny,0,0);
 }
 function drawGhosts(){if(!ghosts.length)return;const c=colours(cur.pal,cur);
   [...halo.children].forEach((b,i)=>{const cv=b.firstChild;paint(blend(ghosts[i],1),cv.width,lens,c);const g=cv.getContext("2d");g.clearRect(0,0,cv.width,cv.width);g.drawImage(tiny,0,0)})}
-function leanTo(k,w){tgtK=k;tgtW=w;if(!leaning){leaning=true;leanMs=performance.now();requestAnimationFrame(leanStep)}}
+function leanTo(){if(!leaning){leaning=true;leanMs=performance.now();requestAnimationFrame(leanStep)}}
+function leanOne(k,w){tw.fill(0);if(k>=0)tw[k]=w;leanTo()}
 function leanStep(ms){
   if(!cur){leaning=false;return}
-  const dt=Math.min(.05,Math.max(0,ms-leanMs)/1000);leanMs=ms;const a=calm?1:1-Math.exp(-dt*(pending>=0?7:11));
-  if(tgtK!==leanK){leanW-=leanW*a+.004;if(leanW<=.01){leanW=0;leanK=tgtK}}else leanW+=(tgtW-leanW)*a;
+  const dt=Math.min(.05,Math.max(0,ms-leanMs)/1000);leanMs=ms;const a=calm?1:1-Math.exp(-dt*(pending>=0?7:11));let moving=false;
+  for(let i=0;i<GN;i++){lw[i]+=(tw[i]-lw[i])*a;if(Math.abs(tw[i]-lw[i])<.003)lw[i]=tw[i];else moving=true}
   drawBig();
-  [...halo.children].forEach((b,i)=>b.style.opacity=i===leanK&&leanW>.02?.5+.5*leanW:"");
-  if(pending>=0&&leanK===pending&&leanW>.985){commit(pending);leaning=false;return}
-  if(tgtK!==leanK||Math.abs(tgtW-leanW)>.003)requestAnimationFrame(leanStep);else leaning=false;
+  [...halo.children].forEach((b,i)=>b.style.opacity=lw[i]>.02?.5+.5*Math.min(1,lw[i]):"");
+  if(pending>=0&&lw[pending]>.985){commit(pending);leaning=false;return}
+  if(moving)requestAnimationFrame(leanStep);else leaning=false;
 }
-function settle(){leanK=tgtK=-1;leanW=tgtW=0;pending=-1;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
+function settle(){lw.fill(0);tw.fill(0);pending=-1;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
+// round the ring, the mark leans toward the ghost you're near; between two, it leans toward both at once
 stage.addEventListener("pointermove",(e)=>{
   if(tune||pending>=0||!gLay||unf>0||e.pointerType!=="mouse")return;
-  const sr=stage.getBoundingClientRect(),x=e.clientX-sr.left,y=e.clientY-sr.top;let best=-1,bd=1e9;
-  for(let i=0;i<GN;i++){const a=-Math.PI/2+i*Math.PI*2/GN,d=Math.hypot(x-gLay.cx-gLay.R*Math.cos(a),y-gLay.cy-gLay.R*Math.sin(a));if(d<bd){bd=d;best=i}}
-  const w=1-sstep(gLay.gs*.42,gLay.gs*1.3,bd);leanTo(w>.004?best:-1,w)});
-stage.addEventListener("pointerleave",()=>{if(pending<0)leanTo(-1,0)});
-function become(i){if(!ghosts[i]||pending>=0)return;if(leanK===i&&leanW>.97){commit(i);return}pending=i;leanTo(i,1)}
+  const sr=stage.getBoundingClientRect(),dx=e.clientX-sr.left-gLay.cx,dy=e.clientY-sr.top-gLay.cy,arc=Math.PI*2/GN;
+  const f=(((Math.atan2(dy,dx)+Math.PI/2)/arc)%GN+GN)%GN,i=Math.floor(f)%GN,j=(i+1)%GN,u=sstep(.1,.9,f-Math.floor(f));
+  const near=1-sstep(gLay.gs*.45,gLay.gs*1.15,Math.abs(Math.hypot(dx,dy)-gLay.R));
+  tw.fill(0);if(near>.004){tw[i]=near*Math.cos(u*Math.PI/2);tw[j]=near*Math.sin(u*Math.PI/2)}leanTo()});
+stage.addEventListener("pointerleave",()=>{if(pending<0){tw.fill(0);leanTo()}});
+// double-click keeps the shape you're looking at, even one caught halfway between two ghosts; a new ring grows round it
+stage.addEventListener("dblclick",(e)=>{if(!cur||unf>0||pending>=0||e.target.closest(".ghost,.tunehint")||!leant())return;e.preventDefault();keepLive()});
+function keepLive(){
+  remember();const m=mix(lw);cur.g=m.g;cur.n0=m.n0;cur.n1=m.n1;cur.s=m.s;
+  if(cur.s<.02||cur.s>.98){cur.n0=cur.n1=cur.s>.5?cur.n1:cur.n0;cur.s=0}
+  lw.fill(0);tw.fill(0);[...halo.children].forEach(b=>b.style.opacity="");
+  if(!calm)big.animate([{scale:1.045},{scale:1}],{duration:420,easing:"cubic-bezier(.2,.9,.3,1.3)"});
+  told();drawBig();makeGhosts();drawGhosts();queue();
+}
+function become(i){if(!ghosts[i]||pending>=0)return;if(lw[i]>.97&&lw.every((v,k)=>k===i||v<.02)){commit(i);return}pending=i;leanOne(i,1)}
 function commit(i){
   remember();const m=blend(ghosts[i],1);cur.g=m.g;if(m.n1!==cur.n1||m.n0!==cur.n0){cur.n0=cur.n1=m.n1;cur.s=0}
-  leanK=tgtK=-1;leanW=tgtW=0;pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
+  lw.fill(0);tw.fill(0);pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
   told();drawBig();makeGhosts();drawGhosts();queue(); // the mark first, the sheet on the next frame
 }
-function remember(){hist.push({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0}))});if(hist.length>60)hist.shift()}
-function stepBack(){if(!hist.length||drop)return;const h=hist.pop();cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();told();makeGhosts();drawGhosts();queue()}
-function told(){const n=hist.length;if(!$("hexes").contains(document.activeElement))hexes();$("latin").textContent=latin(cur);$("keep").textContent="Keep it";$("undoWrap").hidden=!n;$("wash").hidden=!cur.dye.length;
+const snapOf=()=>({g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0})),gh:ghosts});
+function remember(){hist.push(snapOf());if(hist.length>80)hist.shift();fut=[]}
+function restore(h){cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();
+  // the ring you had then comes back with it
+  if(h.gh&&h.gh!==ghosts){ghosts=h.gh;gen++;[...halo.children].forEach((b,i)=>{b.classList.add("fresh");setTimeout(()=>b.classList.remove("fresh"),calm?0:60+i*30)})}
+  told();drawGhosts();queue()}
+function stepBack(){if(!hist.length||drop)return;fut.push(snapOf());restore(hist.pop())}
+function stepAgain(){if(!fut.length||drop)return;hist.push(snapOf());restore(fut.pop())}
+function told(){const n=hist.length;if(!$("hexes").contains(document.activeElement))hexes();$("latin").textContent=latin(cur);$("keep").textContent="Keep it";$("undo").disabled=!n;$("redo").disabled=!fut.length;$("wash").hidden=!cur.dye.length;
+  const pn=cur.s>.5?cur.n1:cur.n0;$("petn").textContent=pn+" petals";$("fewer").disabled=pn===SYM[0]&&cur.s%1===0;$("more").disabled=pn===SYM[SYM.length-1]&&cur.s%1===0;
   $("found").textContent=foundAt+(cur.note||"");
   // the link carries every change, so a shared mark arrives exactly as it was left
   const url=cur.at+(n||cur.dye.length||cur.edited?"&"+codeOf(cur):"");
   if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}}
-$("undo").onclick=stepBack;
+$("undo").onclick=stepBack;$("redo").onclick=stepAgain;
 addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio();prender()}});
 $("fewer").onclick=()=>petals(-1);$("more").onclick=()=>petals(1);
 
@@ -813,7 +895,7 @@ function carry(b,src){
       const el=document.createElement("div");el.className="drop";el.style.background=drop.h;document.body.append(el);drop.el=el;$("swatches").classList.add("carrying");mixing()}
     drop.x=e.clientX;drop.y=e.clientY;drop.el.style.translate=drop.x+"px "+drop.y+"px";
     // over another colour, the drop drinks some of it in
-    const t=document.elementFromPoint(drop.x,drop.y),o=t&&t.closest(".pip,.mine button,.sw");if(drop.over&&drop.over!==o)drop.over.classList.remove("over");
+    const t=document.elementFromPoint(drop.x,drop.y),o=t&&t.closest(".tray button,.sw,.hexes i");if(drop.over&&drop.over!==o)drop.over.classList.remove("over");
     drop.over=o&&o!==b?o:null;if(drop.over)drop.over.classList.add("over");
     const r=big.getBoundingClientRect(),px=(drop.x-r.left)/r.width*2-1,py=(drop.y-r.top)/r.height*2-1;
     drop.in=unf<.01&&Math.hypot(px,py)<.98;drop.el.classList.toggle("in",drop.in);
@@ -826,13 +908,14 @@ function carry(b,src){
   const up=()=>{if(!drop||drop.b!==b)return;const d=drop;drop=null;$("swatches").classList.remove("carrying");if(d.over)d.over.classList.remove("over");if(!d.on)return;dropEnd=performance.now();
     if(d.acc){const now=cur.acc;cur.acc=d.acc0;remember();cur.acc=now;keepColour(d);told();queue()}
     else if(d.bg){remember();cur.gr=groundPick(d);keepColour(d);told();queue()}
-    else if(d.in&&!wet){remember();settle();wet={x:d.px,y:d.py,r:.55,h:d.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();keepColour(d)} // a quick drop leaves a spot
+    else if(d.in&&!wet){remember();settle();wet={x:d.px,y:d.py,r:.55,h:d.mixed?dyeSafe(d.h):d.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();keepColour(d)} // a quick drop leaves a spot
     else if(d.in)keepColour(d);
     if(d.el){d.el.classList.add(d.in?"in":"gone");setTimeout(()=>d.el.remove(),320)}soak()};
   b.addEventListener("pointerup",up);b.addEventListener("pointercancel",up);
 }
 // a set offers whichever of its colours suits the job; a single colour or a mixed one is taken as it is
-function groundPick(d){d=d||drop;return d.exact||d.mixed?d.h:groundFor(d.src.set)}
+// a mixed ground is eased lighter or darker until the mark still reads on it
+function groundPick(d){d=d||drop;return d.mixed?apartFrom(d.h,inkOf(cur),2.4):d.exact?d.h:groundFor(d.src.set)}
 function accentAt(px,py){ // over the mark's accent bits, a drop recolours them instead of dyeing the ink
   if(!drop.in||wet){if(drop.acc){cur.acc=drop.acc0;drop.acc=false;drawBig()}return}
   const g=big.getContext("2d"),x=Math.round((px*.5+.5)*big.width),y=Math.round((py*.5+.5)*big.height);let on=false;
@@ -842,9 +925,9 @@ function accentAt(px,py){ // over the mark's accent bits, a drop recolours them 
 }
 function mixing(){let last=performance.now();
   const step=(ms)=>{if(!drop||!drop.on)return;const dt=Math.min(.05,(ms-last)/1000);last=ms;
-    if(drop.over){const h=drop.over.dataset.h||dyeFor(+[...$("swatches").children].indexOf(drop.over.parentElement));
-      const k=1-Math.exp(-dt*1.7);drop.lab=drop.lab||oklab(drop.h);const t=oklab(h);drop.lab=drop.lab.map((v,i)=>v+(t[i]-v)*k);
-      drop.h=fromLab(drop.lab);drop.mixed=true;drop.el.style.background=drop.h;if(wet)wet.h=drop.h;if(drop.acc){cur.acc=drop.h;drawBig()}}
+    if(drop.over){const h=drop.over.dataset.h||dyeFor(+drop.over.dataset.set);
+      const k=1-Math.exp(-dt*1.7);drop.lab=mixLab(drop.lab||oklab(drop.h),oklab(h),k);
+      drop.h=fromLab(drop.lab);drop.mixed=true;drop.el.style.background=drop.h;if(wet)wet.h=dyeSafe(drop.h);if(drop.acc){cur.acc=drop.h;drawBig()}}
     requestAnimationFrame(step)};
   requestAnimationFrame(step)}
 // colours mixed or typed are kept, so they're there next time
@@ -858,19 +941,37 @@ function paintAll(h){if(!cur||inkOf(cur)===h)return;remember();cur.ink=h;told();
 const toLin=(v)=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4,toS=(v)=>v<=.0031308?v*12.92:1.055*v**(1/2.4)-.055;
 function oklab(h){const [r,g,b]=hex(h).map(toLin),l=Math.cbrt(.4122214708*r+.5363325363*g+.0514459929*b),m=Math.cbrt(.2119034982*r+.6806995451*g+.1073969566*b),s=Math.cbrt(.0883024619*r+.2817188376*g+.6299787005*b);
   return [.2104542553*l+.793617785*m-.0040720468*s,1.9779984951*l-2.428592205*m+.4505937099*s,.0259040371*l+.7827717662*m-.808675766*s]}
-function fromLab([L,a,b]){const l=(L+.3963377774*a+.2158037573*b)**3,m=(L-.1055613458*a-.0638541728*b)**3,s=(L-.0894841775*a-1.291485548*b)**3;
-  return "#"+[4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.707614701*s]
-    .map(v=>Math.round(clamp(toS(clamp(v)))*255).toString(16).padStart(2,"0")).join("")}
+const labLin=(L,a,b)=>{const l=(L+.3963377774*a+.2158037573*b)**3,m=(L-.1055613458*a-.0638541728*b)**3,s=(L-.0894841775*a-1.291485548*b)**3;
+  return [4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.707614701*s]};
+const outside=(c)=>c.some(v=>v<-.0005||v>1.0005);
+function fromLab([L,a,b]){L=clamp(L);let c=labLin(L,a,b);
+  // a colour the screen can't show loses a little of its strength, never its hue, instead of being clipped harsh
+  if(outside(c)){let lo=0,hi=1;for(let i=0;i<16;i++){const m=(lo+hi)/2;if(outside(labLin(L,a*m,b*m)))hi=m;else lo=m}c=labLin(L,a*lo,b*lo)}
+  return "#"+c.map(v=>Math.round(clamp(toS(clamp(v)))*255).toString(16).padStart(2,"0")).join("")}
+// mixing turns the hue the short way round and keeps the colour's strength, so two clear colours make a clear third, not grey mud
+function mixLab(p,q,k){
+  const C1=Math.hypot(p[1],p[2]),C2=Math.hypot(q[1],q[2]);let h1=Math.atan2(p[2],p[1]),h2=Math.atan2(q[2],q[1]);
+  if(C1<.02)h1=h2;else if(C2<.02)h2=h1; // a grey takes on the other's hue
+  const dh=Math.atan2(Math.sin(h2-h1),Math.cos(h2-h1)),L=p[0]+(q[0]-p[0])*k,C=C1+(C2-C1)*k,h=h1+dh*k;
+  return [L,C*Math.cos(h),C*Math.sin(h)]}
+// a colour nudged lighter or darker, its hue kept, until it stands apart from another by at least min
+function apartFrom(h,from,min){
+  if(contrast(h,from)>=min)return h;const p=oklab(h),up=p[0]>=oklab(from)[0];
+  for(const dir of up?[1,-1]:[-1,1])for(let t=.02;t<=.7;t+=.02){const L=p[0]+dir*t;if(L<0||L>1)break;const c=fromLab([L,p[1],p[2]]);if(contrast(c,from)>=min)return c}
+  return h}
+const dyeSafe=(h)=>apartFrom(h,groundOf(cur),1.45);
 // the mark's colours, written out; click one and type to set it exactly
 function hexes(){if(!cur)return;const el=$("hexes"),rows=[["ground",groundOf(cur)],["ink",inkOf(cur)],["accent",accOf(cur)],...cur.dye.slice(-2).map((d,k)=>["dye"+(cur.dye.length>1?" "+(k+1):""),d.h,k])];
-  el.innerHTML=rows.map(([n,h],i)=>`<span class="hx"><i style="background:${h}"></i>${n} <span contenteditable="true" spellcheck="false" data-i="${i}" aria-label="${n} colour">${h}</span></span>`).join("");
+  el.innerHTML=rows.map(([n,h],i)=>`<span class="hx" title="${n}"><i style="background:${h}" data-h="${h}" aria-hidden="true"></i><span contenteditable="true" spellcheck="false" data-i="${i}" aria-label="${n} colour">${h.slice(1)}</span><small>${n.replace(/^dye.*/,"dye")}</small></span>`).join("");
+  el.querySelectorAll("i").forEach((d)=>carry(d,{hex:d.dataset.h})); // a chip's colour can be carried off like any other
   el.querySelectorAll("[contenteditable]").forEach(x=>{const [n,h,k]=rows[+x.dataset.i];
     let done=false;
     const set=()=>{if(done)return;done=true;let v=x.textContent.trim().replace(/^#/,"").toLowerCase();if(/^[0-9a-f]{3}$/.test(v))v=[...v].map(c=>c+c).join("");
       if(!/^[0-9a-f]{6}$/.test(v)||"#"+v===h){hexes();return}v="#"+v;remember();
       if(n==="ground")cur.gr=v;else if(n==="ink")cur.ink=v;else if(n==="accent")cur.acc=v;else cur.dye[cur.dye.length>1?k:0].h=v;
-      addMine(v);told();hexes();drawStudio()};
-    x.onkeydown=(e)=>{if(e.key==="Enter"){e.preventDefault();set();x.blur()}else if(e.key==="Escape"){done=true;x.textContent=h;x.blur();hexes()}};
+      addMine(v);told();hexes();drawStudio();warnRead()};
+    x.onkeydown=(e)=>{if(e.key==="Enter"){e.preventDefault();set();x.blur()}else if(e.key==="Escape"){e.stopPropagation();done=true;x.blur();hexes()}};
+    x.onfocus=()=>{const r=document.createRange();r.selectNodeContents(x);const s=getSelection();s.removeAllRanges();s.addRange(r)};
     x.onblur=set})}
 function soak(){if(!dyeOn){dyeOn=true;dyeMs=performance.now();requestAnimationFrame(dyeStep)}}
 function dyeStep(ms){
@@ -878,7 +979,7 @@ function dyeStep(ms){
   const dt=Math.min(.05,Math.max(0,ms-dyeMs)/1000);dyeMs=ms;let busy=false;
   if(washing){cur.dye.forEach(d=>d.r*=Math.exp(-dt*9));if(cur.dye.every(d=>d.r<.03)){cur.dye=[];washing=false}else busy=true}
   if(!washing&&!wet&&drop&&drop.in&&drop.inAt&&ms-drop.inAt>130){ // it lands once it rests a moment, not as it passes over
-    remember();settle();wet={x:drop.px,y:drop.py,r:.14,h:drop.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();$("wash").hidden=false}
+    remember();settle();wet={x:drop.px,y:drop.py,r:.14,h:drop.mixed?dyeSafe(drop.h):drop.h,w:1};cur.dye.push(wet);if(cur.dye.length>2)cur.dye.shift();$("wash").hidden=false}
   if(washing){}else if(wet){
     if(drop&&drop.in){drop.age+=dt;wet.r=.14+1.5*(1-Math.exp(-drop.age*1.3));wet.w=calm?0:1;busy=true}
     else if(!drop){wet.w*=Math.exp(-dt*5);if(wet.w<.01||calm){wet.w=0;wet=null}else busy=true}
@@ -958,7 +1059,7 @@ function pdraw(g,P,a){
 const layers=()=>({t:sstep(.5,1,unf),e:clamp(unf-1),k:clamp(unf-2),f:clamp(unf-3)});
 function prender(){
   const on=!!cur&&unf>.001;pv.hidden=!on;big.style.visibility=on?"hidden":"";halo.style.visibility=on?"hidden":"";stage.classList.toggle("unfolded",on);
-  $("markhint").hidden=unf>=.5;$("posterhint").hidden=unf<.5;$("png").textContent=unf>=.5?"Save poster":"Save PNG";
+  $("markhint").hidden=$("leanhint").hidden=unf>=.5;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Save poster":"Save PNG";
   if(!on)return;pbuild();
   const sr=stage.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2),cw=Math.round(sr.width*dp),ch=Math.round(sr.height*dp);
   if(pv.width!==cw||pv.height!==ch){pv.width=cw;pv.height=ch}
@@ -989,7 +1090,7 @@ stage.addEventListener("wheel",(e)=>{if(!cur||drop)return;e.preventDefault();con
   const now=performance.now();if(now-wheelAt>400)wheelAcc=0;wheelAt=now;wheelAcc+=d;
   if(Math.abs(wheelAcc)>=60){petals(wheelAcc>0?-1:1);wheelAcc=0}},{passive:false});
 $("unfold").onclick=()=>foldTo(1);$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
-(function buildFmts(){$("fmts").innerHTML="Shape: "+FMT.map((f,i)=>`<button data-f="${i}" aria-pressed="${!i}">${f[0]}</button>`).join(" / ");
+(function buildFmts(){$("fmts").innerHTML=FMT.map((f,i)=>`<button data-f="${i}" aria-pressed="${!i}">${f[0]}</button>`).join("");
   $("fmts").onclick=(e)=>{const b=e.target.closest("button");if(!b)return;fmt=+b.dataset.f;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";
     [...$("fmts").children].forEach(x=>x.setAttribute("aria-pressed",x===b));prender()}})();
 const onHero=(e)=>{if(!pgeo)return false;const sr=stage.getBoundingClientRect(),P=pgeo.P,u=(e.clientX-sr.left-pgeo.ox)/pgeo.f,v=(e.clientY-sr.top-pgeo.oy)/pgeo.f;
@@ -1146,7 +1247,7 @@ $("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.crea
   c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
 /* ---------- start ---------- */
-if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";$("leanhint").textContent="Tap a ghost and your mark melts into it."}
+if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";$("leanhint").textContent="Drag the mark to twist it. Tap a ghost and your mark melts into it."}
 function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^&]+))?(?:&([0-9a-z]+))?$/.exec(location.hash);if(!m)return null;
   cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3),code:m[5]}}
 const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
