@@ -779,6 +779,166 @@ const E = [];
   E.push({ id: "motion", name: "Motion", trials: [easeTrial, timeTrial, bounceTrial] });
 }
 
+/* ── Endless ────────────────────────────────────────────────────────────────
+   Shapes grown from a seed, so there's always a new one. Every truth is
+   measured from the shape's own pixels (its ink, its box, its roomiest
+   point), so every question works on every shape. Each answer teaches a small
+   model of your eye, and the model guesses your next answer before you give it.
+   ──────────────────────────────────────────────────────────────────────────── */
+const Endless = {};
+{
+  const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const N = 256, GLYPHS = "ALTVYPRFJ7G4K?&bdq";
+  const radial = (f) => { const rs = [], P = []; for (let i = 0; i < 180; i++) rs.push(Math.max(0.05, f(i / 180 * Math.PI * 2))); const m = 112 / Math.max(...rs); rs.forEach((r, i) => { const a = i / 180 * Math.PI * 2; P.push([128 + r * m * Math.cos(a), 128 + r * m * Math.sin(a)]); }); return P; };
+  const pathOf = (P) => (c) => { P.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath(); };
+  function makeShape(seed) {
+    const r = rng(seed), kind = Math.floor(r() * 5);
+    if (kind === 4) {
+      const ch = GLYPHS[Math.floor(r() * GLYPHS.length)], it = r() < 0.3;
+      return { paint(c, col, st) { c.font = `${it ? "italic " : ""}600 180px "IBM Plex Sans", system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "alphabetic"; if (st) { c.strokeStyle = col; c.strokeText(ch, 128, 196); } else { c.fillStyle = col; c.fillText(ch, 128, 196); } } };
+    }
+    let path, rule = "nonzero";
+    if (kind === 0) { // a blob, pushed off-round by a few waves
+      const A = [0.12 + r() * 0.2, r() * 0.22, r() * 0.14, r() * 0.09], F = A.map(() => r() * 7);
+      path = pathOf(radial((a) => Math.max(0.25, 1 + A.reduce((s, v, i) => s + v * Math.cos((i + 1) * a + F[i]), 0))));
+    } else if (kind === 1) { // petals, longer on one side
+      const n = 3 + Math.floor(r() * 4), p = 0.6 + r() * 1.6, lean = 0.2 + r() * 0.35, ph = r() * 7, rot = r() * 7;
+      path = pathOf(radial((a) => (0.3 + 0.7 * Math.abs(Math.cos(n * (a + rot) / 2)) ** p) * (1 + lean * Math.cos(a + ph))));
+    } else if (kind === 2) { // a polygon with uneven corners
+      const n = 3 + Math.floor(r() * 4), rot = r() * 7, P = [];
+      for (let i = 0; i < n; i++) { const a = (i + 0.2 + r() * 0.6) / n * Math.PI * 2 + rot, d = 112 * (0.55 + r() * 0.45); P.push([128 + d * Math.cos(a), 128 + d * Math.sin(a)]); }
+      path = pathOf(P);
+    } else { // a ring with its hole off to one side
+      const ri = 30 + r() * 42, off = (108 - ri - 12) * (0.45 + r() * 0.55), a = r() * 7, hx = 128 + off * Math.cos(a), hy = 128 + off * Math.sin(a);
+      path = (c) => { c.moveTo(236, 128); c.arc(128, 128, 108, 0, Math.PI * 2); c.moveTo(hx + ri, hy); c.arc(hx, hy, ri, 0, Math.PI * 2); };
+      rule = "evenodd";
+    }
+    return { paint(c, col, st) { c.beginPath(); path(c); if (st) { c.strokeStyle = col; c.stroke(); } else { c.fillStyle = col; c.fill(rule); } } };
+  }
+  // read a shape's truths from its pixels: ink area, balance point, box, and roomiest point
+  const MC = document.createElement("canvas"); MC.width = MC.height = N;
+  const mx = MC.getContext("2d", { willReadFrequently: true });
+  function measure(sh) {
+    mx.setTransform(1, 0, 0, 1, 0, 0); mx.clearRect(0, 0, N, N); sh.paint(mx, "#000");
+    const px = mx.getImageData(0, 0, N, N).data, D = new Float32Array(N * N);
+    let n = 0, sx = 0, sy = 0, x0 = N, y0 = N, x1 = 0, y1 = 0;
+    for (let i = 0; i < N * N; i++) if (px[i * 4 + 3] > 127) {
+      const x = i % N, y = (i / N) | 0; D[i] = 1e9; n++; sx += x; sy += y;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    // distance from each inked pixel to the nearest empty one, in two sweeps
+    const at = (x, y) => (x < 0 || y < 0 || x >= N || y >= N ? 0 : D[y * N + x]), Q = Math.SQRT2;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const i = y * N + x; if (D[i]) D[i] = Math.min(D[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + Q, at(x + 1, y - 1) + Q); }
+    let rr = 0, rx = 128, ry = 128;
+    for (let y = N - 1; y >= 0; y--) for (let x = N - 1; x >= 0; x--) { const i = y * N + x; if (D[i]) { D[i] = Math.min(D[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + Q, at(x - 1, y + 1) + Q); if (D[i] > rr) { rr = D[i]; rx = x; ry = y; } } }
+    n = n || 1;
+    return { area: n, cen: [sx / n + 0.5, sy / n + 0.5], box: [x0, y0, x1 + 1, y1 + 1], room: [rx + 0.5, ry + 0.5], rr };
+  }
+  const cache = new Map();
+  function shape(seed) {
+    let v = cache.get(seed);
+    if (!v) { const sh = makeShape(seed); v = { sh, m: measure(sh) }; cache.set(seed, v); if (cache.size > 300) cache.delete(cache.keys().next().value); }
+    return v;
+  }
+  // put a shape in the scene with its box centred at (cx, cy) and its widest side `size` long
+  function place(seed, cx, cy, size) {
+    const { sh, m } = shape(seed), bw = m.box[2] - m.box[0], bh = m.box[3] - m.box[1], s = size / Math.max(bw, bh);
+    const tx = cx - (m.box[0] + bw / 2) * s, ty = cy - (m.box[1] + bh / 2) * s, to = (p) => [tx + p[0] * s, ty + p[1] * s];
+    return { sh, s, tx, ty, cen: to(m.cen), room: to(m.room), bc: [cx, cy], rr: m.rr * s, w: bw * s, h: bh * s,
+      x0: cx - bw * s / 2, x1: cx + bw * s / 2, y0: cy - bh * s / 2, area: m.area * s * s, q: Math.max(bw, bh) / Math.sqrt(m.area) };
+  }
+  function paintAt(c, sc, col, stroke, w, dash) {
+    c.save(); c.translate(sc.tx, sc.ty); c.scale(sc.s, sc.s);
+    if (stroke) { c.lineWidth = (w || 3) / sc.s; c.setLineDash((dash || []).map((v) => v / sc.s)); c.lineJoin = "round"; }
+    sc.sh.paint(c, col, stroke); c.restore();
+  }
+  const newSeed = () => (Math.random() * 4294967296) >>> 0;
+  // the most telling of several fresh shapes: pick at random among the best three
+  const best = (make, score, n) => { const cs = []; for (let i = 0; i < n; i++) { const v = make(); cs.push([v, score(v)]); } cs.sort((a, b) => b[1] - a[1]); return cs[Math.floor(Math.random() * Math.min(3, cs.length))][0]; };
+  // everything you've answered here, per kind, kept for the model
+  const M = (k) => { S.M = S.M || {}; return (S.M[k] = S.M[k] || []); };
+  const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
+  const recent = (k, n) => M(k).slice(-n);
+  function solve(A, b) {
+    const n = b.length, R = A.map((r, i) => [...r, b[i]]);
+    for (let i = 0; i < n; i++) {
+      let p = i; for (let j = i + 1; j < n; j++) if (Math.abs(R[j][i]) > Math.abs(R[p][i])) p = j;
+      [R[i], R[p]] = [R[p], R[i]]; const d = R[i][i] || 1e-9;
+      for (let j = i; j <= n; j++) R[i][j] /= d;
+      for (let r = 0; r < n; r++) if (r !== i) { const f = R[r][i]; for (let j = i; j <= n; j++) R[r][j] -= f * R[i][j]; }
+    }
+    return R.map((r) => r[n]);
+  }
+  Object.assign(Endless, { place, paintAt, newSeed, best, M, mean, recent, solve });
+}
+
+/* Endless · centre: your dot is modelled as the balance point, plus some lean
+   toward the box's middle, some toward the roomiest point, and some lift. */
+{
+  const { place, paintAt, newSeed, best, M, mean, recent, solve } = Endless, D0 = 500;
+  const sceneOf = (s) => place(s.seed, 500 + s.ox, 440 + s.oy, D0);
+  const feats = (sc) => [[(sc.bc[0] - sc.cen[0]) / D0, (sc.bc[1] - sc.cen[1]) / D0], [(sc.room[0] - sc.cen[0]) / D0, (sc.room[1] - sc.cen[1]) / D0], [0, -sc.h / D0]];
+  function fit() {
+    const L = M("centre"), A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], b = [0, 0, 0];
+    for (const { e, o } of L) for (let i = 0; i < 3; i++) { b[i] += e[i][0] * o[0] + e[i][1] * o[1]; for (let j = 0; j < 3; j++) A[i][j] += e[i][0] * e[j][0] + e[i][1] * e[j][1]; }
+    // a gentle pull toward "the balance point, nothing more", worth half an answer
+    for (let i = 0; i < 3; i++) A[i][i] += 0.5 * (L.length ? A[i][i] / L.length : 0) + 1e-3;
+    return solve(A, b);
+  }
+  const guess = (sc) => { const w = fit(), e = feats(sc); return [0, 1].map((j) => sc.cen[j] + D0 * (w[0] * e[0][j] + w[1] * e[1][j] + w[2] * e[2][j])); };
+  // a shape teaches most when its three centres sit far apart, in different directions
+  const telling = (s) => { const e = feats(sceneOf(s)), l = (v) => Math.hypot(v[0], v[1]); return Math.abs(e[0][0] * e[1][1] - e[0][1] * e[1][0]) + 0.3 * (l(e[0]) + l(e[1])); };
+  Endless.centre = {
+    summary() {
+      const L = M("centre"); if (!L.length) return "";
+      const w = fit(), lift = w[2] * 100, r = recent("centre", 6).slice(1);
+      return `<b>Centre</b> Across ${L.length} shape${L.length > 1 ? "s" : ""}, your dots sit ${pc(w[0] * 100)} of the way from the balance point toward the middle of the box, ${pc(w[1] * 100)} toward the roomiest point, and ${Math.abs(lift) < 0.5 ? "at its height" : `${Math.abs(lift).toFixed(1)}% of the height ${lift > 0 ? "higher" : "lower"}`}.`
+        + (r.length ? ` My recent guesses landed ${pc(mean(r.map((x) => x.err)) * 100)} of a shape from you; always guessing the balance point would land ${pc(mean(r.map((x) => x.base)) * 100)}.` : "");
+    } };
+  Endless.trials = [{ id: "x-centre", kind: "centre", q: "Put the dot in the middle of this shape.", hint: "drag the dot",
+    init(again) {
+      if (!(again && this.s)) {
+        const s = best(() => ({ seed: newSeed(), ox: Math.round((Math.random() - 0.5) * 140), oy: Math.round((Math.random() - 0.5) * 90) }), telling, 16);
+        s.pred = guess(sceneOf(s)); this.s = s;
+      }
+      this.s.x = 500; this.s.y = 905;
+    },
+    move(h, dx, dy) { this.s.x = cl(this.s.x + dx, 30, 970); this.s.y = cl(this.s.y + dy, 30, 970); },
+    draw(c, k) {
+      const sc = sceneOf(this.s), p = this.s.pred;
+      paintAt(c, sc, C.ink);
+      if (k != null) {
+        c.save(); c.globalAlpha = k * 0.5; c.setLineDash([6, 8]); c.strokeStyle = C.leaf; c.lineWidth = 2; c.strokeRect(sc.x0, sc.y0, sc.w, sc.h); c.restore();
+        c.save(); c.globalAlpha = k * 0.6; ring(c, sc.room[0], sc.room[1], sc.rr, C.leaf, 2, [6, 8]); c.restore();
+        c.save(); c.globalAlpha = k;
+        for (const q of [sc.cen, sc.room, sc.bc]) { line(c, [q[0] - 14, q[1]], [q[0] + 14, q[1]], C.leaf, 3); line(c, [q[0], q[1] - 14], [q[0], q[1] + 14], C.leaf, 3); }
+        ring(c, p[0], p[1], 22, C["pink-ink"], 3, [5, 6]);
+        c.restore();
+        tags(c, [{ x: sc.cen[0], y: sc.cen[1], t: "balance point" }, { x: sc.room[0], y: sc.room[1], t: "roomiest point" }, { x: sc.bc[0], y: sc.bc[1], t: "middle of its box" }, { x: p[0], y: p[1], t: "my guess", col: C["pink-ink"] }], k);
+      }
+      dot(c, this.s.x, this.s.y, 14, C.pink);
+    },
+    learn() {
+      const sc = sceneOf(this.s), p = [this.s.x, this.s.y];
+      M("centre").push({ e: feats(sc), o: [(p[0] - sc.cen[0]) / D0, (p[1] - sc.cen[1]) / D0], err: dist(p, this.s.pred) / D0, base: dist(p, sc.cen) / D0 });
+      if (M("centre").length > 80) M("centre").shift();
+    },
+    read() {
+      const sc = sceneOf(this.s), p = [this.s.x, this.s.y], err = dist(p, this.s.pred) / D0;
+      const near = [["the balance point", sc.cen], ["the roomiest point", sc.room], ["the middle of its box", sc.bc]].map(([n, q]) => [n, dist(p, q)]).sort((a, b) => a[1] - b[1])[0][0];
+      return { v: near,
+        line: `Your dot is closest to ${near}. ${err < 0.02 ? "My guess, made before you moved, landed right on it." : `My guess, made before you moved, landed ${pc(err * 100)} of the shape's size away.`}`,
+        why: Endless.centre.summary().replace(/<b>.*?<\/b> /, ""),
+        short: `Any shape: you centre near ${near.replace("the ", "")}` };
+    } }];
+}
+
+E.push({ id: "endless", name: "Endless", endless: true, trials: Endless.trials,
+  where() {
+    const all = ["centre", "size", "even"].flatMap((k) => Endless.recent(k, 4).slice(1)), n = ["centre", "size", "even"].reduce((s, k) => s + Endless.M(k).length, 0);
+    return `${n} answered${all.length >= 2 ? ` &nbsp;·&nbsp; my recent guesses: ${pc(Endless.mean(all.map((x) => x.pe != null ? x.pe : x.err * 100)))} off` : " &nbsp;·&nbsp; a new shape every time"}`;
+  } });
+
 /* ── more experiments ───────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -825,21 +985,28 @@ function start(i, again) {
   acts([[`it ${T.feels || "looks"} right`, commit, true], ["skip", goNext]]);
   draw(); live();
 }
-function goNext() { start(cur + 1); }
+// after the set comes Endless, which never runs out: it asks next where it knows your eye least
+function goNext() { const n = flat[cur + 1]; start(flat[cur].e.endless || (n && n.e.endless) ? pickEndless() : cur + 1); }
+function pickEndless() {
+  const last = flat[cur].t.kind, ks = flat.filter((f) => f.e.endless);
+  return flat.indexOf(ks.map((f) => [f, Endless.M(f.t.kind).length + Math.random() * 1.5 + (f.t.kind === last ? 2 : 0)]).sort((a, b) => a[1] - b[1])[0][0]);
+}
+const isLast = () => !flat[cur].e.endless && cur === flat.length - 1;
 function acts(list) {
   const a = $("#act"); a.innerHTML = "";
   for (const [t, fn, main] of list) { const b = document.createElement("button"); b.type = "button"; b.className = "w" + (main ? " main" : ""); b.textContent = t; b.onclick = fn; a.append(b); }
 }
 function commit() {
   if (rev != null) return;
+  if (T.learn) T.learn();
   const r = T.read();
   (S.R[T.id] = S.R[T.id] || []).push({ s: JSON.parse(JSON.stringify(T.s)), v: r.v, short: r.short, t: Date.now() });
   if (S.R[T.id].length > 12) S.R[T.id].shift();
   save();
   const n = S.R[T.id].length;
-  $("#say").innerHTML = `<p class="line fade">${r.line}</p><p class="why fade">${r.why}${n > 1 ? ` <span style="color:var(--faint)">Your ${n - 1} earlier ${n > 2 ? "answers are" : "answer is"} drawn faintly.</span>` : ""}</p>`;
+  $("#say").innerHTML = `<p class="line fade">${r.line}</p><p class="why fade">${r.why}${n > 1 && !T.kind ? ` <span style="color:var(--faint)">Your ${n - 1} earlier ${n > 2 ? "answers are" : "answer is"} drawn faintly.</span>` : ""}</p>`;
   cv.classList.add("done");
-  const last = cur === flat.length - 1;
+  const last = isLast();
   acts([[last ? "see your eye" : "next", last ? portrait : goNext, true], ["again", () => start(cur, true)]]);
   rev = 0; revT = performance.now();
   const step = (now) => { rev = calm.matches ? 1 : Math.min(1, (now - revT) / 650); rev = 1 - (1 - rev) ** 3; draw(); if (rev < 1) requestAnimationFrame(step); };
@@ -865,7 +1032,7 @@ cv.addEventListener("keydown", (e) => {
   const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
   if (d && rev == null) { const m = e.shiftKey ? 20 : 4; T.move(kh, d[0] * m, d[1] * m, null); draw(); e.preventDefault(); }
   else if (e.key === "Tab" && T.handles && rev == null && !e.altKey) { /* let focus move normally */ }
-  else if (e.key === "Enter") { e.preventDefault(); rev == null ? commit() : (cur === flat.length - 1 ? portrait() : goNext()); }
+  else if (e.key === "Enter") { e.preventDefault(); rev == null ? commit() : (isLast() ? portrait() : goNext()); }
 });
 
 /* your eye: every answer you've given, drawn small with its truths */
