@@ -135,6 +135,13 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 /* while you drag, a small label beside the pointer names what you're making */
 .readout{position:fixed;z-index:9;pointer-events:none;font:11px var(--f-mono);background:var(--ink);color:var(--ground);padding:3px 9px;border-radius:999px;translate:14px -28px;transition:opacity .2s}
 .readout.out{opacity:0}
+.readout.hud{display:flex;align-items:center;gap:9px;padding:5px 13px 5px 5px;border-radius:14px;line-height:1.3;white-space:nowrap;box-shadow:0 6px 20px -8px rgba(0,0,0,.35)}
+.readout.hud:not(:has(.pad)){padding:5px 13px}
+.readout .rt{display:flex;flex-direction:column}.readout .rt b{font-weight:600}.readout .rt small{font-size:10px;opacity:.72}
+.readout .pad{position:relative;width:28px;height:28px;border-radius:8px;flex:none;background:color-mix(in srgb,var(--ground) 20%,transparent)}
+.readout .pad::before,.readout .pad::after{content:"";position:absolute;background:color-mix(in srgb,var(--ground) 40%,transparent)}
+.readout .pad::before{left:50%;top:5px;bottom:5px;width:1px}.readout .pad::after{top:50%;left:5px;right:5px;height:1px}
+.readout .pad i{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--ground);box-shadow:0 0 0 2px color-mix(in srgb,var(--ground) 30%,transparent)}
 .readout.fieldname{font:italic 15px/1.2 var(--f-serif);padding:2px 10px 3px;translate:16px -34px;transition:opacity .25s,scale .3s cubic-bezier(.2,.9,.3,1.4)}.readout.fieldname.out{scale:.92}
 .sheet h2 .looks{float:right;margin-top:-5px;font-weight:400;letter-spacing:0}.looks button{padding:2px 9px;font-size:11px}
 #big.m-stretch,#big.m-lean{cursor:move}#big.m-colour,#big.m-draw{cursor:crosshair}
@@ -956,7 +963,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-7]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-7]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -1137,29 +1144,34 @@ function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");c
   const soft=(q)=>q.map((p,i)=>{const a=q[closed?(i-1+N)%N:Math.max(0,i-1)],b=q[closed?(i+1)%N:Math.min(N-1,i+1)];return [(a[0]+p[0]*2+b[0])/4,(a[1]+p[1]*2+b[1])/4]}),sm=soft(soft(raw));
   penTo(makePen(toPetal(resample(sm,PEN_N,closed),cur),closed,cur.pen?cur.pen.mir:0));
   told();drawGhosts();
-  ro.textContent=closed?"filled · tap the mark to let it go":"drawn · tap the mark to let it go";ro.classList.remove("out");clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1600);return true}
+  hud(closed?"filled":"drawn","tap the mark to let the drawing go",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1600);return true}
 big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false,ink:mode===6?[markAt(e)]:null}});
 big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
   if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
   tune.x=e.clientX;tune.y=e.clientY;
   if(tune.ink){const v=markAt(e),q=tune.ink[tune.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)tune.ink.push(v);inkC.classList.add("on");big.classList.add("inking");const closed=drawInk(tune.ink);
-    ro.textContent=closed?"let go to fill it":"";ro.classList.toggle("out",!closed);ro.style.left=e.clientX+"px";ro.style.top=e.clientY+"px";return}
+    hud(closed?"let go to fill it":"drawing a petal",closed?"a closed loop fills in":`it repeats ${pureN(cur)} times round the mark`,e.clientX,e.clientY);return}
+  // hold Shift and the drag keeps to whichever way it set off in, so one trait changes and the other stays put
+  tune.tx=(tune.tx||0)+dx;tune.ty=(tune.ty||0)+dy;let lx=dx,ly=dy;
+  if(e.shiftKey){if(!tune.ax&&Math.abs(tune.tx)+Math.abs(tune.ty)>2)tune.ax=Math.abs(tune.tx)>=Math.abs(tune.ty)?"x":"y";if(tune.ax==="x")ly=0;else if(tune.ax==="y")lx=0}else tune.ax=null;
+  apply(tune,lx,ly);hudNow(tune,e.clientX,e.clientY);queue()});
+// what each mode does with a movement of dx, dy pixels; the drag and the arrow keys both come through here
+function apply(t,dx,dy){
   if(mode===0){cur.g[6]=clamp(cur.g[6]+dx*.0028);cur.g[13]=clamp(cur.g[13]-dy*.0034)}
-  else if(mode===1){slide(19,dx*.0026);cur.g[20]=clamp(cur.g[20]-dy*.003)}
-  else if(mode===2){slide(21,dx*.0026);slide(22,-dy*.0026)}
+  else if(mode===1){slide(19,dx*.0026,t);cur.g[20]=clamp(cur.g[20]-dy*.003)}
+  else if(mode===2){slide(21,dx*.0026,t);slide(22,-dy*.0026,t)}
   else if(mode===3){ // one line through all ten outlines: circle, capsule, lens, diamond, box, then teardrop, heart, crescent, star, hook
     let P=cur.g[23]>0?1+cur.g[23]:cur.g[2];P=clamp(P+dx*.0024,0,2);cur.g[2]=Math.min(P,1);cur.g[23]=Math.max(P-1,0);cur.g[5]=clamp(cur.g[5]-dy*.003)}
-  else if(mode===4){if(!tune.framed){tune.framed=true;if(cur.g[14]<.74&&Math.abs(dx)>=Math.abs(dy))cur.g[14]=.8} // a frame only shows round a badge, so it puts one on
+  else if(mode===4){if(!t.framed&&(dx||dy)){t.framed=true;if(cur.g[14]<.74&&Math.abs(dx)>=Math.abs(dy))cur.g[14]=.8} // a frame only shows round a badge, so it puts one on
     cur.g[24]=clamp(cur.g[24]+dx*.0024);cur.g[14]=clamp(cur.g[14]-dy*.003)}
-  else if(mode===5){if(!tune.tint)tune.tint={gr:groundOf(cur),ink:inkOf(cur),acc:accOf(cur),dye:cur.dye.map(d=>d.h),dh:0,cf:1};
-    const t=tune.tint;t.dh+=dx*.0065;t.cf=clamp(t.cf*Math.exp(-dy*.0045),.22,1.7);retint(t)}
-  const said=nameNow();ro.textContent=said;ro.classList.toggle("out",!said);ro.style.left=e.clientX+"px";ro.style.top=e.clientY+"px";
-  queue()});
+  else if(mode===5){if(!t.tint)t.tint={gr:groundOf(cur),ink:inkOf(cur),acc:accOf(cur),dye:cur.dye.map(d=>d.h),dh:0,cf:1};
+    const q=t.tint;q.dh+=dx*.0065;q.cf=clamp(q.cf*Math.exp(-dy*.0045),.22,1.7);retint(q)}}
 // stretch, bend and weight each have a soft stop at the middle, where the mark is in balance again: the drag
 // carries on underneath, so it rests there for a moment and then moves on without a jump
+let nudging=null; // an arrow-key nudging in progress: its own drag state, and the timer that ends it
 const DET=.035,toRaw=(v)=>{const a=v-.5;return a?.5+Math.sign(a)*(Math.abs(a)*(.5-DET)/.5+DET):.5},
   fromRaw=(r)=>{const a=r-.5;return .5+Math.sign(a)*Math.max(Math.abs(a)-DET,0)*.5/(.5-DET)};
-function slide(k,dv){const raw=tune.raw||(tune.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
+function slide(k,dv,t=tune){const raw=t.raw||(t.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
 const end=()=>{const t=tune;tune=null;
   if(t&&t.ink){if(!cur)return;if(t.moved)inkDone(t);else if(cur.pen&&cur.pen.w>0){remember();penTo(null);told();ro.classList.add("out")}return} // a tap in Draw lets the drawing go
   if(t&&t.moved)told();ro.classList.add("out");if(cur&&!mirOn())mirC.classList.remove("on")};
@@ -1180,15 +1192,53 @@ $("modepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropaga
 // the names a drag passes through, said beside the pointer so you know what you're getting
 const OUTLINES=["circle","capsule","lens","diamond","box","teardrop","heart","crescent","star","flame"],FRAMES=["hexagon","shield","drop","arch"];
 function nameNow(){const g=cur.g;
-  if(mode===3)return g[23]<.06?OUTLINES[Math.round(g[2]*4)]:OUTLINES[5+Math.round(clamp((g[23]-.12)/.88)*4)];
+  if(mode===3)return (g[23]<.06?OUTLINES[Math.round(g[2]*4)]:OUTLINES[5+Math.round(clamp((g[23]-.12)/.88)*4)])+(g[5]>.66?", full":g[5]<.34?", fine":"");
   if(mode===4)return g[14]<.7?"no frame":g[24]<.06?(g[12]>.5?"rounded square":"circle"):FRAMES[Math.round(clamp((g[24]-.12)/.88)*3)];
+  if(mode===5)return hueName(inkOf(cur))+" on "+hueName(groundOf(cur));
   // twist, stretch and lean are where symmetry is made and lost, so their labels also say what the mark now holds
   const s=scan(cur),k=kindOfScan(s),short=k==="mirrored"?s.mirrors+" mirror lines":k==="one"?"one mirror":k;
   if(mode===0)return sayScan(s);
   if(mode===2){const b=Math.abs(g[21]-.5)>.004,h=Math.abs(g[22]-.5)>.004;return (b&&h?"bent, heavier one end":b?"bent":h?"heavier one end":"balanced")+" · "+short}
   if(mode===1){const a=g[19]-.5;return ((Math.abs(a)<.06?"":a>0?"wider":"taller")+(g[20]>.2?(Math.abs(a)<.06?"":", ")+"squarer":"")||"round")+" · "+short}
   return ""}
-const ro=document.createElement("div");ro.className="readout out";document.body.append(ro);
+const ro=document.createElement("div");ro.className="readout out";ro.setAttribute("aria-hidden","true");document.body.append(ro);
+/* the label beside the pointer while you shape a mark: what you're getting, what each way of the drag changes
+   and by how much, and a little square with a dot for where the mark sits between the two */
+function hud(name,sub,x,y,pad){ro.classList.add("hud");delete ro.dataset.rest;
+  ro.innerHTML=(pad?`<span class="pad"><i style="left:${(4+clamp(pad[0])*20).toFixed(1)}px;top:${(4+(1-clamp(pad[1]))*20).toFixed(1)}px"></i></span>`:"")+`<span class="rt"><b>${name}</b>${sub?`<small>${sub}</small>`:""}</span>`;
+  ro.classList.remove("out");if(x!=null){ro.style.left=x+"px";ro.style.top=y+"px"}}
+const pct=(v)=>Math.round(v*100),sgn=(v)=>{const k=Math.round((v-.5)*200);return k>0?"+"+k:k<0?"−"+(-k):"0"};
+const wrapDeg=(r)=>{let d=r*180/Math.PI%360;if(d>180)d-=360;if(d<-180)d+=360;return d};
+const outIdx=(g)=>g[23]<.06?Math.round(g[2]*4):5+Math.round(clamp((g[23]-.12)/.88)*4),frIdx=(g)=>g[24]<.06?0:1+Math.round(clamp((g[24]-.12)/.88)*3);
+const AXES=[
+  [{v:g=>g[6],say:v=>"twist "+pct(v)},{v:g=>g[13],say:v=>"thicker "+pct(v)}],
+  [{v:g=>g[19],say:v=>Math.abs(v-.5)<.005?"even":(v>.5?"wider ":"taller ")+Math.round(Math.abs(v-.5)*200)},{v:g=>g[20],say:v=>"squarer "+pct(v)}],
+  [{v:g=>g[21],say:v=>"bend "+sgn(v)},{v:g=>g[22],say:v=>"heavy end "+sgn(v)}],
+  [{v:g=>(g[23]>0?1+g[23]:g[2])/2,say:(v,g)=>"outline "+(outIdx(g)+1)+" of 10"},{v:g=>g[5],say:v=>"fuller "+pct(v)}],
+  [{v:g=>g[24],say:(v,g)=>"frame "+(frIdx(g)+1)+" of 5"},{v:g=>g[14],say:v=>"badge "+pct(v)}],
+  [{v:(g,q)=>.5+wrapDeg(q?q.dh:0)/360,say:(v,g,q)=>{const d=Math.round(wrapDeg(q?q.dh:0));return "hue "+(d>0?"+":d<0?"−":"")+Math.abs(d)+"°"}},
+   {v:(g,q)=>((q?q.cf:1)-.22)/1.48,say:(v,g,q)=>"vivid "+Math.round((q?q.cf:1)*100)+"%"}]];
+// what each way does, said when the pointer rests on the mark before a drag
+const AXW=["↔ twist · ↕ thicker or thinner","↔ wider or taller · ↕ squarer","↔ bend · ↕ one end heavier","↔ outline · ↕ fuller or finer","↔ frame · ↕ badge","↔ hue · ↕ vivid or calm","draw one petal and it repeats round"];
+function hudNow(t,x,y){const A=AXES[mode];if(!A||!cur)return;const g=cur.g,q=t&&t.tint,v=A.map(a=>a.v(g,q));
+  const lock=t&&t.ax?`  ·  ⇧ ${t.ax==="x"?"sideways":"up and down"} only`:"";
+  hud(nameNow()||MODES[mode][1],A.map((a,i)=>(i?"↕ ":"↔ ")+a.say(v[i],g,q)).join("  ·  ")+lock,x,y,v)}
+// a colour named the way you'd say it
+function hueName(h){const [L,a,b]=oklab(h),C=Math.hypot(a,b);
+  if(C<.035)return L<.22?"black":L>.93?"white":L<.5?"charcoal":"grey";
+  const H=(Math.atan2(b,a)*180/Math.PI+360)%360,N=[[15,"rose"],[45,"red"],[75,"orange"],[100,"amber"],[125,"yellow"],[155,"green"],[185,"jade"],[215,"teal"],[250,"sky"],[280,"blue"],[310,"violet"],[345,"magenta"],[361,"rose"]];
+  return (L<.4?"deep ":L>.86?"pale ":"")+N.find(n=>H<n[0])[1]}
+// rest on the mark and it says what dragging it will do in this mode
+let restT=0;const restOff=()=>{clearTimeout(restT);if(ro.dataset.rest){delete ro.dataset.rest;ro.classList.add("out")}};
+big.addEventListener("pointermove",(e)=>{if(tune||e.pointerType==="touch")return;restOff();if(live||unfT>0||!cur||nudging)return;const x=e.clientX,y=e.clientY;
+  restT=setTimeout(()=>{if(tune||nudging||!cur||live||unfT>0)return;hud(MODES[mode][1],AXW[mode]+(mode<6?"  ·  ⇧ one way":""),x,y);ro.dataset.rest="1"},650)});
+big.addEventListener("pointerleave",restOff);big.addEventListener("pointerdown",restOff);
+// the arrow keys nudging the mark in whatever mode you're in, Shift for bigger steps; a run of nudges is one step back
+function nudgeKey(e){if(!cur||live||unfT>0||mode===6||drop||tune)return false;const t=e.target;if(t&&t.closest&&t.closest("input,textarea,[role=menu],.modepop,dialog,#looks"))return false;
+  e.preventDefault();const st=e.shiftKey?40:10,dx=e.key==="ArrowLeft"?-st:e.key==="ArrowRight"?st:0,dy=e.key==="ArrowUp"?-st:e.key==="ArrowDown"?st:0;
+  if(!nudging){restOff();settle();remember();nudging={}}clearTimeout(nudging.t);apply(nudging,dx,dy);
+  const r=big.getBoundingClientRect();hudNow(nudging,r.left+r.width*.5,r.top+r.height*.9);queue();
+  nudging.t=setTimeout(()=>{nudging=null;ro.classList.add("out");if(cur){told();if(!mirOn())mirC.classList.remove("on")}},900);return true}
 // colour turns as one: every hue moves by the same angle and keeps its lightness, so the set stays in tune, and its
 // strength rises or falls together; nothing can drift into a colour that fights the others
 function retint(t){const f=(h)=>{const [L,a,b]=oklab(h),C=Math.hypot(a,b)*t.cf,H=Math.atan2(b,a)+t.dh;return fromLab([L,C*Math.cos(H),C*Math.sin(H)])};
@@ -1412,7 +1462,7 @@ function sayScan(s){const k=kindOfScan(s);return k==="mirrored"?(s.mirrors===s.n
 // the lines are shown only while symmetry is what you're changing: dragging a twist, a stretch or a lean, choosing
 // from the symmetry word, or leaning toward the calmer or wilder ghost
 let mirShow=false;
-const mirOn=()=>mirShow||!!(tune&&tune.moved&&mode<3)||(!live&&((ghosts[0]&&ghosts[0].sym&&lw[0]>.35)||(ghosts[4]&&ghosts[4].sym&&lw[4]>.35)));
+const mirOn=()=>mirShow||!!(tune&&tune.moved&&mode<3)||!!(nudging&&mode<3)||(!live&&((ghosts[0]&&ghosts[0].sym&&lw[0]>.35)||(ghosts[4]&&ghosts[4].sym&&lw[4]>.35)));
 const mirC=$("mirrors");
 function drawMirrors(m){const s=scan(m),px=mirC.width,c=px/2,R=px*.5,g=mirC.getContext("2d");g.clearRect(0,0,px,px);mirC.classList.add("on");
   const acc=accOf(cur),lw2=Math.max(1,px/420);
@@ -1923,7 +1973,7 @@ function foldTo(v){unfT=clamp(v,0,4);if(unfT>0)Promise.all([document.fonts.load(
 // the wheel turns petals on the mark; only once a poster is open does it add or peel off layers
 let wheelAcc=0,wheelAt=0;
 stage.addEventListener("wheel",(e)=>{if(!cur||drop)return;e.preventDefault();const d=e.deltaY*(e.deltaMode?40:1);
-  if(live){if(live.rec)return;live.per=clamp(live.per*Math.exp(d*.0024),3,30);ro.textContent=`one loop in ${Math.round(live.per)} s`;ro.classList.remove("out");ro.style.left=e.clientX+"px";ro.style.top=e.clientY+"px";clearTimeout(liveOn.t);liveOn.t=setTimeout(()=>ro.classList.add("out"),900);return}
+  if(live){if(live.rec)return;live.per=clamp(live.per*Math.exp(d*.0024),3,30);hud(`one loop in ${Math.round(live.per)} s`,"scroll down for slower, up for faster",e.clientX,e.clientY);clearTimeout(liveOn.t);liveOn.t=setTimeout(()=>ro.classList.add("out"),900);return}
   if(unfT>=1){foldTo(Math.max(1,unfT+d*.0032));return}
   const now=performance.now();if(now-wheelAt>400)wheelAcc=0;wheelAt=now;wheelAcc+=d;
   if(Math.abs(wheelAcc)>=60){petals(wheelAcc>0?-1:1);wheelAcc=0}},{passive:false});
@@ -2363,7 +2413,8 @@ const GUIDE=[
  ["The field",[["Drag","Wander. Let go mid-drag and it glides on."],["Scroll or pinch","Go deeper: new marks grow between the ones you see. Zoom out to travel."],
    ["Click a mark","Open it to shape, colour and save it."],["Type a letter","Plant it: marks grow shaped round it. <kbd>Backspace</kbd> takes one away, <kbd>Esc</kbd> clears."],
    ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field. A ring shows the mark in the middle."],["<kbd>Enter</kbd>","Open the ringed mark."]]],
- ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. Sideways and up and down each do something."],
+ ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. A label beside the pointer names what you're getting and what each way changes. Rest on the mark to see it before you drag."],
+   ["Hold <kbd>⇧</kbd> while dragging","Keeps to the way you set off in, so only one thing changes."],["Arrow keys","Nudge the mark in the mode you're in. <kbd>⇧</kbd> for bigger steps."],
    ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],
    ["Draw <kbd>7</kbd>","Draw one petal on the mark and it repeats all the way round. Close the loop to fill it. Tap the mark to let the drawing go."],
    ["− + or scroll over the mark","More or fewer petals."],["The symmetry word, or <kbd>M</kbd>","Mirrored, one mirror, turning or free. Hover each to preview it."],
