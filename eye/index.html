@@ -45,7 +45,8 @@ h1 i{color:var(--pink-ink)}
 .portrait #me{display:block}
 .portrait .stage,.portrait .q,.portrait .say{display:none}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:18px 0 0}
-.card{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 10px 12px;margin:0}
+.card{appearance:none;display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 10px 12px;margin:0;transition:border-color .15s,transform .15s}
+.card:hover,.card:focus-visible{border-color:var(--pink);outline:none;transform:translateY(-1px)}
 .card canvas{display:block;width:100%;aspect-ratio:1;border-radius:4px;background:var(--bg)}
 .card b{display:block;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:10px 0 2px}
 .card span{font-size:14px;color:var(--ink)}
@@ -110,7 +111,9 @@ function ring(c, x, y, r, col, w, dash) {
 function line(c, a, b, col, w, dash) {
   c.save(); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.strokeStyle = col; c.lineWidth = w || 3; c.setLineDash(dash || []); c.stroke(); c.restore();
 }
+let MINI = false; // the small portrait cards draw no words: they're too small to read
 function label(c, x, y, t, col, align) {
+  if (MINI) return;
   c.save(); c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`; c.fillStyle = col || C.leaf;
   c.textAlign = align || "left"; c.textBaseline = "middle";
   // a soft tag behind the words, so a label reads on any shape
@@ -699,18 +702,24 @@ function portrait() {
   $("#where").innerHTML = `<b>Your eye</b> · ${Object.keys(S.R).length} of ${flat.length} answered`;
   const box = $("#cards"); box.innerHTML = "";
   for (const f of flat) {
-    const rs = S.R[f.t.id], fig = document.createElement("figure"); fig.className = "card" + (rs ? "" : " empty");
+    const rs = S.R[f.t.id], fig = document.createElement("button"); fig.type = "button"; fig.className = "card" + (rs ? "" : " empty");
+    fig.setAttribute("aria-label", `${f.e.name}, trial ${f.ti + 1}: ${rs ? rs[rs.length - 1].short : "not answered yet"}. Open it.`);
     const c = document.createElement("canvas"); fig.append(c);
-    fig.insertAdjacentHTML("beforeend", `<b>${f.e.name}</b><span>${rs ? rs[rs.length - 1].short : "not answered yet"}</span>`);
+    fig.insertAdjacentHTML("beforeend", `<b>${f.e.name} · ${f.ti + 1}${rs && rs.length > 1 ? ` · ${rs.length} answers` : ""}</b><span>${rs ? rs[rs.length - 1].short : "not answered yet"}</span>`);
+    const at = flat.indexOf(f); fig.onclick = () => { start(at); $("#q").scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" }); };
     box.append(fig);
     requestAnimationFrame(() => {
       const px = Math.round((c.clientWidth || 200) * dpr); c.width = c.height = px;
       const x = c.getContext("2d"), t = Object.create(f.t);
-      if (rs) { t.s = JSON.parse(JSON.stringify(rs[rs.length - 1].s)); render(x, t, 1, rs.slice(0, -1).map((r) => r.s), px); }
-      else { t.init(); x.globalAlpha = 0.35; render(x, t, null, [], px); }
+      MINI = true;
+      try {
+        if (rs) { t.s = JSON.parse(JSON.stringify(rs[rs.length - 1].s)); render(x, t, 1, rs.slice(0, -1).map((r) => r.s), px); }
+        else { t.init(); x.globalAlpha = 0.35; render(x, t, null, [], px); }
+      } finally { MINI = false; }
     });
   }
-  acts([["back to the experiments", () => start(cur), true], ["start from the first", () => start(0)]]);
+  acts([["back to the experiments", () => start(cur), true], ["start from the first", () => start(0)],
+    ...(Object.keys(S.R).length ? [["forget my answers", () => { if (confirm("Forget every answer you've given here? This only clears this browser.")) { S = { at: [0, 0], R: {} }; save(); portrait(); } }]] : [])]);
   scrollTo({ top: $("#main").offsetTop, behavior: calm.matches ? "auto" : "smooth" });
 }
 $("#toMe").onclick = () => ($("#main").classList.contains("portrait") ? start(cur) : portrait());
