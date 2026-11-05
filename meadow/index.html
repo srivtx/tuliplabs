@@ -196,6 +196,9 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .hexes i{width:18px;height:18px;border-radius:50%;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 50%,transparent);transition:scale .25s cubic-bezier(.2,.9,.3,1.45)}
 .hexes small{opacity:.55;font-size:10px}
 .hexes [contenteditable]{outline:none;cursor:text;opacity:.9}.hexes [contenteditable]:focus{opacity:1}
+.readnote{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:11px;font-variant-numeric:tabular-nums;opacity:.78}
+.readnote b{font-weight:600}.readnote i{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none;opacity:.35;transition:opacity .3s}
+.readnote.good i{opacity:1}.readnote.low{opacity:1}.readnote.low i{opacity:1;background:var(--accent)}
 .dyehint{margin:9px 0 0;opacity:.7;line-height:1.5}
 .sheet h2 #wash{float:right;font-weight:400;letter-spacing:0;text-decoration:underline;text-underline-offset:3px;opacity:.8}.sheet h2 #wash:hover{opacity:1}
 /* a drop of colour carried from the swatches; it sinks into the mark when it reaches it */
@@ -334,7 +337,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div><p class="latin" id="latin" role="button" tabindex="0" title="Copy a link to this exact mark"></p><p class="found" id="found"></p></div>
     <div><h2>At real size <span class="grp looks" id="looks" role="group" aria-label="Look"></span></h2><div id="sizes"></div></div>
     <div><h2>Out in the world</h2><div class="worlds" id="worlds"></div></div>
-    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="tray" id="tray"><span class="trayset" id="trayset"></span><span class="mine" id="mine" aria-label="Colours you made"></span></div><div class="hexes" id="hexes" aria-label="This mark's colours"></div><p class="dyehint">Drag any colour onto the mark, its accents, or the ground around it. Pass it over other colours to mix.</p></div>
+    <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="tray" id="tray"><span class="trayset" id="trayset"></span><span class="mine" id="mine" aria-label="Colours you made"></span></div><div class="hexes" id="hexes" aria-label="This mark's colours"></div><p class="readnote" id="readnote" title="How far the ink stands out from the ground, as a contrast ratio (WCAG). A mark needs 3:1; 4.5:1 stays clear even when small."></p><p class="dyehint">Drag any colour onto the mark, its accents, or the ground around it. Pass it over other colours to mix.</p></div>
     <div class="acts">
       <div class="do"><button class="primary" id="keep">Keep it</button><button id="deeper">Grow from here</button><button id="unfold">Make a poster</button><button id="alive">Make it move</button></div>
       <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><button id="sheet" title="One image to hand over: its name, colours, real sizes, and on light and dark">Sheet</button><button id="vid" title="One seamless loop of it moving">Video</button><button id="gif" title="The loop as a GIF, for chats, emoji and avatars">GIF</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
@@ -907,7 +910,7 @@ field.addEventListener("dblclick",(e)=>{cam.zt=clamp(cam.zt+1,ZMIN,ZMAX);cam.ax=
 /* ---------- lenses ---------- */
 LENSES.forEach((name,i)=>{const b=document.createElement("button");b.textContent=name;b.setAttribute("aria-pressed",i===lens);b.onclick=()=>setLens(i,true);$("lenses").append(b)});
 function setLens(i,wave){if(i===lens)return;lensPrev=lens;lens=i;lensAt=performance.now()/1000;lensO=[W/2,H];
-  [...$("lenses").children,...$("looks").children].forEach((b)=>b.setAttribute("aria-pressed",b.textContent===LENSES[i]));if(!$("studio").hidden)drawStudio()}
+  [...$("lenses").children,...$("looks").children].forEach((b)=>b.setAttribute("aria-pressed",b.textContent===LENSES[i]));if(!$("studio").hidden){drawStudio();tabMark()}}
 
 /* ---------- planting letters ---------- */
 function edt(f,n){ // exact distance transform, one row or column at a time
@@ -1005,7 +1008,7 @@ function worlds(c){
   if(pale)onGround($("wTab"),16,c,.1);else copyTo($("wTab"),16,lens,c);$("wTab").style.borderRadius=pale?"4px":""}
 (function buildSheet(){
   $("sizes").innerHTML=[16,24,32,48,64].map(s=>`<figure><canvas id="sz${s}"></canvas><figcaption>${s}</figcaption></figure>`).join("");
-  $("worlds").innerHTML=`<div class="world w-tab" id="wSite" role="button" tabindex="0" title="Save the icons for your site: a favicon, an SVG icon, home-screen icons and the lines for your page"><div><canvas id="wTab"></canvas><span id="wSiteT">Your site</span></div></div><div class="world w-app" title="On a phone"><canvas id="wApp"></canvas></div><div class="world w-paper" title="Printed in black"><canvas id="wPaper"></canvas></div><div class="world w-night" title="On black"><canvas id="wNight"></canvas></div>`;
+  $("worlds").innerHTML=`<div class="world w-tab" id="wSite" role="button" tabindex="0" title="Save the icons for your site: a favicon, an SVG icon, home-screen icons, its colours as CSS and design tokens, and the lines for your page"><div><canvas id="wTab"></canvas><span id="wSiteT">Your site</span></div></div><div class="world w-app" title="On a phone"><canvas id="wApp"></canvas></div><div class="world w-paper" title="Printed in black"><canvas id="wPaper"></canvas></div><div class="world w-night" title="On black"><canvas id="wNight"></canvas></div>`;
   PAL.forEach((p,i)=>{
     const b=document.createElement("button");b.className="sw";b.dataset.set=i;b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");
     b.onclick=()=>{if(performance.now()-dropEnd<350||(cur.pal===i&&!cur.gr&&!cur.ink&&!cur.acc))return;remember();cur.pal=i;cur.gr=cur.ink=cur.acc=null;showTray(i);told();drawStudio()};
@@ -1045,7 +1048,7 @@ let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
 function closeStudio(){if(live){live=null;stage.classList.remove("living");$("livenote").hidden=true;$("alive").textContent="Make it move";$("vid").disabled=$("gif").disabled=false}cancelAnimationFrame(penRaf);penShow=null;inkC.classList.remove("on");big.classList.remove("inking");$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
-  $("studio").hidden=true;$("tag").inert=$("foot").inert=false;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
+  $("studio").hidden=true;$("tag").inert=$("foot").inert=false;cur=null;tabMark();unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 let keptNow=false;
 function leave(){closeStudio();
   if(keptNow){keptNow=false;let seen=false;try{seen=!!localStorage.getItem("meadow-shelf-told");localStorage.setItem("meadow-shelf-told","1")}catch(e){}
@@ -1604,7 +1607,14 @@ function told(){const n=hist.length;if(!$("hexes").contains(document.activeEleme
   $("found").textContent=foundAt+(cur.note||"");shapeWord(true);
   // the link carries every change, so a shared mark arrives exactly as it was left
   const url=cur.at+(n||cur.dye.length||cur.edited||cur.pen||symI!==2?"&"+codeOf(cur):"")+(cur.pen?"&p"+penCode(cur.pen):""); // under another symmetry setting the spot alone would grow a different mark
-  if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}}
+  if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}tabMark()}
+// while a mark is open, the browser tab wears it and its name, so a row of tabs shows which mark is which
+const tabIcon=document.querySelector('link[rel="icon"]'),tabHome=[tabIcon.href,document.title];let tabT=0;
+function tabMark(){clearTimeout(tabT);if(!cur){tabIcon.href=tabHome[0];document.title=tabHome[1];return}
+  document.title=latin(cur)+" · Meadow";
+  tabT=setTimeout(()=>{if(!cur)return;const cv=document.createElement("canvas");cv.width=cv.height=64;const g=cv.getContext("2d");
+    g.fillStyle=groundOf(cur);g.beginPath();g.roundRect(0,0,64,64,14);g.fill();paint(cur,52,lens,colours(cur.pal,cur));g.drawImage(tiny,6,6);
+    try{tabIcon.href=cv.toDataURL("image/png")}catch(e){}},260)}
 $("undo").onclick=stepBack;$("redo").onclick=stepAgain;
 addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio();prender()}});
 // when the words under the mark wrap to another line, everything above makes room for them
@@ -1703,7 +1713,11 @@ function apartFrom(h,from,min){
   return h}
 const dyeSafe=(h)=>apartFrom(h,groundOf(cur),1.45);
 // the mark's colours, written out; click one and type to set it exactly
-function hexes(){if(!cur)return;const el=$("hexes"),rows=[["ground",groundOf(cur)],["ink",inkOf(cur)],["accent",accOf(cur)],...cur.dye.slice(-2).map((d,k)=>["dye"+(cur.dye.length>1?" "+(k+1):""),d.h,k])];
+// how well the ink reads on its ground, in the words a brand guide would use
+function readNote(){const r=contrast(inkOf(cur),groundOf(cur)),el=$("readnote"),v=(Math.floor(r*10)/10).toFixed(1);
+  const [cls,say]=r>=7?["good","AAA, clear even at 16 px"]:r>=4.5?["good","AA, clear at every size"]:r>=3?["","enough for a mark, soft below 24 px"]:["low","too faint for small sizes"];
+  el.className="readnote "+cls;el.innerHTML=`<i aria-hidden="true"></i><span>Ink on ground <b>${v} : 1</b> · ${say}</span>`}
+function hexes(){if(!cur)return;readNote();const el=$("hexes"),rows=[["ground",groundOf(cur)],["ink",inkOf(cur)],["accent",accOf(cur)],...cur.dye.slice(-2).map((d,k)=>["dye"+(cur.dye.length>1?" "+(k+1):""),d.h,k])];
   el.innerHTML=rows.map(([n,h],i)=>`<span class="hx" title="${n}"><i style="background:${h}" data-h="${h}" aria-hidden="true"></i><span contenteditable="true" spellcheck="false" data-i="${i}" aria-label="${n} colour">${h.slice(1)}</span><small>${n.replace(/^dye.*/,"dye")}</small></span>`).join("");
   el.querySelectorAll("i").forEach((d)=>carry(d,{hex:d.dataset.h})); // a chip's colour can be carried off like any other
   el.querySelectorAll("[contenteditable]").forEach(x=>{const [n,h,k]=rows[+x.dataset.i];
@@ -2158,12 +2172,14 @@ async function saveSheet(){if(!cur)return;$("say").textContent="Setting out the 
   head("COLOURS",y+=104);y+=58;
   [["Ground",ground],["Ink",ink],["Accent",acc]].forEach(([n,h],i)=>{const cx=X+i*Math.floor(CW/3);g.fillStyle=h;g.beginPath();g.arc(cx+52,y+52,52,0,Math.PI*2);g.fill();
     g.strokeStyle=line;g.lineWidth=2;g.stroke();g.fillStyle=text;g.font="600 22px "+MONO;g.fillText(h.toUpperCase(),cx+128,y+46);g.fillStyle=soft;g.font="400 19px "+MONO;g.fillText(n,cx+128,y+76)});
-  head("AT REAL SIZE, TWICE OVER",y+=186);y+=50;
+  {const r=contrast(ink,ground),v=(Math.floor(r*10)/10).toFixed(1),lv=r>=7?"AAA":r>=4.5?"AA":r>=3?"AA for graphics":"below 3 : 1";
+    g.fillStyle=soft;g.font="400 18px "+MONO;g.fillText(`Ink on ground ${v} : 1 · ${lv}`,X,y+150)}
+  head("AT REAL SIZE, TWICE OVER",y+=216);y+=50;
   const sz=[16,24,32,48,64];g.fillStyle=ground;g.beginPath();g.roundRect(X,y,CW,196,24);g.fill();
   let sx=X+48;sz.forEach(s=>{const d=s*2;mark(d,sx,y+(150-d)/2+14);g.fillStyle=text;g.font="400 16px "+MONO;g.globalAlpha=.6;g.fillText(String(s),sx+d/2-g.measureText(String(s)).width/2,y+180);g.globalAlpha=1;sx+=d+72});
   head("ON LIGHT AND ON DARK",y+=270);y+=50;
-  const tw2=(CW-36)/2;[["#ffffff","#111111"],["#111111","#f5f5f5"]].forEach(([bg,fg],i)=>{const tx=X+i*(tw2+36);g.fillStyle=bg;g.beginPath();g.roundRect(tx,y,tw2,280,24);g.fill();g.strokeStyle=line;g.lineWidth=2;g.stroke();
-    mark(200,tx+(tw2-200)/2,y+40,{i:K(fg),a:K(fg)})});
+  const tw2=(CW-36)/2;[["#ffffff","#111111"],["#111111","#f5f5f5"]].forEach(([bg,fg],i)=>{const tx=X+i*(tw2+36);g.fillStyle=bg;g.beginPath();g.roundRect(tx,y,tw2,256,24);g.fill();g.strokeStyle=line;g.lineWidth=2;g.stroke();
+    mark(190,tx+(tw2-190)/2,y+33,{i:K(fg),a:K(fg)})});
   g.fillStyle=soft;g.font="400 17px "+MONO;g.fillText("Grown in Meadow · Tulip Labs",X,SH-64);
   cv.toBlob(async(b)=>{try{await saveFile(slug()+"-sheet.png",b);$("say").textContent="Saved the sheet."}catch(e){$("say").textContent="That didn't save."}},"image/png")}
 // the whole shelf in one zip: every kept mark as an SVG and a 1024-pixel PNG, in the way you're looking now
@@ -2181,6 +2197,12 @@ async function saveShelfAll(){if(!shelf.length||saveShelfAll.busy)return;saveShe
   for(const [nm,c] of pngs)files.push({name:"meadow-shelf/"+nm+".png",data:new Uint8Array(await (await new Promise(r=>c.toBlob(r,"image/png"))).arrayBuffer())});
   try{await saveFile("meadow-shelf.zip",zipOf(files));$("say").textContent=`Saved ${shelf.length===1?"the one mark":"all "+shelf.length+" marks"} on your shelf.`}catch(e){$("say").textContent="That didn't save."}
   saveShelfAll.busy=false}
+// the mark's colours as tokens a developer can paste straight in: CSS custom properties and a design-tokens JSON
+const rgbOf=(h)=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+function tokList(){const t=[["ground",groundOf(cur)],["ink",inkOf(cur)],["accent",accOf(cur)]];cur.dye.slice(-2).forEach((d,k,a)=>t.push(["dye"+(a.length>1?"-"+(k+1):""),d.h]));return t}
+function tokCss(){const t=tokList(),r=contrast(inkOf(cur),groundOf(cur)).toFixed(2);
+  return `/* ${latin(cur)}, from Meadow. Ink on ground ${r} : 1. */\n:root {\n`+t.map(([n,h])=>`  --mark-${n}: ${h}; /* rgb(${rgbOf(h).join(" ")}) */`).join("\n")+`\n}\n`}
+function tokJson(){const o={};tokList().forEach(([n,h])=>{o[n]={$type:"color",$value:h}});return JSON.stringify({[slug()]:o},null,2)+"\n"}
 async function saveSiteIcons(){if(!cur)return;
   const c=colours(cur.pal,cur),ground=groundOf(cur),pale=contrast(inkOf(cur),"#ffffff")<1.9,name=latin(cur),dir=slug()+"-icons/";
   // a pale mark would vanish on a white tab, so there it sits on a little tile of its own ground, as in the preview
@@ -2194,8 +2216,9 @@ async function saveSiteIcons(){if(!cur)return;
   const head=`<link rel="icon" href="/favicon.ico" sizes="32x32">\n<link rel="icon" href="/icon.svg" type="image/svg+xml">\n<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n<link rel="manifest" href="/site.webmanifest">\n<meta name="theme-color" content="${ground}">\n`;
   const man=JSON.stringify({name,short_name:name.split(" ")[0],icons:[{src:"/icon-192.png",sizes:"192x192",type:"image/png"},{src:"/icon-512.png",sizes:"512x512",type:"image/png"},{src:"/icon-mask.png",sizes:"512x512",type:"image/png",purpose:"maskable"}],theme_color:ground,background_color:ground,display:"standalone"},null,2);
   const files=[["favicon.ico",icoOf(fav,[16,32,48])],["icon.svg",svg],["apple-touch-icon.png",apple],["icon-192.png",i192],["icon-512.png",i512],["icon-mask.png",mask],["site.webmanifest",man],
+    ["colours.css",tokCss()],["tokens.json",tokJson()],
     ["add-to-head.html","<!-- "+name+", from Meadow. Put these files at the root of your site, then paste these lines into <head>. -->\n"+head]].map(([n,d])=>({name:dir+n,data:d}));
-  try{await saveFile(slug()+"-icons.zip",zipOf(files));$("say").textContent="Saved the icons for your site, with the lines to paste into its <head>."+note()}catch(e){$("say").textContent="That didn't save."}}
+  try{await saveFile(slug()+"-icons.zip",zipOf(files));$("say").textContent="Saved the icons for your site, its colours as CSS and tokens, and the lines to paste into its <head>."+note()}catch(e){$("say").textContent="That didn't save."}}
 const note=()=>lens>=3?" Dots and Soft are PNG looks, so the SVG holds the plain shape.":"";
 $("wSite").onclick=saveSiteIcons;
 $("shelfall").onclick=saveShelfAll;$("sheet").onclick=saveSheet;$("shelfall").onmouseenter=$("shelfall").onfocus=()=>{$("shelfall").textContent="Save all"};$("shelfall").onmouseleave=$("shelfall").onblur=()=>{$("shelfall").textContent="Your shelf"};
@@ -2348,13 +2371,13 @@ const GUIDE=[
  ["The ghosts",[["Point between two ghosts","The mark blends them, exactly half of each at the midpoint."],["Click a ghost","Become it. A new ring grows round the new mark."],
    ["Double-click","Keep the blend you're looking at."],["Grow from here","A fresh ring of ghosts round the mark as it is now."]]],
  ["Colour",[["A colour set","Ground, ink and accent chosen to go together. Rest on a set to see its three colours."],
-   ["Drag any colour","Onto the mark, its accents or the ground round it. Pass it over other colours to mix them."],["Type a code","Click any of the mark's colour codes and type a new one."],["Wash it off","Takes dyed colour back off the mark."]]],
+   ["Drag any colour","Onto the mark, its accents or the ground round it. Pass it over other colours to mix them."],["Type a code","Click any of the mark's colour codes and type a new one."],["Ink on ground","The line under the codes says how well the ink stands out. 4.5 : 1 or more stays clear even at 16 px."],["Wash it off","Takes dyed colour back off the mark."]]],
  ["Posters",[["Make a poster","Sets the mark on a poster. Scroll for more or fewer layers: echoes, kin, the field."],["The style word, or <kbd>1</kbd>–<kbd>4</kbd>","Echo, Reflect, Repeat or Plate."],
    ["Drag the mark","Move it on the page. Pick the poster's shape below it, then save a Poster PNG."]]],
  ["Moving marks",[["Make it move","The mark drifts through its ghosts in a loop that never jumps."],["Click it, or Hold still","Keep the moment you like as the new mark."],
    ["Scroll","A slower or faster loop, from 3 to 30 seconds."],["Video · GIF","Save exactly one loop: a 1080-pixel video, or a GIF for chats, emoji and avatars."]]],
- ["Taking it with you",[["SVG · PNG","A crisp vector or a 1024-pixel image."],["Sheet","One image to hand over: the mark on its ground, its name, its three colours, its real sizes, and on light and dark."],["Copy SVG","Straight onto the clipboard for Figma and the like."],
-   ["Your site","Under Out in the world: a zip with a favicon, an SVG icon, home-screen icons, a manifest and the lines for your page."],["The link","The address always holds this exact mark, colours and drawing included. Click the mark's name to copy it."],["Your shelf","Click the words Your shelf, under the actions, to save every kept mark as SVG and PNG in one zip."]]],
+ ["Taking it with you",[["SVG · PNG","A crisp vector or a 1024-pixel image."],["Sheet","One image to hand over: the mark on its ground, its name, its three colours and how well they read, its real sizes, and on light and dark."],["Copy SVG","Straight onto the clipboard for Figma and the like."],
+   ["Your site","Under Out in the world: a zip with a favicon, an SVG icon, home-screen icons, a manifest, the colours as CSS and design tokens, and the lines for your page."],["The link","The address always holds this exact mark, colours and drawing included. Click the mark's name to copy it."],["Your shelf","Click the words Your shelf, under the actions, to save every kept mark as SVG and PNG in one zip."]]],
  ["Your shelf and the nursery",[["Keep it","The mark joins your shelf, bottom right in the field. It stays in this browser."],
    ["Drag a kept mark onto another","Onto a mark in the field, another kept mark, or the one you're shaping: the meadow becomes their nursery, every mix of the two between them."],
    ["In the nursery","Further up grows wilder, further down bolder. Children can be kept and bred again. Back to the meadow, top left, returns you."],["Let go","Drag a kept mark into the soft circle beside the shelf, or hover it and press ×."]]],
@@ -2369,10 +2392,10 @@ function openGuide(){endTour(true);const inStudio=!$("studio").hidden,w=walkHere
 gbox.addEventListener("keydown",(e)=>e.stopPropagation());
 // search: every word you type must appear in a row; American spellings and everyday words find Meadow's own
 const SYN={color:"colour",colors:"colours",export:"save",download:"save",undo:"step back",redo:"step forward",logo:"mark",icon:"icon",favicon:"favicon",animate:"move",animation:"move",
-  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw"};
+  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css"};
 // words people reach for that a section answers without using them
-const GTAGS={"The field":"explore browse wander map","Shaping a mark":"edit change shape tweak","The ghosts":"variations options suggestions","Colour":"palette paint","Posters":"print layout",
-  "Moving marks":"loop animation","Taking it with you":"save export download file share","Your shelf and the nursery":"keep favourites saved breed"};
+const GTAGS={"The field":"explore browse wander map","Shaping a mark":"edit change shape tweak","The ghosts":"variations options suggestions","Colour":"palette paint contrast wcag hex","Posters":"print layout",
+  "Moving marks":"loop animation","Taking it with you":"save export download file share tokens css developer","Your shelf and the nursery":"keep favourites saved breed"};
 const gRows=[...$("guidebody").querySelectorAll("dl > div")].map(d=>({d,dt:d.querySelector("dt"),dd:d.querySelector("dd"),h0:d.querySelector("dt").innerHTML,h1:d.querySelector("dd").innerHTML,
   txt:(d.closest("section").querySelector("h3").textContent+" "+(GTAGS[d.closest("section").querySelector("h3").textContent]||"")+" "+d.textContent).toLowerCase()}));
 const markUp=(html,ws)=>ws.length?html.replace(/(<[^>]+>)|([^<]+)/g,(m,tag,text)=>tag||text.replace(new RegExp("("+ws.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")+")","gi"),"<mark>$1</mark>")):html;
