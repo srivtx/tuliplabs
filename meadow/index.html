@@ -127,6 +127,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #shapepop canvas{grid-row:1/3;width:30px;height:30px;justify-self:center}
 #waypop{min-width:262px}#waypop button{grid-template-columns:34px 1fr;align-items:center}#waypop canvas{grid-row:1/3;width:30px;height:30px;justify-self:center}
 /* mirror lines laid over the mark while its symmetry is being changed, fading as each line stops holding */
+#wasbig{position:absolute;pointer-events:none;opacity:0}.stage.unfolded #wasbig{display:none}
 #mirrors{position:absolute;pointer-events:none;opacity:0;transition:opacity .35s ease}
 #mirrors.on{opacity:1}
 #big{transition:opacity .45s ease}
@@ -327,6 +328,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div id="beforetag" hidden>As you opened it</div>
     <canvas id="big" width="900" height="900" aria-label="Your mark. Drag sideways to twist it, up and down to thicken it."></canvas>
     <div id="halo" aria-label="Ways your mark could grow"></div>
+    <canvas id="wasbig" aria-hidden="true"></canvas>
     <canvas id="mirrors" aria-hidden="true"></canvas>
     <canvas id="inkpad" aria-hidden="true"></canvas>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
@@ -805,7 +807,7 @@ const R=makeR(field,false);
 const tiny=document.createElement("canvas"),T=R&&makeR(tiny,true);
 if(!R||!T){document.body.insertAdjacentHTML("beforeend",'<div id="nogl">This field needs a browser that can draw with the graphics card.</div>');throw new Error("no webgl2")}
 const buf=new Float32Array(R.MAX*R.STRIDE),one=new Float32Array(R.STRIDE);
-let W=0,H=0,dpr=1,base=100,sharp=2,slow=0,ema=16;
+let W=0,H=0,dpr=1,base=100,sharp=2,slow=0,ema=16,quick=0,softAt=0,softWait=20000;
 const cam={x:.55,y:.35,z:0,zt:0,vx:0,vy:0,ax:0,ay:0};
 let lens=0,lensPrev=0,lensAt=-9,lensO=[0,0];
 let growAt=performance.now()/1000,growO=[0,0],growK=1.9,prevKeyMs=0;
@@ -824,7 +826,10 @@ function frame(ms){
   if(!$("studio").hidden)return;
   const t=ms/1000,gapMs=ms-prevKeyMs,dt=Math.min(.05,gapMs/1000||.016);prevKeyMs=ms;
   // if this device can't keep up, draw a little softer rather than stutter
-  if(gapMs<120&&document.visibilityState==="visible"){ema=lerp(ema,gapMs,.06);slow=ema>30?slow+1:0;if(slow>90&&sharp>1){sharp=Math.max(1,sharp-.5);slow=0;ema=16;resize()}}
+  if(gapMs<120&&document.visibilityState==="visible"){ema=lerp(ema,gapMs,.06);slow=ema>30?slow+1:0;quick=ema<18.5?quick+1:0;
+    if(slow>90&&sharp>1){sharp=Math.max(1,sharp-.5);slow=quick=0;ema=16;softAt=ms;resize()}
+    // and once it keeps up again for a while, it tries sharp again; each time that fails it waits twice as long before the next try
+    else if(quick>300&&sharp<Math.min(2,devicePixelRatio||1)&&ms-softAt>softWait){sharp=Math.min(2,sharp+.5);quick=slow=0;ema=16;softWait*=2;resize()}}
   // ease the zoom about the pointer, keep the throw going after a drag
   const dz=cam.zt-cam.z;
   if(Math.abs(dz)>1e-4){const s0=ppw();const nz=cam.z+dz*(1-Math.exp(-dt*11));const wx=cam.x+(cam.ax-W/2)/s0,wy=cam.y+(cam.ay-H/2)/s0;cam.z=nz;const s1=ppw();cam.x=wx-(cam.ax-W/2)/s1;cam.y=wy-(cam.ay-H/2)/s1}
@@ -987,7 +992,12 @@ field.addEventListener("dblclick",(e)=>{cam.zt=clamp(cam.zt+1,ZMIN,ZMAX);cam.ax=
 /* ---------- lenses ---------- */
 LENSES.forEach((name,i)=>{const b=document.createElement("button");b.textContent=name;b.setAttribute("aria-pressed",i===lens);b.onclick=()=>setLens(i,true);$("lenses").append(b)});
 function setLens(i,wave){if(i===lens)return;lensPrev=lens;lens=i;lensAt=performance.now()/1000;lensO=[W/2,H];
-  [...$("lenses").children,...$("looks").children].forEach((b)=>b.setAttribute("aria-pressed",b.textContent===LENSES[i]));if(!$("studio").hidden){drawStudio();tabMark()}}
+  [...$("lenses").children,...$("looks").children].forEach((b)=>b.setAttribute("aria-pressed",b.textContent===LENSES[i]));if(!$("studio").hidden){fadeBig();drawStudio();tabMark()}}
+// in the studio a new look melts in over the old one rather than snapping, as the field's does with its wave
+function fadeBig(){const c=$("wasbig");if(calm||!big.width||!big.offsetWidth)return;const w=big.offsetWidth;
+  Object.assign(c.style,{left:big.offsetLeft+"px",top:big.offsetTop+"px",width:w+"px",height:w+"px"});if(c.width!==big.width)c.width=c.height=big.width;
+  const g=c.getContext("2d");g.clearRect(0,0,c.width,c.width);g.drawImage(big,0,0);c.getAnimations().forEach(a=>a.cancel());
+  c.animate([{opacity:1},{opacity:0}],{duration:340,easing:"cubic-bezier(.3,0,.2,1)",fill:"forwards"})}
 
 /* ---------- planting letters ---------- */
 function edt(f,n){ // exact distance transform, one row or column at a time
@@ -1034,7 +1044,7 @@ addEventListener("keydown",(e)=>{
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(e.key==="Tab"&&unfT<=0&&!live&&stage.matches(":hover")&&!e.target.closest("input,textarea,dialog,.modepop")){e.preventDefault();setMode((mode+(e.shiftKey?6:1))%7);sayMode()}
-    else if(/^[1-8]$/.test(e.key)&&e.target.tagName!=="INPUT"){const k=+e.key-1;if(k===7){if(!way)setWay(1,true);setMode(6)}else if(k===6&&mode===6)setWay(way+1,true);else{setMode(k);sayMode()}}else if((e.key==="["||e.key==="]")&&freeOn()&&unfT<=0)brushBy(e.key==="]"?1.25:.8);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
+    else if(/^[1-8]$/.test(e.key)&&e.target.tagName!=="INPUT"){const k=+e.key-1;if(k===7){if(!way)setWay(1,true);setMode(6)}else if(k===6&&mode===6)setWay(way+1,true);else{setMode(k);sayMode()}}else if((e.key==="["||e.key==="]")&&freeOn()&&unfT<=0)brushBy(e.key==="]"?1.25:.8);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);else if((e.key==="l"||e.key==="L")&&unfT<=0&&!live&&e.target.tagName!=="INPUT"){setLens((lens+(e.shiftKey?LENSES.length-1:1))%LENSES.length,true);sayLook()}return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -1432,6 +1442,9 @@ let mode=0;
 // switching mode from the keys says which one you're in beside the pointer, since the word that names it sits below the mark
 function sayMode(){if(!cur||tune)return;const r=big.getBoundingClientRect(),over=ringE&&big.matches(":hover"),x=over?ringE.clientX:r.left+r.width*.5,y=over?ringE.clientY:r.top+r.height*.9;restOff();
   hud(mode===6?"Draw · "+WAYS[way].n.toLowerCase():MODES[mode][1],(mode===6?WAYS[way].d:AXW[mode])+" · Tab for the next",x,y);clearTimeout(sayMode.t);sayMode.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1400)}
+// L in the studio steps through the looks, as 1 to 5 do in the field; the label says which
+function sayLook(){if(!cur||tune)return;const r=big.getBoundingClientRect(),over=ringE&&big.matches(":hover"),x=over?ringE.clientX:r.left+r.width*.5,y=over?ringE.clientY:r.top+r.height*.9;restOff();
+  hud(LENSES[lens],"L for the next look · ⇧L back",x,y);clearTimeout(sayMode.t);sayMode.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1400)}
 function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];if(i===6&&typeof firstTime==="function")firstTime("draw");
   if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
   big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw"][i];if(i!==6){ring.classList.remove("on");guideInk(null);popWay(false)}
@@ -2598,7 +2611,9 @@ addEventListener("keyup",(e)=>{if(e.key==="b"||e.key==="B")showBefore(false)});a
    A step moves on by itself once you've done what it shows, or with Next. The field and the mark each have their
    own walk, and each runs once by itself; "Guide" opens the whole of what does what, and either walk again. */
 const seenT=(()=>{try{const v=JSON.parse(localStorage.getItem("meadow-tour")||"{}");return v&&typeof v==="object"?v:{}}catch(e){return {}}})();
-const markSeen=(k)=>{seenT[k]=1;try{localStorage.setItem("meadow-tour",JSON.stringify(seenT))}catch(e){}};
+// each walk remembers which edition you saw; steps added later carry v, and you get just those once, as a short walk of what's new
+const TV=2,newFor=(k)=>!!seenT[k]&&seenT[k]<TV&&TOUR[k].some(st=>(st.v||1)>seenT[k]);
+const markSeen=(k)=>{seenT[k]=TV;try{localStorage.setItem("meadow-tour",JSON.stringify(seenT))}catch(e){}};
 const boxOf=(els,pad=8,rad=18)=>{const rs=els.map(e=>e&&e.getBoundingClientRect()).filter(r=>r&&(r.width||r.height));if(!rs.length)return null;
   const x0=Math.min(...rs.map(r=>r.left)),y0=Math.min(...rs.map(r=>r.top)),x1=Math.max(...rs.map(r=>r.right)),y1=Math.max(...rs.map(r=>r.bottom));
   return {x:x0-pad,y:y0-pad,w:x1-x0+pad*2,h:y1-y0+pad*2,r:Math.min(rad,(y1-y0)/2+pad)}};
@@ -2634,6 +2649,9 @@ const TOUR={
  draw:[
   {t:"Draw on the mark",b:"Draw a line across the mark. The word under it says where each line lands: round the mark as a petal, just where you draw, or mirrored. Press 7 again for the next way. Close a loop to fill it.",
    at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.p=cur&&cur.pen;s.f=cur&&cur.fr},done:(s)=>cur&&(cur.pen!==s.p||cur.fr!==s.f)},
+  {v:2,t:"Snap it straight",b:"Hold ⇧ while you draw and the line snaps straight, in 15° steps; pause and it turns a corner. Finish where you started and it snaps shut and fills. Start on the end of a line and it carries that line on.",
+   at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.n=cur&&cur.fr?cur.fr.s.length:0;s.p=cur&&cur.pen},
+   done:(s)=>{if(!cur)return false;if(cur.pen!==s.p&&cur.pen)return true;const L=cur.fr?cur.fr.s:[];return L.length>s.n&&!!(L[L.length-1].e||L[L.length-1].c)}},
   {t:"Change it, or let it go",b:"A new petal replaces the last; lines add up, and ⌥ rubs them out. Tap the mark to let the drawing go, and ⌘Z steps back. What you draw travels in the link and into the nursery."},
  ],
  nursery:[
@@ -2644,8 +2662,10 @@ const TOUR={
  studio:[
   {t:"Drag the mark to change it",b:"Sideways and up and down each change something different. Let go and that's the new mark; nothing you try is lost.",
    at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.h=hist.length},done:(s)=>hist.length>s.h},
-  {t:"Choose what dragging does",b:"Click this word to pick: twist, stretch, lean, petal shape, frame, colour, or draw a petal yourself. The keys 1 to 7 do the same.",
+  {t:"Choose what dragging does",b:"Click this word to pick: twist, stretch, lean, petal shape, frame, colour, or draw on it. The keys 1 to 7 do the same.",
    at:()=>boxOf([$("modeword")],7),go:(s)=>{s.m=mode},done:(s)=>mode!==s.m},
+  {v:2,t:"Switch without looking away",b:"With the pointer on the mark, Tab steps to the next way of dragging and ⇧Tab back; a label at the pointer says which. L does the same for the look: Ink, Line, Pixel, Dots, Soft.",
+   at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.m=mode;s.l=lens},done:(s)=>mode!==s.m||lens!==s.l},
   {t:"The ghosts are where it could go",b:"Each ghost is a nearby version of your mark. Point between two and the mark blends them; click one to become it; double-click to keep a blend.",
    at:()=>{if(!gLay)return null;const r=stage.getBoundingClientRect(),P=[1,2].map(i=>{const a=-Math.PI/2+i*Math.PI*2/GN;return [r.left+gLay.cx+gLay.R*Math.cos(a),r.top+gLay.cy+gLay.R*Math.sin(a)]}),h=gLay.gs*.62;
      const x0=Math.min(P[0][0],P[1][0])-h,y0=Math.min(P[0][1],P[1][1])-h,x1=Math.max(P[0][0],P[1][0])+h,y1=Math.max(P[0][1],P[1][1])+h;return {x:x0,y:y0,w:x1-x0,h:y1-y0,r:h}}},
@@ -2668,14 +2688,14 @@ const TOURN={field:"The field",studio:"Your mark",poster:"Posters",live:"Moving 
 // a walk lasts as long as the thing it shows: leave the poster, the motion, the pen or the nursery, and its walk ends quietly
 const TOURON={field:()=>$("studio").hidden,studio:()=>!$("studio").hidden,poster:()=>!$("studio").hidden&&unfT>0,live:()=>!$("studio").hidden&&!!live,draw:()=>!$("studio").hidden&&mode===6,nursery:()=>$("studio").hidden&&!!nur};
 // the first time you reach a new part, its walk starts by itself, unless another walk is under way
-function firstTime(kind){if(seenT[kind]||tour)return;setTimeout(()=>{if(!tour&&!seenT[kind]&&TOURON[kind]())startTour(kind)},650)}
+function firstTime(kind){if((seenT[kind]&&!newFor(kind))||tour)return;setTimeout(()=>{if(!tour&&TOURON[kind]()&&(!seenT[kind]||newFor(kind)))startTour(kind,!!seenT[kind])},650)}
 const walkHere=()=>$("studio").hidden?(nur?"nursery":"field"):live?"live":unfT>0?"poster":mode===6?"draw":"studio";
-function startTour(kind){endTour(true);if(!TOURON[kind]())return;markSeen(kind);
-  tour={kind,steps:TOUR[kind],i:-1,s:{},doneAt:0,last:""};$("tour").hidden=tcard.hidden=false;$("tour").classList.remove("out");
+function startTour(kind,news){endTour(true);if(!TOURON[kind]())return;const was=seenT[kind]||0,steps=news?TOUR[kind].filter(st=>(st.v||1)>was):TOUR[kind];markSeen(kind);if(!steps.length)return;
+  tour={kind,steps,name:(news?"New · ":"")+TOURN[kind],i:-1,s:{},doneAt:0,last:""};$("tour").hidden=tcard.hidden=false;$("tour").classList.remove("out");
   $("tourdots").innerHTML=tour.steps.map((s,k)=>`<i title="${k+1}. ${s.t}"></i>`).join("");requestAnimationFrame(()=>tcard.classList.remove("out"));showStep(0);requestAnimationFrame(tourLoop)}
 function showStep(i){if(!tour)return;if(i>=tour.steps.length){endTour();return}
   const st=tour.steps[i];tour.i=i;tour.s={};tour.doneAt=0;tour.last="";if(st.go)st.go(tour.s);
-  $("tourn").textContent=TOURN[tour.kind]+(tour.steps.length>1?" · "+(i+1)+" of "+tour.steps.length:"");$("tourh").textContent=st.t;$("tourb").textContent=st.b;
+  $("tourn").textContent=tour.name+(tour.steps.length>1?" · "+(i+1)+" of "+tour.steps.length:"");$("tourh").textContent=st.t;$("tourb").textContent=st.b;
   $("tourdid").hidden=!st.done;tcard.classList.remove("done");$("tournext").textContent=i===tour.steps.length-1?"Done":"Next";
   [...$("tourdots").children].forEach((d,k)=>d.classList.toggle("on",k===i));
   if(st.el){const e=st.el();if(e)e.scrollIntoView({block:"nearest",behavior:calm?"auto":"smooth"})}
@@ -2703,7 +2723,7 @@ addEventListener("resize",()=>{if(tour)tour.last=""});
 addEventListener("keydown",(e)=>{if(!(e.key==="?"||(e.code==="Slash"&&e.shiftKey))||e.metaKey||e.ctrlKey||gbox.open||$("studio").hidden)return;const t=e.target;if(t&&(t.isContentEditable||t.tagName==="INPUT"||t.tagName==="TEXTAREA"))return;e.preventDefault();e.stopImmediatePropagation();openGuide()},true);
 // when a mark opens: a walk round the field hands over to the walk round the mark, and a first mark gets it anyway
 function tourOnOpen(){if(tour&&tour.kind==="field"){endTour(true);setTimeout(()=>{if(!$("studio").hidden)startTour("studio")},900);return}
-  if(!seenT.studio&&!tour)setTimeout(()=>{if(!$("studio").hidden&&!tour&&!seenT.studio)startTour("studio")},1200)}
+  if((!seenT.studio||newFor("studio"))&&!tour)setTimeout(()=>{if(!$("studio").hidden&&!tour&&(!seenT.studio||newFor("studio")))startTour("studio",!!seenT.studio)},1200)}
 // the whole of what does what, in one sheet
 const GUIDE=[
  ["The field",[["Drag","Wander. Let go mid-drag and it glides on."],["Scroll or pinch","Go deeper: new marks grow between the ones you see. Zoom out to travel."],
@@ -2712,6 +2732,7 @@ const GUIDE=[
  ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. A label beside the pointer names what you're getting and what each way changes. Rest on the mark to see it before you drag."],
    ["Hold <kbd>⇧</kbd> while dragging","Keeps to the way you set off in, so only one thing changes."],["Arrow keys","Nudge the mark in the mode you're in. <kbd>⇧</kbd> for bigger steps."],
    ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],["<kbd>Tab</kbd> over the mark","Steps to the next mode, <kbd>⇧Tab</kbd> back. A label beside the pointer says which one you're in."],
+   ["<kbd>L</kbd>","Steps to the next look (Ink, Line, Pixel, Dots, Soft), <kbd>⇧L</kbd> back. The new look melts in over the old."],
    ["Draw <kbd>7</kbd>","Draw on the mark. The word after it says where each line lands: <i>round the mark</i>, as a petal that repeats as the mark does; <i>just where you draw</i>; or mirrored side to side, top to bottom or four ways. Press <kbd>7</kbd> again for the next way; <kbd>8</kbd> goes straight to just where you draw."],
    ["Round the mark","Draw one petal and it repeats all the way round. Close the loop to fill it. Tap the mark to let it go. On a lettered mark the petal sits beside the letters. In Petal mode, sideways makes it longer or shorter."],
    ["Lines where you draw","Lines land exactly where you draw them, one after another, over the mark and any letters. A closed loop fills; on a badge a line cuts through. <kbd>[</kbd> <kbd>]</kbd> change the brush, <kbd>⌘Z</kbd> takes a line back, a tap clears them all."],
@@ -2744,7 +2765,7 @@ function openGuide(){endTour(true);const inStudio=!$("studio").hidden,w=walkHere
 gbox.addEventListener("keydown",(e)=>e.stopPropagation());
 // search: every word you type must appear in a row; American spellings and everyday words find Meadow's own
 const SYN={color:"colour",colors:"colours",export:"save",download:"save",undo:"step back",redo:"step forward",logo:"mark",icon:"icon",favicon:"favicon",animate:"move",animation:"move",
-  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css",brush:"brush",straight:"straight",ruler:"straight",symmetric:"mirror",polygon:"straight",erase:"rub out",eraser:"rub out",rub:"rub out",join:"rub out",sketch:"draw",freehand:"where you draw",kaleidoscope:"mirrored",reflect:"mirrored"};
+  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css",brush:"brush",straight:"straight",ruler:"straight",symmetric:"mirror",polygon:"straight",erase:"rub out",eraser:"rub out",rub:"rub out",join:"rub out",sketch:"draw",freehand:"where you draw",kaleidoscope:"mirrored",reflect:"mirrored",snap:"straight",switch:"steps",shortcut:"steps",shortcuts:"steps",lens:"look",view:"look"};
 // words people reach for that a section answers without using them
 const GTAGS={"The field":"explore browse wander map","Shaping a mark":"edit change shape tweak","The ghosts":"variations options suggestions","Colour":"palette paint contrast wcag hex","Posters":"print layout",
   "Moving marks":"loop animation","Taking it with you":"save export download file share tokens css developer","Your shelf and the nursery":"keep favourites saved breed"};
@@ -2769,6 +2790,13 @@ function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^
 const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
 window.__meadow={cam,setLens,plant,openStudio,specimen,world:(x,y)=>world(x,y),breed:(a,b)=>breed(a,b),svgText,tend,probe(m,n){const k=cur;cur=m;const r=readField(n,0);cur=k;return r},get cur(){return cur},get tiles(){return tiles}};
 requestAnimationFrame(frame);
+// the first mark you open used to pay for setting up its own drawing (a hitch of 30 ms or so); that's done quietly once the
+// field is up and the page is idle, by drawing one mark at the studio's size and a ring of small ones, then throwing them away
+(()=>{let tries=0;const warm=()=>{if(cur||!$("studio").hidden||nur)return;const m=nearest(innerWidth/2,innerHeight/2);
+  if(!m||!m.ok){if(++tries<12)setTimeout(warm,500);return}
+  const c=colours(m.pal,m);paint(m,1100,lens,c);paintMany(Array.from({length:GN},()=>({m,px:120,fix:c,l:lens})));
+  const t=document.createElement("canvas");t.width=t.height=64;t.getContext("2d").drawImage(...tinyAt(0,0))};
+  const later=()=>window.requestIdleCallback?requestIdleCallback(warm,{timeout:2500}):setTimeout(warm,1200);setTimeout(later,900)})();
 setTimeout(()=>document.body.classList.add("live"),400);
 if(!landed&&!seenT.field)setTimeout(()=>{if(!tour&&$("studio").hidden&&!gbox.open)startTour("field")},1800);
 if(landed)(async()=>{if(landed.letters)await plant(landed.letters);const m=specimen(cam.x,cam.y);if(!m.ok)tend([m]);openStudio(m);const e=landed.code&&readCode(landed.code);
