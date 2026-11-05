@@ -499,6 +499,72 @@ const E = [];
   ] });
 }
 
+/* ── Balance ────────────────────────────────────────────────────────────── */
+{
+  // a simple model of visual weight: area × darkness. The dark square counts fully, the pale circle at 45%.
+  const F = [150, 250, 850, 750], MID = [500, 500], SQ = 150, R = 110, PALE = 0.45;
+  const wH = SQ * SQ, wL = Math.PI * R * R * PALE, K = wH / wL;
+  const bal = (h) => [MID[0] - K * (h[0] - MID[0]), MID[1] - K * (h[1] - MID[1])];
+  const weightAt = (h, p) => [(wH * h[0] + wL * p[0]) / (wH + wL), (wH * h[1] + wL * p[1]) / (wH + wL)];
+  function scene(c, h, p) {
+    poly(c, [[F[0], F[1]], [F[2], F[1]], [F[2], F[3]], [F[0], F[3]]], C.bg, C.line, 3);
+    poly(c, [[h[0] - SQ / 2, h[1] - SQ / 2], [h[0] + SQ / 2, h[1] - SQ / 2], [h[0] + SQ / 2, h[1] + SQ / 2], [h[0] - SQ / 2, h[1] + SQ / 2]], C.ink);
+    c.save(); c.globalAlpha *= PALE; dot(c, p[0], p[1], R, C.ink); c.restore();
+    ring(c, p[0], p[1], R, C.pink, 3);
+  }
+  function trial(id, q, hint, H0, P0, free) {
+    return { id, q, hint,
+      init() { this.s = { x: P0[0], y: P0[1] }; },
+      move(hd, dx, dy) {
+        this.s.x = cl(this.s.x + dx, F[0] + R + 4, F[2] - R - 4);
+        if (free) this.s.y = cl(this.s.y + dy, F[1] + R + 4, F[3] - R - 4);
+        // the circle can't sit on the square
+        const nx = cl(this.s.x, H0[0] - SQ / 2, H0[0] + SQ / 2), ny = cl(this.s.y, H0[1] - SQ / 2, H0[1] + SQ / 2);
+        const d = Math.hypot(this.s.x - nx, this.s.y - ny);
+        if (d < R + 6) { const ux = (this.s.x - nx) / (d || 1), uy = (this.s.y - ny) / (d || 1); this.s.x = nx + ux * (R + 6) || H0[0] + SQ / 2 + R + 6; this.s.y = free ? ny + uy * (R + 6) : this.s.y; }
+      },
+      draw(c, k, prev) {
+        const p = [this.s.x, this.s.y], b = bal(H0);
+        // a pin under the middle, so the frame reads as something that could tip
+        if (!free) poly(c, [[MID[0], F[3] + 4], [MID[0] + 34, F[3] + 60], [MID[0] - 34, F[3] + 60]], C.faint);
+        c.save();
+        if (k != null && !free) {
+          const tq = wH * (H0[0] - MID[0]) + wL * (p[0] - MID[0]), ang = cl(tq / (wH * 170) * 0.16, -0.16, 0.16) * k;
+          c.translate(MID[0], F[3] + 4); c.rotate(ang); c.translate(-MID[0], -(F[3] + 4));
+        }
+        scene(c, H0, p);
+        if (k != null) {
+          prev.forEach((q) => ring(c, q.x, q.y, R, C.faint, 2));
+          c.save(); c.globalAlpha = k;
+          ring(c, b[0], b[1], R, C.leaf, 3, [8, 8]);
+          label(c, b[0], b[1] + R + 30, "balanced, by the model", C.leaf, "center");
+          const w = weightAt(H0, p);
+          truth(c, MID[0], MID[1], "middle", 1, "l", -30);
+          dot(c, w[0], w[1], 9, C.pink); label(c, w[0] + 18, w[1] + 36, "your weight", C.pink);
+          c.restore();
+        }
+        c.restore();
+      },
+      read() {
+        const p = [this.s.x, this.s.y], b = bal(H0), v = [b[0] - MID[0], b[1] - MID[1]], L = Math.hypot(v[0], v[1]);
+        const along = ((p[0] - MID[0]) * v[0] + (p[1] - MID[1]) * v[1]) / (L * L) - 1;
+        const across = free ? Math.abs((p[0] - MID[0]) * v[1] - (p[1] - MID[1]) * v[0]) / (L * L) : 0;
+        const pct = Math.round(Math.abs(along) * 100);
+        const way = Math.abs(along) < 0.08 ? "near" : along > 0 ? "past" : "short of";
+        return { v: R2(along),
+          line: `You placed the circle ${way === "near" ? "close to" : `${pct}% ${way}`} the point where a simple size × darkness model balances it${across > 0.15 ? `, and off to one side of the line through the middle` : ""}.`,
+          why: way === "near" ? "Your eye matches the simple model: weight is about size times darkness. A big pale shape can hold up a small dark one."
+            : way === "past" ? "You moved it further out than the model needs, so to your eye the pale circle weighs less than its size suggests: darkness counts for more."
+            : "You kept it closer in than the model needs, so to your eye the pale circle weighs more than its darkness suggests: size counts for a lot.",
+          short: way === "near" ? "Balance: you weigh by size × darkness" : way === "past" ? "Balance: darkness weighs more for you" : "Balance: size weighs more for you" };
+      } };
+  }
+  E.push({ id: "balance", name: "Balance", trials: [
+    trial("w-line", "Slide the pale circle until the frame feels steady.", "drag the circle sideways", [330, 500], [585, 500], false),
+    trial("w-free", "Now the square is up in a corner. Steady it again.", "drag the circle anywhere", [330, 400], [600, 420], true),
+  ] });
+}
+
 /* ── more experiments ───────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────────────────────────
