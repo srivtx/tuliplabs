@@ -149,7 +149,10 @@ function label(c, x, y, t, col, align) {
   c.save(); c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`; c.fillStyle = col || C.leaf;
   c.textAlign = align || "left"; c.textBaseline = "middle";
   // a soft tag behind the words, so a label reads on any shape
-  const w = c.measureText(t).width, px = LS * 0.45, h = LS * 1.5, x0 = c.textAlign === "right" ? x - w - px : c.textAlign === "center" ? x - w / 2 - px : x - px;
+  const w = c.measureText(t).width, px = LS * 0.45, h = LS * 1.5;
+  let x0 = c.textAlign === "right" ? x - w - px : c.textAlign === "center" ? x - w / 2 - px : x - px;
+  // never let a name run off the canvas: slide it back inside, whatever the screen size
+  const nudge = Math.max(0, 6 - x0) - Math.max(0, x0 + w + 2 * px - 994); x0 += nudge; x += nudge;
   c.save(); c.globalAlpha *= 0.88; c.fillStyle = C.panel; c.beginPath(); c.roundRect ? c.roundRect(x0, y - h / 2, w + 2 * px, h, h / 2) : c.rect(x0, y - h / 2, w + 2 * px, h); c.fill(); c.restore();
   c.fillText(t, x, y); c.restore();
 }
@@ -163,25 +166,45 @@ function truth(c, x, y, t, k, side, dy) {
 /* a row of line samples with their names, so each dashed truth says what it is */
 function legend(c, items, y, k) {
   c.save(); c.globalAlpha = k; c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
-  const ws = items.map(([, t]) => 56 + c.measureText(t).width), gap = 44, tot = ws.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
-  let x = 500 - tot / 2;
-  items.forEach(([d, t, col], i) => { line(c, [x, y], [x + 44, y], col || C.leaf, 3, d); label(c, x + 56, y, t, col || C.leaf); x += ws[i] + gap; });
+  const ws = items.map(([, t]) => 56 + c.measureText(t).width + LS * 0.5), gap = 40, rows = [[]];
+  // when the names are too wide for one line (big type on a small screen), wrap onto more
+  items.forEach((it, i) => { const r = rows[rows.length - 1], wide = r.reduce((a, j) => a + ws[j] + gap, 0) + ws[i]; if (r.length && wide > 960) rows.push([i]); else r.push(i); });
+  rows.forEach((r, ri) => {
+    let x = 500 - (r.reduce((a, j) => a + ws[j], 0) + gap * (r.length - 1)) / 2;
+    const yy = y + (ri - (rows.length - 1) / 2) * LS * 1.8;
+    for (const j of r) { const [d, t, col] = items[j]; line(c, [x, yy], [x + 44, yy], col || C.leaf, 3, d); label(c, x + 56, yy, t, col || C.leaf); x += ws[j] + gap; }
+  });
   c.restore();
 }
 /* names beside several marks at once, stacked so no two names overlap */
 function tags(c, items, k) {
   c.save(); c.globalAlpha = k; c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
-  const step = LS * 1.7, placed = [];
+  const step = LS * 2, placed = [];
   for (const it of [...items].sort((a, b) => a.y - b.y)) {
     const col = it.col || C.leaf, right = it.x < 640, w = c.measureText(it.t).width + LS;
-    const x0 = right ? it.x + 26 : it.x - 26 - w;
-    let y = it.y;
-    for (const p of placed) if (x0 < p.x1 && x0 + w > p.x0 && Math.abs(y - p.y) < step) y = p.y + step;
+    const x0 = cl(right ? it.x + 26 - LS / 2 : it.x - 26 - w + LS / 2, 6, 994 - w);
+    let y = it.y, hit, n = 0;
+    // keep stepping down until this name is clear of every one already placed (a margin, so rounding can't loop)
+    while (n++ < 20 && (hit = placed.find((p) => x0 < p.x1 && x0 + w > p.x0 && Math.abs(y - p.y) < step - 0.5))) y = hit.y + step;
     placed.push({ x0, x1: x0 + w, y });
     if (Math.abs(y - it.y) > 4) line(c, [it.x + (right ? 14 : -14), it.y], [right ? x0 : x0 + w, y], col, 1.5);
     label(c, right ? it.x + 26 : it.x - 26, y, it.t, col, right ? "left" : "right");
   }
   c.restore();
+}
+/* names along one line, each centred on its mark; one that would collide moves a row (up, or down with dir 1) */
+function rowNames(c, items, y, dir) {
+  c.save(); c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
+  const placed = [];
+  for (const it of [...items].sort((a, b) => a.x - b.x)) {
+    const w = c.measureText(it.t).width + LS * 1.4, x0 = it.x - w / 2;
+    let lv = 0; while (placed.some((p) => p.lv === lv && x0 < p.x1 && x0 + w > p.x0)) lv++;
+    placed.push({ x0, x1: x0 + w, lv });
+    placed[placed.length - 1].y = y + (dir || -1) * lv * LS * 1.7;
+    label(c, it.x, placed[placed.length - 1].y, it.t, it.col || C.leaf, "center");
+  }
+  c.restore();
+  return placed;
 }
 /* moving trials read the clock; the small portrait cards and reduced motion hold still */
 let playAnyway = false; // set when someone asks for less motion but chooses to watch a motion trial
@@ -382,17 +405,19 @@ const E = [];
         row(c, it, this.s.x, y0, C.ink);
         if (k != null) {
           c.save(); c.globalAlpha = k;
-          label(c, L0 - 8, ROW[1] - H / 2 - 30, "equal gaps by the ruler", C.leaf);
           row(c, it, equalGaps(it), ROW[1], C.faint);
           label(c, L0 - 8, ROW[2] - H / 2 - 30, "equal distances between centres", C.leaf);
           row(c, it, equalCentres(it), ROW[2], C.faint);
-          // your gaps, measured, under the first row
+          // your gaps, measured, above your row, where there's room for the numbers to stack
           const e = edges(it, this.s.x), G = (L1 - L0 - it.reduce((a, b) => a + b.w(), 0)) / (it.length - 1);
+          const gaps = [];
           for (let i = 0; i < e.length - 1; i++) {
-            const a = e[i][1], b = e[i + 1][0], y = y0 + H / 2 + 34;
+            const a = e[i][1], b = e[i + 1][0], y = y0 - H / 2 - 30;
             line(c, [a, y], [b, y], C.pink, 3); line(c, [a, y - 9], [a, y + 9], C.pink, 3); line(c, [b, y - 9], [b, y + 9], C.pink, 3);
-            label(c, (a + b) / 2, y + 30, Math.round((b - a) / G * 100) + "%", C.pink, "center");
+            gaps.push({ x: (a + b) / 2, t: Math.round((b - a) / G * 100) + "%", col: C.pink });
           }
+          rowNames(c, gaps, y0 - H / 2 - 30 - LS * 1.2, -1);
+          label(c, L0 - 8, ROW[1] - H / 2 - 30, "equal gaps by the ruler", C.leaf);
           c.restore();
         }
       },
@@ -512,7 +537,7 @@ const E = [];
       draw(c, k, prev) {
         const all = [...P, { L: this.s.L, h: this.s.h }];
         all.forEach((p, i) => { const x = 115 + i * 200; poly(c, [[x, 150], [x + 170, 150], [x + 170, 360], [x, 360]], ok(p.L, Cc, p.h), i === 3 ? C.pink : null, 4); });
-        label(c, 815, 400, "yours", C.pink, "right");
+        label(c, 815, 118, "yours", C.pink, "right");
         // the map: hue across, lightness down, all at the palette's strength
         c.save(); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high"; c.drawImage(mapOf(Cc), MX, MY, MW, MH); c.restore();
         P.forEach((p) => { const [x, y] = toMap(p.h, p.L); ring(c, x, y, 13, C.bg, 4); ring(c, x, y, 13, C.ink, 2); });
@@ -520,6 +545,7 @@ const E = [];
           prev.forEach((p) => { const [x, y] = toMap(p.h, p.L); ring(c, x, y, 9, C.faint, 2); });
           const m = meanHue(P);
           c.save(); c.globalAlpha = k;
+          const names = [];
           for (const [off, half, n] of BANDS) {
             const a = (m + off - half + 360) % 360, xs = [a, a + 2 * half];
             for (const sh of [0, -360]) {
@@ -528,8 +554,9 @@ const E = [];
               if (r > l) { line(c, [l, MY - 18], [r, MY - 18], C.leaf, 5); }
             }
             const cx = MX + (((m + off) % 360 + 360) % 360) / 360 * MW;
-            label(c, cl(cx, MX + 60, MX + MW - 60), MY - 46, n, C.leaf, "center");
+            names.push({ x: cl(cx, MX + 60, MX + MW - 60), t: n });
           }
+          rowNames(c, names, MY - 46);
           c.restore();
         }
         const [x, y] = toMap(this.s.h, this.s.L); ring(c, x, y, 16, C.bg, 6); ring(c, x, y, 16, C.pink, 4);
@@ -590,10 +617,15 @@ const E = [];
           prev.forEach((q) => ring(c, q.x, q.y, R, C.faint, 2));
           c.save(); c.globalAlpha = k;
           ring(c, b[0], b[1], R, C.leaf, 3, [8, 8]);
-          label(c, b[0], b[1] + R + 30, "balanced, by the model", C.leaf, "center");
           const w = weightAt(H0, p);
-          truth(c, MID[0], MID[1], "middle", 1, "l", -30);
-          dot(c, w[0], w[1], 9, C.pink); label(c, w[0] + 18, w[1] + 36, "your weight", C.pink);
+          line(c, [MID[0] - 16, MID[1]], [MID[0] + 16, MID[1]], C.leaf, 3); line(c, [MID[0], MID[1] - 16], [MID[0], MID[1] + 16], C.leaf, 3);
+          dot(c, w[0], w[1], 9, C.pink);
+          // the marks tilt with the frame, but their names are laid out level, so they read and stack cleanly
+          const M = c.getTransform(), sc = Math.hypot(M.a, M.b), lv = (q) => { const d = M.transformPoint(new DOMPoint(q[0], q[1])); return [d.x / sc, d.y / sc]; };
+          const [m0, w0, b0] = [lv(MID), lv(w), lv([b[0], b[1] + R])];
+          c.save(); c.setTransform(sc, 0, 0, sc, 0, 0);
+          tags(c, [{ x: m0[0], y: m0[1], t: "middle" }, { x: w0[0], y: w0[1], t: "your weight", col: C["pink-ink"] }, { x: b0[0], y: b0[1], t: "balanced, by the model" }], 1);
+          c.restore();
           c.restore();
         }
         c.restore();
@@ -715,7 +747,7 @@ const E = [];
         plot(c, nn[0][2], P1, P2, 0, 1, C.leaf, 3, [10, 8], k);
         c.save(); c.globalAlpha = k;
         label(c, PL + 22, P1 + 16, `closest named curve: ${nn[0][0]}`, C.leaf);
-        label(c, 500, TY + 62, "rings: where it is at each twelfth of the time", C.faint, "center");
+        label(c, 500, TY + 62, "rings: each twelfth of the time", C.faint, "center");
         c.restore();
       }
       plot(c, f, P1, P2, 0, 1, C.pink, 5);
@@ -1064,10 +1096,12 @@ const Endless = {};
       paintAt(c, row(this.s, m.xe).B, C.leaf, true, 3, [10, 9]);
       paintAt(c, row(this.s, m.xc).B, C.leaf, true, 3, [2, 7]);
       paintAt(c, row(this.s, this.s.pred).B, C.ink, true, 3, [5, 6]);
+      const gaps = [];
       for (const [a, b, g] of [[A.x1, B.x0, gl], [B.x1, Cc.x0, gr]]) {
         line(c, [a, gy], [b, gy], C.pink, 3); line(c, [a, gy - 12], [a, gy + 12], C.pink, 3); line(c, [b, gy - 12], [b, gy + 12], C.pink, 3);
-        label(c, (a + b) / 2, gy + 42, pc(g / ev * 100), C.pink, "center");
+        gaps.push({ x: (a + b) / 2, t: pc(g / ev * 100), col: C.pink });
       }
+      rowNames(c, gaps, gy + 42, 1);
       c.restore();
       legend(c, [[[10, 9], "even gaps"], [[2, 7], "even balance points"], [[5, 6], "my guess", C.ink]], 860, k);
     },
