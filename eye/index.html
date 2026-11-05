@@ -82,6 +82,7 @@ h1 i{color:var(--pink-ink)}
     <p class="lede" style="margin:0">Every answer you've given, drawn as you left it, with the maths beside it.</p>
     <div class="learnt" id="learnt"></div>
     <div class="cards" id="cards"></div>
+    <input type="file" id="load" accept="application/json,.json" hidden>
   </section>
 </main>
 <script>
@@ -157,7 +158,8 @@ function tags(c, items, k) {
   c.restore();
 }
 /* moving trials read the clock; the small portrait cards and reduced motion hold still */
-const clock = () => (MINI || calm.matches ? null : performance.now());
+let playAnyway = false; // set when someone asks for less motion but chooses to watch a motion trial
+const clock = () => (MINI || (calm.matches && !playAnyway) ? null : performance.now());
 const Kit = { poly, dot, ring, line, label, truth, cl, dist };
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -1095,7 +1097,7 @@ function draw() { if (T) render(g, T, rev, rev == null ? [] : prev(), size * dpr
 /* moving trials draw every frame while they're on screen */
 let looping = false;
 function live() {
-  if (looping || !T || !T.live || calm.matches) return;
+  if (looping || !T || !T.live || (calm.matches && !playAnyway)) return;
   looping = true;
   const f = () => { if (!T || !T.live || $("#main").classList.contains("portrait")) { looping = false; return; } draw(); requestAnimationFrame(f); };
   requestAnimationFrame(f);
@@ -1107,11 +1109,15 @@ function start(i, again) {
   $("#main").classList.remove("portrait"); $("#say").after($("#act"));
   $("#where").innerHTML = f.e.where ? `<b>${f.e.name}</b> · ${f.e.where()}` : `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length} &nbsp;·&nbsp; experiment ${f.ei + 1} of ${E.length}`;
   const q = $("#q"); q.textContent = T.q; q.classList.remove("fade"); void q.offsetWidth; q.classList.add("fade");
-  $("#say").innerHTML = `<p class="why" id="hint">${T.hint} until it ${T.feels || "looks"} right.${T.live && calm.matches ? " Your system asks for less motion, so it holds still here." : ""}</p>`;
+  const still = T.live && calm.matches && !playAnyway, keys = !toldKeys && matchMedia("(hover: hover)").matches;
+  $("#say").innerHTML = `<p class="why" id="hint">${T.hint} until it ${T.feels || "looks"} right.${keys ? " Arrow keys work too, with Shift for bigger steps, and Enter says it looks right." : ""}${still ? ` Your system asks for less motion, so it holds still. <button class="w" type="button" id="playIt">play it anyway</button>` : ""}</p>`;
+  if (keys) toldKeys = true;
+  if (still) $("#playIt").onclick = () => { playAnyway = true; $("#playIt").remove(); live(); };
   cv.classList.remove("done");
   acts([[`it ${T.feels || "looks"} right`, commit, true], ["skip", goNext]]);
   draw(); live();
 }
+let toldKeys = false;
 // after the set comes Endless, which never runs out: it asks next where it knows your eye least
 function goNext() { const n = flat[cur + 1]; start(flat[cur].e.endless || (n && n.e.endless) ? pickEndless() : cur + 1); }
 function pickEndless() {
@@ -1188,9 +1194,27 @@ function portrait() {
     });
   }
   acts([["back to the experiments", () => start(cur), true], ["start from the first", () => start(0)],
+    ...(Object.keys(S.R).length ? [["save my answers", saveFile]] : []), ["load answers", () => $("#load").click()],
     ...(Object.keys(S.R).length ? [["forget my answers", () => { if (confirm("Forget every answer you've given here? This only clears this browser.")) { S = { at: [0, 0], R: {} }; save(); portrait(); } }]] : [])]);
   scrollTo({ top: $("#main").offsetTop, behavior: calm.matches ? "auto" : "smooth" });
 }
+/* your answers live in this browser; save them as a file to keep them or move them to another */
+function saveFile() {
+  const a = document.createElement("a"), d = new Date().toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({ eye: 1, saved: d, answers: S }, null, 1)], { type: "application/json" }));
+  a.download = `eye-answers-${d}.json`; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$("#load").onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    const o = JSON.parse(await f.text()), n = o && o.answers;
+    if (!n || typeof n.R !== "object" || !Array.isArray(n.at)) throw 0;
+    if (Object.keys(S.R).length && !confirm("Replace the answers in this browser with the ones in this file?")) return;
+    S = { at: n.at, R: n.R, M: n.M || {} }; save(); portrait();
+  } catch (err) { alert("That file doesn't look like saved Eye answers."); }
+};
 $("#toMe").onclick = () => ($("#main").classList.contains("portrait") ? start(cur) : portrait());
 
 colours();
@@ -1200,7 +1224,7 @@ new ResizeObserver(fit).observe(cv);
 // the letters are measured from the real font, so wait for it (and give up waiting after 2.5 s)
 const fontsIn = document.fonts ? Promise.race([Promise.all([document.fonts.load('600 100px "IBM Plex Sans"'), document.fonts.load('500 20px "IBM Plex Mono"'), document.fonts.ready]), new Promise((r) => setTimeout(r, 2500))]) : Promise.resolve();
 fontsIn.then(() => { start(cur); fit(); });
-window.EYE = { E, S, flat, get T() { return T; }, start, commit, portrait };
+window.EYE = { E, get S() { return S; }, flat, get T() { return T; }, start, commit, portrait };
 })();
 </script>
 </body>
