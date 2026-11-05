@@ -127,7 +127,8 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 /* mirror lines laid over the mark while its symmetry is being changed, fading as each line stops holding */
 #mirrors{position:absolute;pointer-events:none;opacity:0;transition:opacity .35s ease}
 #mirrors.on{opacity:1}
-#big{transition:opacity .45s ease}#big.inking{opacity:.22;transition:opacity .18s ease}
+#big{transition:opacity .45s ease}
+.stage.living .ghost{transition:opacity .6s ease}.stage.living #big{cursor:pointer}#big.inking{opacity:.22;transition:opacity .18s ease}
 #inkpad{position:absolute;pointer-events:none;opacity:0;transition:opacity .5s ease .08s}#inkpad.on{opacity:1;transition:none}.stage.unfolded #inkpad{display:none}
 .stage.unfolded #mirrors{display:none}
 /* while you drag, a small label beside the pointer names what you're making */
@@ -249,7 +250,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <canvas id="inkpad" aria-hidden="true"></canvas>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
-      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–6)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
+      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–7)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="livenote" hidden>It drifts through its kin. Click it to keep the moment you like; scroll for slower or faster.</span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
       <div class="modepop" id="modepop" hidden role="menu" aria-label="What dragging the mark changes"></div>
       <div class="modepop" id="stylepop" hidden role="menu" aria-label="How the poster sets the mark"></div>
       <div class="tools">
@@ -266,8 +267,8 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div><h2>Out in the world</h2><div class="worlds" id="worlds"></div></div>
     <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="tray" id="tray"><span class="trayset" id="trayset"></span><span class="mine" id="mine" aria-label="Colours you made"></span></div><div class="hexes" id="hexes" aria-label="This mark's colours"></div><p class="dyehint">Drag any colour onto the mark, its accents, or the ground around it. Pass it over other colours to mix.</p></div>
     <div class="acts">
-      <div class="do"><button class="primary" id="keep">Keep it</button><button id="deeper">Grow from here</button><button id="unfold">Make a poster</button></div>
-      <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
+      <div class="do"><button class="primary" id="keep">Keep it</button><button id="deeper">Grow from here</button><button id="unfold">Make a poster</button><button id="alive">Make it move</button></div>
+      <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><button id="vid" title="One seamless loop of it moving">Video</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
     </div>
     <p id="say" role="status"></p>
     <div class="kept" id="kept" hidden><span class="kl">Your shelf</span><div class="keptrow" id="keptrow" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span></div>
@@ -871,7 +872,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-7]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-7]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -960,7 +961,7 @@ function openStudio(m,from){ftag.classList.add("out");cancelAnimationFrame(penRa
 let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
-function closeStudio(){cancelAnimationFrame(penRaf);penShow=null;inkC.classList.remove("on");big.classList.remove("inking");$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
+function closeStudio(){if(live){live=null;stage.classList.remove("living");$("livenote").hidden=true;$("alive").textContent="Make it move";$("vid").disabled=false}cancelAnimationFrame(penRaf);penShow=null;inkC.classList.remove("on");big.classList.remove("inking");$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
   $("studio").hidden=true;$("tag").inert=$("foot").inert=false;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 let keptNow=false;
 function leave(){closeStudio();
@@ -1043,7 +1044,7 @@ function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");c
   penTo(makePen(toPetal(resample(sm,PEN_N,closed),cur),closed,cur.pen?cur.pen.mir:0));
   told();drawGhosts();
   ro.textContent=closed?"filled · tap the mark to let it go":"drawn · tap the mark to let it go";ro.classList.remove("out");clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1600);return true}
-big.addEventListener("pointerdown",(e)=>{try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false,ink:mode===6?[markAt(e)]:null}});
+big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false,ink:mode===6?[markAt(e)]:null}});
 big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
   if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
   tune.x=e.clientX;tune.y=e.clientY;
@@ -1317,7 +1318,7 @@ function sayScan(s){const k=kindOfScan(s);return k==="mirrored"?(s.mirrors===s.n
 // the lines are shown only while symmetry is what you're changing: dragging a twist, a stretch or a lean, choosing
 // from the symmetry word, or leaning toward the calmer or wilder ghost
 let mirShow=false;
-const mirOn=()=>mirShow||!!(tune&&tune.moved&&mode<3)||(ghosts[0]&&ghosts[0].sym&&lw[0]>.35)||(ghosts[4]&&ghosts[4].sym&&lw[4]>.35);
+const mirOn=()=>mirShow||!!(tune&&tune.moved&&mode<3)||(!live&&((ghosts[0]&&ghosts[0].sym&&lw[0]>.35)||(ghosts[4]&&ghosts[4].sym&&lw[4]>.35)));
 const mirC=$("mirrors");
 function drawMirrors(m){const s=scan(m),px=mirC.width,c=px/2,R=px*.5,g=mirC.getContext("2d");g.clearRect(0,0,px,px);mirC.classList.add("on");
   const acc=accOf(cur),lw2=Math.max(1,px/420);
@@ -1385,19 +1386,63 @@ function leanStep(ms){
   if(moving)requestAnimationFrame(leanStep);else leaning=false;
 }
 const ghostPath=(t)=>{const v=clamp((t-.04)/.92);return v+(v*v*(3-2*v)-v)*.25}; // nearly even, with the slightest rest at each ghost
+/* ---------- a living mark ----------
+   The mark drifts round its ring of ghosts, leaning part of the way toward each in turn and melting between
+   neighbours, so it changes without ever stopping being itself. One trip round is one loop, and the end meets the
+   start exactly, so a saved video loops without a seam. Click to keep the moment you like; scroll for the pace */
+let live=null;
+function liveWeights(ph,out){out.fill(0);const f=(((ph%1)+1)%1)*GN,i=Math.floor(f)%GN,j=(i+1)%GN,u=ghostPath(f-Math.floor(f));
+  // a stranger is a bigger leap, so the mark only leans a little way toward one; the breath swells and eases twice a loop
+  const reach=(k)=>(ghosts[k]&&ghosts[k].far?.5:.74)*(.86+.14*Math.cos(ph*Math.PI*4));out[i]=reach(i)*(1-u);out[j]=reach(j)*u}
+function liveOn(){if(!cur||live)return;if(unfT>0)foldTo(0);popShape(false);tw.fill(0);pending=-1;
+  live={ph:0,per:9,ms:performance.now(),t0:performance.now(),rec:false};stage.classList.add("living");
+  $("leanhint").hidden=true;$("livenote").hidden=false;$("alive").textContent="Hold still";const me=live;requestAnimationFrame((ms)=>liveStep(ms,me))}
+function liveOff(keep){if(!live)return;const was=live;live=null;stage.classList.remove("living");$("livenote").hidden=true;$("leanhint").hidden=unf>=.5;$("alive").textContent="Make it move";
+  if(keep&&!was.rec&&leant())keepLive();else{tw.fill(0);leanTo()}
+  [...halo.children].forEach(b=>b.style.opacity="")}
+// one loop per life, so stopping and starting quickly never runs two at once
+function liveStep(ms,me){if(!live||live!==me||!cur)return;
+ const dt=Math.min(.05,Math.max(0,ms-live.ms)/1000);live.ms=ms;
+  if(!live.rec){live.ph=(live.ph+dt/live.per)%1;liveWeights(live.ph,lw);
+    const k=calm?1:clamp((ms-live.t0)/1600),e=k*k*(3-2*k);if(e<1)for(let i=0;i<GN;i++)lw[i]*=e; // it wakes gently instead of jumping
+    tw.set(lw);drawBig();
+    [...halo.children].forEach((b,i)=>b.style.opacity=lw[i]>.02?.35+.65*Math.min(1,lw[i]/.74):".35")}
+  requestAnimationFrame((t)=>liveStep(t,me))}
+// the moment the living mark is at, as one still mark
+const liveMark=()=>{let m=leant()?mix(lw):cur;if(penShow)m={...m,pen:penShow};return m};
+/* a loop saved as a video: drawn frame by frame at an even pace off screen, on the mark's own ground, so every
+   frame is whole even when the device is slow, and the last frame leads straight back into the first */
+async function recordLoop(){
+  const type=window.MediaRecorder&&["video/mp4;codecs=avc1.42E01E","video/mp4","video/webm;codecs=vp9","video/webm"].find(t=>MediaRecorder.isTypeSupported(t));
+  const S=1080,cv=document.createElement("canvas");cv.width=cv.height=S;
+  if(!type||!cv.captureStream){$("say").textContent="This browser can't record video here. Try Chrome, Edge or Safari.";return}
+  if(!live)liveOn();if(!live||live.rec)return;live.rec=true;$("vid").disabled=true;
+  const g=cv.getContext("2d"),stream=cv.captureStream(0),track=stream.getVideoTracks()[0],rec=new MediaRecorder(stream,{mimeType:type,videoBitsPerSecond:9e6}),chunks=[];
+  rec.ondataavailable=(e)=>{if(e.data.size)chunks.push(e.data)};const done=new Promise(r=>rec.onstop=r);
+  const FPS=30,frames=Math.round(live.per*FPS),ph0=live.ph,c=colours(cur.pal,cur),ground=groundOf(cur),wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+  rec.start();
+  for(let k=0;k<frames;k++){if(!live||!cur)break;const t0=performance.now();liveWeights(ph0+k/frames,lw);tw.set(lw);
+    g.fillStyle=ground;g.fillRect(0,0,S,S);paint(liveMark(),Math.round(S*.84),lens,c);g.drawImage(tiny,Math.round(S*.08),Math.round(S*.08));track.requestFrame();
+    drawBig();if(k%6===0)$("say").textContent=`Recording one loop… ${Math.round(k/frames*100)}%`;
+    await wait(Math.max(0,1000/FPS-(performance.now()-t0)))}
+  rec.stop();await done;track.stop();$("vid").disabled=false;
+  if(live){live.rec=false;live.ph=ph0;live.ms=performance.now()}
+  if(!cur)return;const blob=new Blob(chunks,{type:type.split(";")[0]});
+  if(!blob.size){$("say").textContent="That didn't record. Try again.";return}
+  try{await saveFile(slug()+(type.includes("mp4")?".mp4":".webm"),blob);$("say").textContent=`Saved a ${Math.round(live?live.per:frames/FPS)}-second loop.`}catch(e){$("say").textContent="That didn't save."}}
 function settle(){lw.fill(0);tw.fill(0);pending=-1;peek=null;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
 // round the ring, the mark leans toward the ghost you're near; between two, it leans toward both at once
 stage.addEventListener("pointermove",(e)=>{
-  if(tune||pending>=0||!gLay||unf>0||e.pointerType!=="mouse"||!$("shapepop").hidden)return;
+  if(live||tune||pending>=0||!gLay||unf>0||e.pointerType!=="mouse"||!$("shapepop").hidden)return;
   const sr=stage.getBoundingClientRect(),dx=e.clientX-sr.left-gLay.cx,dy=e.clientY-sr.top-gLay.cy,arc=Math.PI*2/GN;
   // between two ghosts the mark walks a straight line from one to the other, at an even pace under the pointer:
   // exactly half of each at the midpoint. (It used to linger by each ghost and rush across the middle.)
   const f=(((Math.atan2(dy,dx)+Math.PI/2)/arc)%GN+GN)%GN,i=Math.floor(f)%GN,j=(i+1)%GN,u=ghostPath(f-Math.floor(f));
   const near=1-sstep(gLay.gs*.45,gLay.gs*1.15,Math.abs(Math.hypot(dx,dy)-gLay.R));
   tw.fill(0);if(near>.004){tw[i]=near*(1-u);tw[j]=near*u}leanTo()});
-stage.addEventListener("pointerleave",()=>{if(pending<0){tw.fill(0);leanTo()}});
+stage.addEventListener("pointerleave",()=>{if(pending<0&&!live){tw.fill(0);leanTo()}});
 // double-click keeps the shape you're looking at, even one caught halfway between two ghosts; a new ring grows round it
-stage.addEventListener("dblclick",(e)=>{if(!cur||unf>0||pending>=0||e.target.closest(".ghost,.tunehint")||!leant())return;e.preventDefault();keepLive()});
+stage.addEventListener("dblclick",(e)=>{if(!cur||unf>0||pending>=0||live||e.target.closest(".ghost,.tunehint")||!leant())return;e.preventDefault();keepLive()});
 function keepLive(){
   remember();const m=mix(lw);cur.g=m.g;cur.pen=m.pen;cur.n0=m.n0;cur.n1=m.n1;cur.s=m.s;
   if(cur.s<.02||cur.s>.98){cur.n0=cur.n1=cur.s>.5?cur.n1:cur.n0;cur.s=0}
@@ -1405,7 +1450,7 @@ function keepLive(){
   if(!calm)big.animate([{scale:1.045},{scale:1}],{duration:420,easing:"cubic-bezier(.2,.9,.3,1.3)"});
   told();drawBig();makeGhosts();drawGhosts();queue();
 }
-function become(i){if(!ghosts[i]||pending>=0)return;if(lw[i]>.97&&lw.every((v,k)=>k===i||v<.02)){commit(i);return}pending=i;leanOne(i,1)}
+function become(i){if(!ghosts[i]||pending>=0||(live&&live.rec))return;if(live)liveOff(false);if(lw[i]>.97&&lw.every((v,k)=>k===i||v<.02)){commit(i);return}pending=i;leanOne(i,1)}
 function commit(i){
   remember();const m=blend(ghosts[i],1);cur.g=m.g;cur.pen=m.pen;if(m.n1!==cur.n1||m.n0!==cur.n0){cur.n0=cur.n1=m.n1;cur.s=0}
   lw.fill(0);tw.fill(0);pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
@@ -1696,8 +1741,8 @@ function pdraw(g,P,a){
 const layers=()=>({t:sstep(.5,1,unf),e:clamp(unf-1),k:clamp(unf-2),f:clamp(unf-3)});
 function prender(){
   const on=!!cur&&unf>.001;pv.hidden=!on;big.style.visibility=on?"hidden":"";halo.style.visibility=on?"hidden":"";stage.classList.toggle("unfolded",on);
-  $("markhint").hidden=$("leanhint").hidden=unf>=.5;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Poster PNG":"PNG";
-  $("unfold").hidden=unf>=.5;{const n=Math.floor(unfT+1e-3);$("layer").textContent=n>=4?"Peel back to the words":n===3?"Add the "+["field","sky","field","field"][pstyle]:n===2?"Add its kin":"Add the "+["echoes","reflection","wallpaper","guides"][pstyle]}
+  $("markhint").hidden=unf>=.5;$("leanhint").hidden=unf>=.5||!!live;$("livenote").hidden=unf>=.5||!live;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Poster PNG":"PNG";
+  $("unfold").hidden=$("alive").hidden=$("vid").hidden=unf>=.5;{const n=Math.floor(unfT+1e-3);$("layer").textContent=n>=4?"Peel back to the words":n===3?"Add the "+["field","sky","field","field"][pstyle]:n===2?"Add its kin":"Add the "+["echoes","reflection","wallpaper","guides"][pstyle]}
   if(!on)return;pbuild();
   const sr=stage.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2),cw=Math.round(sr.width*dp),ch=Math.round(sr.height*dp);
   if(pv.width!==cw||pv.height!==ch){pv.width=cw;pv.height=ch}
@@ -1729,10 +1774,11 @@ function foldTo(v){unfT=clamp(v,0,4);if(unfT>0)Promise.all([document.fonts.load(
 // the wheel turns petals on the mark; only once a poster is open does it add or peel off layers
 let wheelAcc=0,wheelAt=0;
 stage.addEventListener("wheel",(e)=>{if(!cur||drop)return;e.preventDefault();const d=e.deltaY*(e.deltaMode?40:1);
+  if(live){if(live.rec)return;live.per=clamp(live.per*Math.exp(d*.0024),3,30);ro.textContent=`one loop in ${Math.round(live.per)} s`;ro.classList.remove("out");ro.style.left=e.clientX+"px";ro.style.top=e.clientY+"px";clearTimeout(liveOn.t);liveOn.t=setTimeout(()=>ro.classList.add("out"),900);return}
   if(unfT>=1){foldTo(Math.max(1,unfT+d*.0032));return}
   const now=performance.now();if(now-wheelAt>400)wheelAcc=0;wheelAt=now;wheelAcc+=d;
   if(Math.abs(wheelAcc)>=60){petals(wheelAcc>0?-1:1);wheelAcc=0}},{passive:false});
-$("unfold").onclick=()=>foldTo(2);$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
+$("unfold").onclick=()=>{if(live)liveOff(false);foldTo(2)};$("alive").onclick=()=>{if(live){if(!live.rec)liveOff(true)}else liveOn()};$("vid").onclick=()=>recordLoop();$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
 (function buildFmts(){$("fmts").innerHTML=FMT.map((f,i)=>`<button data-f="${i}" aria-pressed="${!i}">${f[0]}</button>`).join("");
   $("fmts").onclick=(e)=>{const b=e.target.closest("button");if(!b||+b.dataset.f===fmt)return;fadeFrom();fmt=+b.dataset.f;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";
     [...$("fmts").children].forEach(x=>x.setAttribute("aria-pressed",x===b));prender()}})();
