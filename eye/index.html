@@ -362,6 +362,74 @@ const E = [];
   ] });
 }
 
+/* ── Cut ────────────────────────────────────────────────────────────────── */
+{
+  const PHI = (Math.sqrt(5) - 1) / 2; // 0.618…
+  const MARKS = [[0.5, "half"], [1 / 3, "a third"], [2 / 3, "a third"], [1 - PHI, "golden"], [PHI, "golden"], [0.25, "a quarter"], [0.75, "a quarter"]];
+  const nearest = (r) => MARKS.map(([m, n]) => [n, Math.abs(r - m)]).sort((a, b) => a[1] - b[1])[0];
+  const ratio = (r) => { const a = Math.round(r * 100); return `${a} : ${100 - a}`; };
+  const famous = "The golden cut (62 : 38) is the most famous proportion in design, but experiments on it since the 1800s disagree about how much people really prefer it.";
+  E.push({ id: "cut", name: "Cut", trials: [
+    { id: "x-rect", q: "Cut the rectangle where it feels best.", hint: "drag the cut sideways",
+      init() { this.s = { r: 0.86 }; },
+      move(h, dx) { this.s.r = cl(this.s.r + dx / 800, 0.04, 0.96); },
+      draw(c, k, prev) {
+        const x0 = 100, w = 800, y0 = 330, h = 340, x = x0 + w * this.s.r;
+        poly(c, [[x0, y0], [x, y0], [x, y0 + h], [x0, y0 + h]], C.ink);
+        poly(c, [[x, y0], [x0 + w, y0], [x0 + w, y0 + h], [x, y0 + h]], C.soft, C.ink, 3);
+        if (k != null) {
+          prev.forEach((p) => line(c, [x0 + w * p.r, y0 - 30], [x0 + w * p.r, y0 + h + 30], C.faint, 2));
+          c.save(); c.globalAlpha = k;
+          for (const [m, n] of [[0.5, "half"], [1 / 3, "third"], [2 / 3, "third"], [1 - PHI, "golden"], [PHI, "golden"]]) {
+            const mx = x0 + w * m, up = n === "golden";
+            line(c, [mx, up ? y0 - 70 : y0 + h], [mx, up ? y0 : y0 + h + 70], C.leaf, 2, [6, 7]);
+            label(c, mx, up ? y0 - 92 : y0 + h + 92, n, C.leaf, "center");
+          }
+          c.restore();
+        }
+        line(c, [x, y0 - 40], [x, y0 + h + 40], C.pink, 6);
+      },
+      read() {
+        const r = this.s.r, [n, d] = nearest(r);
+        return { v: R2(r),
+          line: `Your cut splits it ${ratio(r)}, closest to ${n === "half" ? "the half" : n === "golden" ? "the golden cut" : n}${d > 0.015 ? ` but not on it` : ""}.`,
+          why: n === "half" && d < 0.03 ? "A half feels calm and still: two equal parts with nothing pulling either way. " + famous
+            : n === "golden" && d <= 0.015 ? "That's within a hair of the golden cut. " + famous
+            : "An uneven cut feels like it's going somewhere: one part leads and the other follows. " + famous,
+          short: `Cuts: you split at ${ratio(r)}` };
+      } },
+    { id: "x-horizon", q: "Where should the horizon go?", hint: "drag the horizon up or down",
+      init() { this.s = { r: 0.12 }; },
+      move(h, dx, dy) { this.s.r = cl(this.s.r + dy / 560, 0.04, 0.96); },
+      draw(c, k, prev) {
+        const x0 = 230, w = 540, y0 = 220, h = 560, y = y0 + h * this.s.r;
+        poly(c, [[x0, y0], [x0 + w, y0], [x0 + w, y], [x0, y]], C.soft);
+        poly(c, [[x0, y], [x0 + w, y], [x0 + w, y0 + h], [x0, y0 + h]], C.ink);
+        dot(c, x0 + w * 0.72, y0 + Math.min(h * 0.16, (y - y0) * 0.5), 26, C.faint); // a sun, so it reads as a landscape
+        poly(c, [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]], null, C.line, 2);
+        if (k != null) {
+          prev.forEach((p) => line(c, [x0 - 30, y0 + h * p.r], [x0 + w + 30, y0 + h * p.r], C.faint, 2));
+          c.save(); c.globalAlpha = k;
+          for (const [m, n] of [[0.5, "half"], [1 / 3, "third"], [2 / 3, "third"], [1 - PHI, "golden"], [PHI, "golden"]]) {
+            const my = y0 + h * m, left = n === "golden";
+            line(c, [left ? x0 - 60 : x0 + w, my], [left ? x0 : x0 + w + 60, my], C.leaf, 2, [6, 7]);
+            label(c, left ? x0 - 66 : x0 + w + 66, my, n, C.leaf, left ? "right" : "left");
+          }
+          c.restore();
+        }
+        line(c, [x0 - 20, y], [x0 + w + 20, y], C.pink, 6);
+      },
+      read() {
+        const r = this.s.r, [n] = nearest(r), d = Math.abs(r - 0.5), a = Math.round(r * 100);
+        return { v: R2(r),
+          line: `Your horizon gives ${a}% to the sky and ${100 - a}% to the land, closest to ${n === "golden" ? "the golden cut" : n === "half" ? "the half" : n}.`,
+          why: n === "half" && d < 0.04 ? "Photographers are often taught to keep the horizon off the middle, because a centred horizon makes sky and land compete. You chose the stillness of the middle anyway."
+            : `Photographers are taught to put the horizon on a third, so that one of sky or land leads. You gave the most room to the ${r > 0.5 ? "sky" : "land"}.`,
+          short: `Horizons: ${a}% sky, ${100 - a}% land` };
+      } },
+  ] });
+}
+
 /* ── more experiments ───────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────────────────────────
