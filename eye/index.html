@@ -125,6 +125,14 @@ function truth(c, x, y, t, k, side, dy) {
   const r = side === "l"; label(c, x + (r ? -26 : 26), y + (dy || 0), t, C.leaf, r ? "right" : "left");
   c.restore();
 }
+/* a row of line samples with their names, so each dashed truth says what it is */
+function legend(c, items, y, k) {
+  c.save(); c.globalAlpha = k; c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
+  const ws = items.map(([, t]) => 56 + c.measureText(t).width), gap = 44, tot = ws.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
+  let x = 500 - tot / 2;
+  items.forEach(([d, t], i) => { line(c, [x, y], [x + 44, y], C.leaf, 3, d); label(c, x + 56, y, t, C.leaf); x += ws[i] + gap; });
+  c.restore();
+}
 const Kit = { poly, dot, ring, line, label, truth, cl, dist };
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -217,6 +225,62 @@ const E = [];
       } },
   ] });
   function incR(P) { const a = dist(P[1], P[2]), b = dist(P[2], P[0]), c = dist(P[0], P[1]), s = (a + b + c) / 2; return Math.sqrt(s * (s - a) * (s - b) * (s - c)) / s; }
+}
+
+/* ── Same size ──────────────────────────────────────────────────────────── */
+{
+  const SQ = 300, SX = 290, Y = 500, RX = 700; // the fixed square: 300 wide, centred at (290, 500)
+  const square = (c) => poly(c, [[SX - SQ / 2, Y - SQ / 2], [SX + SQ / 2, Y - SQ / 2], [SX + SQ / 2, Y + SQ / 2], [SX - SQ / 2, Y + SQ / 2]], C.ink);
+  const triPts = (b, x = RX) => { const h = b * Math.sqrt(3) / 2; return [[x, Y - h / 2], [x + b / 2, Y + h / 2], [x - b / 2, Y + h / 2]]; };
+  // drag right or up to grow, left or down to shrink
+  const grow = (key, lo, hi) => function (h, dx, dy) { this.s[key] = cl(this.s[key] + (dx - dy) * 0.6, lo, hi); };
+  const verdict = (p, a, b) => p < a ? "below" : p <= b ? "between" : "past";
+  E.push({ id: "size", name: "Same size", trials: [
+    { id: "s-circle", q: "Make the circle look as big as the square.", hint: "drag right or up to grow it, left or down to shrink it",
+      init() { this.s = { r: 105 }; }, move: grow("r", 50, 240),
+      draw(c, k, prev) {
+        square(c);
+        if (k != null) prev.forEach((p) => ring(c, RX, Y, p.r, C.faint, 2));
+        dot(c, RX, Y, this.s.r, C.pink);
+        if (k != null) {
+          c.save(); c.globalAlpha = k;
+          ring(c, RX, Y, SQ / 2, C.leaf, 3, [10, 9]); ring(c, RX, Y, SQ / Math.sqrt(Math.PI), C.leaf, 3, [2, 7]);
+          c.restore(); legend(c, [[[10, 9], "same width"], [[2, 7], "same area"]], 820, k);
+        }
+      },
+      read() {
+        const p = (2 * this.s.r) / SQ * 100, area = 200 / Math.sqrt(Math.PI);
+        const v = verdict(p, 101, area + 1);
+        return { v: R2(p),
+          line: `Your circle is ${p.toFixed(1)}% as wide as the square. Same width would be 100%; same area would be ${area.toFixed(1)}%.`,
+          why: v === "below" ? "You matched the edges. Many type designers would go a little bigger: a round letter like O is drawn slightly taller than H, overshooting the lines, so it doesn't look small beside it."
+            : v === "between" ? "You made it bigger than the square's width, but not by its whole area. That's overshoot: round letters rise above and dip below the lines straight ones sit on, because a circle of the same width looks smaller."
+            : "You went past equal area: to your eye a circle has to be quite large before it holds its own against a square's corners.",
+          short: `Circles: you see them equal at ${p.toFixed(0)}% width` };
+      } },
+    { id: "s-tri", q: "Now make the triangle look as big as the square.", hint: "drag right or up to grow it, left or down to shrink it",
+      init() { this.s = { b: 250 }; }, move: grow("b", 120, 480),
+      draw(c, k, prev) {
+        square(c);
+        if (k != null) prev.forEach((p) => poly(c, triPts(p.b), null, C.faint, 2));
+        poly(c, triPts(this.s.b), C.pink);
+        if (k != null) {
+          const L = [[SQ, [10, 9], "same width"], [SQ * 2 / Math.sqrt(3), [24, 8], "same height"], [Math.sqrt(4 * SQ * SQ / Math.sqrt(3)), [2, 7], "same area"]];
+          c.save(); c.globalAlpha = k;
+          for (const [b, d] of L) { c.setLineDash(d); poly(c, triPts(b), null, C.leaf, 3); }
+          c.restore(); legend(c, L.map(([, d, t]) => [d, t]), 820, k);
+        }
+      },
+      read() {
+        const p = this.s.b / SQ * 100, hgt = 200 / Math.sqrt(3), area = Math.sqrt(4 / Math.sqrt(3)) * 100;
+        return { v: R2(p),
+          line: `Your triangle is ${p.toFixed(0)}% as wide as the square. Same height would be ${hgt.toFixed(0)}%; same area ${area.toFixed(0)}%.`,
+          why: p < hgt - 3 ? "You kept it close to the square's width. Most eyes want more: a triangle's points hold almost no ink, so it reads small. Play buttons are usually drawn larger than the stop square beside them for this reason."
+            : p < area - 5 ? "You grew it well past the square's width. Pointed shapes lose the most size to the eye, because their tips hold so little ink. Icon designers do the same, drawing a play triangle larger than the stop square beside it."
+            : "You went almost to equal area. You judge size by how much ink there is, not by edges, and a triangle hides most of its size in thin points.",
+          short: `Triangles: you see them equal at ${p.toFixed(0)}% width` };
+      } },
+  ] });
 }
 
 /* ── more experiments ───────────────────────────────────────────────────── */
