@@ -1665,7 +1665,7 @@ ch1:{ch:1,title:'A city of mild preferences',steps:[
    const rows=Object.keys(G.st.res).sort().map(k=>`<div class="g-row"><span>wants ${k} of 8</span>${meter(G.st.res[k])}</div>`).join('');
    return `<b>Experiment.</b> Rebuild the city with a different wish and let it settle. Is a slightly pickier city slightly more divided, or a lot more?<br>${rows}<div class="g-row" style="opacity:.7"><span>now: ${sch.need} of 8</span>${meter(schStat.seg)}</div>`},
   wait:()=>Object.keys(G.st.res||{}).length>=3,hint:'Try two more wishes. Each needs about 12 sweeps to settle.',
-  okText:'A small change in what people want gives a big jump in the result. When output isn’t proportional to input, it's called <b>nonlinear</b>.'},
+  okText:'A small change in what people want gives a big jump in the result. When output isn’t proportional to input, it’s called <b>nonlinear</b>.'},
  {say:`<b>Why chapter 1 starts here.</b><br><br>Kepler's equations predict where Mars will be, down to the second. Schelling's model can't predict any real city. What it gives you is a <b>mechanism</b>: a city can divide even when nobody wants it to.<br><br>Complexity science accepts models like this: built from simple rules, run on a computer instead of solved with equations, and judged by what they <b>explain</b>. The side panel compares the two kinds of model, axis by axis.`}
 ]},
 
