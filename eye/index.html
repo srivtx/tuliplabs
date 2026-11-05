@@ -51,6 +51,10 @@ h1 i{color:var(--pink-ink)}
 .card b{display:block;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:10px 0 2px}
 .card span{font-size:14px;color:var(--ink)}
 .card.empty span{color:var(--faint)}
+.learnt{margin:18px 0 0;max-width:640px}
+.learnt h3{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+.learnt p{margin:8px 0 0;color:var(--muted)}
+.learnt p b{color:var(--ink);font-weight:600;margin-right:6px}
 @media (prefers-reduced-motion:reduce){.fade{animation:none}}
 </style>
 <link rel="stylesheet" href="../learn/nav.css">
@@ -76,6 +80,7 @@ h1 i{color:var(--pink-ink)}
   <section id="me" aria-label="Your eye">
     <h2 class="q">Your eye, so far.</h2>
     <p class="lede" style="margin:0">Every answer you've given, drawn as you left it, with the maths beside it.</p>
+    <div class="learnt" id="learnt"></div>
     <div class="cards" id="cards"></div>
   </section>
 </main>
@@ -1147,6 +1152,9 @@ cv.addEventListener("keydown", (e) => {
 function portrait() {
   $("#main").classList.add("portrait"); $("#cards").after($("#act"));
   $("#where").innerHTML = `<b>Your eye</b> · ${Object.keys(S.R).length} of ${flat.length} answered`;
+  // what Endless has learnt about your eye, in words
+  const said = [Endless.centre, Endless.size, Endless.even].map((k) => k.summary()).filter(Boolean);
+  $("#learnt").innerHTML = said.length ? `<h3>What Endless has learnt</h3>${said.map((t) => `<p>${t}</p>`).join("")}` : "";
   const box = $("#cards"); box.innerHTML = "";
   for (const f of flat) {
     const rs = S.R[f.t.id], fig = document.createElement("button"); fig.type = "button"; fig.className = "card" + (rs ? "" : " empty");
