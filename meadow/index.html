@@ -269,7 +269,12 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #guidebox .gh{display:flex;align-items:flex-end;gap:16px;padding:26px 30px 18px;border-bottom:1px solid color-mix(in srgb,var(--ink) 25%,transparent);flex:none}
 #guidebox h2{font:400 36px/1 var(--f-serif);margin:0}
 #guidebox .gh p{margin:7px 0 0;opacity:.8;font-size:12px;line-height:1.5}
-#guidebox .walk{margin-left:auto;background:var(--ink);color:var(--ground);padding:8px 16px;border-radius:999px;font-weight:600;white-space:nowrap}
+#guidebox input[type=search]{margin-left:auto;width:220px;font:12px var(--f-mono);color:inherit;background:color-mix(in srgb,var(--ink) 7%,transparent);border:0;border-radius:999px;padding:8px 14px;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 30%,transparent);outline:0}
+#guidebox input[type=search]:focus{box-shadow:inset 0 0 0 2px var(--ink)}#guidebox input::placeholder{color:inherit;opacity:.55}
+#guidebox .gnone{padding:40px 30px 56px;margin:0;font-size:13px;opacity:.75;text-align:center}
+#guidebox mark{background:color-mix(in srgb,var(--ink) 18%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+#guidebox .walk{background:var(--ink);color:var(--ground);padding:8px 16px;border-radius:999px;font-weight:600;white-space:nowrap}
 #guidebox .gx{width:34px;height:34px;flex:none;border-radius:50%;font-size:17px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 35%,transparent)}
 #guidebox .gx:hover{background:color-mix(in srgb,var(--ink) 10%,transparent)}
 #guidebox .gb{overflow:auto;padding:24px 30px 32px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:28px 36px}
@@ -302,7 +307,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 <div id="tour" hidden aria-hidden="true"><div class="spot none"></div></div>
 <div id="tourcard" class="out" hidden role="dialog" aria-live="polite" aria-labelledby="tourh"><div class="n" id="tourn"></div><h3 id="tourh"></h3><p id="tourb"></p><div class="did" id="tourdid"><span>Try it, or press Next.</span><b>✓ That's it</b></div>
   <div class="row"><button class="skip" id="tourskip">Skip the tour</button><span class="dots" id="tourdots"></span><button class="next" id="tournext">Next</button></div></div>
-<dialog id="guidebox" aria-labelledby="guideh"><div class="gh"><div><h2 id="guideh">How Meadow works</h2><p>Find a mark you like, shape it, colour it, and take it with you as an icon, a logo, a poster or a loop.</p></div><button class="walk" id="guidewalk">Walk me round</button><button class="gx" id="guidex" aria-label="Close">×</button></div><div class="gb" id="guidebody"></div></dialog>
+<dialog id="guidebox" aria-labelledby="guideh"><div class="gh"><div><h2 id="guideh">How Meadow works</h2><p>Find a mark you like, shape it, colour it, and take it with you as an icon, a logo, a poster or a loop.</p></div><input id="guideq" type="search" placeholder="Search the guide" aria-label="Search the guide" autocomplete="off" spellcheck="false"><button class="walk" id="guidewalk">Walk me round</button><button class="gx" id="guidex" aria-label="Close">×</button></div><div class="gb" id="guidebody"></div><p class="gnone" id="guidenone" hidden>Nothing in the guide matches that. Try a shorter word, or one like save, colour or petal.</p></dialog>
 <input id="letters" aria-label="Letters to plant" maxlength="3" autocomplete="off" autocapitalize="off" spellcheck="false">
 
 <section id="studio" hidden aria-label="The mark you picked">
@@ -1160,7 +1165,7 @@ const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
   ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw a petal","Draw","draw one petal and it grows all the way round; close a loop to fill it"]];
 let mode=0;
-function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];
+function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];if(i===6&&typeof firstTime==="function")firstTime("draw");
   if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
   big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
 MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
@@ -1908,7 +1913,7 @@ stage.addEventListener("wheel",(e)=>{if(!cur||drop)return;e.preventDefault();con
   if(unfT>=1){foldTo(Math.max(1,unfT+d*.0032));return}
   const now=performance.now();if(now-wheelAt>400)wheelAcc=0;wheelAt=now;wheelAcc+=d;
   if(Math.abs(wheelAcc)>=60){petals(wheelAcc>0?-1:1);wheelAcc=0}},{passive:false});
-$("unfold").onclick=()=>{if(live)liveOff(false);foldTo(2)};$("alive").onclick=()=>{if(live){if(!live.rec)liveOff(true)}else liveOn()};$("vid").onclick=()=>recordLoop();$("gif").onclick=()=>recordGif();$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
+$("unfold").onclick=()=>{if(live)liveOff(false);foldTo(2);firstTime("poster")};$("alive").onclick=()=>{if(live){if(!live.rec)liveOff(true)}else{liveOn();firstTime("live")}};$("vid").onclick=()=>recordLoop();$("gif").onclick=()=>recordGif();$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
 (function buildFmts(){$("fmts").innerHTML=FMT.map((f,i)=>`<button data-f="${i}" aria-pressed="${!i}">${f[0]}</button>`).join("");
   $("fmts").onclick=(e)=>{const b=e.target.closest("button");if(!b||+b.dataset.f===fmt)return;fadeFrom();fmt=+b.dataset.f;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";
     [...$("fmts").children].forEach(x=>x.setAttribute("aria-pressed",x===b));prender()}})();
@@ -1967,7 +1972,7 @@ function breed(a,b){
   if(!$("studio").hidden)leave();
   R.nursery(true,A.pal,B.pal);cam.x=0;cam.y=0;cam.vx=cam.vy=0;cam.z=cam.zt=innerWidth<1100?-1.1:-.9;cam.ax=W/2;cam.ay=H/2;
   regrow([W/2,H/2]);lastPlace="";$("home").hidden=false;
-  say2(`${A.name} on the left, ${B.name} on the right. Up grows wilder, down bolder.`);
+  say2(`${A.name} on the left, ${B.name} on the right. Up grows wilder, down bolder.`);firstTime("nursery");
 }
 function leaveNursery(){if(!nur)return;const h=nur.home;nur=null;hyCache.clear();R.nursery(false);R.pens(null);
   cam.x=h.x;cam.y=h.y;cam.z=cam.zt=h.z;cam.vx=cam.vy=0;regrow([W/2,H/2]);lastPlace="";$("home").hidden=true;
@@ -2245,6 +2250,28 @@ const TOUR={
   {t:"Open a mark",b:"Click any mark, this one say, to open it. That's where you shape it, colour it and save it.",
    at:()=>{const m=nearest(innerWidth/2,innerHeight/2);if(!m)return null;const sc=ppw();return ringOf(((m.x-cam.x)*sc+W/2)/dpr,((m.y-cam.y)*sc+H/2)/dpr,base*.86/dpr*.64)}},
  ],
+ poster:[
+  {t:"Your mark on a poster",b:"Drag the mark to move it on the page. Scroll for more or fewer layers: its echoes, its kin, then the field round it.",
+   at:()=>boxOf([pv],6,24),go:(s)=>{s.u=unfT;s.o=off.join()},done:(s)=>unfT!==s.u||off.join()!==s.o},
+  {t:"Four ways to set it",b:"Click this word to choose Echo, Reflect, Repeat or Plate. The keys 1 to 4 do the same.",at:()=>boxOf([$("styleword")],7),go:(s)=>{s.p=pstyle},done:(s)=>pstyle!==s.p},
+  {t:"Its shape, then save",b:"Pick the page: a post, a story, a square or a print poster. PNG saves it at full size, and Back to the mark folds it away.",at:()=>boxOf([$("fmts")],7)},
+ ],
+ live:[
+  {t:"It drifts through its kin",b:"The mark wanders through its ghosts in a loop that never jumps. Scroll over it for a slower or faster loop, from 3 to 30 seconds.",
+   at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.p=live&&live.per},done:(s)=>live&&live.per!==s.p},
+  {t:"Keep a moment, or the loop",b:"Click the mark, or Hold still, to keep the moment you like as your mark. Video and GIF save exactly one loop.",
+   at:()=>boxOf([$("alive"),$("vid"),$("gif")],8),el:()=>$("alive")},
+ ],
+ draw:[
+  {t:"Draw one petal",b:"Draw a stroke across the mark and it repeats all the way round, mirrored the way the mark is. Close the loop to fill it.",
+   at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.p=cur&&cur.pen},done:(s)=>cur&&cur.pen!==s.p},
+  {t:"Change it, or let it go",b:"Draw again to replace it. Tap the mark to let the drawing go, and ⌘Z steps back. What you draw travels in the link and into the nursery."},
+ ],
+ nursery:[
+  {t:"Welcome to the nursery",b:"The two marks you bred sit to the left and the right, and every mix of them grows in between. Drag and scroll as in the field."},
+  {t:"Up wilder, down bolder",b:"Further up the children grow wilder, further down bolder. Click any child to open it; keep it and you can breed it again."},
+  {t:"Back to the meadow",b:"When you're done, this takes you back to where you were in the field.",at:()=>boxOf([$("home")],7),done:()=>!nur},
+ ],
  studio:[
   {t:"Drag the mark to change it",b:"Sideways and up and down each change something different. Let go and that's the new mark; nothing you try is lost.",
    at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.h=hist.length},done:(s)=>hist.length>s.h},
@@ -2268,12 +2295,18 @@ const TOUR={
    at:()=>boxOf([$("kept").hidden?$("keep"):$("kept")],8),el:()=>$("kept").hidden?$("keep"):$("kept")},
  ]};
 let tour=null;const tcard=$("tourcard"),tspot=q("#tour .spot");
-function startTour(kind){endTour(true);if(kind==="studio"&&$("studio").hidden)return;markSeen(kind);
+const TOURN={field:"The field",studio:"Your mark",poster:"Posters",live:"Moving marks",draw:"Drawing a petal",nursery:"The nursery"};
+// a walk lasts as long as the thing it shows: leave the poster, the motion, the pen or the nursery, and its walk ends quietly
+const TOURON={field:()=>$("studio").hidden,studio:()=>!$("studio").hidden,poster:()=>!$("studio").hidden&&unfT>0,live:()=>!$("studio").hidden&&!!live,draw:()=>!$("studio").hidden&&mode===6,nursery:()=>$("studio").hidden&&!!nur};
+// the first time you reach a new part, its walk starts by itself, unless another walk is under way
+function firstTime(kind){if(seenT[kind]||tour)return;setTimeout(()=>{if(!tour&&!seenT[kind]&&TOURON[kind]())startTour(kind)},650)}
+const walkHere=()=>$("studio").hidden?(nur?"nursery":"field"):live?"live":unfT>0?"poster":mode===6?"draw":"studio";
+function startTour(kind){endTour(true);if(!TOURON[kind]())return;markSeen(kind);
   tour={kind,steps:TOUR[kind],i:-1,s:{},doneAt:0,last:""};$("tour").hidden=tcard.hidden=false;$("tour").classList.remove("out");
   $("tourdots").innerHTML=tour.steps.map((s,k)=>`<i title="${k+1}. ${s.t}"></i>`).join("");requestAnimationFrame(()=>tcard.classList.remove("out"));showStep(0);requestAnimationFrame(tourLoop)}
 function showStep(i){if(!tour)return;if(i>=tour.steps.length){endTour();return}
   const st=tour.steps[i];tour.i=i;tour.s={};tour.doneAt=0;tour.last="";if(st.go)st.go(tour.s);
-  $("tourn").textContent=(tour.kind==="field"?"The field":"Your mark")+" · "+(i+1)+" of "+tour.steps.length;$("tourh").textContent=st.t;$("tourb").textContent=st.b;
+  $("tourn").textContent=TOURN[tour.kind]+(tour.steps.length>1?" · "+(i+1)+" of "+tour.steps.length:"");$("tourh").textContent=st.t;$("tourb").textContent=st.b;
   $("tourdid").hidden=!st.done;tcard.classList.remove("done");$("tournext").textContent=i===tour.steps.length-1?"Done":"Next";
   [...$("tourdots").children].forEach((d,k)=>d.classList.toggle("on",k===i));
   if(st.el){const e=st.el();if(e)e.scrollIntoView({block:"nearest",behavior:calm?"auto":"smooth"})}
@@ -2289,7 +2322,7 @@ function placeCard(r){const cw=tcard.offsetWidth,ch=tcard.offsetHeight,M=16,vw=i
     x=best.x;y=best.y}
   tcard.style.left=Math.round(x)+"px";tcard.style.top=Math.round(y)+"px"}
 function tourLoop(){if(!tour)return;requestAnimationFrame(tourLoop);const st=tour.steps[tour.i];
-  if(tour.kind==="studio"&&$("studio").hidden){endTour();return}
+  if(!TOURON[tour.kind]()&&!(st.done&&tour.doneAt)){endTour();return}
   const r=st.at?st.at():null,key=r?[r.x,r.y,r.w,r.h].map(Math.round).join():"none";
   if(key!==tour.last){tour.last=key;tspot.classList.toggle("none",!r);
     const b=r||{x:innerWidth/2,y:innerHeight/2,w:0,h:0,r:0};Object.assign(tspot.style,{left:b.x+"px",top:b.y+"px",width:b.w+"px",height:b.h+"px",borderRadius:(r?b.r:999)+"px"});placeCard(r)}
@@ -2324,17 +2357,34 @@ const GUIDE=[
    ["Your site","Under Out in the world: a zip with a favicon, an SVG icon, home-screen icons, a manifest and the lines for your page."],["The link","The address always holds this exact mark, colours and drawing included. Click the mark's name to copy it."],["Your shelf","Click the words Your shelf, under the actions, to save every kept mark as SVG and PNG in one zip."]]],
  ["Your shelf and the nursery",[["Keep it","The mark joins your shelf, bottom right in the field. It stays in this browser."],
    ["Drag a kept mark onto another","Onto a mark in the field, another kept mark, or the one you're shaping: the meadow becomes their nursery, every mix of the two between them."],
-   ["In the nursery","Further up grows wilder, further down bolder. Children can be kept and bred again."],["Let go","Drag a kept mark into the soft circle beside the shelf, or hover it and press ×."]]],
+   ["In the nursery","Further up grows wilder, further down bolder. Children can be kept and bred again. Back to the meadow, top left, returns you."],["Let go","Drag a kept mark into the soft circle beside the shelf, or hover it and press ×."]]],
 ];
 $("guidebody").innerHTML=GUIDE.map(([h,rows])=>`<section><h3>${h}</h3><dl>${rows.map(([t,d])=>`<div><dt>${t}</dt><dd>${d}</dd></div>`).join("")}</dl></section>`).join("");
 const gbox=$("guidebox");
-function openGuide(){endTour(true);const inStudio=!$("studio").hidden;$("guidewalk").textContent=inStudio?"Walk me round this mark":"Walk me round the field";
-  try{gbox.showModal()}catch(e){gbox.setAttribute("open","")}const at=inStudio?(live?5:unf>=.5?4:1):0;[...$("guidebody").children].forEach((e,k)=>e.classList.toggle("here",k===at));
+function openGuide(){endTour(true);const inStudio=!$("studio").hidden,w=walkHere();
+  $("guidewalk").textContent={field:"Walk me round the field",studio:"Walk me round this mark",poster:"Walk me round the poster",live:"Walk me round the motion",draw:"Walk me round drawing",nursery:"Walk me round the nursery"}[w];
+  $("guideq").value="";findIn("");
+  try{gbox.showModal()}catch(e){gbox.setAttribute("open","")}if(matchMedia("(hover:hover)").matches)$("guideq").focus();const at=nur&&!inStudio?7:inStudio?(live?5:unf>=.5?4:1):0;[...$("guidebody").children].forEach((e,k)=>e.classList.toggle("here",k===at));
   const sec=$("guidebody").children[at];$("guidebody").scrollTop=at?Math.max(0,sec.offsetTop-$("guidebody").offsetTop-16):0}
 gbox.addEventListener("keydown",(e)=>e.stopPropagation());
+// search: every word you type must appear in a row; American spellings and everyday words find Meadow's own
+const SYN={color:"colour",colors:"colours",export:"save",download:"save",undo:"step back",redo:"step forward",logo:"mark",icon:"icon",favicon:"favicon",animate:"move",animation:"move",
+  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw"};
+// words people reach for that a section answers without using them
+const GTAGS={"The field":"explore browse wander map","Shaping a mark":"edit change shape tweak","The ghosts":"variations options suggestions","Colour":"palette paint","Posters":"print layout",
+  "Moving marks":"loop animation","Taking it with you":"save export download file share","Your shelf and the nursery":"keep favourites saved breed"};
+const gRows=[...$("guidebody").querySelectorAll("dl > div")].map(d=>({d,dt:d.querySelector("dt"),dd:d.querySelector("dd"),h0:d.querySelector("dt").innerHTML,h1:d.querySelector("dd").innerHTML,
+  txt:(d.closest("section").querySelector("h3").textContent+" "+(GTAGS[d.closest("section").querySelector("h3").textContent]||"")+" "+d.textContent).toLowerCase()}));
+const markUp=(html,ws)=>ws.length?html.replace(/(<[^>]+>)|([^<]+)/g,(m,tag,text)=>tag||text.replace(new RegExp("("+ws.map(w=>w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")+")","gi"),"<mark>$1</mark>")):html;
+function findIn(qs){const ws=qs.toLowerCase().split(/\s+/).filter(Boolean).map(w=>SYN[w]||w);let any=0;
+  gRows.forEach(r=>{const hit=ws.every(w=>r.txt.includes(w));r.d.hidden=!hit;if(hit)any++;r.dt.innerHTML=markUp(r.h0,ws);r.dd.innerHTML=markUp(r.h1,ws)});
+  [...$("guidebody").children].forEach(sec=>{sec.hidden=![...sec.querySelectorAll("dl > div")].some(d=>!d.hidden);if(ws.length)sec.classList.remove("here")});
+  $("guidenone").hidden=!!any;$("guidebody").hidden=!any;if(ws.length)$("guidebody").scrollTop=0}
+$("guideq").addEventListener("input",()=>findIn($("guideq").value.trim()));
+$("guideq").addEventListener("keydown",(e)=>{if(e.key==="Escape"&&$("guideq").value){e.preventDefault();$("guideq").value="";findIn("")}});
 gbox.addEventListener("click",(e)=>{if(e.target===gbox)gbox.close()}); // a click on the dimmed backdrop closes it
 $("guidex").onclick=()=>gbox.close();
-$("guidewalk").onclick=()=>{gbox.close();startTour($("studio").hidden?"field":"studio")};
+$("guidewalk").onclick=()=>{gbox.close();startTour(walkHere())};
 $("guide").onclick=openGuide;$("guide2").onclick=openGuide;
 
 /* ---------- start ---------- */
