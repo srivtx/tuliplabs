@@ -565,6 +565,54 @@ const E = [];
   ] });
 }
 
+/* ── Enough ─────────────────────────────────────────────────────────────── */
+{
+  const grow = function (h, dx, dy) { this.s.f = cl(this.s.f + (dx - dy) / 900, 0.01, 1); };
+  const meter = (c, f, k) => {
+    line(c, [250, 880], [750, 880], C.line, 6);
+    line(c, [250, 880], [250 + 500 * f, 880], C.pink, 6);
+    if (k != null) label(c, 500, 925, `${Math.round(f * 100)}% of the line drawn`, C.pink, "center");
+  };
+  function read(f, what) {
+    const p = Math.round(f * 100);
+    return { v: R2(f),
+      line: `You saw ${what} once ${p}% of its line was there.`,
+      why: p < 35 ? `Your eye drew the other ${100 - p}% itself. Gestalt psychologists called this closure: we see whole shapes from parts, which is why a logo can leave out most of its line and still read.`
+        : p < 70 ? "Your eye filled in the gaps once the pieces were long enough to suggest a path. Gestalt psychologists called this closure; it's why dashed and broken outlines still read as shapes."
+        : "You waited until most of the line was there: a cautious eye that wants proof before it calls it a shape. Many people see the whole from much less; try it again and stop earlier.",
+      short: `Closure: you see ${what} at ${p}%` };
+  }
+  E.push({ id: "enough", name: "Enough", trials: [
+    { id: "n-circle", q: "Stop when you can see a circle.", hint: "drag right or up to draw more of it",
+      init() { this.s = { f: 0.02 }; }, move: grow,
+      draw(c, k, prev) {
+        const N = 12, R = 260, seg = Math.PI * 2 / N;
+        if (k != null) { c.save(); c.globalAlpha = k * 0.5; ring(c, 500, 460, R, C.leaf, 2, [3, 9]); c.restore(); }
+        c.save(); c.lineCap = "round"; c.strokeStyle = C.ink; c.lineWidth = 16;
+        for (let i = 0; i < N; i++) { const a = i * seg - Math.PI / 2, h = seg * this.s.f / 2; c.beginPath(); c.arc(500, 460, R, a - h, a + h); c.stroke(); }
+        c.restore();
+        if (k != null) prev.forEach((p) => line(c, [250 + 500 * p.f, 866], [250 + 500 * p.f, 894], C.faint, 3));
+        meter(c, this.s.f, k);
+      },
+      read() { return read(this.s.f, "a circle"); } },
+    { id: "n-square", q: "Now stop when you can see a square.", hint: "drag right or up to draw more of it",
+      init() { this.s = { f: 0.02 }; }, move: grow,
+      draw(c, k, prev) {
+        const S = 480, x0 = 260, y0 = 220, f = this.s.f, l = (S / 2) * f;
+        if (k != null) { c.save(); c.globalAlpha = k * 0.5; c.setLineDash([3, 9]); poly(c, [[x0, y0], [x0 + S, y0], [x0 + S, y0 + S], [x0, y0 + S]], null, C.leaf, 2); c.restore(); }
+        c.save(); c.lineCap = "square"; c.strokeStyle = C.ink; c.lineWidth = 16;
+        // the line grows out from each corner, so the corners are what you see first
+        for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x0 + S, y0, -1, 1], [x0 + S, y0 + S, -1, -1], [x0, y0 + S, 1, -1]]) {
+          c.beginPath(); c.moveTo(cx + sx * l, cy); c.lineTo(cx, cy); c.lineTo(cx, cy + sy * l); c.stroke();
+        }
+        c.restore();
+        if (k != null) prev.forEach((p) => line(c, [250 + 500 * p.f, 866], [250 + 500 * p.f, 894], C.faint, 3));
+        meter(c, f, k);
+      },
+      read() { return read(this.s.f, "a square"); } },
+  ] });
+}
+
 /* ── more experiments ───────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────────────────────────
