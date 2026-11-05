@@ -144,6 +144,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .readout .pad i{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--ground);box-shadow:0 0 0 2px color-mix(in srgb,var(--ground) 30%,transparent)}
 .readout.fieldname{font:italic 15px/1.2 var(--f-serif);padding:2px 10px 3px;translate:16px -34px;transition:opacity .25s,scale .3s cubic-bezier(.2,.9,.3,1.4)}.readout.fieldname.out{scale:.92}
 .sheet h2 .looks{float:right;margin-top:-5px;font-weight:400;letter-spacing:0}.looks button{padding:2px 9px;font-size:11px}
+#brushring{position:fixed;left:0;top:0;z-index:40;pointer-events:none;border-radius:50%;border:1.5px solid var(--ink);box-shadow:0 0 0 1px color-mix(in srgb,var(--ground) 55%,transparent);opacity:0;transition:opacity .18s ease,width .12s ease,height .12s ease}#brushring.on{opacity:.55}#brushring.rub{border-style:dashed;opacity:.8}
 #big.m-stretch,#big.m-lean{cursor:move}#big.m-colour,#big.m-draw{cursor:crosshair}
 /* the mark's possible next selves, floating round it */
 #halo{position:absolute;inset:0;pointer-events:none}
@@ -329,7 +330,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <canvas id="inkpad" aria-hidden="true"></canvas>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
-      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–7)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="livenote" hidden>It drifts through its kin. Click it to keep the moment you like; scroll for slower or faster.</span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
+      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–8)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="livenote" hidden>It drifts through its kin. Click it to keep the moment you like; scroll for slower or faster.</span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
       <div class="modepop" id="modepop" hidden role="menu" aria-label="What dragging the mark changes"></div>
       <div class="modepop" id="stylepop" hidden role="menu" aria-label="How the poster sets the mark"></div>
       <div class="tools">
@@ -570,7 +571,7 @@ float penD(vec2 c,float t){int N=uPenN;
 float freeD(vec2 p){float d=1e9,dc=1e9,sg=1.;int s0=0;
  for(int i=0;i<192;i++){if(i>=uFrN)break;vec4 b=frP(i);
   if(b.z>0.){vec4 a=frP(i-1);vec2 pa=p-a.xy,ba=b.xy-a.xy;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);
-   if(b.w>0.){float ra=b.w*(.22+.78*sqrt(sin(PI*a.z))),rb=b.w*(.22+.78*sqrt(sin(PI*b.z)));d=min(d,length(pa-ba*h)-mix(ra,rb,h));}
+   if(b.w>0.){float ra=b.z>1.5?b.w:b.w*(.22+.78*sqrt(sin(PI*a.z))),rb=b.z>1.5?b.w:b.w*(.22+.78*sqrt(sin(PI*b.z)));d=min(d,length(pa-ba*h)-mix(ra,rb,h));}
    else{dc=min(dc,length(pa-ba*h));bvec3 k=bvec3(p.y>=a.y,p.y<b.y,ba.x*pa.y>ba.y*pa.x);if(all(k)||all(not(k)))sg=-sg;}}
   bool last=i+1>=uFrN||frP(i+1).z<=0.;
   if(last&&b.w<0.){vec2 a=b.xy,c=frP(s0).xy,pa=p-a,ba=c-a;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);dc=min(dc,length(pa-ba*h));
@@ -1154,12 +1155,13 @@ function closesOn(pts){if(pts.length<8)return false;let L=0,x0=9,x1=-9,y0=9,y1=-
 // the stroke as it's drawn, already shaped as the petal will be (a brush line that swells and tapers, or a filled loop),
 // with its copies round the mark. Each is laid down solid on a layer and then faded as one, so overlaps don't darken
 const inkL=document.createElement("canvas");
-function drawInk(pts,free){const px=big.width;if(inkC.width!==px)inkC.width=inkC.height=px;if(inkL.width!==px)inkL.width=inkL.height=px;
+function drawInk(pts,free,o){const px=big.width;if(inkC.width!==px)inkC.width=inkC.height=px;if(inkL.width!==px)inkL.width=inkL.height=px;
   const g=inkC.getContext("2d"),h=inkL.getContext("2d");g.clearRect(0,0,px,px);if(pts.length<2)return;
-  const n=free?1:pureN(cur),{w}=petalSize(cur.g,pureN(cur)),c=px/2,closed=closesOn(pts),t=Math.max(1,(free?brushW:w*.95)*c),P=pts.map(([x,y])=>[(x*.5+.5)*px,(y*.5+.5)*px]);
+  const n=free?1:pureN(cur),{w}=petalSize(cur.g,pureN(cur)),c=px/2,closed=o&&o.even?!!o.shut:closesOn(pts),t=Math.max(1,(free?brushW:w*.95)*c),P=pts.map(([x,y])=>[(x*.5+.5)*px,(y*.5+.5)*px]);
   const L=[0];for(let i=1;i<P.length;i++)L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));const tot=L[L.length-1]||1;
   const one=(k)=>{h.save();h.translate(c,c);h.rotate(k*Math.PI*2/n);h.translate(-c,-c);h.beginPath();
     if(closed){P.forEach(([X,Y],i)=>i?h.lineTo(X,Y):h.moveTo(X,Y));h.closePath();h.fill();h.lineWidth=t*.44;h.stroke()}
+    else if(o&&o.even){h.lineWidth=2*t;P.forEach(([X,Y],i)=>i?h.lineTo(X,Y):h.moveTo(X,Y));h.stroke()}
     else for(let i=1;i<P.length;i++){const s=(L[i-1]+L[i])/2/tot;h.lineWidth=2*t*(.22+.78*Math.sqrt(Math.sin(Math.PI*s)));h.beginPath();h.moveTo(P[i-1][0],P[i-1][1]);h.lineTo(P[i][0],P[i][1]);h.stroke()}
     h.restore()};
   const layer=(ks,a)=>{h.clearRect(0,0,px,px);h.lineCap=h.lineJoin="round";h.strokeStyle=h.fillStyle=inkOf(cur);ks.forEach(one);g.globalAlpha=a;g.drawImage(inkL,0,0);g.globalAlpha=1};
@@ -1178,34 +1180,84 @@ function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");c
    and all. A loop that closes on itself fills; on a badge a line cuts through to the ground. [ and ] change the
    brush. Each line is one step back, and a tap on the mark clears them all */
 const FR_MAX=192;let brushW=.045;
+// a ring round the pointer the size of the brush (dashed while ⌥ rubs out), so you see the line's width before you draw
+const ring=document.createElement("div");ring.id="brushring";ring.setAttribute("aria-hidden","true");document.body.append(ring);let ringE=null;
+function ringAt(e){ringE={clientX:e.clientX,clientY:e.clientY,altKey:e.altKey,pointerType:e.pointerType};const on=mode===7&&!!cur&&!live&&unfT<=0&&e.pointerType!=="touch"&&!$("studio").hidden;
+  ring.classList.toggle("on",on);if(!on)return;const r=big.getBoundingClientRect(),rub=tune?!!tune.rub:e.altKey,d=Math.max(6,(rub?.056:brushW)*r.width);
+  ring.classList.toggle("rub",rub);ring.style.width=ring.style.height=d+"px";ring.style.transform=`translate(${e.clientX-d/2}px,${e.clientY-d/2}px)`}
+big.addEventListener("pointermove",ringAt);big.addEventListener("pointerleave",()=>{ring.classList.remove("on");ringE=null});
+addEventListener("keydown",(e)=>{if(e.key==="Alt"&&ringE)ringAt({...ringE,altKey:true})});addEventListener("keyup",(e)=>{if(e.key==="Alt"&&ringE)ringAt({...ringE,altKey:false})});
 function frPack(strokes){if(!strokes.length)return null;const v=new Float32Array(FR_MAX*4);let n=0;
-  strokes.forEach(st=>{const k=st.p.length;st.p.forEach(([x,y],i)=>{v[n*4]=x;v[n*4+1]=y;v[n*4+2]=i?Math.max(i/(k-1),1e-4):0;v[n*4+3]=st.c?-st.w:st.w;n++})});
+  strokes.forEach(st=>{const q=st.p,A=[0];for(let i=1;i<q.length;i++)A.push(A[i-1]+Math.hypot(q[i][0]-q[i-1][0],q[i][1]-q[i-1][1]));const tot=A[A.length-1]||1;
+    q.forEach(([x,y],i)=>{v[n*4]=x;v[n*4+1]=y;v[n*4+2]=i?Math.max(A[i]/tot,1e-4)+(st.e&&!st.c?2:0):0;v[n*4+3]=st.c?-st.w:st.w;n++})});
   return {s:strokes,v,n,id:++penId}}
-const frCode=(F)=>F?F.s.map(st=>(st.c?"1":"0")+B36(st.w/.2,2)+st.p.length.toString(36)+st.p.map(([x,y])=>B36((x+1)/2,2)+B36((y+1)/2,2)).join("")).join(""):"";
+const frCode=(F)=>F?F.s.map(st=>{const k=st.p.length,d=st.c?1:st.e?2:0;return (k>35?d+3:d)+B36(st.w/.2,2)+(k>35?k.toString(36).padStart(2,"0"):k.toString(36))+st.p.map(([x,y])=>B36((x+1)/2,2)+B36((y+1)/2,2)).join("")}).join(""):"";
 function readFree(t){if(!t||!/^[0-9a-z]+$/.test(t))return null;const out=[];let i=0;
-  while(i+4<=t.length){const c=t[i]==="1",w=U36(t.substr(i+1,2))*.2,k=parseInt(t[i+3],36);i+=4;if(!(k>=2)||i+k*4>t.length)return null;const p=[];
-    for(let j=0;j<k;j++,i+=4)p.push([+(U36(t.substr(i,2))*2-1).toFixed(4),+(U36(t.substr(i+2,2))*2-1).toFixed(4)]);out.push({p,w:+w.toFixed(4),c:c?1:0})}
+  while(i+4<=t.length){const d=parseInt(t[i],36),long=d>=3,c=d%3===1,e=d%3===2,w=U36(t.substr(i+1,2))*.2,k=parseInt(long?t.substr(i+3,2):t[i+3],36);if(!(d<6))return null;i+=long?5:4;if(!(k>=2)||i+k*4>t.length)return null;const p=[];
+    for(let j=0;j<k;j++,i+=4)p.push([+(U36(t.substr(i,2))*2-1).toFixed(4),+(U36(t.substr(i+2,2))*2-1).toFixed(4)]);out.push(e?{p,w:+w.toFixed(4),c:0,e:1}:{p,w:+w.toFixed(4),c:c?1:0})}
   let n=0;const fit=out.filter(st=>(n+=st.p.length)<=FR_MAX);return fit.length?frPack(fit):null}
 const frLines=(m)=>m&&m.fr?m.fr.s.length:0;
 const brushPx=()=>Math.round(brushW*2*512); // its width at 1024 pixels, the size the mark is saved at
-function freeDone(t){inkC.classList.remove("on");const pts=t.ink;let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
-  if(pts.length<3||L<.02){hist.pop();ro.classList.add("out");return false}
-  const closed=closesOn(pts),raw=closed?pts.slice(0,-1):pts,N=raw.length;
-  // one soft pass only: enough to take out the jitter of a mouse, little enough that the line stays where you put it
-  const sm=raw.map((p,i)=>{const a=raw[closed?(i-1+N)%N:Math.max(0,i-1)],b=raw[closed?(i+1)%N:Math.min(N-1,i+1)];return [(a[0]+p[0]*2+b[0])/4,(a[1]+p[1]*2+b[1])/4]});
-  const k=clamp(Math.round(L/.025)+2,4,32),pp=resample(sm,k,closed).map(([x,y])=>[+clamp(x,-1,1).toFixed(4),+clamp(y,-1,1).toFixed(4)]);
-  if((cur.fr?cur.fr.n:0)+k>FR_MAX){hist.pop();hud("that's as many lines as a mark can hold","step back, or tap the mark to clear them",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},2200);drawStudio();return false}
-  cur.fr=frPack([...(cur.fr?cur.fr.s:[]),{p:pp,w:+brushW.toFixed(4),c:closed?1:0}]);told();drawStudio();
-  const n=cur.fr.s.length;hud(closed?"filled":"drawn",`${n} line${n>1?"s":""} · ⌘Z takes one back · tap the mark to clear`,null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1800);return true}
-function brushBy(f,x,y){brushW=clamp(brushW*f,.012,.16);const r=big.getBoundingClientRect();
+// the ends of every open line, which a new line can start from or finish on, and pick up as one line
+function frEnds(){const out=[];if(cur&&cur.fr)cur.fr.s.forEach((st,i)=>{if(!st.c){out.push({i,end:0,p:st.p[0]});out.push({i,end:1,p:st.p[st.p.length-1]})}});return out}
+const joinR=()=>Math.max(.032,brushW*1.1);
+function nearEnd(v,skip){let best=null,bd=joinR();for(const q of frEnds()){if(skip&&skip(q))continue;const d=Math.hypot(v[0]-q.p[0],v[1]-q.p[1]);if(d<bd){bd=d;best=q}}return best}
+function freeDone(t){inkC.classList.remove("on");clearTimeout(t.dwell);const pts=t.ink;let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+  if(pts.length<2||L<.02){hist.pop();ro.classList.add("out");return false}
+  const even=!!t.even;let closed=even?!!t.shut:closesOn(pts);
+  // finishing on the end of another line, or back on the line this one set off from, lands exactly on it
+  const Z=closed?null:nearEnd(pts[pts.length-1],q=>t.join&&q.i===t.join.i&&q.end===t.join.end);if(Z)pts[pts.length-1]=[Z.p[0],Z.p[1],1];
+  const raw=closed?pts.slice(0,-1):pts;let pp;
+  if(closed&&!even){ // a hand-drawn loop: one soft pass all the way round
+    const N=raw.length,sm=raw.map((p,i)=>{const a=raw[(i-1+N)%N],b=raw[(i+1)%N];return [(a[0]+p[0]*2+b[0])/4,(a[1]+p[1]*2+b[1])/4]});pp=resample(sm,clamp(Math.round(L/.025)+2,4,32),true)}
+  else{ // corners (where a straight line turns, or a join) stay exactly where they are; only the freehand runs between them are softened
+    const ks=[0];for(let i=1;i<raw.length-1;i++)if(raw[i][2])ks.push(i);ks.push(raw.length-1);pp=[raw[0]];
+    for(let j=1;j<ks.length;j++){const seg=raw.slice(ks[j-1],ks[j]+1);if(seg.length<=2){pp.push(seg[seg.length-1]);continue}
+      let Ls=0;for(let i=1;i<seg.length;i++)Ls+=Math.hypot(seg[i][0]-seg[i-1][0],seg[i][1]-seg[i-1][1]);
+      const sm=seg.map((p,i)=>i===0||i===seg.length-1?p:[(seg[i-1][0]+p[0]*2+seg[i+1][0])/4,(seg[i-1][1]+p[1]*2+seg[i+1][1])/4]);
+      pp.push(...resample(sm,clamp(Math.round(Ls/.025)+2,3,32),false).slice(1))}}
+  pp=pp.map(([x,y])=>[+clamp(x,-1,1).toFixed(4),+clamp(y,-1,1).toFixed(4)]);
+  // a line that starts or ends on another line of the same brush becomes one line with it, so the join doesn't pinch
+  const S=cur.fr?cur.fr.s.slice():[],nw={p:pp,w:+brushW.toFixed(4),c:closed?1:0};if(even&&!closed)nw.e=1;
+  const fits=(st)=>st&&!st.c&&!!st.e===!!nw.e&&Math.abs(st.w-nw.w)<=.2*st.w;let joined=false;
+  if(!closed){const A=t.join;
+    if(A&&fits(S[A.i])){const base=A.end?S[A.i].p:S[A.i].p.slice().reverse();nw.p=base.concat(nw.p.slice(1));nw.w=S[A.i].w;
+      if(Z&&Z.i===A.i){nw.p.pop();nw.c=1;delete nw.e;closed=true}S[A.i]=null;joined=true}
+    if(!closed&&Z&&S[Z.i]&&fits(S[Z.i])){const tail=Z.end?S[Z.i].p.slice().reverse():S[Z.i].p;nw.p=nw.p.slice(0,-1).concat(tail);S[Z.i]=null;joined=true}}
+  const keep=S.filter(Boolean);keep.push(nw);
+  if(keep.reduce((a,st)=>a+st.p.length,0)>FR_MAX){hist.pop();hud("that's as many lines as a mark can hold","step back, or tap the mark to clear them",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},2200);drawStudio();return false}
+  cur.fr=frPack(keep);told();drawStudio();
+  const n=cur.fr.s.length;hud(closed?"filled":joined?"joined":even?"straight":"drawn",`${n} line${n>1?"s":""} · ⌘Z takes one back · tap the mark to clear`,null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1800);return true}
+// hold ⌥ and drag (or tap) to rub out the lines you touch, whole lines at a time
+function lineNear(st,v,r){const q=st.p,n=q.length;let d=1e9,inn=false;
+  for(let i=0;i<n;i++){if(i===n-1&&!st.c)break;const a=q[i],b=q[(i+1)%n],bx=b[0]-a[0],by=b[1]-a[1],px=v[0]-a[0],py=v[1]-a[1],h=clamp((px*bx+py*by)/Math.max(bx*bx+by*by,1e-9));
+    d=Math.min(d,Math.hypot(px-bx*h,py-by*h));if(st.c&&((a[1]>v[1])!==(b[1]>v[1]))&&v[0]<a[0]+(v[1]-a[1])*bx/(by||1e-9))inn=!inn}
+  return st.c?(inn||d<st.w*.22+r):d<st.w+r}
+function rubAt(v,t){if(!cur.fr)return 0;let gone=0;const keep=cur.fr.s.filter(st=>{const hit=lineNear(st,v,.028);if(hit)gone++;return !hit});if(!gone)return 0;
+  cur.fr=keep.length?frPack(keep):null;t.gone=(t.gone||0)+gone;drawStudio();return gone}
+function brushBy(f,x,y){brushW=clamp(brushW*f,.012,.16);const r=big.getBoundingClientRect();if(ringE)ringAt(ringE);
   hud("brush "+brushPx()+" px","at 1024 pixels · [ thinner · ] thicker",x??r.left+r.width*.5,y??r.top+r.height*.9);clearTimeout(brushBy.t);brushBy.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1100)}
-big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false,ink:mode>=6?[markAt(e)]:null,free:mode===7}});
+big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}const rub=mode===7&&e.altKey;tune={x:e.clientX,y:e.clientY,moved:false,ink:mode>=6&&!rub?[markAt(e)]:null,free:mode===7,rub};
+  if(tune.free&&tune.ink){const q=nearEnd(tune.ink[0]);if(q){tune.ink[0]=[q.p[0],q.p[1],1];tune.join=q}}});
 big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
   if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
   tune.x=e.clientX;tune.y=e.clientY;
-  if(tune.ink){const v=markAt(e),q=tune.ink[tune.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)tune.ink.push(v);inkC.classList.add("on");if(!tune.free)big.classList.add("inking");const closed=drawInk(tune.ink,tune.free);
-    if(tune.free)hud(closed?"let go to fill it":"drawing",closed?"a closed loop fills in":`brush ${brushPx()} px · exactly where you draw · [ ] for the brush`,e.clientX,e.clientY);
-    else hud(closed?"let go to fill it":"drawing a petal",closed?"a closed loop fills in":`it repeats ${pureN(cur)} times round the mark`,e.clientX,e.clientY);return}
+  if(tune.rub){const v=markAt(e),p=tune.rv||v,k=Math.max(1,Math.ceil(Math.hypot(v[0]-p[0],v[1]-p[1])/.02));for(let i=1;i<=k;i++)rubAt([p[0]+(v[0]-p[0])*i/k,p[1]+(v[1]-p[1])*i/k],tune);tune.rv=v;
+    hud("rubbing out",tune.gone?`${tune.gone} line${tune.gone>1?"s":""} gone · ⌘Z brings them back`:"touch a line to take it away",e.clientX,e.clientY);return}
+  if(tune.ink&&tune.free){const T=tune,v=markAt(e);
+    if(e.shiftKey){ // a straight line from where Shift went down, held to 15° steps; pause to turn a corner, come back to the start to close it
+      if(T.anc==null){T.ink[T.ink.length-1][2]=1;T.anc=T.ink.length-1;T.even=true}
+      const a=T.ink[T.anc],s0=T.ink[0],L=Math.hypot(v[0]-a[0],v[1]-a[1]),st=Math.PI/12,ang=Math.round(Math.atan2(v[1]-a[1],v[0]-a[0])/st)*st;
+      T.shut=T.anc>0&&Math.hypot(v[0]-s0[0],v[1]-s0[1])<joinR();T.deg=Math.round(((-ang*180/Math.PI)%360+360)%360);
+      T.ink.length=T.anc+1;T.ink.push(T.shut?[s0[0],s0[1],1]:[a[0]+Math.cos(ang)*L,a[1]+Math.sin(ang)*L,1]);
+      clearTimeout(T.dwell);T.dwell=setTimeout(()=>{if(tune!==T||T.anc==null||T.shut)return;const z=T.ink[T.ink.length-1],a=T.ink[T.anc];if(Math.hypot(z[0]-a[0],z[1]-a[1])<.03)return;
+        T.anc=T.ink.length-1;hud("corner","carry on the other way",T.x,T.y)},340)}
+    else{if(T.anc!=null){T.anc=null;T.shut=false;clearTimeout(T.dwell)}const q=T.ink[T.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)T.ink.push(v)}
+    inkC.classList.add("on");const closed=drawInk(T.ink,true,{even:T.even,shut:T.shut});
+    if(T.anc!=null)hud(T.shut?"let go to close it":"straight line",T.shut?"a closed shape fills in":`${T.deg}° · pause to turn a corner · brush ${brushPx()} px`,e.clientX,e.clientY);
+    else hud(closed?"let go to fill it":T.join?"carrying the line on":"drawing",closed?"a closed loop fills in":`brush ${brushPx()} px · ⇧ straight · ⌥ rub out · [ ] brush`,e.clientX,e.clientY);return}
+  if(tune.ink){const v=markAt(e),q=tune.ink[tune.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)tune.ink.push(v);inkC.classList.add("on");big.classList.add("inking");const closed=drawInk(tune.ink,false);
+    hud(closed?"let go to fill it":"drawing a petal",closed?"a closed loop fills in":`it repeats ${pureN(cur)} times round the mark`,e.clientX,e.clientY);return}
   // hold Shift and the drag keeps to whichever way it set off in, so one trait changes and the other stays put
   tune.tx=(tune.tx||0)+dx;tune.ty=(tune.ty||0)+dy;let lx=dx,ly=dy;
   if(e.shiftKey){if(!tune.ax&&Math.abs(tune.tx)+Math.abs(tune.ty)>2)tune.ax=Math.abs(tune.tx)>=Math.abs(tune.ty)?"x":"y";if(tune.ax==="x")ly=0;else if(tune.ax==="y")lx=0}else tune.ax=null;
@@ -1235,6 +1287,7 @@ const DET=.035,toRaw=(v)=>{const a=v-.5;return a?.5+Math.sign(a)*(Math.abs(a)*(.
   fromRaw=(r)=>{const a=r-.5;return .5+Math.sign(a)*Math.max(Math.abs(a)-DET,0)*.5/(.5-DET)};
 function slide(k,dv,t=tune){const raw=t.raw||(t.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
 const end=()=>{const t=tune;tune=null;
+  if(t&&t.rub){if(!cur)return;if(!t.moved){remember();rubAt(markAt({clientX:t.x,clientY:t.y}),t)}if(t.gone){told();hud("rubbed out",`${t.gone} line${t.gone>1?"s":""} gone · ⌘Z brings them back`,null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1400)}else{hist.pop();ro.classList.add("out")}return}
   if(t&&t.ink&&t.free){if(!cur)return;if(t.moved)freeDone(t);else if(cur.fr){remember();cur.fr=null;told();drawStudio();hud("cleared","⌘Z brings the lines back",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>ro.classList.add("out"),1400)}return}
   if(t&&t.ink){if(!cur)return;if(t.moved)inkDone(t);else if(cur.pen&&cur.pen.w>0){remember();penTo(null);told();ro.classList.add("out")}return} // a tap in Draw lets the drawing go
   if(t&&t.moved)told();ro.classList.add("out");if(cur&&!mirOn())mirC.classList.remove("on")};
@@ -1242,11 +1295,14 @@ const end=()=>{const t=tune;tune=null;
 const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],["stretch it","Stretch","wide or tall, and up to square it off softly"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
   ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw a petal","Draw","draw one petal and it grows all the way round; close a loop to fill it"],
-  ["draw freely","Draw freely","lines land exactly where you draw, one after another; [ and ] for the brush"]];
+  ["draw freely","Draw freely","lines land exactly where you draw; Shift for straight lines, ⌥ to rub out, [ and ] for the brush"]];
 let mode=0;
 function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];if(i===6&&typeof firstTime==="function")firstTime("draw");
   if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
-  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw","m-draw"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
+  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw","m-draw"][i];if(i!==7)ring.classList.remove("on");
+  // the second half of the hint says what matters in this mode: blending between ghosts, or how to draw
+  const gh=$("ghosthint"),tip=i===6?"Close a loop to fill it; a tap lets the drawing go.":i===7?"Hold ⇧ for straight lines, ⌥ to rub out; [ and ] change the brush.":null;
+  if(tip){if(gh.dataset.was==null)gh.dataset.was=gh.textContent;gh.textContent=tip}else if(gh.dataset.was!=null){gh.textContent=gh.dataset.was;delete gh.dataset.was}big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
 MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
   b.onclick=()=>{setMode(i);popMode(false)};$("modepop").append(b)});setMode(0);
 function popMode(on){const p=$("modepop");p.hidden=!on;$("modeword").setAttribute("aria-expanded",on);if(on)p.children[mode].focus()}
@@ -1287,7 +1343,7 @@ const AXES=[
   [{v:(g,q)=>.5+wrapDeg(q?q.dh:0)/360,say:(v,g,q)=>{const d=Math.round(wrapDeg(q?q.dh:0));return "hue "+(d>0?"+":d<0?"−":"")+Math.abs(d)+"°"}},
    {v:(g,q)=>((q?q.cf:1)-.22)/1.48,say:(v,g,q)=>"vivid "+Math.round((q?q.cf:1)*100)+"%"}]];
 // what each way does, said when the pointer rests on the mark before a drag
-const AXW=["↔ twist · ↕ thicker or thinner","↔ wider or taller · ↕ squarer","↔ bend · ↕ one end heavier","↔ outline · ↕ fuller or finer","↔ frame · ↕ badge","↔ hue · ↕ vivid or calm","draw one petal and it repeats round","exactly where you draw · [ ] brush · tap to clear"];
+const AXW=["↔ twist · ↕ thicker or thinner","↔ wider or taller · ↕ squarer","↔ bend · ↕ one end heavier","↔ outline · ↕ fuller or finer","↔ frame · ↕ badge","↔ hue · ↕ vivid or calm","draw one petal and it repeats round","exactly where you draw · ⇧ straight · ⌥ rub out · [ ] brush · tap to clear"];
 function hudNow(t,x,y){const A=AXES[mode];if(!A||!cur)return;const g=cur.g,q=t&&t.tint,v=A.map(a=>a.v(g,q));
   const lock=t&&t.ax?`  ·  ⇧ ${t.ax==="x"?"sideways":"up and down"} only`:"";
   hud(nameNow()||MODES[mode][1],A.map((a,i)=>(i?"↕ ":"↔ ")+a.say(v[i],g,q)).join("  ·  ")+lock,x,y,v)}
@@ -2486,6 +2542,8 @@ const GUIDE=[
    ["The word, or <kbd>1</kbd>–<kbd>8</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw · Draw freely."],
    ["Draw <kbd>7</kbd>","Draw one petal on the mark and it repeats all the way round. Close the loop to fill it. Tap the mark to let the drawing go. On a lettered mark the petal sits beside the letters. In Petal mode, sideways makes it longer or shorter."],
    ["Draw freely <kbd>8</kbd>","Lines land exactly where you draw them, one after another, over the mark and any letters. A closed loop fills; on a badge a line cuts through. <kbd>[</kbd> <kbd>]</kbd> change the brush, <kbd>⌘Z</kbd> takes a line back, a tap clears them all."],
+   ["Straight lines <kbd>⇧</kbd>","Hold Shift while drawing freely for a straight line in 15° steps, one width end to end. Pause to turn a corner; come back to the start and the shape fills."],
+   ["Rub out <kbd>⌥</kbd>","Hold ⌥ (Alt) and drag or tap over lines to take them away. Start a line on the end of another and it carries that line on."],
    ["− + or scroll over the mark","More or fewer petals."],["The symmetry word, or <kbd>M</kbd>","Mirrored, one mirror, turning or free. Hover each to preview it."],
    ["<kbd>⌘Z</kbd> · <kbd>⇧⌘Z</kbd>","Step back and forward through every change. <kbd>Esc</kbd> goes back to the field."],["Hold <kbd>B</kbd>","See the mark as it was when you opened it. Let go and your changes come back."],["<kbd>?</kbd>","Opens this guide while you're shaping a mark."]]],
  ["The ghosts",[["Point between two ghosts","The mark blends them, exactly half of each at the midpoint."],["Click a ghost","Become it. A new ring grows round the new mark."],
@@ -2512,7 +2570,7 @@ function openGuide(){endTour(true);const inStudio=!$("studio").hidden,w=walkHere
 gbox.addEventListener("keydown",(e)=>e.stopPropagation());
 // search: every word you type must appear in a row; American spellings and everyday words find Meadow's own
 const SYN={color:"colour",colors:"colours",export:"save",download:"save",undo:"step back",redo:"step forward",logo:"mark",icon:"icon",favicon:"favicon",animate:"move",animation:"move",
-  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css",brush:"draw freely",sketch:"draw freely",freehand:"draw freely"};
+  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css",brush:"draw freely",straight:"straight",ruler:"straight",polygon:"straight",erase:"rub out",eraser:"rub out",rub:"rub out",join:"rub out",sketch:"draw freely",freehand:"draw freely"};
 // words people reach for that a section answers without using them
 const GTAGS={"The field":"explore browse wander map","Shaping a mark":"edit change shape tweak","The ghosts":"variations options suggestions","Colour":"palette paint contrast wcag hex","Posters":"print layout",
   "Moving marks":"loop animation","Taking it with you":"save export download file share tokens css developer","Your shelf and the nursery":"keep favourites saved breed"};
