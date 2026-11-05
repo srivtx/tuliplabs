@@ -430,6 +430,75 @@ const E = [];
   ] });
 }
 
+/* ── Belong ─────────────────────────────────────────────────────────────── */
+{
+  // OKLCH → sRGB, so steps in the map are even steps to the eye
+  function ok(L, Cc, h) {
+    const a = Cc * Math.cos(h * Math.PI / 180), b = Cc * Math.sin(h * Math.PI / 180);
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    const f = (x) => { x = cl(x, 0, 1); return Math.round(255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)); };
+    return `rgb(${f(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s)},${f(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s)},${f(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)})`;
+  }
+  const MX = 100, MW = 800, MY = 500, MH = 400, LHI = 0.92, LLO = 0.32;
+  const toMap = (h, L) => [MX + (((h % 360) + 360) % 360) / 360 * MW, MY + (LHI - L) / (LHI - LLO) * MH];
+  const wrap = (d) => ((d % 360) + 540) % 360 - 180;
+  const meanHue = (P) => { let x = 0, y = 0; P.forEach((p) => { x += Math.cos(p.h * Math.PI / 180); y += Math.sin(p.h * Math.PI / 180); }); return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; };
+  // the map is painted once per strength into a small image, then scaled up smoothly
+  const MAPS = {};
+  function mapOf(Cc) {
+    if (MAPS[Cc]) return MAPS[Cc];
+    const W = 120, Hh = 40, m = document.createElement("canvas"); m.width = W; m.height = Hh; const x = m.getContext("2d");
+    for (let i = 0; i < W; i++) for (let j = 0; j < Hh; j++) { x.fillStyle = ok(LHI - (j + 0.5) / Hh * (LHI - LLO), Cc, (i + 0.5) * 360 / W); x.fillRect(i, j, 1, 1); }
+    return (MAPS[Cc] = m);
+  }
+  const BANDS = [[0, 34, "neighbours"], [180, 30, "opposite"], [120, 14, "a third"], [-120, 14, "a third"]];
+  function trial(id, q, P, Cc, start) {
+    return { id, q, hint: "drag to move your colour around the map below",
+      init() { this.s = { h: start[0], L: start[1] }; },
+      move(hd, dx, dy) { this.s.h = (this.s.h + dx / MW * 360 + 360) % 360; this.s.L = cl(this.s.L - dy / MH * (LHI - LLO), LLO, LHI); },
+      draw(c, k, prev) {
+        const all = [...P, { L: this.s.L, h: this.s.h }];
+        all.forEach((p, i) => { const x = 115 + i * 200; poly(c, [[x, 150], [x + 170, 150], [x + 170, 360], [x, 360]], ok(p.L, Cc, p.h), i === 3 ? C.pink : null, 4); });
+        label(c, 815, 400, "yours", C.pink, "right");
+        // the map: hue across, lightness down, all at the palette's strength
+        c.save(); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high"; c.drawImage(mapOf(Cc), MX, MY, MW, MH); c.restore();
+        P.forEach((p) => { const [x, y] = toMap(p.h, p.L); ring(c, x, y, 13, C.bg, 4); ring(c, x, y, 13, C.ink, 2); });
+        if (k != null) {
+          prev.forEach((p) => { const [x, y] = toMap(p.h, p.L); ring(c, x, y, 9, C.faint, 2); });
+          const m = meanHue(P);
+          c.save(); c.globalAlpha = k;
+          for (const [off, half, n] of BANDS) {
+            const a = (m + off - half + 360) % 360, xs = [a, a + 2 * half];
+            for (const sh of [0, -360]) {
+              const x0 = MX + (xs[0] + sh) / 360 * MW, x1 = MX + (xs[1] + sh) / 360 * MW;
+              const l = Math.max(MX, x0), r = Math.min(MX + MW, x1);
+              if (r > l) { line(c, [l, MY - 18], [r, MY - 18], C.leaf, 5); }
+            }
+            const cx = MX + (((m + off) % 360 + 360) % 360) / 360 * MW;
+            label(c, cl(cx, MX + 60, MX + MW - 60), MY - 46, n, C.leaf, "center");
+          }
+          c.restore();
+        }
+        const [x, y] = toMap(this.s.h, this.s.L); ring(c, x, y, 16, C.bg, 6); ring(c, x, y, 16, C.pink, 4);
+      },
+      read() {
+        const m = meanHue(P), d = Math.abs(wrap(this.s.h - m)), Ls = P.map((p) => p.L), lo = Math.min(...Ls), hi = Math.max(...Ls);
+        const rel = d < 34 ? "next to them in hue" : d > 150 ? "opposite them in hue" : Math.abs(d - 120) < 14 ? "a third of the way round the wheel from them" : `${Math.round(d)}° round the wheel from them`;
+        const light = this.s.L < lo - 0.04 ? "darker than all three" : this.s.L > hi + 0.04 ? "lighter than all three" : "within their lightness";
+        return { v: [Math.round(d), R2(this.s.L)],
+          line: `You picked a colour ${rel}, ${light}.`,
+          why: d < 34 ? "Neighbouring hues feel like one family: they share almost everything, so a palette like this reads as calm. " + (light === "within their lightness" ? "You kept to their lightness too, so yours blends in." : "You changed the lightness instead, which is how a family gets a leader.")
+            : d > 150 ? "Opposite hues make each other look stronger, which is why complements pop. " + (light === "within their lightness" ? "Keeping the same lightness is what stops them clashing." : "Changing the lightness as well makes yours a clear accent.")
+            : "Colours that belong usually share most things and differ in one. Yours differs in hue by a lot, but not all the way to opposite: an in-between choice that some palettes use for tension.",
+          short: `Colour: you pick ${d < 34 ? "neighbours" : d > 150 ? "opposites" : "in-betweens"}, ${light === "within their lightness" ? "same lightness" : light.split(" ")[0]}` };
+      } };
+  }
+  E.push({ id: "belong", name: "Belong", trials: [
+    trial("b-warm", "Pick a fourth colour that belongs with these three.", [{ L: 0.72, h: 28 }, { L: 0.62, h: 42 }, { L: 0.8, h: 62 }], 0.12, [250, 0.45]),
+    trial("b-cool", "And one for these.", [{ L: 0.48, h: 232 }, { L: 0.58, h: 250 }, { L: 0.68, h: 214 }], 0.07, [60, 0.85]),
+  ] });
+}
+
 /* ── more experiments ───────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────────────────────────
