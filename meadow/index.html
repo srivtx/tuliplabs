@@ -689,9 +689,6 @@ void main(){
  vec3 ink,acc;
  gPT=uNu==1?clamp(vPT,0.,1.):0.;gPW=mix(uPenS.x,uPenS2.x,gPT);gPM=mix(uPenS.z,uPenS2.z,gPT);gPC=uPenK>.5||gPT<.5?uPenS.y:uPenS2.y;if(uPenK<.5)gPT=step(.5,gPT);
  if(uLm<1.){float t=clamp(uLm*1.9-length(gl_FragCoord.xy-uLo.xy)/max(uLo.z,1.)*.9,0.,1.);gLt=t*t*(3.-2.*t);}
- if(uFix==1){ink=uInk;acc=uAcc;}else{
-  vec2 w=worldAt(gl_FragCoord.xy);int a,b;float e;country(w,a,b,e);float t=clamp(.5+e*uPPW,0.,1.);
-  ink=mix(uI[b],uI[a],t);acc=mix(uA[b],uA[a],t);}
  vec2 p=vP,dq=vP;float px=2./vS;int L=int(vL+.5);float ca=0.,cb=0.;float shade=1.,spec=0.;
  if(L==2){
   float N=16.;vec2 u=(p*.5+.5)*N,c=floor(u),f=fract(u);dq=(c+.5)/N*2.-1.;vec2 m=mark(dq);
@@ -713,6 +710,11 @@ void main(){
    vec2 gr=vec2(dFdx(h),dFdy(h))/px;vec3 nn=normalize(vec3(-gr*1.25,1.));vec3 Ld=normalize(vec3(-.5,.6,.72));
    float df=max(dot(nn,Ld),0.);shade=.56+.62*df;spec=pow(max(dot(reflect(-Ld,nn),vec3(0.,0.,1.)),0.),26.)*.55;}
  }
+ // nothing here: the pixel stays clear, so the colours (which country it's in, any dye) aren't worked out at all
+ if(ca<=0.&&cb<=0.){o=vec4(0.);return;}
+ if(uFix==1){ink=uInk;acc=uAcc;}else{
+  vec2 w=worldAt(gl_FragCoord.xy);int a,b;float e;country(w,a,b,e);float t=clamp(.5+e*uPPW,0.,1.);
+  ink=mix(uI[b],uI[a],t);acc=mix(uA[b],uA[a],t);}
  ink=dyed(ink,dq);
  vec3 col=(ink*ca*(1.-cb)+acc*cb)*shade;float al=ca+(1.-ca)*cb;col+=spec*al;
  o=vec4(col,al);
@@ -828,7 +830,7 @@ function frame(ms){
   const i0=Math.floor((cam.x-W/2/sc)/sp)-1,i1=Math.ceil((cam.x+W/2/sc)/sp)+1,j0=Math.floor((cam.y-H/2/sc)/sp)-1,j1=Math.ceil((cam.y+H/2/sc)/sp)+1;
   const size=base*.86,born=sstep(.08,.86,f),speed=Math.hypot(cam.vx,cam.vy)*sc;
   const reach=Math.hypot(W,H)*.6,pX=pointer.x*dpr,pY=pointer.y*dpr,bulge=base*1.5;
-  let n=0;tiles.length=0;hover=null;hoverP=[pointer.x,pointer.y];let bestD=1e18;const fresh=[],freshAt=[];
+  tendPoll();let n=0;tiles.length=0;hover=null;hoverP=[pointer.x,pointer.y];let bestD=1e18;const fresh=[],freshAt=[];
   for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){
     if(n>=R.MAX)break;
     const even=!(i&1)&&!(j&1);if(!even&&born<.02)continue;
@@ -846,7 +848,10 @@ function frame(ms){
     put(buf,n*R.STRIDE,sx,sy,s,rotn,g,m,lensHere);n++;
     const hd=(sx-pX)**2+(sy-pY)**2;if(g>.6&&hd<bestD&&hd<(s*.55)**2){bestD=hd;hover=m}
   }
-  if(fresh.length){tend(fresh);fresh.forEach((m,k)=>{const o=freshAt[k]*R.STRIDE;buf[o+5]=m.n0;buf[o+6]=m.n1;buf[o+7]=m.s;for(let q=0;q<NG;q++)buf[o+9+q]=m.g[q]||0})}
+  // new marks wait unseen while they're judged, nearest the middle first, so new ground grows in from the middle
+  if(fresh.length){fresh.forEach((m,k)=>{buf[freshAt[k]*R.STRIDE+4]=0});if(hover&&!hover.ok)hover=null;
+    if(!tj){const ks=fresh.map((m,k)=>k).filter(k=>!fresh[k].judging),d2=(k)=>{const o=freshAt[k]*R.STRIDE;return (buf[o]-W/2)**2+(buf[o+1]-H/2)**2};
+      if(ks.length){ks.sort((a,b)=>d2(a)-d2(b));tendSoon(ks.slice(0,TJ_N).map(k=>fresh[k]))}}}
   R.melt(clamp((t-meltAt)/1.2),[meltO[0],meltO[1],reach]);
   R.ground(W,H,[cam.x,cam.y],sc);
   R.marks(buf,n,W,H,[cam.x,cam.y],sc,null,false);
@@ -892,17 +897,29 @@ function chrome(){
 const AC=16,AS=48,AN=AC*AS,atlas=new Float32Array(AC*AC*T.STRIDE),atlasPx=new Uint8Array(AN*AN*4);
 const seenCell=new Int32Array(AS*AS),stack=new Int32Array(AS*AS),cellMask=new Uint8Array(AS*AS);
 let atlasFB=null;
-function judgeAll(list){
-  const gl=T.gl;
+function drawAtlas(list){const gl=T.gl;
   if(!atlasFB){atlasFB=gl.createFramebuffer();const tx=gl.createTexture();gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,tx);
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,AN,AN,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
     gl.bindFramebuffer(gl.FRAMEBUFFER,atlasFB);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,tx,0);gl.activeTexture(gl.TEXTURE0)}
   gl.bindFramebuffer(gl.FRAMEBUFFER,atlasFB);
   list.forEach((m,i)=>put(atlas,i*T.STRIDE,(i%AC+.5)*AS,(((i/AC)|0)+.5)*AS,AS,0,1,m,0));T.pen(list[0]);
-  T.marks(atlas,list.length,AN,AN,[0,0],1,{i:K("#000000"),a:K("#000000")},2);
-  const used=Math.ceil(list.length/AC)*AS;gl.readPixels(0,AN-used,AN,used,gl.RGBA,gl.UNSIGNED_BYTE,atlasPx);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  T.marks(atlas,list.length,AN,AN,[0,0],1,{i:K("#000000"),a:K("#000000")},2);return Math.ceil(list.length/AC)*AS}
+function judgeAll(list){const gl=T.gl,used=drawAtlas(list);
+  gl.readPixels(0,AN-used,AN,used,gl.RGBA,gl.UNSIGNED_BYTE,atlasPx);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   return list.map((m,i)=>judge(i%AC,(i/AC)|0,used));
 }
+/* the field's new marks are judged without waiting: drawn small, then read back a frame or two later once the
+   graphics card has finished, so the page never stops to wait for it. Until then they stay unseen */
+let tj=null,tpbo=null;const TJ_N=64;
+function tendSoon(list,pass=0){const gl=T.gl,used=drawAtlas(list);
+  if(!tpbo)tpbo=gl.createBuffer();gl.bindBuffer(gl.PIXEL_PACK_BUFFER,tpbo);gl.bufferData(gl.PIXEL_PACK_BUFFER,AN*used*4,gl.STREAM_READ);gl.readPixels(0,AN-used,AN,used,gl.RGBA,gl.UNSIGNED_BYTE,0);gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  tj={list,used,pass,sync:gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0)};gl.flush();list.forEach(m=>m.judging=1)}
+function tendPoll(){if(!tj)return;const gl=T.gl,st=gl.clientWaitSync(tj.sync,0,0);if(st===gl.TIMEOUT_EXPIRED)return;
+  const {list,used,pass}=tj;gl.deleteSync(tj.sync);tj=null;list.forEach(m=>delete m.judging);
+  if(st===gl.WAIT_FAILED){tend(list.filter(m=>!m.ok));return}
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER,tpbo);gl.getBufferSubData(gl.PIXEL_PACK_BUFFER,0,atlasPx,0,AN*used*4);gl.bindBuffer(gl.PIXEL_PACK_BUFFER,null);
+  const next=[];list.forEach((m,i)=>{if(m.ok)return;const r=judge(i%AC,(i/AC)|0,used);if(weak(r)&&pass<3){nudge(m,r);next.push(m)}else m.ok=true});
+  if(next.length)tendSoon(next,pass+1)}
 function judge(cx,cy,used){
   let ink=0;const B=3,C=AS/B;
   for(let y=0;y<AS;y++){const row=used-1-(cy*AS+y);for(let x=0;x<AS;x++){const o=(row*AN+cx*AS+x)*4,v=atlasPx[o]<127||atlasPx[o+2]<127?1:0;cellMask[y*AS+x]=v;ink+=v}}
