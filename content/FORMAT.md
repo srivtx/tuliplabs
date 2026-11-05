@@ -1,11 +1,11 @@
 # Lesson format
 
-Each chapter is one Markdown file in `content/tc/` (Think Complexity) or `content/ms/` (ModSim).
+Each chapter is one Markdown file in `content/tc/` (Complexity) or `content/ms/` (ModSim).
 `python3 tools/build.py --verify` turns them into `content/tc.json` / `content/ms.json` and proves
 every block works in CPython: examples run, predictions are deterministic, every reference
 solution passes its tests and every starter fails them.
 
-Tracks: `tc` Think Complexity, `ms` ModSim, `bx` Build your own X, `ps` Probability & Stats, `ds` DSA, `od` Open Data Structures.
+Tracks: `tc` Complexity, `ms` ModSim, `bx` Build your own X, `ps` Probability & Stats, `ds` DSA, `od` Structures.
 
 Front matter: `id`, `num`, `title`, `tagline`, `world` (3D world id, optional), `part` (optional),
 `minutes`, and a `goals:` list. `## Heading` starts a section. Plain Markdown between blocks is prose.

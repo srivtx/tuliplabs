@@ -1,8 +1,8 @@
-"""Small helpers shared by the Think Complexity lessons.
+"""Small helpers shared by the Complexity in code lessons.
 
 Everything a chapter teaches is written out in that chapter. This file only
 holds plumbing that isn't the point of any lesson: drawing grids, labelling
-plots, and a base class for 2-D cellular automata like the book's Cell2D.
+plots, and a base class for 2-D cellular automata (Cell2D).
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ def draw_array(array, cmap="Blues", **options):
 
 
 class Cell2D:
-    """Base class for 2-D cellular automata (like the book's Cell2D)."""
+    """Base class for 2-D cellular automata."""
 
     def __init__(self, n, m=None):
         m = n if m is None else m

@@ -75,14 +75,14 @@
       "Each chapter climbs the same ladder. First you predict what some code does, then fix a bug, then put lines in order, then write it yourself, and finally rebuild it from memory. Anything you get wrong comes back later in your review queue."
     ],
     "list": ["Real Python, running in your browser", "A five-step ladder in every chapter", "Wrong answers come back for review"],
-    "cta": "Open Think Complexity", "href": "code/"
+    "cta": "Open Complexity in code", "href": "code/"
   },
   {
     "id": "launch", "date": "2026-10-28", "kind": "Launch", "glyph": "grid", "a": "#3d8fe0", "b": "#0f2c4f",
     "card": "12 worlds", "title": "The lab opens with twelve 3D worlds you can poke",
     "body": "Cities, sandpiles, flocks and forest fires as voxel worlds, each with a guided story, a notebook of ideas and a quiz.",
     "more": [
-      "The lab opened with twelve worlds from Think Complexity, built from voxels you can poke: a city that grows, a sandpile that topples, a flock that steers itself, a forest that burns and grows back.",
+      "The lab opened with twelve worlds about complexity, built from voxels you can poke: a city that grows, a sandpile that topples, a flock that steers itself, a forest that burns and grows back.",
       "Each world comes with a guided story that walks you through what you are seeing, a notebook of the ideas behind it, and a short quiz at the end."
     ],
     "list": ["Twelve voxel worlds", "A guided story, a notebook and a quiz for each"],

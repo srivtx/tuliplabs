@@ -1,5 +1,5 @@
 /* Tulip Labs: code tracks.
-   One engine renders every chapter of both books from content/<track>.json.
+   One engine renders every chapter of every track from content/<track>.json.
    Python runs in the browser through Pyodide (learn/py-worker.js), or through
    tools/devserver.py when the page is opened with ?runner=local. */
 (function () {
@@ -1043,7 +1043,7 @@
       h("div", { class: "p-corner bl" }, `${N} chapters` + (parts.length > 1 ? ` · ${parts.length} parts` : "") + " · Python in your browser"),
       h("div", { class: "p-corner br" }, `fig. 1 — your flower, ${STAGE_NAMES[st]}`));
 
-    const ladder = [["Read & run", "The book's code, live. Change a number and run it again."], ["Predict", "Type what a program prints before you run it."],
+    const ladder = [["Read & run", "Working code, live. Change a number and run it again."], ["Predict", "Type what a program prints before you run it."],
       ["Reorder", "Scrambled lines, sometimes with decoys. Rebuild the program."], ["Fill the blanks", "The skeleton is there; you write the heart of it."],
       ["Bug hunt", "It runs, but it's wrong. Find out why."], ["Write it", "A blank function and a set of checks."],
       ["Rebuild & explain", "The chapter's core idea from memory, then in your own words."]];

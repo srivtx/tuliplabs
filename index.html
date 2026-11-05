@@ -419,7 +419,7 @@ a{color:var(--pink-soft)}
     </div>
     <div class="ribbon" aria-label="What's inside">
       <div class="rib-h"><span>what's inside</span><span>bar length = chapters</span></div>
-      <a class="rib" href="worlds/" data-k="worlds" style="--kc:#ff5fa8;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Worlds</b><em>12</em></span></span><span class="rib-t">Poke 12 voxel worlds: cities, sandpiles, flocks, forest fires</span></a><a class="rib" href="design/" data-k="dz" style="--kc:#1fa8c9;--w:0.727"><span class="rib-track"><span class="rib-bar"><b>Design</b><em>32</em></span></span><span class="rib-t">Match a target poster, card or layout in CSS</span></a><a class="rib" href="code/" data-k="tc" style="--kc:#2fb38f;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Complexity</b><em>12</em></span></span><span class="rib-t">The Python behind every world, step by step</span></a><a class="rib" href="modsim/" data-k="ms" style="--kc:#3d8fe0;--w:0.591"><span class="rib-track"><span class="rib-bar"><b>ModSim</b><em>26</em></span></span><span class="rib-t">Model the real world: growth, epidemics, things that fall</span></a><a class="rib" href="build/" data-k="bx" style="--kc:#e6a21a;--w:0.659"><span class="rib-track"><span class="rib-bar"><b>Build X</b><em>29</em></span></span><span class="rib-t">Rebuild SQL, git, a CPU, an OS and a tiny GPT from scratch</span></a><a class="rib" href="stats/" data-k="ps" style="--kc:#9a6be0;--w:0.295"><span class="rib-track"><span class="rib-bar"><b>Stats</b><em>13</em></span></span><span class="rib-t">Simulate chance first, then prove it</span></a><a class="rib" href="dsa/" data-k="ds" style="--kc:#3caa4c;--w:1.000"><span class="rib-track"><span class="rib-bar"><b>DSA</b><em>44</em></span></span><span class="rib-t">From Big-O to Codeforces, one pattern at a time</span></a><a class="rib" href="ods/" data-k="od" style="--kc:#ee6a4c;--w:0.091"><span class="rib-track"><span class="rib-bar"><b>ODS</b><em>soon</em></span></span><span class="rib-t">Open Data Structures, chapter by chapter</span></a>
+      <a class="rib" href="worlds/" data-k="worlds" style="--kc:#ff5fa8;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Worlds</b><em>12</em></span></span><span class="rib-t">Poke 12 voxel worlds: cities, sandpiles, flocks, forest fires</span></a><a class="rib" href="design/" data-k="dz" style="--kc:#1fa8c9;--w:0.727"><span class="rib-track"><span class="rib-bar"><b>Design</b><em>32</em></span></span><span class="rib-t">Match a target poster, card or layout in CSS</span></a><a class="rib" href="code/" data-k="tc" style="--kc:#2fb38f;--w:0.273"><span class="rib-track"><span class="rib-bar"><b>Complexity</b><em>12</em></span></span><span class="rib-t">The Python behind every world, step by step</span></a><a class="rib" href="modsim/" data-k="ms" style="--kc:#3d8fe0;--w:0.591"><span class="rib-track"><span class="rib-bar"><b>ModSim</b><em>26</em></span></span><span class="rib-t">Model the real world: growth, epidemics, things that fall</span></a><a class="rib" href="build/" data-k="bx" style="--kc:#e6a21a;--w:0.659"><span class="rib-track"><span class="rib-bar"><b>Build X</b><em>29</em></span></span><span class="rib-t">Rebuild SQL, git, a CPU, an OS and a tiny GPT from scratch</span></a><a class="rib" href="stats/" data-k="ps" style="--kc:#9a6be0;--w:0.295"><span class="rib-track"><span class="rib-bar"><b>Stats</b><em>13</em></span></span><span class="rib-t">Simulate chance first, then prove it</span></a><a class="rib" href="dsa/" data-k="ds" style="--kc:#3caa4c;--w:1.000"><span class="rib-track"><span class="rib-bar"><b>DSA</b><em>44</em></span></span><span class="rib-t">From Big-O to Codeforces, one pattern at a time</span></a><a class="rib" href="ods/" data-k="od" style="--kc:#ee6a4c;--w:0.091"><span class="rib-track"><span class="rib-bar"><b>Structures</b><em>soon</em></span></span><span class="rib-t">Build each data structure, then watch it work</span></a>
     </div>
   </div>
 </section>
@@ -462,7 +462,7 @@ a{color:var(--pink-soft)}
       <div class="tab" style="--kc:#ff5fa8">
         <button type="button" role="tab" id="tab-3" aria-controls="pan-3" aria-selected="false"><span class="n">04</span><b>A garden that grows with you.</b></button>
         <div class="more"><div><p>Every track is a flower. Chapters make it bloom, and wrong answers come back later for review, so nothing slips.</p>
-          <p class="cnt">136 chapters, one garden</p><div class="chips"><a href="worlds/">3D worlds</a><a href="modsim/">ModSim</a><a href="stats/">Probability & Stats</a><a href="ods/">Open Data Structures</a></div>
+          <p class="cnt">136 chapters, one garden</p><div class="chips"><a href="worlds/">3D worlds</a><a href="modsim/">ModSim</a><a href="stats/">Probability & Stats</a><a href="ods/">Structures</a></div>
           <a class="open" href="#tracks">Pick a track <i class="arw down" aria-hidden="true"></i></a></div></div>
         <i class="bar" aria-hidden="true"></i>
       </div>
@@ -611,10 +611,10 @@ const $ = (s) => document.querySelector(s);
 /* ---------- tracks: the one list the page is built from ---------- */
 const TRACKS = [
   { k: "worlds", data: null, href: "worlds/", name: "3D worlds", tag: "play", count: 12,
-    desc: "Think Complexity as voxel worlds: a city, a party, a sandpile, traffic. Drag, poke, and follow a guided story.", art: "cube" },
+    desc: "Complexity science as voxel worlds: a city, a party, a sandpile, traffic. Drag, poke, and follow a guided story.", art: "cube" },
   { k: "dz", data: "dz", href: "design/", name: "Design studio", tag: "play", unit: " levels",
     desc: "Match a target in CSS: your board and the target overlap, and a meter shows how many pixels agree.", art: "frame" },
-  { k: "tc", data: "tc", href: "code/", name: "Think Complexity", tag: "code along",
+  { k: "tc", data: "tc", href: "code/", name: "Complexity in code", tag: "code along",
     desc: "The Python behind every world: graphs, small worlds, cellular automata, agents and evolution.", art: "glider" },
   { k: "ms", data: "ms", href: "modsim/", name: "ModSim", tag: "code along",
     desc: "Modeling and simulation: bike share, population, epidemics, heat, drugs in the blood, projectiles.", art: "wave" },
@@ -624,8 +624,8 @@ const TRACKS = [
     desc: "Simulate it, then prove it: Bayes, the central limit theorem, the bootstrap, MCMC, an honest A/B test.", art: "bell" },
   { k: "ds", data: "ds", href: "dsa/", name: "DSA", tag: "course",
     desc: "From counting steps to segment trees. LeetCode, Codeforces and big-company questions on every rung.", art: "tree" },
-  { k: "od", data: "od", href: "ods/", name: "Open Data Structures", tag: "book",
-    desc: "Pat Morin's book chapter by chapter: array stacks, linked lists, skiplists, hash tables, heaps, B-trees.", art: "list" },
+  { k: "od", data: "od", href: "ods/", name: "Structures", tag: "course",
+    desc: "Build every classic data structure yourself: array stacks, linked lists, skiplists, hash tables, heaps, B-trees.", art: "list" },
 ];
 const KC = { worlds: "#ff5fa8", dz: "#1fa8c9", tc: "#2fb38f", ms: "#3d8fe0", bx: "#e6a21a", ps: "#9a6be0", ds: "#3caa4c", od: "#ee6a4c" };
 
@@ -645,8 +645,8 @@ function chState(id, blocks) {
 /* ---------- top bar switcher: same markup as every other page ---------- */
 (function nav() {
   const G = [["Play", ["worlds", "dz"]], ["Code along", ["tc", "ms"]], ["Courses", ["bx", "ps", "ds", "od"]]];
-  const sub = { worlds: "Think Complexity as 12 voxel worlds you can poke", dz: "Match a target in CSS, pixel by pixel", tc: "The Python behind every world, step by step", ms: "Modeling and simulation, learnt in code",
-    bx: "See every part of a real tool, then write it", ps: "Simulate it, then prove it", ds: "From the ground floor to Codeforces", od: "Pat Morin's book, chapter by chapter" };
+  const sub = { worlds: "Complexity as 12 voxel worlds you can poke", dz: "Match a target in CSS, pixel by pixel", tc: "The Python behind every world, step by step", ms: "Modeling and simulation, learnt in code",
+    bx: "See every part of a real tool, then write it", ps: "Simulate it, then prove it", ds: "From the ground floor to Codeforces", od: "Build each data structure, then watch it work" };
   const by = Object.fromEntries(TRACKS.map((t) => [t.k, t]));
   let h = '<summary aria-label="Switch section"><i class="sq"></i><span>Home</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections">';
   h += '<a class="home k-home" href="./" aria-current="page"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a>';
@@ -666,8 +666,8 @@ const TITLE = (() => {
   let cols = 0, rows = 0, on = null, cell = 10, mode = -1, st = null, t0 = 0, last = 0;
   const MODES = [
     { name: "breadth-first search", link: "dsa/#19", where: "DSA, chapter 19" },
-    { name: "the Game of Life", link: "code/#6", where: "Think Complexity, chapter 6" },
-    { name: "a sandpile", link: "code/#8", where: "Think Complexity, chapter 8" },
+    { name: "the Game of Life", link: "code/#6", where: "Complexity, chapter 6" },
+    { name: "a sandpile", link: "code/#8", where: "Complexity, chapter 8" },
   ];
   async function sample() {
     try { await document.fonts.load('700 120px "Pixelify Sans"'); } catch (e) { /* fallback font is fine */ }

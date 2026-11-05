@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Learn complexity science by playing: all 12 chapters of Think Complexity as interactive 3D voxel worlds with guided stories.">
+<meta name="description" content="Learn complexity science by playing: 12 interactive 3D voxel worlds with guided stories.">
 <meta property="og:title" content="Tulip Labs">
-<meta property="og:description" content="All 12 chapters of Think Complexity as interactive 3D voxel worlds you can play with.">
+<meta property="og:description" content="12 interactive 3D voxel worlds about complexity science, for you to play with.">
 <meta property="og:image" content="../docs/screenshot.png">
 <meta name="theme-color" content="#3a4fa3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges'><rect x='1' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='1' width='1' height='1' fill='%23d23f87'/><rect x='3' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='4' y='1' width='1' height='1' fill='%23d23f87'/><rect x='5' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='3' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='5' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='3' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='4' width='1' height='1' fill='%233faa52'/><rect x='3' y='4' width='1' height='1' fill='%2324803c'/><rect x='6' y='4' width='1' height='1' fill='%233faa52'/><rect x='0' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='5' width='1' height='1' fill='%233faa52'/><rect x='3' y='5' width='1' height='1' fill='%2324803c'/><rect x='5' y='5' width='1' height='1' fill='%233faa52'/><rect x='6' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='6' width='1' height='1' fill='%233faa52'/><rect x='2' y='6' width='1' height='1' fill='%233faa52'/><rect x='3' y='6' width='1' height='1' fill='%2324803c'/><rect x='4' y='6' width='1' height='1' fill='%233faa52'/><rect x='5' y='6' width='1' height='1' fill='%233faa52'/></svg>">
@@ -309,7 +309,7 @@ input[type=range]{accent-color:var(--pink)}
 <div class="app">
 <header class="top">
   <a class="brand" href="../" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Tulip Labs</b></a>
-  <details class="sw k-worlds"><summary aria-label="Switch section"><i class="sq"></i><span>3D worlds</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections"><a class="home k-home" href="../"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a><h6>Play</h6><a class="k-worlds" href="../worlds/" aria-current="page"><i class="sq"></i><b>3D worlds</b><small>Think Complexity as 12 voxel worlds you can poke</small></a><a class="k-dz" href="../design/"><i class="sq"></i><b>Design studio</b><small>Match a target in CSS, pixel by pixel</small></a><a style="--kc:#e8476a" href="../meadow/"><i class="sq"></i><b>Meadow</b><small>An endless map of marks to wander</small></a><h6>Code along</h6><a class="k-tc" href="../code/"><i class="sq"></i><b>Think Complexity</b><small>The Python behind every world, step by step</small></a><a class="k-ms" href="../modsim/"><i class="sq"></i><b>ModSim</b><small>Modeling and simulation, learnt in code</small></a><h6>Courses</h6><a class="k-bx" href="../build/"><i class="sq"></i><b>Build your own X</b><small>See every part of a real tool, then write it</small></a><a class="k-ps" href="../stats/"><i class="sq"></i><b>Probability & Stats</b><small>Simulate it, then prove it</small></a><a class="k-ds" href="../dsa/"><i class="sq"></i><b>DSA</b><small>From the ground floor to Codeforces</small></a><a class="k-od" href="../ods/"><i class="sq"></i><b>Open Data Structures</b><small>Pat Morin's book, chapter by chapter</small></a></nav></details>
+  <details class="sw k-worlds"><summary aria-label="Switch section"><i class="sq"></i><span>3D worlds</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections"><a class="home k-home" href="../"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a><h6>Play</h6><a class="k-worlds" href="../worlds/" aria-current="page"><i class="sq"></i><b>3D worlds</b><small>Complexity as 12 voxel worlds you can poke</small></a><a class="k-dz" href="../design/"><i class="sq"></i><b>Design studio</b><small>Match a target in CSS, pixel by pixel</small></a><a style="--kc:#e8476a" href="../meadow/"><i class="sq"></i><b>Meadow</b><small>An endless map of marks to wander</small></a><h6>Code along</h6><a class="k-tc" href="../code/"><i class="sq"></i><b>Complexity in code</b><small>The Python behind every world, step by step</small></a><a class="k-ms" href="../modsim/"><i class="sq"></i><b>ModSim</b><small>Modeling and simulation, learnt in code</small></a><h6>Courses</h6><a class="k-bx" href="../build/"><i class="sq"></i><b>Build your own X</b><small>See every part of a real tool, then write it</small></a><a class="k-ps" href="../stats/"><i class="sq"></i><b>Probability & Stats</b><small>Simulate it, then prove it</small></a><a class="k-ds" href="../dsa/"><i class="sq"></i><b>DSA</b><small>From the ground floor to Codeforces</small></a><a class="k-od" href="../ods/"><i class="sq"></i><b>Structures</b><small>Build each data structure, then watch it work</small></a></nav></details>
   <span class="grow"></span>
   <div class="hdr-tools"><a class="nb-btn code-link" id="code-btn" href="../code/#1" title="Learn this chapter's Python, step by step">&lt;/&gt; Code</a><button class="nb-btn" id="map-btn">Map</button><button class="nb-btn" id="nb-btn" aria-label="Open notebook">Notebook <b id="nb-count">0</b></button></div>
   <nav class="tabs" role="tablist" aria-label="Chapters">
@@ -339,7 +339,7 @@ input[type=range]{accent-color:var(--pink)}
     <div id="pins"></div>
     <div class="toast" id="toast" hidden></div>
     <div class="welcome" id="welcome" hidden>
-      <p class="eyebrow">Think Complexity · all 12 chapters</p>
+      <p class="eyebrow">Complexity science · 12 worlds</p>
       <h2>Learn complexity by playing with it</h2>
       <ol class="w-list">
         <li><b>Each chapter is a small world</b> made of blocks: a city, a party, a sand pile, a sugar-mountain society.</li>
@@ -543,7 +543,7 @@ input[type=range]{accent-color:var(--pink)}
           <tr><td>Std of degree</td><td>52.4</td><td id="t-wssd">–</td><td id="t-basd">–</td></tr>
         </tbody>
       </table></div>
-      <p class="src">Facebook column: SNAP dataset, 4039 users and 88,234 friendships (Table 4.1 in the book). Model columns are computed live on your much smaller graphs, so read the pattern rather than the exact values: WS wins on clustering, BA wins on spread of degree.</p>
+      <p class="src">Facebook column: SNAP dataset, 4039 users and 88,234 friendships (a standard benchmark). Model columns are computed live on your much smaller graphs, so read the pattern rather than the exact values: WS wins on clustering, BA wins on spread of degree.</p>
     </div>
     <div class="block">
       <h3>Try this</h3>
@@ -700,7 +700,7 @@ input[type=range]{accent-color:var(--pink)}
       <div id="traffic-ctl" style="margin-top:12px">
         <div class="ctl"><label for="s-trn">Cars</label><input id="s-trn" type="range" min="5" max="60" step="1" value="20"><output id="o-trn">20</output></div>
         <div class="ctl"><label for="s-treps">Random wobble</label><input id="s-treps" type="range" min="0" max="5" step="0.5" value="0"><output id="o-treps">0%</output></div>
-        <div class="ctl"><label for="s-trdrv">Driver rule</label><select id="s-trdrv" class="sel"><option value="basic">Floor it (the book’s driver)</option><option value="jerky">Floor it, but brake when close</option><option value="smooth">Match your speed to the gap ahead</option></select><span></span></div>
+        <div class="ctl"><label for="s-trdrv">Driver rule</label><select id="s-trdrv" class="sel"><option value="basic">Floor it (the classic driver)</option><option value="jerky">Floor it, but brake when close</option><option value="smooth">Match your speed to the gap ahead</option></select><span></span></div>
         <div class="btns"><button class="btn primary" id="tr-brake">Tap your brakes</button><button class="btn" id="tr-reset">Restart road</button></div>
       </div>
       <div id="boids-ctl" hidden style="margin-top:12px">
@@ -1054,7 +1054,7 @@ const tab2={
       const done=wave.level>wave.maxD+0.5;const stepIdx=done?-2:Math.floor(wave.level);
       if(stepIdx!==er.lastStepIdx){er.lastStepIdx=stepIdx;renderCode2(done?[8]:[4,5,6,7]);
         $('#code2note').textContent=done?`Done: ${total} of ${n} nodes are reachable from node ${er.src}.`+(total<n?' The rest live on other islands, so the graph is not connected.':' Every node was reached, so the graph is connected.')
-          :`Exploring: ${reached} nodes seen so far, ring ${Math.max(0,stepIdx)} hops out. (The book's version uses a stack, so it visits in a different order, but it finds the same set.)`}
+          :`Exploring: ${reached} nodes seen so far, ring ${Math.max(0,stepIdx)} hops out. (The classic version uses a stack, so it visits in a different order, but it finds the same set.)`}
       if(done&&total<n)goal('goals2','flood');
       $('#legend').innerHTML=`<b>Search from node ${er.src}</b><div class="row"><span>height = hops + 1</span><span><span class="sw" style="background:var(--c5)"></span>unreached</span></div>`}
     else $('#legend').innerHTML=`<b>G(n=${n}, p=${fmtP(er.p)})</b><div class="row"><span>colour = component</span><span>height = degree</span><span><span class="sw" style="background:var(--c5)"></span>isolated</span></div>`},
@@ -1474,7 +1474,7 @@ const tab9={
    ============================================================ */
 const tr={mode:'traffic',L:1000,n:20,eps:0,cars:[],run:true,acc:0,rate:14,driver:'basic',brake:0,you:0,hist:[],steps:0,crashes:0,exp:null};
 const DRIVERS={basic:(d,dist)=>1,jerky:(d,dist)=>dist>1.5*d.speed+3?1:-2,smooth:(d,dist)=>Math.min(40,dist*0.8)-d.speed};
-const DRIVER_NAMES={basic:'Floor it (the book’s driver)',jerky:'Floor it, but brake when close',smooth:'Match your speed to the gap ahead'};
+const DRIVER_NAMES={basic:'Floor it (the classic driver)',jerky:'Floor it, but brake when close',smooth:'Match your speed to the gap ahead'};
 function trNew(n,eps){tr.n=n;tr.eps=eps;tr.cars=[];for(let i=0;i<n;i++)tr.cars.push({loc:i*tr.L/n,speed:0,crash:false});tr.hist=[];tr.steps=0;tr.crashes=0}
 function trStepOnce(cars,eps,driver,brakeIdx){const n=cars.length,L=tr.L;let crashes=0;for(let i=0;i<n;i++){const d=cars[i],nx=cars[(i+1)%n];let dist=n===1?L:((nx.loc-d.loc+L)%L);
     let acc=DRIVERS[driver](d,dist);if(i===brakeIdx)acc=-10;acc=Math.max(-10,Math.min(1,acc));let sp=d.speed+acc;sp*=1+eps*(2*Math.random()-1);sp=Math.max(0,Math.min(40,sp));
@@ -1658,14 +1658,14 @@ ch1:{ch:1,title:'A city of mild preferences',steps:[
   pins:()=>someUnhappy(1).map(i=>({n:i,t:'still moving',c:'hot'}))},
  {enter(){G.st.seg1=schStat.seg},
   say:()=>{const s=G.st.seg1,c=s<0.56?0:s<0.69?1:2;
-   return `${verdict('g1',c,Q1)}<br><br>Started: ${meter(0.5)}<br>Ended: ${meter(s)}<br><br>You can see big red and blue neighbourhoods. Yet <b>nobody wanted a divided city</b>: every household was happy to be outnumbered 5 to 3.<br><br>The division isn't inside any household. It only exists at the level of the whole city. The book calls this <b>emergence</b>: simple local rules producing a big pattern that nobody planned.`}},
+   return `${verdict('g1',c,Q1)}<br><br>Started: ${meter(0.5)}<br>Ended: ${meter(s)}<br><br>You can see big red and blue neighbourhoods. Yet <b>nobody wanted a divided city</b>: every household was happy to be outnumbered 5 to 3.<br><br>The division isn't inside any household. It only exists at the level of the whole city. This is called <b>emergence</b>: simple local rules producing a big pattern that nobody planned.`}},
  {enter(){G.st.res={3:G.st.seg1};G.st.resNeed=3},
   btns:[2,3,4,5].map(k=>({t:`Everyone wants ${k} of 8`,fn(){setRange('s-need',k);schReset();pickYou();setRun1(true);G.st.resNeed=k}})),
   say:()=>{if(schSweeps()>=12&&G.st.resNeed===sch.need)G.st.res[sch.need]=schStat.seg;
    const rows=Object.keys(G.st.res).sort().map(k=>`<div class="g-row"><span>wants ${k} of 8</span>${meter(G.st.res[k])}</div>`).join('');
    return `<b>Experiment.</b> Rebuild the city with a different wish and let it settle. Is a slightly pickier city slightly more divided, or a lot more?<br>${rows}<div class="g-row" style="opacity:.7"><span>now: ${sch.need} of 8</span>${meter(schStat.seg)}</div>`},
   wait:()=>Object.keys(G.st.res||{}).length>=3,hint:'Try two more wishes. Each needs about 12 sweeps to settle.',
-  okText:'A small change in what people want gives a big jump in the result. When output isn’t proportional to input, the book calls it <b>nonlinear</b>.'},
+  okText:'A small change in what people want gives a big jump in the result. When output isn’t proportional to input, it's called <b>nonlinear</b>.'},
  {say:`<b>Why chapter 1 starts here.</b><br><br>Kepler's equations predict where Mars will be, down to the second. Schelling's model can't predict any real city. What it gives you is a <b>mechanism</b>: a city can divide even when nobody wants it to.<br><br>Complexity science accepts models like this: built from simple rules, run on a computer instead of solved with equations, and judged by what they <b>explain</b>. The side panel compares the two kinds of model, axis by axis.`}
 ]},
 
@@ -1695,19 +1695,19 @@ ch2:{ch:2,title:'A party of strangers',steps:[
       const same=er.comp.id[a]===er.comp.id[b];er.extra.add(key(a,b));G.st.rc++;if(same)G.st.rw++;G.st.lp=[a,b,same,performance.now()];erBuild(false)},reduced?40:240)}}],
   say:()=>{const r=G.st.runs;let s=`Press the button and watch chats appear at random.<br><br>Chats so far: <b>${G.st.rc||0}</b> · wasted (already linked): <b>${G.st.rw||0}</b> · groups: <b>${er.comp.sizes.length}</b>`;
    if(r.length){const f=r[0],c=f<=12?0:f<=25?1:2;s+=`<br><br>${verdict('g2',c,Q2)} Runs so far: <b>${r.join(', ')}</b> chats.<br>Chance wastes lots of chats on people who were already linked. The final few loners are hard to hit at random.`}return s},
-  wait:()=>G.st.runs&&G.st.runs.length>=2,hint:'Run it at least twice. Every run is different.',okText:'Random linking always needs more lines than a smart host. How many more? That is what the book measures next.',
+  wait:()=>G.st.runs&&G.st.runs.length>=2,hint:'Run it at least twice. Every run is different.',okText:'Random linking always needs more lines than a smart host. How many more? That is what we measure next.',
   pins:()=>{const L=G.st.lp;return L&&performance.now()-L[3]<900?[{n:L[0],t:L[2]?'wasted chat':'new link',c:L[2]?'':'soft'},{n:L[1],t:'·',c:'tiny'}]:[]}},
  {enter(){er.extra.clear();setRange('s-ern',40);er.p=0.004;$('#s-erp').value=erV(0.004);erBuild(false);G.st.pc=null},
   control:{id:'s-erp',label:'Chattiness p',out:()=>fmtP(er.p)},
-  say:()=>`Random chatting is exactly the book's model, the <b>Erdős–Rényi graph</b>: every pair of guests talks with the same chance <b>p</b>.<br><br>Now 40 guests. Drag chattiness up <b>slowly</b> until everyone is one colour. Lines appear one by one, but watch how the colours merge.<br><br>Each guest talks to <b>${fmt(er.p*(er.n-1),1)}</b> people on average · groups: <b>${er.comp.sizes.length}</b>`,
+  say:()=>`Random chatting is exactly the classic model, the <b>Erdős–Rényi graph</b>: every pair of guests talks with the same chance <b>p</b>.<br><br>Now 40 guests. Drag chattiness up <b>slowly</b> until everyone is one colour. Lines appear one by one, but watch how the colours merge.<br><br>Each guest talks to <b>${fmt(er.p*(er.n-1),1)}</b> people on average · groups: <b>${er.comp.sizes.length}</b>`,
   wait:()=>er.comp.sizes.length===1,ok(){G.st.pc=er.p},hint:'Keep going until there is a single group.',okText:'Everyone is linked.',pins:()=>[{n:0,t:'You'}]},
  {enter(){startWave(er,0,-1);er.lastStepIdx=-1},
   click(n){startWave(er,n,-1);er.lastStepIdx=-1},
   say:()=>{const d=er.bfs?er.bfs.d:[];let mx=0;for(const x of d)if(x>mx)mx=x;
-   return `Being linked means a rumour can reach everyone. You start one. Each round, everyone who knows it tells everyone they've talked to.<br><br><b>Tower height = rounds of retelling</b> before that person heard it. The last guest heard after <b>${mx}</b> rounds.<br><br><b>Tap anyone</b> to start a rumour from them instead. This spreading is the book's <b>reachable nodes</b> search.`},
+   return `Being linked means a rumour can reach everyone. You start one. Each round, everyone who knows it tells everyone they've talked to.<br><br><b>Tower height = rounds of retelling</b> before that person heard it. The last guest heard after <b>${mx}</b> rounds.<br><br><b>Tap anyone</b> to start a rumour from them instead. This spreading is the <b>reachable nodes</b> search.`},
   pins:()=>{if(!er.bfs)return[];let far=er.src;er.bfs.d.forEach((x,i)=>{if(x>er.bfs.d[far])far=i});return[{n:er.src,t:'starts here',c:'hot'},{n:far,t:`last to hear · round ${er.bfs.d[far]}`,c:'soft'}]}},
  {enter(){er.src=er.dst=-1;er.bfs=null;er.edgesDirty=true},
-  say:()=>{const pc=G.st.pc||er.p,n=er.n;return `Your 40 guests became fully linked at about <b>${fmt(pc*(n-1),1)}</b> chats per guest.<br><br>The book gives a rule of thumb for where this happens: <b>p* = ln(n) / n</b>. In plain words, each person needs about <b>ln(n)</b> contacts. ln(40) ≈ <b>3.7</b>.<br><br>The surprise is how <b>sudden</b> it is. A bit below p* the party is almost never fully linked; a bit above, almost always. It's a tipping point, like water turning to ice.`}},
+  say:()=>{const pc=G.st.pc||er.p,n=er.n;return `Your 40 guests became fully linked at about <b>${fmt(pc*(n-1),1)}</b> chats per guest.<br><br>There's a rule of thumb for where this happens: <b>p* = ln(n) / n</b>. In plain words, each person needs about <b>ln(n)</b> contacts. ln(40) ≈ <b>3.7</b>.<br><br>The surprise is how <b>sudden</b> it is. A bit below p* the party is almost never fully linked; a bit above, almost always. It's a tipping point, like water turning to ice.`}},
  {chart:'ch2',btns:[{t:'Throw 80 random parties at each chattiness',primary:true,fn(){erRun()}}],
   say:`See the tipping point for yourself. The button throws 80 random 40-person parties at each chattiness level and counts how many end up fully linked.`,
   wait:()=>er.trial&&er.trial.n===er.n&&er.trial.pts.length>=18,hint:'Press the button and watch the curve fill in.',
@@ -1717,7 +1717,7 @@ ch2:{ch:2,title:'A party of strangers',steps:[
 /* ===================== CHAPTER 3 ===================== */
 ch3:{ch:3,title:'A village around a lake',steps:[
  {enter(){ws.extra.clear();setRange('s-wsn',120);setRange('s-wsk',6);setRange('s-wsp',0);ws.src=ws.dst=-1;ws.bfs=null;ws.edgesDirty=true},
-  say:`120 houses in a ring around a lake. Each block is a house. Everyone knows only the <b>3 nearest houses on each side</b>: the short lines hugging the ring.<br><br>Your friends mostly know each other too. It's a close-knit village; the book calls this a <b>ring lattice</b>.<br><br>Ravi lives exactly across the lake.`,
+  say:`120 houses in a ring around a lake. Each block is a house. Everyone knows only the <b>3 nearest houses on each side</b>: the short lines hugging the ring.<br><br>Your friends mostly know each other too. It's a close-knit village; this is called a <b>ring lattice</b>.<br><br>Ravi lives exactly across the lake.`,
   pins:()=>[{n:0,t:'You'},{n:60,t:'Ravi, across the lake',c:'soft'}]},
  {say:`You have a letter for Ravi, but there's no post office. You can only hand it to someone <b>you know</b>, who hands it to someone <b>they know</b>, and so on.<span class="q">How many hand-offs to reach Ravi?</span>`,ask:{key:'g3',opts:Q3},
   pins:()=>[{n:0,t:'You'},{n:60,t:'Ravi',c:'soft'}]},
@@ -1736,13 +1736,13 @@ ch3:{ch:3,title:'A village around a lake',steps:[
   okText:'One long tie, placed well, beats hundreds of short ones. Shortcuts are powerful.',
   pins:()=>{const o=[{n:0,t:'You'},{n:60,t:'Ravi',c:'soft'}];if(G.st.a>=0)o.push({n:G.st.a,t:'shortcut from here…',c:'hot'});return o}},
  {enter(){ws.extra.clear();wsBuild();startWave(ws,0,60);G.st.msg=''},
-  say:`In real life nobody plans shortcuts. A few people just happen to know someone far away: a cousin, an old classmate.<br><br>So instead: <b>2% of all friendships</b> get swapped for a friend somewhere random. The book calls this <b>rewiring</b> with probability p = 0.02.<span class="q">How many hand-offs to Ravi now?</span>`,ask:{key:'g3b',opts:Q3b},
+  say:`In real life nobody plans shortcuts. A few people just happen to know someone far away: a cousin, an old classmate.<br><br>So instead: <b>2% of all friendships</b> get swapped for a friend somewhere random. This is called <b>rewiring</b> with probability p = 0.02.<span class="q">How many hand-offs to Ravi now?</span>`,ask:{key:'g3b',opts:Q3b},
   pins:()=>[{n:0,t:'You'},{n:60,t:'Ravi',c:'soft'}]},
  {enter(){setRange('s-wsp',wsV(0.02));startWave(ws,0,60)},btns:[{t:'Try another random village',fn(){ws.seed=rseed();wsBuild();startWave(ws,0,60)}}],
   say:()=>{const d=ws.bfs?ws.bfs.d[60]:0,c=d>=15?0:d>=9?1:2;
    return `${verdict('g3b',c,Q3b)}<br><br>Now it takes <span class="big">${d}</span> hand-offs. The <b class="r">red route</b> leaps across the lake on a <b class="y">yellow random tie</b>. Only ${ws.rewired.size} of ${ws.n*ws.k/2} friendships changed.<br><br>Try another random village: the number changes, but it stays small.`},
   pins:()=>[{n:0,t:'You'},{n:60,t:'Ravi',c:'soft'}]},
- {say:()=>`Distances collapsed. Did the close-knit village fall apart?<br><br><b>Do your friends know each other?</b> The book measures this as <b>clustering</b>. It's still <span class="big">${pct(ws.C/ws.C0)}</span> of the original.<br><b>Average hand-offs</b> between any two houses (<b>path length</b>) dropped to <span class="big">${pct(ws.L/ws.L0)}</span> of the original.<br><br>Close-knit <i>and</i> short paths at the same time: a <b>small world</b>. That explains Milgram's experiment, where letters reached strangers in about six steps.`,
+ {say:()=>`Distances collapsed. Did the close-knit village fall apart?<br><br><b>Do your friends know each other?</b> This is measured as <b>clustering</b>. It's still <span class="big">${pct(ws.C/ws.C0)}</span> of the original.<br><b>Average hand-offs</b> between any two houses (<b>path length</b>) dropped to <span class="big">${pct(ws.L/ws.L0)}</span> of the original.<br><br>Close-knit <i>and</i> short paths at the same time: a <b>small world</b>. That explains Milgram's experiment, where letters reached strangers in about six steps.`,
   pins:()=>[{n:0,t:'You'},{n:60,t:'Ravi',c:'soft'}]},
  {chart:'ch3',control:{id:'s-wsp',label:'Random ties p',out:()=>fmtP(ws.p)},
   say:()=>`Push the random ties all the way to <b>p = 1</b> and watch the two numbers.<br><br>p = ${fmtP(ws.p)} · friends know each other: <b>${pct(ws.C/ws.C0)}</b> · hand-offs: <b>${pct(ws.L/ws.L0)}</b>`,
@@ -1768,7 +1768,7 @@ ch4:{ch:4,title:'A town that keeps growing',steps:[
   say:()=>{const R=ba.repeated.length;let s=`In the model nobody “chooses”. It's a <b>lottery</b>: every member holds <b>one ticket per friend</b>, all in one box (<b>${R}</b> tickets). A newcomer draws tickets to pick friends.<br><br>Draw a few tickets and see who wins.`;
    if(G.st.last>=0){const d=ba.adj[G.st.last].size;s+=`<br><br>Last draw: <b>member ${G.st.last}</b>, holding ${d} of ${R} tickets (a <b>${(d/R*100).toFixed(0)}%</b> chance).`}
    const tally=Object.entries(G.st.draws).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([i,c])=>`member ${i} ×${c}`).join(' · ');if(tally)s+=`<br>Winners so far: ${tally}`;return s},
-  wait:()=>G.st.nd>=6,hint:'Draw 6 tickets.',okText:'Tall towers win far more often, and every win gives them another ticket. The book calls this <b>preferential attachment</b>.',
+  wait:()=>G.st.nd>=6,hint:'Draw 6 tickets.',okText:'Tall towers win far more often, and every win gives them another ticket. This is called <b>preferential attachment</b>.',
   pins:()=>G.st.last>=0?[{n:G.st.last,t:'winner!',c:'hot'}]:[]},
  {say:`Now let the lottery run by itself until the town has <b>300 members</b>.<span class="q">Who will end up the most popular?</span>`,ask:{key:'g4',opts:Q4}},
  {enter(){ba.src=ba.dst=-1;ba.bfs=null;ba.grow=true;$('#b-bagrow').textContent='Pause'},
@@ -1914,10 +1914,10 @@ ch5:{ch:5,title:'A world in one line',steps:[
  {enter(){ca.diff=false;ca.start='single';ca.first=caFirst();ca.rule=30;caSet();ca.shown=1;ca.burst=true},
   btns:[{t:'Run it again',fn(){ca.shown=1;ca.burst=true}}],
   say:()=>{const mid=(ca.W-1)/2,bits=ca.rows.slice(0,Math.min(ca.shown,ca.T)).map(r=>r[mid]).join('');
-   return `Rule 30 from a single cell. Read down the <b>centre column</b>: <code>${bits}</code><br><br>It looks like coin flips and passes many statistical tests for randomness. Yet nothing here is random. Run it again and you get the <b>exact same</b> sequence, every time.<br><br>So is its future predictable? In principle, yes: same start, same future. In practice, the only way to know row 1,000 is to compute all 999 rows before it. That tension is the book's point about <b>determinism</b>.`},
+   return `Rule 30 from a single cell. Read down the <b>centre column</b>: <code>${bits}</code><br><br>It looks like coin flips and passes many statistical tests for randomness. Yet nothing here is random. Run it again and you get the <b>exact same</b> sequence, every time.<br><br>So is its future predictable? In principle, yes: same start, same future. In practice, the only way to know row 1,000 is to compute all 999 rows before it. That tension is the point about <b>determinism</b>.`},
   pins:()=>[{n:(ca.W-1)/2,t:'centre column'}],learn:['Determinism']},
  {enter(){ca.start='random';ca.seed=3;ca.first=caFirst();ca.rule=110;caSet();ca.shown=1;ca.burst=true},
-  say:`<b>Rule 110</b> from a random start. After a while the background settles into a repeating texture, and <b>structures</b> drift through it at different angles and crash into each other. The book calls them <b>spaceships</b>.<br><br>Those collisions can behave like logic gates (AND, OR), so Rule 110 can compute <b>anything a computer can</b>. It is <b>Turing complete</b>, which Matthew Cook proved in 1998. A one-line world with an 8-entry table is as powerful as your laptop, just much slower.`,
+  say:`<b>Rule 110</b> from a random start. After a while the background settles into a repeating texture, and <b>structures</b> drift through it at different angles and crash into each other. They're called <b>spaceships</b>.<br><br>Those collisions can behave like logic gates (AND, OR), so Rule 110 can compute <b>anything a computer can</b>. It is <b>Turing complete</b>, which Matthew Cook proved in 1998. A one-line world with an 8-entry table is as powerful as your laptop, just much slower.`,
   learn:['Universality']},
  CHK('How many different rules are possible for this kind of automaton (3-cell neighbourhood, on/off cells)?',['8','256','Infinitely many'],1,
   'There are 8 neighbourhood patterns, and each can map to on or off: 2 × 2 × … (8 times) = 2⁸ = 256.'),
@@ -1945,9 +1945,9 @@ ch6:{ch:6,title:'The Game of Life',steps:[
   say:()=>`Conway conjectured that <b>no starting pattern can grow forever</b>: everything would eventually die out or stop growing.<br><br>In 1970 Bill Gosper's team found this: the <b>glider gun</b>. Tick <b>${life.gen}</b> · live cells <b>${life.pop}</b>`,
   wait:()=>life.gen>=120,hint:'Fire it and watch for 120 ticks.',okText:'It launches a new glider every 30 ticks, forever, so the population grows without limit. The conjecture was <b>wrong</b>, and running the model is what settled it.',learn:["Conway's conjecture"]},
  {enter(){life.speed=10;life.run=true},
-  say:`<b>A question the book asks.</b> Is that glider a real <i>thing</i>?<span class="q">Which view feels right to you?</span>`,
+  say:`<b>A question worth asking.</b> Is that glider a real <i>thing</i>?<span class="q">Which view feels right to you?</span>`,
   check:{open:true,opts:['Yes: gliders are real objects in the Life world, just as atoms are real in ours','No: “glider” is a handy way to describe cells switching on and off; only the cells are real'],
-   why:'Both are respectable positions. The first is <b>realism</b>: our best theories describe things that really exist. The second is <b>instrumentalism</b>: theories are tools for prediction, and their entities need not exist. The book suggests your answer can reasonably differ from one entity to the next.'},learn:['Realism vs instrumentalism']},
+   why:'Both are respectable positions. The first is <b>realism</b>: our best theories describe things that really exist. The second is <b>instrumentalism</b>: theories are tools for prediction, and their entities need not exist. Your answer can reasonably differ from one entity to the next.'},learn:['Realism vs instrumentalism']},
  CHK('A dead cell has exactly 3 live neighbours. What happens next tick?',['It stays dead','It comes alive','It depends on its diagonal neighbours only'],1,'Exactly 3 live neighbours means birth. That is the only way a dead cell comes alive.'),
  CHK('What did the glider gun prove?',['Life always dies out eventually','A finite starting pattern can grow forever, so Conway’s conjecture was false','Gliders are the only spaceships'],1,'One gun keeps adding gliders forever, so the number of live cells grows without bound.')
 ]},
@@ -1968,7 +1968,7 @@ ch7:{ch:7,title:'Water, ink and leopard spots',steps:[
   say:`Is that flip real, or luck? The button tests 40 random rocks at each porosity and counts how often water gets through.`,
   wait:()=>ph.trial&&ph.trial.length>=13,hint:'Press the button.',okText:'Below about 55% water almost never gets through; above 65% it almost always does. That sudden jump near q ≈ 0.59 is a <b>critical point</b>, the same tipping-point shape as the party in chapter 2.',learn:['Critical point']},
  {enter(){ph.seed=7;percNew(40,40,0.593,false)},chart:c=>drawPhFrac(c),btns:[{t:'Measure clusters at q = 0.593',primary:true,fn(){phFractal()}}],
-  say:()=>`Right at the critical point the wet cluster is lacy, with holes at every scale. How “big” is a shape like that? Count its wet cells as the slab gets wider. A line would grow like size¹ and a filled area like size² (the two grey guide lines).<br><br>${ph.frac?`Measured slope: <span class="big">${fmt(ph.frac.slope,2)}</span>. That's between 1 and 2: the cluster is a <b>fractal</b>. The book finds about 1.85.`:'Press the button to measure.'}`,
+  say:()=>`Right at the critical point the wet cluster is lacy, with holes at every scale. How “big” is a shape like that? Count its wet cells as the slab gets wider. A line would grow like size¹ and a filled area like size² (the two grey guide lines).<br><br>${ph.frac?`Measured slope: <span class="big">${fmt(ph.frac.slope,2)}</span>. That's between 1 and 2: the cluster is a <b>fractal</b>. The accepted value is about 1.85.`:'Press the button to measure.'}`,
   wait:()=>!!ph.frac,learn:['Fractal dimension']},
  {enter(){phInk()},click(n){rdDrop(n)},
   say:()=>`Different physics now: a chemical spreading through a 64×64 dish. <b>Tap to drop ink.</b> Height and colour show how much is there.<br><br>The rule: each cell compares itself with the average of its neighbours. If it has more, ink flows out; if less, ink flows in. That's <b>diffusion</b>. Drops: <b>${ph.drops}</b>`,
@@ -2076,7 +2076,7 @@ const LINKS=[
  ['Cellular automaton','Game of Life','Life is a cellular automaton in two dimensions, with a neighbourhood of 8.'],
  ['Cellular automaton','Percolation','The percolation model is itself a cellular automaton: each pore checks its neighbours every step.'],
  ['Nonlinear','Tipping point','Small change, big effect. Going from wanting 3 to 4 like neighbours, or adding a few edges near p*.'],
- ['Diffusion','Toppling rule','The book uses the same neighbour kernel for both: share with the 4 neighbours, whether it is ink or sand.'],
+ ['Diffusion','Toppling rule','Both use the same neighbour kernel: share with the 4 neighbours, whether it is ink or sand.'],
  ['Preferential attachment','Heavy-tailed','Rich-get-richer growth is one mechanism that produces a heavy tail.']];
 const MAPSEL={kind:null,v:null};
 function mapPos(){const pos={};for(let c=1;c<=12;c++){const ts=NOTES.filter(n=>n[0]===c);ts.forEach(([_,t],k)=>{pos[t]={x:72+(c-1)*122,y:100+k*80}})}return pos}
@@ -2187,7 +2187,7 @@ ch9:{ch:9,title:'A society made of sugar',steps:[
   say:()=>`One last experiment: all 400 agents start packed into the bottom-left corner. Remember, agents can only move <b>north, south, east or west</b>, never diagonally.<br><br>Watch the bands of agents that break away toward the far mountain. Step <b>${sug.steps}</b>`,
   wait:()=>sug.steps>=30,hint:'Watch for about 30 steps.',okText:'The bands travel <b>diagonally</b>, which no single agent can do. A property of the group that its members don’t have is an <b>emergent property</b>. And there was no shortcut to discovering it: we had to run the model. That is <b>computational irreducibility</b>.',learn:['Emergent property','Computational irreducibility']},
  CHK('In Sugarscape, which agents tend to survive when sugar is scarce?',['Those with high vision and low metabolism','Those who started with the most sugar, whatever their traits','It is completely random'],0,'Seeing far and burning little lets an agent find sugar and outlast scarcity, so the survivors’ average traits shift.'),
- CHK('Why do the migration waves count as an emergent property?',['Because agents are programmed to form waves','Because the waves move diagonally, something no individual agent can do'],1,'The group has a capability its members lack. That is the strongest kind of emergence the book describes.')
+ CHK('Why do the migration waves count as an emergent property?',['Because agents are programmed to form waves','Because the waves move diagonally, something no individual agent can do'],1,'The group has a capability its members lack. That is the strongest kind of emergence.')
 ]},
 
 ch10:{ch:10,title:'Jams, flocks and free will',steps:[
@@ -2216,7 +2216,7 @@ ch10:{ch:10,title:'Jams, flocks and free will',steps:[
    el.querySelectorAll('[data-bk]').forEach(b=>b.onclick=()=>{const k=b.dataset.bk;bd.on[k]=!bd.on[k];b.setAttribute('aria-pressed',bd.on[k]);G.st.off=(G.st.off||0)+1;const pb=document.querySelector(`#boids-ctl [data-rule="${k}"]`);if(pb)pb.setAttribute('aria-pressed',bd.on[k])})},
   say:`Switch the rules off one at a time and watch what changes. Without “avoid”, birds pile into one clump. Without “move to neighbours”, the flock drifts apart. Without “match heading”, it becomes a swarm rather than a flock.`,
   wait:()=>(G.st.off||0)>=2,hint:'Toggle at least two rules.'},
- {say:`<b>The chapter's big question: free will.</b><br><br>If your neurons follow physical laws, how can you make choices? The book points to what you just saw. A jam moves <b>backward</b> though every car moves forward. A flock turns <b>as one</b> though no bird decides for it. Wholes can have abilities their parts lack.<br><br>So maybe a person can have free will, choosing among options, even if each neuron follows fixed rules. This view is called <b>compatibilism</b>. It's a debate, not a proof, but these models make it concrete.`,learn:['Compatibilism']},
+ {say:`<b>The chapter's big question: free will.</b><br><br>If your neurons follow physical laws, how can you make choices? One answer points to what you just saw. A jam moves <b>backward</b> though every car moves forward. A flock turns <b>as one</b> though no bird decides for it. Wholes can have abilities their parts lack.<br><br>So maybe a person can have free will, choosing among options, even if each neuron follows fixed rules. This view is called <b>compatibilism</b>. It's a debate, not a proof, but these models make it concrete.`,learn:['Compatibilism']},
  CHK('In the phantom jam, which way does the jam move?',['Forward, with the cars','Backward, against the traffic','It doesn’t move'],1,'Cars enter the jam at the back and leave at the front, so the jam itself creeps backward.'),
  CHK('What do Boids show about flocks?',['Flocks need a leader bird','Coordinated group motion can come from simple local rules, with no leader'],1,'Each boid only reacts to its neighbours, yet the group moves like one organism.')
 ]},
@@ -2227,7 +2227,7 @@ ch11:{ch:11,title:'Evolution you can watch',steps:[
   say:()=>`Each column is one possible <b>genome</b>: 8 genes, each on or off, so 256 genomes. Its height is its <b>fitness</b>, the chance of surviving each step. This whole terrain is a <b>fitness landscape</b> (here, a random one).<br><br><b>Tap any genome</b>: its 8 neighbours light up. Each is exactly <b>one mutation</b> away, one gene flipped.${ev.sel>=0?`<br><br>Selected: <code>${evBits(ev.sel)}</code>, fitness ${fmt(ev.fitAll[ev.sel],2)}`:''}`,
   wait:()=>ev.sel>=0,hint:'Tap a genome.',learn:['Fitness landscape'],pins:()=>{let b=0;for(let g=1;g<256;g++)if(ev.fitAll[g]>ev.fitAll[b])b=g;return[{n:b,t:'highest peak',c:'soft'}]}},
  {enter(){ev.sel=-1;ev.run=false;ev.diffSurv=false;ev.diffRep=false;ev.mut=true;evNew('same')},
-  say:`The book's recipe for evolution has three ingredients: <b>replicators</b> (copies), <b>variation</b>, and <b>differential survival or reproduction</b>.<br><br>Let's leave out the third one. 100 organisms start on one genome (orange). Each step 10% die <b>at random</b>, whatever their fitness, and are replaced by copies of random survivors, with occasional mutations.<span class="q">What happens to mean fitness?</span>`,
+  say:`A minimal recipe for evolution has three ingredients: <b>replicators</b> (copies), <b>variation</b>, and <b>differential survival or reproduction</b>.<br><br>Let's leave out the third one. 100 organisms start on one genome (orange). Each step 10% die <b>at random</b>, whatever their fitness, and are replaced by copies of random survivors, with occasional mutations.<span class="q">What happens to mean fitness?</span>`,
   ask:{key:'g11',opts:['It climbs steadily','It drops steadily','It wanders up and down with no direction']}},
  {enter(){ev.run=true;ev.speed=20},chart:c=>drawEv(c),
   say:()=>`Step <b>${ev.steps}</b> · mean fitness <b>${fmt(evMeanFit(),3)}</b>${ev.steps>=300?`<br><br>${verdict('g11',2,['It climbs','It drops','It wanders'])} Without selection, fitness just drifts: a <b>random walk</b>. The population changes, which technically counts as evolution, but it explains nothing about adaptation.`:''}`,
@@ -2272,7 +2272,7 @@ ch12:{ch:12,title:'Selfish genes, nice brains',steps:[
   say:()=>{const e=pd.evo[pd.evo.length-1]||[0,1,0,0];let s=`Step <b>${pd.steps}</b> · points per round <b>${fmt(e[1],2)}</b> · niceness <b>${pct(e[2])}</b>`;
    if(pd.steps>=3000){const avg=pd.evo.slice(-2500).reduce((a,p)=>a+p[1],0)/Math.min(2500,pd.evo.length);s+=`<br><br>${verdict('g12',1,['Defection stays forever','Cooperation appears, but rises and collapses in waves','Cooperation takes over for good'])}<br><br>Defectors are vulnerable to invasion by nicer strategies, which score 3 with each other. But a very nice population is easy prey for defectors, so niceness crashes, and then rebuilds. Average score over the run: <b>${fmt(avg,2)}</b>, well above the 1.0 of pure defection.`}return s},
   wait:()=>pd.steps>=3000,hint:'Running 3,000 steps…',learn:['Evolution of cooperation']},
- {say:`<b>The chapter's answer to the problem of altruism:</b> genes that make brains inclined to cooperate, retaliate and forgive can spread, because those brains do well in a world full of repeated dilemmas.<br><br>As the book puts it: maybe that's why <b>selfish genes build altruistic brains</b>.<br><br><span class="note">Honest note: the book's version 2.6.4 adds a correction saying its original code for this chapter had a bug, so the waves you see here (from corrected code) can look different from the figures in your copy.</span>`},
+ {say:`<b>The chapter's answer to the problem of altruism:</b> genes that make brains inclined to cooperate, retaliate and forgive can spread, because those brains do well in a world full of repeated dilemmas.<br><br>Put another way: maybe that's why <b>selfish genes build altruistic brains</b>.<br><br><span class="note">Honest note: an early published version of this model had a bug, so the waves you see here (from corrected code) can look different from some older published figures.</span>`},
  CHK('Why is the Prisoner’s Dilemma a dilemma?',['Cooperating always pays more','Defecting is better for each player individually, yet both defecting is worse than both cooperating'],1,'Individual logic and group outcome point in opposite directions.'),
  CHK('Why can’t a population of pure cooperators last?',['Mutant defectors exploit them and score 5 per round','Cooperators get bored'],0,'Unconditional niceness invites exploitation. Strategies that retaliate resist it.')
 ]}});
@@ -2394,7 +2394,7 @@ TOURS.ch9.steps.splice(6,0,{enter(){G.st.before=top10();G.st.taxT=null;sug.run=t
    $('#g-tax').onclick=e=>{sug.tax=!sug.tax;e.currentTarget.setAttribute('aria-pressed',sug.tax);$('#sg-tax').setAttribute('aria-pressed',sug.tax);if(sug.tax)G.st.taxT=sug.steps}},
   say:()=>`<b>Try a policy.</b> The richest 10% hold <b>${pct(top10())}</b> of the sugar right now${G.st.before?` (it was ${pct(G.st.before)} when this step began)`:''}. Switch on the tax and let it run. What happens to that share? And to the poorest agents?`,
   wait:()=>sug.tax&&G.st.taxT!=null&&sug.steps-G.st.taxT>=150,hint:'Switch the tax on and let it run 150 steps.',
-  okText:'Sharing narrows the gap in this toy world. Real economies are far messier, and the book notes that, in versions of Sugarscape with taxes and transfers, inequality proves hard to remove. Models like this let you test such ideas cheaply, and argue about them honestly.'});
+  okText:'Sharing narrows the gap in this toy world. Real economies are far messier, and in versions of Sugarscape with taxes and transfers, inequality proves hard to remove. Models like this let you test such ideas cheaply, and argue about them honestly.'});
 TOURS.ch8.steps.splice(6,0,{enter(){sandPour()},btns:[{t:'Start pouring again',fn(){sandPour()}}],
   say:()=>`<b>One more for fun.</b> A big empty table, and sand pours onto <b>one spot in the middle</b>, grain after grain. Same toppling rule, nothing else.<br><br>Grains poured: <b>${sand.poured||0}</b>`,
   wait:()=>(sand.poured||0)>=8000,hint:'Watch it grow…',okText:'A mandala of nested shapes appears from a single rule and a single pouring spot. Fractal structure costs nothing to make; it is what simple local rules do when pushed to a critical state.'});

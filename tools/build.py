@@ -17,12 +17,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT = os.path.join(ROOT, "content")
 TRACKS = {
-    "tc": "Think Complexity",
-    "ms": "Modeling and Simulation in Python",
+    "tc": "Complexity in code",
+    "ms": "Modeling & Simulation",
     "bx": "Build your own X",
     "ps": "Probability and Statistics",
     "ds": "Data Structures & Algorithms",
-    "od": "Open Data Structures",
+    "od": "Structures",
 }
 
 

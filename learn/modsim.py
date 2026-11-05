@@ -1,8 +1,7 @@
-"""A small, readable stand-in for the ModSim library used in
-*Modeling and Simulation in Python* (Allen B. Downey, 3rd edition).
+"""A small, readable modelling library for the Modeling & Simulation track.
 
-It keeps the book's names and call signatures, so code from the book runs as
-printed, but it's short enough to read in one sitting. Two simplifications:
+It keeps the standard ModSim names and call signatures (credits:
+https://tuliplabs.srivtx.xyz/credits/), but it's short enough to read in one sitting. Two simplifications:
 there are no Pint units (numbers are plain floats), and `State`/`System`
 are simple attribute bags rather than pandas Series.
 """
@@ -189,7 +188,7 @@ class TimeFrame(pd.DataFrame):
 
     @property
     def T(self):
-        """The book names temperature T, so results.T means that column when it exists
+        """Temperature is named T, so results.T means that column when it exists
         (plain pandas would give the transpose)."""
         if "T" in self.columns:
             return self["T"]
