@@ -133,9 +133,26 @@ function legend(c, items, y, k) {
   c.save(); c.globalAlpha = k; c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
   const ws = items.map(([, t]) => 56 + c.measureText(t).width), gap = 44, tot = ws.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
   let x = 500 - tot / 2;
-  items.forEach(([d, t], i) => { line(c, [x, y], [x + 44, y], C.leaf, 3, d); label(c, x + 56, y, t, C.leaf); x += ws[i] + gap; });
+  items.forEach(([d, t, col], i) => { line(c, [x, y], [x + 44, y], col || C.leaf, 3, d); label(c, x + 56, y, t, col || C.leaf); x += ws[i] + gap; });
   c.restore();
 }
+/* names beside several marks at once, stacked so no two names overlap */
+function tags(c, items, k) {
+  c.save(); c.globalAlpha = k; c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
+  const step = LS * 1.7, placed = [];
+  for (const it of [...items].sort((a, b) => a.y - b.y)) {
+    const col = it.col || C.leaf, right = it.x < 640, w = c.measureText(it.t).width + LS;
+    const x0 = right ? it.x + 26 : it.x - 26 - w;
+    let y = it.y;
+    for (const p of placed) if (x0 < p.x1 && x0 + w > p.x0 && Math.abs(y - p.y) < step) y = p.y + step;
+    placed.push({ x0, x1: x0 + w, y });
+    if (Math.abs(y - it.y) > 4) line(c, [it.x + (right ? 14 : -14), it.y], [right ? x0 : x0 + w, y], col, 1.5);
+    label(c, right ? it.x + 26 : it.x - 26, y, it.t, col, right ? "left" : "right");
+  }
+  c.restore();
+}
+/* moving trials read the clock; the small portrait cards and reduced motion hold still */
+const clock = () => (MINI || calm.matches ? null : performance.now());
 const Kit = { poly, dot, ring, line, label, truth, cl, dist };
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -616,6 +633,76 @@ const E = [];
   ] });
 }
 
+/* ── Motion ─────────────────────────────────────────────────────────────── */
+{
+  // a CSS-style cubic-bezier: time in, distance out
+  const bez = (x1, y1, x2, y2) => (t) => {
+    if (t <= 0) return 0; if (t >= 1) return 1;
+    let lo = 0, hi = 1, u = t;
+    for (let i = 0; i < 22; i++) { u = (lo + hi) / 2; const x = 3 * (1 - u) * (1 - u) * u * x1 + 3 * (1 - u) * u * u * x2 + u * u * u; x < t ? (lo = u) : (hi = u); }
+    return 3 * (1 - u) * (1 - u) * u * y1 + 3 * (1 - u) * u * u * y2 + u * u * u;
+  };
+  const PL = 200, PR = 800;
+  // a curve of value against time, drawn in the box from top to bot
+  function plot(c, f, top, bot, lo, hi, col, w, dash, alpha) {
+    c.save(); c.globalAlpha *= alpha == null ? 1 : alpha; c.beginPath();
+    for (let i = 0; i <= 90; i++) { const t = i / 90, x = PL + (PR - PL) * t, y = bot - (bot - top) * (f(t) - lo) / (hi - lo); i ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.strokeStyle = col; c.lineWidth = w; c.setLineDash(dash || []); c.lineJoin = "round"; c.stroke(); c.restore();
+  }
+  function axes(c, top, bot, what) {
+    line(c, [PL, bot], [PR, bot], C.line, 2); line(c, [PL, bot], [PL, top], C.line, 2);
+    label(c, PR, bot + 36, "time →", C.faint, "right"); label(c, PL - 14, top + 14, what, C.faint, "right");
+  }
+
+  /* easing: one dot crossing back and forth, its curve drawn underneath */
+  const A0 = 190, A1 = 810, TY = 250, P1 = 420, P2 = 780, DUR = 900, REST = 600;
+  const curve = (s) => bez(s.a * 0.9, 0, 1 - s.b * 0.9, 1);
+  const NAMED = [["linear", bez(0, 0, 1, 1)], ["ease-in", bez(0.42, 0, 1, 1)], ["ease-out", bez(0, 0, 0.58, 1)], ["ease-in-out", bez(0.42, 0, 0.58, 1)], ["CSS ease", bez(0.25, 0.1, 0.25, 1)]];
+  const nearest = (f) => NAMED.map(([n, g]) => { let d = 0; for (let i = 1; i < 40; i++) d += Math.abs(f(i / 40) - g(i / 40)); return [n, d / 39, g]; }).sort((a, b) => a[1] - b[1]);
+  const across = (now, f) => {
+    if (now == null) return 1;
+    const t = now % (2 * (DUR + REST));
+    return t < DUR ? f(t / DUR) : t < DUR + REST ? 1 : t < 2 * DUR + REST ? 1 - f((t - DUR - REST) / DUR) : 0;
+  };
+  const easeTrial = { id: "m-ease", q: "Shape the move until it feels natural.", feels: "feels", live: true,
+    hint: "drag right for a gentler start and up for a gentler landing",
+    init() { this.s = { a: 0.05, b: 0.05 }; },
+    move(h, dx, dy) { this.s.a = cl(this.s.a + dx / 700, 0, 1); this.s.b = cl(this.s.b - dy / 700, 0, 1); },
+    draw(c, k, prev) {
+      const f = curve(this.s);
+      line(c, [A0, TY], [A1, TY], C.line, 4);
+      // where the dot is at each twelfth of the time: bunched rings mean slow, spread rings mean fast
+      for (let i = 0; i <= 12; i++) ring(c, A0 + (A1 - A0) * f(i / 12), TY, 9, C.faint, 2);
+      dot(c, A0 + (A1 - A0) * across(clock(), f), TY, 26, C.pink);
+      axes(c, P1, P2, "distance");
+      if (k != null) {
+        const nn = nearest(f);
+        prev.forEach((p) => plot(c, curve(p), P1, P2, 0, 1, C.faint, 2));
+        NAMED.forEach(([, g]) => plot(c, g, P1, P2, 0, 1, C.leaf, 2, [4, 8], 0.35 * k));
+        plot(c, nn[0][2], P1, P2, 0, 1, C.leaf, 3, [10, 8], k);
+        c.save(); c.globalAlpha = k;
+        label(c, PL + 22, P1 + 16, `closest named curve: ${nn[0][0]}`, C.leaf);
+        label(c, 500, TY + 62, "rings: where it is at each twelfth of the time", C.faint, "center");
+        c.restore();
+      }
+      plot(c, f, P1, P2, 0, 1, C.pink, 5);
+    },
+    read() {
+      const { a, b } = this.s, n = nearest(curve(this.s))[0][0];
+      const word = (v, soft, slow, hard) => (v < 0.2 ? hard : v < 0.55 ? soft : slow);
+      const shape = a < 0.2 && b < 0.2 ? "flat" : b > a + 0.15 ? "out" : a > b + 0.15 ? "in" : "both";
+      return { v: n,
+        line: `Your move has ${word(a, "a soft", "a slow", "a sharp")} start and ${word(b, "a soft", "a slow", "a hard")} landing. Of the curves designers name, it's closest to ${n}.`,
+        why: shape === "out" ? "Fast away, gentle landing. It answers at once and settles calmly, which is why most interface motion eases out: things with mass don't stop dead."
+          : shape === "in" ? "A slow start and a quick finish. On its own this tends to feel like lag for something arriving; it suits things leaving the screen, which gather speed as they go."
+          : shape === "both" ? "Speeding up, then slowing down, like an object with weight pushed and caught. It suits a move from one place to another, where both ends are seen."
+          : "Constant speed. To most eyes it looks mechanical, since nothing with mass starts or stops instantly, but it suits loops and spinners, where no start or stop is seen.",
+        short: `Easing: you like ${n}` };
+    } };
+
+  E.push({ id: "motion", name: "Motion", trials: [easeTrial] });
+}
+
 /* ── more experiments ───────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -642,18 +729,27 @@ function render(c, t, k, pv, px) {
 }
 function draw() { if (T) render(g, T, rev, rev == null ? [] : prev(), size * dpr); }
 
-function start(i) {
+/* moving trials draw every frame while they're on screen */
+let looping = false;
+function live() {
+  if (looping || !T || !T.live || calm.matches) return;
+  looping = true;
+  const f = () => { if (!T || !T.live || $("#main").classList.contains("portrait")) { looping = false; return; } draw(); requestAnimationFrame(f); };
+  requestAnimationFrame(f);
+}
+function start(i, again) {
   cur = cl(i, 0, flat.length - 1);
-  const f = flat[cur]; T = f.t; T.init(); rev = null;
+  const f = flat[cur]; T = f.t; T.init(again); rev = null;
   S.at = [f.ei, f.ti]; save();
   $("#main").classList.remove("portrait"); $("#say").after($("#act"));
-  $("#where").innerHTML = `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length} &nbsp;·&nbsp; experiment ${f.ei + 1} of ${E.length}`;
+  $("#where").innerHTML = f.e.where ? `<b>${f.e.name}</b> · ${f.e.where()}` : `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length} &nbsp;·&nbsp; experiment ${f.ei + 1} of ${E.length}`;
   const q = $("#q"); q.textContent = T.q; q.classList.remove("fade"); void q.offsetWidth; q.classList.add("fade");
-  $("#say").innerHTML = `<p class="why" id="hint">${T.hint} until it looks right.</p>`;
+  $("#say").innerHTML = `<p class="why" id="hint">${T.hint} until it ${T.feels || "looks"} right.${T.live && calm.matches ? " Your system asks for less motion, so it holds still here." : ""}</p>`;
   cv.classList.remove("done");
-  acts([["it looks right", commit, true], ["skip", () => start(cur + 1)]]);
-  draw();
+  acts([[`it ${T.feels || "looks"} right`, commit, true], ["skip", goNext]]);
+  draw(); live();
 }
+function goNext() { start(cur + 1); }
 function acts(list) {
   const a = $("#act"); a.innerHTML = "";
   for (const [t, fn, main] of list) { const b = document.createElement("button"); b.type = "button"; b.className = "w" + (main ? " main" : ""); b.textContent = t; b.onclick = fn; a.append(b); }
@@ -668,7 +764,7 @@ function commit() {
   $("#say").innerHTML = `<p class="line fade">${r.line}</p><p class="why fade">${r.why}${n > 1 ? ` <span style="color:var(--faint)">Your ${n - 1} earlier ${n > 2 ? "answers are" : "answer is"} drawn faintly.</span>` : ""}</p>`;
   cv.classList.add("done");
   const last = cur === flat.length - 1;
-  acts([[last ? "see your eye" : "next", last ? portrait : () => start(cur + 1), true], ["again", () => start(cur)]]);
+  acts([[last ? "see your eye" : "next", last ? portrait : goNext, true], ["again", () => start(cur, true)]]);
   rev = 0; revT = performance.now();
   const step = (now) => { rev = calm.matches ? 1 : Math.min(1, (now - revT) / 650); rev = 1 - (1 - rev) ** 3; draw(); if (rev < 1) requestAnimationFrame(step); };
   requestAnimationFrame(step);
@@ -693,7 +789,7 @@ cv.addEventListener("keydown", (e) => {
   const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
   if (d && rev == null) { const m = e.shiftKey ? 20 : 4; T.move(kh, d[0] * m, d[1] * m, null); draw(); e.preventDefault(); }
   else if (e.key === "Tab" && T.handles && rev == null && !e.altKey) { /* let focus move normally */ }
-  else if (e.key === "Enter") { e.preventDefault(); rev == null ? commit() : (cur === flat.length - 1 ? portrait() : start(cur + 1)); }
+  else if (e.key === "Enter") { e.preventDefault(); rev == null ? commit() : (cur === flat.length - 1 ? portrait() : goNext()); }
 });
 
 /* your eye: every answer you've given, drawn small with its truths */
