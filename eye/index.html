@@ -283,6 +283,85 @@ const E = [];
   ] });
 }
 
+/* ── Even ───────────────────────────────────────────────────────────────── */
+{
+  const L0 = 70, L1 = 930, H = 180, ROW = [290, 600, 840];
+  // shapes: their box width, how to draw them centred at (x, y)
+  const SH = {
+    bar: { w: () => 56, draw: (c, x, y, f) => poly(c, [[x - 28, y - H / 2], [x + 28, y - H / 2], [x + 28, y + H / 2], [x - 28, y + H / 2]], f) },
+    circle: { w: () => H, draw: (c, x, y, f) => dot(c, x, y, H / 2, f) },
+    tri: { w: () => H * 1.1, draw: (c, x, y, f) => poly(c, [[x, y - H / 2], [x + H * 0.55, y + H / 2], [x - H * 0.55, y + H / 2]], f) },
+  };
+  // letters are measured from the real font, so their boxes are their ink
+  let FS = 200, CAP = 140;
+  const M = {};
+  function measure(chs) {
+    g.save(); g.font = `600 100px "IBM Plex Sans", system-ui, sans-serif`;
+    for (const ch of new Set(chs)) { const m = g.measureText(ch); M[ch] = { l: m.actualBoundingBoxLeft, w: m.actualBoundingBoxLeft + m.actualBoundingBoxRight }; }
+    const tot = chs.reduce((a, ch) => a + M[ch].w, 0); // the whole row of letters fills 560 of the 860 between the ends
+    CAP = g.measureText("H").actualBoundingBoxAscent; g.restore();
+    FS = 100 * 560 / tot; CAP *= FS / 100;
+  }
+  const glyph = (ch) => ({ w: () => M[ch].w * FS / 100, draw: (c, x, y, f) => {
+    c.save(); c.font = `600 ${FS}px "IBM Plex Sans", system-ui, sans-serif`; c.fillStyle = f; c.textBaseline = "alphabetic";
+    c.fillText(ch, x - M[ch].w * FS / 200 + M[ch].l * FS / 100, y + CAP / 2); c.restore(); } });
+
+  const edges = (items, xs) => items.map((it, i) => [xs[i] - it.w() / 2, xs[i] + it.w() / 2]);
+  const equalGaps = (items) => { const ws = items.map((it) => it.w()), G = (L1 - L0 - ws.reduce((a, b) => a + b, 0)) / (ws.length - 1); let x = L0; return ws.map((w) => { const c = x + w / 2; x += w + G; return c; }); };
+  const equalCentres = (items) => { const a = L0 + items[0].w() / 2, b = L1 - items[items.length - 1].w() / 2; return items.map((_, i) => a + (b - a) * i / (items.length - 1)); };
+  const row = (c, items, xs, y, f) => items.forEach((it, i) => it.draw(c, xs[i], y, f));
+
+  function trial(id, q, kinds, names) {
+    const items = () => { if (kinds.some((k) => !SH[k] && !M[k])) measure(kinds); return kinds.map((k) => (SH[k] || glyph(k))); };
+    return { id, q, hint: "drag the middle shapes sideways",
+      init() {
+        const it = items(), eq = equalGaps(it), off = [0, 64, -46, 52, 0];
+        this.s = { x: eq.map((x, i) => x + off[i]) };
+      },
+      grab(p) { const xs = this.s.x; let b = 1; for (let i = 1; i < xs.length - 1; i++) if (Math.abs(xs[i] - p[0]) < Math.abs(xs[b] - p[0])) b = i; return b; },
+      move(h, dx) {
+        const it = items(), xs = this.s.x, i = cl(h, 1, xs.length - 2);
+        const lo = xs[i - 1] + it[i - 1].w() / 2 + 8 + it[i].w() / 2, hi = xs[i + 1] - it[i + 1].w() / 2 - 8 - it[i].w() / 2;
+        xs[i] = cl(xs[i] + dx, lo, hi);
+      },
+      draw(c, k, prev) {
+        const it = items(), y0 = k == null ? 500 : 500 - (500 - ROW[0]) * k; // your row rises to make room for the truths
+        row(c, it, this.s.x, y0, C.ink);
+        if (k != null) {
+          c.save(); c.globalAlpha = k;
+          label(c, L0 - 8, ROW[1] - H / 2 - 30, "equal gaps by the ruler", C.leaf);
+          row(c, it, equalGaps(it), ROW[1], C.faint);
+          label(c, L0 - 8, ROW[2] - H / 2 - 30, "equal distances between centres", C.leaf);
+          row(c, it, equalCentres(it), ROW[2], C.faint);
+          // your gaps, measured, under the first row
+          const e = edges(it, this.s.x), G = (L1 - L0 - it.reduce((a, b) => a + b.w(), 0)) / (it.length - 1);
+          for (let i = 0; i < e.length - 1; i++) {
+            const a = e[i][1], b = e[i + 1][0], y = y0 + H / 2 + 34;
+            line(c, [a, y], [b, y], C.pink, 3); line(c, [a, y - 9], [a, y + 9], C.pink, 3); line(c, [b, y - 9], [b, y + 9], C.pink, 3);
+            label(c, (a + b) / 2, y + 30, Math.round((b - a) / G * 100) + "%", C.pink, "center");
+          }
+          c.restore();
+        }
+      },
+      read() {
+        const it = items(), e = edges(it, this.s.x), G = (L1 - L0 - it.reduce((a, b) => a + b.w(), 0)) / (it.length - 1);
+        const gp = e.slice(0, -1).map((x, i) => (e[i + 1][0] - x[1]) / G * 100);
+        const round = (gp[0] + gp[1]) / 2, point = (gp[2] + gp[3]) / 2;
+        const tight = round < 95 && point < 95;
+        return { v: [R2(round), R2(point)],
+          line: `Measured against an equal gap, you left ${Math.round(round)}% beside the ${names[0]} and ${Math.round(point)}% beside the ${names[1]}.`,
+          why: tight ? `You pulled the ${names[0]} and the ${names[1]} in closer than equal gaps. That's how type is spaced: curves and points leave empty space inside their own box, so they have to come closer to look evenly spaced. An O sits nearer its neighbours than an H does.`
+            : round < 95 || point < 95 ? `You pulled one of them in and not the other. Look at the reveal: does the ${round < point ? names[1] : names[0]} now look a little further away than the rest?`
+            : "You spaced it close to the ruler. Look at the equal-gaps row in the reveal: to most eyes the round and pointed shapes look further away than the straight ones, though every gap is the same.",
+          short: `Spacing: ${names[0]} at ${Math.round(round)}%, ${names[1]} at ${Math.round(point)}% of an equal gap` };
+      } };
+  }
+  E.push({ id: "even", name: "Even", trials: [
+    trial("e-shapes", "Space these so the gaps feel even.", ["bar", "circle", "bar", "tri", "bar"], ["circle", "triangle"]),
+    trial("e-letters", "Now space the letters.", ["H", "O", "H", "V", "H"], ["O", "V"]),
+  ] });
+}
+
 /* ── more experiments ───────────────────────────────────────────────────── */
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -389,7 +468,9 @@ colours();
 addEventListener("vnl-theme", () => { colours(); draw(); });
 matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => { colours(); draw(); });
 new ResizeObserver(fit).observe(cv);
-(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { start(cur); fit(); });
+// the letters are measured from the real font, so wait for it (and give up waiting after 2.5 s)
+const fontsIn = document.fonts ? Promise.race([Promise.all([document.fonts.load('600 100px "IBM Plex Sans"'), document.fonts.load('500 20px "IBM Plex Mono"'), document.fonts.ready]), new Promise((r) => setTimeout(r, 2500))]) : Promise.resolve();
+fontsIn.then(() => { start(cur); fit(); });
 window.EYE = { E, S, flat, get T() { return T; }, start, commit, portrait };
 })();
 </script>
