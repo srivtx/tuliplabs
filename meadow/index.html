@@ -526,6 +526,9 @@ float outline(vec2 c,float l,float w,int i){
  if(i==3){vec2 s=vec2(l,w*1.5);return star4(c/s)*min(s.x,s.y);}
  float r1=w,r2=w*.08,h=max(2.*l-r1-r2,(r1-r2)*1.05+.001);return uneven(vec2(c.y,c.x+l-r1),r1,r2,h)-w*.04*sin(clamp((c.x+l)/(2.*l),0.,1.)*PI);}
 float gPO=0.;
+uniform highp sampler2D uFrT;uniform int uFrN; // lines drawn freely, exactly where they were drawn, one point per texel: (x, y, how far along its line, half-width; negative for a filled loop)
+vec4 frP(int i){return texelFetch(uFrT,ivec2(i,0),0);}
+vec2 gP0=vec2(0.); // the point in the mark's own square, before anything bends or twists it
 float gPT=0.,gPW=0.,gPM=0.,gPC=0.; // the drawn petal for this mark: how far toward the second drawing, its weight, its mirror, closed or not
 vec2 pP(int i){return mix(uPen[i],uPen2[i],gPT);}
 float shape(vec2 c,float l,float w,float t){
@@ -562,6 +565,19 @@ float penD(vec2 c,float t){int N=uPenN;
   float ra=t*(.22+.78*sqrt(sin(PI*float(i)/fn))),rb=t*(.22+.78*sqrt(sin(PI*float(i+1)/fn)));
   d=min(d,length(pa-ba*h)-mix(ra,rb,h));}
  return d;}
+// every free line in one pass: a brush line that swells and tapers, or a loop filled to its rim. A point starting a
+// new line has .z of exactly 0, so no segment is drawn across from the line before it
+float freeD(vec2 p){float d=1e9,dc=1e9,sg=1.;int s0=0;
+ for(int i=0;i<192;i++){if(i>=uFrN)break;vec4 b=frP(i);
+  if(b.z>0.){vec4 a=frP(i-1);vec2 pa=p-a.xy,ba=b.xy-a.xy;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);
+   if(b.w>0.){float ra=b.w*(.22+.78*sqrt(sin(PI*a.z))),rb=b.w*(.22+.78*sqrt(sin(PI*b.z)));d=min(d,length(pa-ba*h)-mix(ra,rb,h));}
+   else{dc=min(dc,length(pa-ba*h));bvec3 k=bvec3(p.y>=a.y,p.y<b.y,ba.x*pa.y>ba.y*pa.x);if(all(k)||all(not(k)))sg=-sg;}}
+  bool last=i+1>=uFrN||frP(i+1).z<=0.;
+  if(last&&b.w<0.){vec2 a=b.xy,c=frP(s0).xy,pa=p-a,ba=c-a;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);dc=min(dc,length(pa-ba*h));
+   bvec3 k=bvec3(p.y>=a.y,p.y<c.y,ba.x*pa.y>ba.y*pa.x);if(all(k)||all(not(k)))sg=-sg;
+   d=min(d,sg*dc+b.w*.22);dc=1e9;sg=1.;}
+  if(last)s0=i+1;}
+ return d;}
 vec2 markN(vec2 p0,float n){
  gPO=vG6.x;
  float g_ph=vG0.y,g_pr=vG0.z,g_r=vG0.w,g_l=vG1.x,g_w=vG1.y,g_tw=vG1.z,g_rr=vG1.w,
@@ -591,6 +607,7 @@ vec2 markN(vec2 p0,float n){
   for(int j=-1;j<=1;j++){float c=clamp(c0+float(j),0.,R-1.),off=c-(R-1.)*.5,yy=p.y-off*h-abs(p.x)*(g_ph-.5)*1.3;
    float Lk=L*(1.-(g_r-.5)*.9*abs(off/((R-1.)*.5)));ds=min(ds,shape(vec2(p.x,yy),max(Lk,ws),ws,g_pr));}
   d=mix(d,ds,stk);}
+ float dPen=1e9;
  if(uPenN>1&&gPW>0.){ // the drawn petal, repeated round; its neighbours' copies are checked too, as far as it reaches
   float tp=w*.95/l,dp=1e9;vec2 q0=wheel(p,n,ph);
   for(int j=-6;j<=6;j++){if(abs(j)>uPenJ)continue;vec2 c=(rot(q0,float(j)*TAU/n)-vec2(r1,0.))/l;
@@ -598,7 +615,7 @@ vec2 markN(vec2 p0,float n){
    bool midway=gPM>.001&&gPM<.999;float a=(midway||length(c-uPenB.xy)-uPenB.z-tp<dp)?penD(c,tp):1e9;
    if(gPM>.001){vec2 cm=vec2(c.x,-c.y);float b=(midway||length(cm-uPenB.xy)-uPenB.z-tp<dp)?penD(cm,tp):1e9;a=midway?mix(a,min(a,b),gPM):min(a,b);}
    dp=min(dp,a);}
-  d=mix(d,dp*l,gPW);}
+  dPen=dp*l;d=mix(d,dPen,gPW);}
  float inv=smoothstep(.67,.73,g_inv); // switches ease over a short ramp, so a shape melts through them instead of jumping
  float ring=smoothstep(.56,.68,g_ring);
  // inside a badge the ring stays well clear of the rim, or it leaves thin slivers
@@ -632,12 +649,17 @@ vec2 markN(vec2 p0,float n){
   // three ways a letter lives in a mark; near the border between two, both are drawn and melt together
   float dA=d,bA=b,dB=d,dC=d;
   if(g_inv<.49){vec2 lp=p;lp.x+=lp.y*(g_ph-.5)*.45;float L=letter(lp/.74)*.74;dA=max(d,-(L-.05));bA=L-(g_wt-.5)*.04;}
-  if(g_inv>.43&&g_inv<.79){vec2 u=wheel(p0,n,ph)-vec2(mix(.42,.6,g_r),0.);float sc=min(.5,sin(PI/n)*.72);u=rot(u,PI*.5);dB=letter(u/sc)*sc-(g_wt-.5)*.03-.024;}
+  if(g_inv>.43&&g_inv<.79){vec2 u=wheel(p,n,ph)-vec2(mix(.42,.6,g_r),0.);float sc=min(.5,sin(PI/n)*.72);u=rot(u,PI*.5);dB=letter(u/sc)*sc-(g_wt-.5)*.03-.024;}
   if(g_inv>.73){float sc=mix(.8,1.2,g_r);dC=letter((fold(p,n,ph)-vec2(.32,0.))/sc)*sc-(g_wt-.5)*.04-.016;}
+  // where the letters stand in for the petals, a drawn petal is kept beside them rather than lost
+  if(gPW>0.&&uPenN>1){dB=mix(dB,min(dB,dPen-(g_wt-.5)*.1),gPW);dC=mix(dC,min(dC,dPen-(g_wt-.5)*.1),gPW);}
   if(g_inv<.61){float t=smoothstep(.43,.49,g_inv);d=mix(dA,dB,t);b=mix(bA,1.,t);}
   else{d=mix(dB,dC,smoothstep(.73,.79,g_inv));b=1.;}
  }
  d=max(d,r-.97);b=max(b,r-.97);
+ // free lines go on as ink, or, on a badge, cut through it to the ground. They are trimmed to the mark's own
+ // square circle, not the bent one, so a line drawn near the edge stays whole
+ if(uFrN>1){float f=max(freeD(gP0),length(gP0)-.97),fi=uHasL==1?0.:inv;d=mix(min(d,f),max(d,-f),fi);b=max(b,-f+.02*fi);}
  return vec2(d,b);
 }
 // the whole mark bent out of the round, smoothly: leaned, heavier at one end, wide or tall, and squared off softly.
@@ -649,7 +671,7 @@ vec2 bend(vec2 p){float b=(vG5.z-.5)*2.,hv=(vG5.w-.5)*2.,a=(vG5.x-.5)*2.,sq=vG5.
  float s=exp(abs(a)*.55);if(a>0.)p.y*=s;else p.x*=s;
  if(sq>.002){float n=mix(2.,5.5,sq);vec2 q=abs(p)+1e-5;float rn=pow(pow(q.x,n)+pow(q.y,n),1./n);p*=rn/length(q);}
  return p;}
-vec2 mark(vec2 p){p=bend(p);vec2 a=markN(p,vI.y);if(vI.w>.002)a=mix(a,markN(p,vI.z),vI.w);
+vec2 mark(vec2 p){gP0=p;p=bend(p);vec2 a=markN(p,vI.y);if(vI.w>.002)a=mix(a,markN(p,vI.z),vI.w);
  float grown=(1.-vI.x);return a+grown*1.05;}
 void main(){
  vec3 ink,acc;
@@ -716,7 +738,14 @@ function makeR(canvas,alpha){
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);if(data)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,n,n,0,gl.RGBA,gl.UNSIGNED_BYTE,data)},
     melt(v,o){lm=v;if(o)lo=o},
     // the drawn petal of the mark about to be drawn, or none; every mark in one draw shares it
-    pen(m){gl.useProgram(pM);const P=m&&m.pen;if(!P||!(P.w>0)){gl.uniform1i(U(pM,"uPenN"),0);return}
+    pen(m){gl.useProgram(pM);const F=m&&m.fr;
+      if(F&&F.n>1){if(!this.frT){this.frT=gl.createTexture();gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,this.frT);
+          for(const [k,v] of [[gl.TEXTURE_MIN_FILTER,gl.NEAREST],[gl.TEXTURE_MAG_FILTER,gl.NEAREST],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v)}
+        gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,this.frT);
+        if(this.frId!==F.id){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,FR_MAX,1,0,gl.RGBA,gl.FLOAT,F.v);this.frId=F.id}
+        gl.activeTexture(gl.TEXTURE0);gl.uniform1i(U(pM,"uFrT"),3);gl.uniform1i(U(pM,"uFrN"),F.n)}
+      else gl.uniform1i(U(pM,"uFrN"),0);
+      const P=m&&m.pen;if(!P||!(P.w>0)){gl.uniform1i(U(pM,"uPenN"),0);return}
       gl.uniform2fv(U(pM,"uPen"),P.p);gl.uniform1i(U(pM,"uPenN"),P.p.length>>1);gl.uniform3f(U(pM,"uPenS"),P.w,P.c,P.mir);
       gl.uniform3f(U(pM,"uPenB"),P.b[0],P.b[1],P.b[2]);gl.uniform1i(U(pM,"uPenJ"),penReach(m));
       gl.uniform2fv(U(pM,"uPen2"),P.p);gl.uniform3f(U(pM,"uPenS2"),P.w,P.c,P.mir);gl.uniform1f(U(pM,"uPenK"),1)},
@@ -963,7 +992,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-7]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-8]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="["||e.key==="]")&&mode===7&&unfT<=0)brushBy(e.key==="]"?1.25:.8);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -1036,14 +1065,14 @@ function setRole(r,h){if(!cur)return;const now=r==="gr"?groundOf(cur):r==="ink"?
 function warnRead(){const s=$("say"),low=contrast(inkOf(cur),groundOf(cur))<1.6,t="The ink barely shows on this ground.";if(low)s.textContent=t;else if(s.textContent===t)s.textContent=""}
 function openStudio(m,from){ftag.classList.add("out");cancelAnimationFrame(penRaf);penShow=null;pointer.in=false;hover=null;$("tag").inert=$("foot").inert=true;
   if(!m.ok)tend([m]);
-  cur={...m,g:genes(m.g),dye:(m.dye||[]).map(d=>({...d,w:0}))};
+  cur={...m,g:genes(m.g),dye:(m.dye||[]).map(d=>({...d,w:0})),fr:m.fr||(m.frc?readFree(m.frc):null)};delete cur.frc;
   $("studio").hidden=false;$("tag").classList.add("quiet");$("say").textContent="";
   $("latin").textContent=latin(cur);
   const home=biome(cur.x,cur.y);foundAt=cur.from?`Bred from ${cur.from}.`:`Found at ${cur.x.toFixed(4)}, ${cur.y.toFixed(4)}, in The ${PAL[home.id].place} ${SUFFIX[h3(home.bx,home.by,7)%8]}.`;if(cur.from)cur.edited=true;
   $("keep").textContent="Keep it";
   cur.at="#at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)+(letters?"-"+encodeURIComponent(letters):"");
   try{history.pushState({mark:1},"",cur.at)}catch(e){}
-  hist=[];fut=[];beforeNow=null;$("beforetag").hidden=true;opened={pen:cur.pen||null,g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d}))};lw.fill(0);tw.fill(0);pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
+  hist=[];fut=[];beforeNow=null;$("beforetag").hidden=true;opened={pen:cur.pen||null,fr:cur.fr||null,g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d}))};lw.fill(0);tw.fill(0);pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
   layoutHalo();makeGhosts();drawStudio();trayAt=-1;showTray(cur.pal);tourOnOpen();
   // the mark lifts out of the field and grows into place while the studio fades up round it
   if(!calm){const st=$("studio");st.animate([{opacity:0},{opacity:1}],{duration:240,easing:"ease-out"});
@@ -1125,16 +1154,16 @@ function closesOn(pts){if(pts.length<8)return false;let L=0,x0=9,x1=-9,y0=9,y1=-
 // the stroke as it's drawn, already shaped as the petal will be (a brush line that swells and tapers, or a filled loop),
 // with its copies round the mark. Each is laid down solid on a layer and then faded as one, so overlaps don't darken
 const inkL=document.createElement("canvas");
-function drawInk(pts){const px=big.width;if(inkC.width!==px)inkC.width=inkC.height=px;if(inkL.width!==px)inkL.width=inkL.height=px;
+function drawInk(pts,free){const px=big.width;if(inkC.width!==px)inkC.width=inkC.height=px;if(inkL.width!==px)inkL.width=inkL.height=px;
   const g=inkC.getContext("2d"),h=inkL.getContext("2d");g.clearRect(0,0,px,px);if(pts.length<2)return;
-  const n=pureN(cur),{w}=petalSize(cur.g,n),c=px/2,closed=closesOn(pts),t=Math.max(1,w*.95*c),P=pts.map(([x,y])=>[(x*.5+.5)*px,(y*.5+.5)*px]);
+  const n=free?1:pureN(cur),{w}=petalSize(cur.g,pureN(cur)),c=px/2,closed=closesOn(pts),t=Math.max(1,(free?brushW:w*.95)*c),P=pts.map(([x,y])=>[(x*.5+.5)*px,(y*.5+.5)*px]);
   const L=[0];for(let i=1;i<P.length;i++)L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));const tot=L[L.length-1]||1;
   const one=(k)=>{h.save();h.translate(c,c);h.rotate(k*Math.PI*2/n);h.translate(-c,-c);h.beginPath();
     if(closed){P.forEach(([X,Y],i)=>i?h.lineTo(X,Y):h.moveTo(X,Y));h.closePath();h.fill();h.lineWidth=t*.44;h.stroke()}
     else for(let i=1;i<P.length;i++){const s=(L[i-1]+L[i])/2/tot;h.lineWidth=2*t*(.22+.78*Math.sqrt(Math.sin(Math.PI*s)));h.beginPath();h.moveTo(P[i-1][0],P[i-1][1]);h.lineTo(P[i][0],P[i][1]);h.stroke()}
     h.restore()};
   const layer=(ks,a)=>{h.clearRect(0,0,px,px);h.lineCap=h.lineJoin="round";h.strokeStyle=h.fillStyle=inkOf(cur);ks.forEach(one);g.globalAlpha=a;g.drawImage(inkL,0,0);g.globalAlpha=1};
-  layer(Array.from({length:n-1},(_,i)=>i+1),.42);layer([0],.92);
+  if(!free)layer(Array.from({length:n-1},(_,i)=>i+1),.42);layer([0],free?1:.92);
   return closed}
 const markAt=(e)=>{const r=big.getBoundingClientRect();return [(e.clientX-r.left)/r.width*2-1,(e.clientY-r.top)/r.height*2-1]};
 function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");const pts=t.ink;let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
@@ -1145,23 +1174,56 @@ function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");c
   penTo(makePen(toPetal(resample(sm,PEN_N,closed),cur),closed,cur.pen?cur.pen.mir:0));
   told();drawGhosts();
   hud(closed?"filled":"drawn","tap the mark to let the drawing go",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1600);return true}
-big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false,ink:mode===6?[markAt(e)]:null}});
+/* Draw freely: lines land exactly where you draw them, one after another, on top of the mark as it is, letters
+   and all. A loop that closes on itself fills; on a badge a line cuts through to the ground. [ and ] change the
+   brush. Each line is one step back, and a tap on the mark clears them all */
+const FR_MAX=192;let brushW=.045;
+function frPack(strokes){if(!strokes.length)return null;const v=new Float32Array(FR_MAX*4);let n=0;
+  strokes.forEach(st=>{const k=st.p.length;st.p.forEach(([x,y],i)=>{v[n*4]=x;v[n*4+1]=y;v[n*4+2]=i?Math.max(i/(k-1),1e-4):0;v[n*4+3]=st.c?-st.w:st.w;n++})});
+  return {s:strokes,v,n,id:++penId}}
+const frCode=(F)=>F?F.s.map(st=>(st.c?"1":"0")+B36(st.w/.2,2)+st.p.length.toString(36)+st.p.map(([x,y])=>B36((x+1)/2,2)+B36((y+1)/2,2)).join("")).join(""):"";
+function readFree(t){if(!t||!/^[0-9a-z]+$/.test(t))return null;const out=[];let i=0;
+  while(i+4<=t.length){const c=t[i]==="1",w=U36(t.substr(i+1,2))*.2,k=parseInt(t[i+3],36);i+=4;if(!(k>=2)||i+k*4>t.length)return null;const p=[];
+    for(let j=0;j<k;j++,i+=4)p.push([+(U36(t.substr(i,2))*2-1).toFixed(4),+(U36(t.substr(i+2,2))*2-1).toFixed(4)]);out.push({p,w:+w.toFixed(4),c:c?1:0})}
+  let n=0;const fit=out.filter(st=>(n+=st.p.length)<=FR_MAX);return fit.length?frPack(fit):null}
+const frLines=(m)=>m&&m.fr?m.fr.s.length:0;
+const brushPx=()=>Math.round(brushW*2*512); // its width at 1024 pixels, the size the mark is saved at
+function freeDone(t){inkC.classList.remove("on");const pts=t.ink;let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+  if(pts.length<3||L<.02){hist.pop();ro.classList.add("out");return false}
+  const closed=closesOn(pts),raw=closed?pts.slice(0,-1):pts,N=raw.length;
+  // one soft pass only: enough to take out the jitter of a mouse, little enough that the line stays where you put it
+  const sm=raw.map((p,i)=>{const a=raw[closed?(i-1+N)%N:Math.max(0,i-1)],b=raw[closed?(i+1)%N:Math.min(N-1,i+1)];return [(a[0]+p[0]*2+b[0])/4,(a[1]+p[1]*2+b[1])/4]});
+  const k=clamp(Math.round(L/.025)+2,4,32),pp=resample(sm,k,closed).map(([x,y])=>[+clamp(x,-1,1).toFixed(4),+clamp(y,-1,1).toFixed(4)]);
+  if((cur.fr?cur.fr.n:0)+k>FR_MAX){hist.pop();hud("that's as many lines as a mark can hold","step back, or tap the mark to clear them",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},2200);drawStudio();return false}
+  cur.fr=frPack([...(cur.fr?cur.fr.s:[]),{p:pp,w:+brushW.toFixed(4),c:closed?1:0}]);told();drawStudio();
+  const n=cur.fr.s.length;hud(closed?"filled":"drawn",`${n} line${n>1?"s":""} · ⌘Z takes one back · tap the mark to clear`,null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1800);return true}
+function brushBy(f,x,y){brushW=clamp(brushW*f,.012,.16);const r=big.getBoundingClientRect();
+  hud("brush "+brushPx()+" px","at 1024 pixels · [ thinner · ] thicker",x??r.left+r.width*.5,y??r.top+r.height*.9);clearTimeout(brushBy.t);brushBy.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1100)}
+big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}tune={x:e.clientX,y:e.clientY,moved:false,ink:mode>=6?[markAt(e)]:null,free:mode===7}});
 big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
   if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
   tune.x=e.clientX;tune.y=e.clientY;
-  if(tune.ink){const v=markAt(e),q=tune.ink[tune.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)tune.ink.push(v);inkC.classList.add("on");big.classList.add("inking");const closed=drawInk(tune.ink);
-    hud(closed?"let go to fill it":"drawing a petal",closed?"a closed loop fills in":`it repeats ${pureN(cur)} times round the mark`,e.clientX,e.clientY);return}
+  if(tune.ink){const v=markAt(e),q=tune.ink[tune.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)tune.ink.push(v);inkC.classList.add("on");if(!tune.free)big.classList.add("inking");const closed=drawInk(tune.ink,tune.free);
+    if(tune.free)hud(closed?"let go to fill it":"drawing",closed?"a closed loop fills in":`brush ${brushPx()} px · exactly where you draw · [ ] for the brush`,e.clientX,e.clientY);
+    else hud(closed?"let go to fill it":"drawing a petal",closed?"a closed loop fills in":`it repeats ${pureN(cur)} times round the mark`,e.clientX,e.clientY);return}
   // hold Shift and the drag keeps to whichever way it set off in, so one trait changes and the other stays put
   tune.tx=(tune.tx||0)+dx;tune.ty=(tune.ty||0)+dy;let lx=dx,ly=dy;
   if(e.shiftKey){if(!tune.ax&&Math.abs(tune.tx)+Math.abs(tune.ty)>2)tune.ax=Math.abs(tune.tx)>=Math.abs(tune.ty)?"x":"y";if(tune.ax==="x")ly=0;else if(tune.ax==="y")lx=0}else tune.ax=null;
   apply(tune,lx,ly);hudNow(tune,e.clientX,e.clientY);queue()});
 // what each mode does with a movement of dx, dy pixels; the drag and the arrow keys both come through here
+const penOn=()=>!!(cur&&cur.pen&&cur.pen.w>.5),letPet=()=>!!letters&&!!cur&&cur.g[14]>=.49;
 function apply(t,dx,dy){
   if(mode===0){cur.g[6]=clamp(cur.g[6]+dx*.0028);cur.g[13]=clamp(cur.g[13]-dy*.0034)}
   else if(mode===1){slide(19,dx*.0026,t);cur.g[20]=clamp(cur.g[20]-dy*.003)}
   else if(mode===2){slide(21,dx*.0026,t);slide(22,-dy*.0026,t)}
-  else if(mode===3){ // one line through all ten outlines: circle, capsule, lens, diamond, box, then teardrop, heart, crescent, star, hook
-    let P=cur.g[23]>0?1+cur.g[23]:cur.g[2];P=clamp(P+dx*.0024,0,2);cur.g[2]=Math.min(P,1);cur.g[23]=Math.max(P-1,0);cur.g[5]=clamp(cur.g[5]-dy*.003)}
+  else if(mode===3){
+    // a drawn petal has its own outline, so sideways makes it longer or shorter instead
+    if(penOn())cur.g[4]=clamp(cur.g[4]+dx*.0024);
+    // letters standing in for the petals: sideways makes them bolder, up and down moves them out or makes them larger
+    else if(letPet()){cur.g[4]=clamp(cur.g[4]+dx*.0024);cur.g[3]=clamp(cur.g[3]-dy*.003);return}
+    else{ // one line through all ten outlines: circle, capsule, lens, diamond, box, then teardrop, heart, crescent, star, hook
+      let P=cur.g[23]>0?1+cur.g[23]:cur.g[2];P=clamp(P+dx*.0024,0,2);cur.g[2]=Math.min(P,1);cur.g[23]=Math.max(P-1,0)}
+    cur.g[5]=clamp(cur.g[5]-dy*.003)}
   else if(mode===4){if(!t.framed&&(dx||dy)){t.framed=true;if(cur.g[14]<.74&&Math.abs(dx)>=Math.abs(dy))cur.g[14]=.8} // a frame only shows round a badge, so it puts one on
     cur.g[24]=clamp(cur.g[24]+dx*.0024);cur.g[14]=clamp(cur.g[14]-dy*.003)}
   else if(mode===5){if(!t.tint)t.tint={gr:groundOf(cur),ink:inkOf(cur),acc:accOf(cur),dye:cur.dye.map(d=>d.h),dh:0,cf:1};
@@ -1173,16 +1235,18 @@ const DET=.035,toRaw=(v)=>{const a=v-.5;return a?.5+Math.sign(a)*(Math.abs(a)*(.
   fromRaw=(r)=>{const a=r-.5;return .5+Math.sign(a)*Math.max(Math.abs(a)-DET,0)*.5/(.5-DET)};
 function slide(k,dv,t=tune){const raw=t.raw||(t.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
 const end=()=>{const t=tune;tune=null;
+  if(t&&t.ink&&t.free){if(!cur)return;if(t.moved)freeDone(t);else if(cur.fr){remember();cur.fr=null;told();drawStudio();hud("cleared","⌘Z brings the lines back",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>ro.classList.add("out"),1400)}return}
   if(t&&t.ink){if(!cur)return;if(t.moved)inkDone(t);else if(cur.pen&&cur.pen.w>0){remember();penTo(null);told();ro.classList.add("out")}return} // a tap in Draw lets the drawing go
   if(t&&t.moved)told();ro.classList.add("out");if(cur&&!mirOn())mirC.classList.remove("on")};
 /* what dragging the mark changes. Each mode is the same gesture, sideways and up-down, on two traits that belong together */
 const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],["stretch it","Stretch","wide or tall, and up to square it off softly"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
-  ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw a petal","Draw","draw one petal and it grows all the way round; close a loop to fill it"]];
+  ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw a petal","Draw","draw one petal and it grows all the way round; close a loop to fill it"],
+  ["draw freely","Draw freely","lines land exactly where you draw, one after another; [ and ] for the brush"]];
 let mode=0;
 function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];if(i===6&&typeof firstTime==="function")firstTime("draw");
   if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
-  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
+  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw","m-draw"][i];big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
 MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
   b.onclick=()=>{setMode(i);popMode(false)};$("modepop").append(b)});setMode(0);
 function popMode(on){const p=$("modepop");p.hidden=!on;$("modeword").setAttribute("aria-expanded",on);if(on)p.children[mode].focus()}
@@ -1192,7 +1256,10 @@ $("modepop").addEventListener("keydown",(e)=>{if(e.key==="Escape"){e.stopPropaga
 // the names a drag passes through, said beside the pointer so you know what you're getting
 const OUTLINES=["circle","capsule","lens","diamond","box","teardrop","heart","crescent","star","flame"],FRAMES=["hexagon","shield","drop","arch"];
 function nameNow(){const g=cur.g;
+  if(mode===3&&penOn())return "your drawn petal"+(g[4]>.66?", long":g[4]<.34?", short":"")+(g[5]>.66?", full":g[5]<.34?", fine":"");
+  if(mode===3&&letPet())return (letters.length>1?"letters":"the letter")+(g[4]>.66?", bold":g[4]<.34?", light":"");
   if(mode===3)return (g[23]<.06?OUTLINES[Math.round(g[2]*4)]:OUTLINES[5+Math.round(clamp((g[23]-.12)/.88)*4)])+(g[5]>.66?", full":g[5]<.34?", fine":"");
+  if(mode===4&&letters)return g[14]<.49?(letters.length>1?"letters":"letter")+" cut out of the mark":g[14]<.73?(letters.length>1?"letters":"letter")+" as the petals":(letters.length>1?"letters":"letter")+" round a badge";
   if(mode===4)return g[14]<.7?"no frame":g[24]<.06?(g[12]>.5?"rounded square":"circle"):FRAMES[Math.round(clamp((g[24]-.12)/.88)*3)];
   if(mode===5)return hueName(inkOf(cur))+" on "+hueName(groundOf(cur));
   // twist, stretch and lean are where symmetry is made and lost, so their labels also say what the mark now holds
@@ -1214,12 +1281,13 @@ const AXES=[
   [{v:g=>g[6],say:v=>"twist "+pct(v)},{v:g=>g[13],say:v=>"thicker "+pct(v)}],
   [{v:g=>g[19],say:v=>Math.abs(v-.5)<.005?"even":(v>.5?"wider ":"taller ")+Math.round(Math.abs(v-.5)*200)},{v:g=>g[20],say:v=>"squarer "+pct(v)}],
   [{v:g=>g[21],say:v=>"bend "+sgn(v)},{v:g=>g[22],say:v=>"heavy end "+sgn(v)}],
-  [{v:g=>(g[23]>0?1+g[23]:g[2])/2,say:(v,g)=>"outline "+(outIdx(g)+1)+" of 10"},{v:g=>g[5],say:v=>"fuller "+pct(v)}],
+  [{v:g=>penOn()||letPet()?g[4]:(g[23]>0?1+g[23]:g[2])/2,say:(v,g)=>penOn()?"longer "+pct(v):letPet()?"bolder "+pct(v):"outline "+(outIdx(g)+1)+" of 10"},
+   {v:g=>letPet()&&!penOn()?g[3]:g[5],say:v=>(letPet()&&!penOn()?(cur.g[14]>.73?"larger ":"further out "):"fuller ")+pct(v)}],
   [{v:g=>g[24],say:(v,g)=>"frame "+(frIdx(g)+1)+" of 5"},{v:g=>g[14],say:v=>"badge "+pct(v)}],
   [{v:(g,q)=>.5+wrapDeg(q?q.dh:0)/360,say:(v,g,q)=>{const d=Math.round(wrapDeg(q?q.dh:0));return "hue "+(d>0?"+":d<0?"−":"")+Math.abs(d)+"°"}},
    {v:(g,q)=>((q?q.cf:1)-.22)/1.48,say:(v,g,q)=>"vivid "+Math.round((q?q.cf:1)*100)+"%"}]];
 // what each way does, said when the pointer rests on the mark before a drag
-const AXW=["↔ twist · ↕ thicker or thinner","↔ wider or taller · ↕ squarer","↔ bend · ↕ one end heavier","↔ outline · ↕ fuller or finer","↔ frame · ↕ badge","↔ hue · ↕ vivid or calm","draw one petal and it repeats round"];
+const AXW=["↔ twist · ↕ thicker or thinner","↔ wider or taller · ↕ squarer","↔ bend · ↕ one end heavier","↔ outline · ↕ fuller or finer","↔ frame · ↕ badge","↔ hue · ↕ vivid or calm","draw one petal and it repeats round","exactly where you draw · [ ] brush · tap to clear"];
 function hudNow(t,x,y){const A=AXES[mode];if(!A||!cur)return;const g=cur.g,q=t&&t.tint,v=A.map(a=>a.v(g,q));
   const lock=t&&t.ax?`  ·  ⇧ ${t.ax==="x"?"sideways":"up and down"} only`:"";
   hud(nameNow()||MODES[mode][1],A.map((a,i)=>(i?"↕ ":"↔ ")+a.say(v[i],g,q)).join("  ·  ")+lock,x,y,v)}
@@ -1231,10 +1299,10 @@ function hueName(h){const [L,a,b]=oklab(h),C=Math.hypot(a,b);
 // rest on the mark and it says what dragging it will do in this mode
 let restT=0;const restOff=()=>{clearTimeout(restT);if(ro.dataset.rest){delete ro.dataset.rest;ro.classList.add("out")}};
 big.addEventListener("pointermove",(e)=>{if(tune||e.pointerType==="touch")return;restOff();if(live||unfT>0||!cur||nudging)return;const x=e.clientX,y=e.clientY;
-  restT=setTimeout(()=>{if(tune||nudging||!cur||live||unfT>0)return;hud(MODES[mode][1],AXW[mode]+(mode<6?"  ·  ⇧ one way":""),x,y);ro.dataset.rest="1"},650)});
+  restT=setTimeout(()=>{if(tune||nudging||!cur||live||unfT>0)return;hud(MODES[mode][1],(mode===3&&cur.pen&&cur.pen.w>.5?"↔ longer or shorter · ↕ fuller or finer":mode===3&&letPet()?"↔ bolder · ↕ further out":mode===7?`brush ${brushPx()} px · `+AXW[7]:AXW[mode])+(mode<6?"  ·  ⇧ one way":""),x,y);ro.dataset.rest="1"},650)});
 big.addEventListener("pointerleave",restOff);big.addEventListener("pointerdown",restOff);
 // the arrow keys nudging the mark in whatever mode you're in, Shift for bigger steps; a run of nudges is one step back
-function nudgeKey(e){if(!cur||live||unfT>0||mode===6||drop||tune)return false;const t=e.target;if(t&&t.closest&&t.closest("input,textarea,[role=menu],.modepop,dialog,#looks"))return false;
+function nudgeKey(e){if(!cur||live||unfT>0||mode>=6||drop||tune)return false;const t=e.target;if(t&&t.closest&&t.closest("input,textarea,[role=menu],.modepop,dialog,#looks"))return false;
   e.preventDefault();const st=e.shiftKey?40:10,dx=e.key==="ArrowLeft"?-st:e.key==="ArrowRight"?st:0,dy=e.key==="ArrowUp"?-st:e.key==="ArrowDown"?st:0;
   if(!nudging){restOff();settle();remember();nudging={}}clearTimeout(nudging.t);apply(nudging,dx,dy);
   const r=big.getBoundingClientRect();hudNow(nudging,r.left+r.width*.5,r.top+r.height*.9);queue();
@@ -1421,7 +1489,7 @@ function drawBig(){
 const SP=96,scv=document.createElement("canvas");scv.width=scv.height=SP;const scx=scv.getContext("2d",{willReadFrequently:true});
 const ss=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t)},gcd=(a,b)=>b?gcd(b,a%b):a;
 let scanKey="",scanned=null;
-function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,pen=m.pen&&m.pen.w>.02?m.pen:null,key=Array.from(g,v=>v.toFixed(3)).join()+n+m.s.toFixed(2)+letters+(pen?pen.id+"/"+pen.mir.toFixed(2)+"/"+pen.w.toFixed(2):"");
+function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,pen=m.pen&&m.pen.w>.02?m.pen:null,key=Array.from(g,v=>v.toFixed(3)).join()+n+m.s.toFixed(2)+letters+(pen?pen.id+"/"+pen.mir.toFixed(2)+"/"+pen.w.toFixed(2):"")+(m.fr?"f"+m.fr.id:"");
   if(key===scanKey)return scanned;
   const PI=Math.PI,near=(th,ax)=>{const d=Math.abs(((th-ax)%PI+PI)%PI);return Math.min(d,PI-d)<.01};
   const tw=Math.max(Math.abs(g[6]-.5)-SYMW,0),spin=ss(.5,.85,g[16]),fan=ss(.5,.85,g[17]),stk=ss(.5,.85,g[18]),
@@ -1444,7 +1512,7 @@ function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,pen=m.pen&&m.pen.w>.02?m.pen:nul
     if(sqb>.01){const q=((th%(PI/4))+PI/4)%(PI/4);if(Math.min(q,PI/4-q)>.01)al*=clamp(1-sqb/.15)} // a square badge keeps its four
     if(al>.01)lines.push({th,al})}
   let turns=bd>.02||hv>.02||fan>.01||stk>.01||(frm>.01&&hx<.99)?1:wd>.02?(n%2?1:2):sqb>.1?gcd(n,4):frm>.01?gcd(n,6):n;if(mid>.01&&m.n0!==m.n1)turns=gcd(turns,n===m.n0?m.n1:m.n0);
-  if((letters||pen)&&lines.length+turns>1){ // fold the drawn mark over each line and turn it, and keep only what holds
+  if((letters||pen||m.fr)&&lines.length+turns>1){ // fold the drawn mark over each line and turn it, and keep only what holds
     paint(m,SP,0,{i:K("#000000"),a:K("#000000")});scx.clearRect(0,0,SP,SP);scx.drawImage(tiny,0,0);
     const px=scx.getImageData(0,0,SP,SP).data;let a=new Float32Array(SP*SP);for(let i=0;i<SP*SP;i++)a[i]=px[i*4+3]/255;
     for(let pass=0;pass<2;pass++){const b=new Float32Array(SP*SP);for(let y=1;y<SP-1;y++)for(let x=1;x<SP-1;x++){let s=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)s+=a[(y+j)*SP+x+i];b[y*SP+x]=s/9}a=b}
@@ -1644,9 +1712,9 @@ function commit(i){
   lw.fill(0);tw.fill(0);pending=-1;[...halo.children].forEach(b=>b.style.opacity="");
   told();drawBig();makeGhosts();drawGhosts();queue(); // the mark first, the sheet on the next frame
 }
-const snapOf=()=>({pen:cur.pen||null,g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0})),gh:ghosts});
+const snapOf=()=>({pen:cur.pen||null,fr:cur.fr||null,g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d,w:0})),gh:ghosts});
 function remember(){hist.push(snapOf());if(hist.length>80)hist.shift();fut=[]}
-function restore(h){if(petT){cancelAnimationFrame(petT);petT=0}if(h.pen!==cur.pen&&!calm&&(h.pen||cur.pen))penTo(h.pen||null);else{cancelAnimationFrame(penRaf);penShow=null;cur.pen=h.pen}cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();
+function restore(h){if(petT){cancelAnimationFrame(petT);petT=0}if(h.pen!==cur.pen&&!calm&&(h.pen||cur.pen))penTo(h.pen||null);else{cancelAnimationFrame(penRaf);penShow=null;cur.pen=h.pen}cur.fr=h.fr||null;cur.g=h.g;cur.n0=h.n0;cur.n1=h.n1;cur.s=h.s;cur.pal=h.pal;cur.gr=h.gr;cur.ink=h.ink;cur.acc=h.acc;cur.dye=h.dye;wet=null;settle();
   // the ring you had then comes back with it
   if(h.gh&&h.gh!==ghosts){ghosts=h.gh;gen++;[...halo.children].forEach((b,i)=>{b.classList.add("fresh");setTimeout(()=>b.classList.remove("fresh"),calm?0:60+i*30)})}
   told();drawGhosts();queue()}
@@ -1656,7 +1724,7 @@ function told(){const n=hist.length;if(!$("hexes").contains(document.activeEleme
   const pn=cur.s>.5?cur.n1:cur.n0;$("petn").textContent=pn+" petals";$("fewer").disabled=pn===SYM[0]&&cur.s%1===0;$("more").disabled=pn===SYM[SYM.length-1]&&cur.s%1===0;
   $("found").textContent=foundAt+(cur.note||"");shapeWord(true);
   // the link carries every change, so a shared mark arrives exactly as it was left
-  const url=cur.at+(n||cur.dye.length||cur.edited||cur.pen||symI!==2?"&"+codeOf(cur):"")+(cur.pen?"&p"+penCode(cur.pen):""); // under another symmetry setting the spot alone would grow a different mark
+  const url=cur.at+(n||cur.dye.length||cur.edited||cur.pen||cur.fr||symI!==2?"&"+codeOf(cur):"")+(cur.pen?"&p"+penCode(cur.pen):"")+(cur.fr?"&f"+frCode(cur.fr):""); // under another symmetry setting the spot alone would grow a different mark
   if(location.hash!==url)try{history.replaceState(history.state,"",url)}catch(e){}tabMark()}
 // while a mark is open, the browser tab wears it and its name, so a row of tabs shows which mark is which
 const tabIcon=document.querySelector('link[rel="icon"]'),tabHome=[tabIcon.href,document.title];let tabT=0;
@@ -1855,7 +1923,7 @@ function kinItems(P){const L=ghosts.map(G=>blend(G,1)),W=P.Wp-2*P.m;
   if(P.st===3)return L.map((m,i)=>({m,x:P.m+W/4*(i%4+.5),y:P.kinY+(i>>2)*P.kin*1.75,s:P.kin}));
   return L.map((m,i)=>({m,x:P.m+W/8*(i+.5),y:P.kinY,s:P.kin}))}
 function pbuild(){
-  const key=codeOf(cur)+penCode(cur.pen)+"/"+lens+"/"+fmt+"/"+gen+"/"+pstyle;if(key===pk&&pc)return;pk=key;
+  const key=codeOf(cur)+penCode(cur.pen)+frCode(cur.fr)+"/"+lens+"/"+fmt+"/"+gen+"/"+pstyle;if(key===pk&&pc)return;pk=key;
   const P=pplan(),c=colours(cur.pal,cur),bsz=Math.round(big.offsetWidth*Math.min(devicePixelRatio||1,2));
   pc={hero:snap(cur,Math.min(1400,Math.max(Math.round(P.hs),bsz)),lens,c),line:snap(cur,1100,1,c),field:null,pad:Math.round(P.Wp*.12),items:kinItems(P)};
   if(pstyle===2)pc.acc=snap(cur,360,lens,{i:K(accOf(cur)),a:K(inkOf(cur)),d:[]}),pc.ink=snap(cur,360,lens,{i:K(inkOf(cur)),a:K(accOf(cur)),d:[]});
@@ -2077,7 +2145,7 @@ function breeder(b,k){
 /* ---------- keeping ---------- */
 function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal,m));const u=tiny.toDataURL("image/png");cur=keep;return u}
 // the same mark, in the same colours and letters, is only kept once
-const keyOf=(m)=>codeOf({...m,g:Float32Array.from(m.g),dye:m.dye||[],gr:m.gr||null,ink:m.ink||null,acc:m.acc||null})+"|"+(m.letters||"")+(m.pen?"|"+penCode(m.pen):"");
+const keyOf=(m)=>codeOf({...m,g:Float32Array.from(m.g),dye:m.dye||[],gr:m.gr||null,ink:m.ink||null,acc:m.acc||null})+"|"+(m.letters||"")+(m.pen?"|"+penCode(m.pen):"")+(m.fr?"|f"+frCode(m.fr):m.frc?"|f"+m.frc:"");
 shelf.forEach(k=>{if(!k.key)k.key=keyOf(k)});
 const saveShelf=()=>{try{localStorage.setItem("meadow-shelf",JSON.stringify(shelf));return true}catch(e){return false}};
 function drawShelf(fresh){
@@ -2091,10 +2159,10 @@ function drawShelf(fresh){
 function flashKept(key){document.querySelectorAll(".shelf button,.keptrow button").forEach(b=>{if(shelf[+b.dataset.i]&&shelf[+b.dataset.i].key===key){b.classList.remove("flash");void b.offsetWidth;b.classList.add("flash")}})}
 const isKept=()=>cur&&shelf.some(k=>k.key===keyOf({...cur,letters}));
 $("keep").onclick=()=>{
-  const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,ink:cur.ink||undefined,acc:cur.acc||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h})),pen:cur.pen?{...cur.pen,p:Array.from(cur.pen.p,v=>+v.toFixed(4))}:undefined};
+  const m={x:cur.x,y:cur.y,genus:cur.genus,roots:cur.roots,from:cur.from,pal:cur.pal,gr:cur.gr||undefined,ink:cur.ink||undefined,acc:cur.acc||undefined,g:[...cur.g],n0:cur.n0,n1:cur.n1,s:cur.s,letters,dye:cur.dye.map(({x,y,r,h})=>({x:+x.toFixed(3),y:+y.toFixed(3),r:+r.toFixed(3),h})),pen:cur.pen?{...cur.pen,p:Array.from(cur.pen.p,v=>+v.toFixed(4))}:undefined,frc:cur.fr?frCode(cur.fr):undefined};
   m.key=keyOf(m);const at=shelf.findIndex(k=>k.key===m.key);
   if(at>=0){if(at>0){shelf.unshift(shelf.splice(at,1)[0]);saveShelf();drawShelf()}flashKept(m.key);$("say").textContent="That one's already on your shelf.";return}
-  m.thumb=thumb({...m,g:Float32Array.from(m.g)});shelf.unshift(m);
+  m.thumb=thumb({...m,g:Float32Array.from(m.g),fr:cur.fr||null});shelf.unshift(m);
   const gone=shelf.length>24?shelf.pop():null;const ok=saveShelf();drawShelf(m.key);flyIn(m);keptNow=true;
   $("keep").textContent="Kept ✓";
   $("say").textContent=!ok?"Kept for now, but your browser wouldn't store it for next time.":gone?"Kept. The oldest one made room for it.":shelf.length===1?"Kept. Drag it onto any mark, or onto this one, to breed the two.":"Kept."};
@@ -2237,7 +2305,7 @@ function glyphTex(str){const n=384,tex=new Uint8Array(n*n*4);FACES.forEach((f,c)
 async function saveShelfAll(){if(!shelf.length||saveShelfAll.busy)return;saveShelfAll.busy=true;$("say").textContent="Gathering your shelf…";
   try{await Promise.all(FACES.map(f=>document.fonts.load(f.replace("P","300px"))))}catch(e){}
   const keep=cur,files=[],pngs=[],used={};let gl=letters;
-  try{for(const k of shelf){const m={...k,g:Float32Array.from(k.g),dye:k.dye||[],ok:true},L=k.letters||"";
+  try{for(const k of shelf){const m={...k,g:Float32Array.from(k.g),dye:k.dye||[],ok:true,fr:k.frc?readFree(k.frc):null},L=k.letters||"";
       if(L!==gl){T.glyph(L?glyphTex(L):null,384,null);gl=L}
       cur=m;let nm=slug()+(L?"-"+L.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,""):"");used[nm]=(used[nm]||0)+1;if(used[nm]>1)nm+="-"+used[nm];
       files.push({name:"meadow-shelf/"+nm+".svg",data:svgText()});
@@ -2290,7 +2358,7 @@ function kbLoop(){const on=kbT&&$("studio").hidden&&!nur&&!tour&&performance.now
   const sc=ppw(),R=base*.86/dpr*.64,x=((m.x-cam.x)*sc+W/2)/dpr,y=((m.y-cam.y)*sc+H/2)/dpr;
   Object.assign(kbr.style,{left:x-R+"px",top:y-R+"px",width:R*2+"px",height:R*2+"px"});kbr.classList.add("on");requestAnimationFrame(kbLoop)}
 // hold B while shaping to see the mark as it was when you opened it; let go and every change comes back
-let opened=null,beforeNow=null;const BF=["pen","g","n0","n1","s","pal","gr","ink","acc","dye"];
+let opened=null,beforeNow=null;const BF=["pen","fr","g","n0","n1","s","pal","gr","ink","acc","dye"];
 function showBefore(on){if(!cur||on===!!beforeNow)return;
   if(on){if(!opened||!hist.length||live||unf>0||tune)return;beforeNow={};BF.forEach(k=>beforeNow[k]=cur[k]);BF.forEach(k=>cur[k]=k==="dye"?opened.dye.map(d=>({...d})):opened[k])}
   else{BF.forEach(k=>cur[k]=beforeNow[k]);beforeNow=null}
@@ -2415,8 +2483,9 @@ const GUIDE=[
    ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field. A ring shows the mark in the middle."],["<kbd>Enter</kbd>","Open the ringed mark."]]],
  ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. A label beside the pointer names what you're getting and what each way changes. Rest on the mark to see it before you drag."],
    ["Hold <kbd>⇧</kbd> while dragging","Keeps to the way you set off in, so only one thing changes."],["Arrow keys","Nudge the mark in the mode you're in. <kbd>⇧</kbd> for bigger steps."],
-   ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],
-   ["Draw <kbd>7</kbd>","Draw one petal on the mark and it repeats all the way round. Close the loop to fill it. Tap the mark to let the drawing go."],
+   ["The word, or <kbd>1</kbd>–<kbd>8</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw · Draw freely."],
+   ["Draw <kbd>7</kbd>","Draw one petal on the mark and it repeats all the way round. Close the loop to fill it. Tap the mark to let the drawing go. On a lettered mark the petal sits beside the letters. In Petal mode, sideways makes it longer or shorter."],
+   ["Draw freely <kbd>8</kbd>","Lines land exactly where you draw them, one after another, over the mark and any letters. A closed loop fills; on a badge a line cuts through. <kbd>[</kbd> <kbd>]</kbd> change the brush, <kbd>⌘Z</kbd> takes a line back, a tap clears them all."],
    ["− + or scroll over the mark","More or fewer petals."],["The symmetry word, or <kbd>M</kbd>","Mirrored, one mirror, turning or free. Hover each to preview it."],
    ["<kbd>⌘Z</kbd> · <kbd>⇧⌘Z</kbd>","Step back and forward through every change. <kbd>Esc</kbd> goes back to the field."],["Hold <kbd>B</kbd>","See the mark as it was when you opened it. Let go and your changes come back."],["<kbd>?</kbd>","Opens this guide while you're shaping a mark."]]],
  ["The ghosts",[["Point between two ghosts","The mark blends them, exactly half of each at the midpoint."],["Click a ghost","Become it. A new ring grows round the new mark."],
@@ -2443,7 +2512,7 @@ function openGuide(){endTour(true);const inStudio=!$("studio").hidden,w=walkHere
 gbox.addEventListener("keydown",(e)=>e.stopPropagation());
 // search: every word you type must appear in a row; American spellings and everyday words find Meadow's own
 const SYN={color:"colour",colors:"colours",export:"save",download:"save",undo:"step back",redo:"step forward",logo:"mark",icon:"icon",favicon:"favicon",animate:"move",animation:"move",
-  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css"};
+  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css",brush:"draw freely",sketch:"draw freely",freehand:"draw freely"};
 // words people reach for that a section answers without using them
 const GTAGS={"The field":"explore browse wander map","Shaping a mark":"edit change shape tweak","The ghosts":"variations options suggestions","Colour":"palette paint contrast wcag hex","Posters":"print layout",
   "Moving marks":"loop animation","Taking it with you":"save export download file share tokens css developer","Your shelf and the nursery":"keep favourites saved breed"};
@@ -2463,15 +2532,15 @@ $("guide").onclick=openGuide;$("guide2").onclick=openGuide;
 
 /* ---------- start ---------- */
 if(matchMedia("(pointer:coarse)").matches){$("hint").textContent="Drag to wander. Pinch to go deeper. Tap a mark to pick it.";$("ghosthint").textContent="Tap a ghost and your mark melts into it."}
-function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^&]+))?(?:&([0-9a-z]+))?(?:&p([0-9a-z]+))?$/.exec(location.hash);if(!m)return null;
-  cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3),code:m[5],pen:m[6]}}
+function fromHash(){const m=/^#at-([np][0-9a-z]+)-([np][0-9a-z]+)-(-?\d+)(?:-([^&]+))?(?:&([0-9a-z]+))?(?:&p([0-9a-z]+))?(?:&f([0-9a-z]+))?$/.exec(location.hash);if(!m)return null;
+  cam.x=dec(m[1]);cam.y=dec(m[2]);cam.z=cam.zt=clamp(+m[3]/4,ZMIN,ZMAX);let l="";try{l=decodeURIComponent(m[4]||"")}catch(e){}return {letters:l.slice(0,3),code:m[5],pen:m[6],fr:m[7]}}
 const landed=fromHash();growO=[W/2,H/2];cam.ax=W/2;cam.ay=H/2;chrome();
 window.__meadow={cam,setLens,plant,openStudio,specimen,world:(x,y)=>world(x,y),breed:(a,b)=>breed(a,b),svgText,tend,probe(m,n){const k=cur;cur=m;const r=readField(n,0);cur=k;return r},get cur(){return cur},get tiles(){return tiles}};
 requestAnimationFrame(frame);
 setTimeout(()=>document.body.classList.add("live"),400);
 if(!landed&&!seenT.field)setTimeout(()=>{if(!tour&&$("studio").hidden&&!gbox.open)startTour("field")},1800);
 if(landed)(async()=>{if(landed.letters)await plant(landed.letters);const m=specimen(cam.x,cam.y);if(!m.ok)tend([m]);openStudio(m);const e=landed.code&&readCode(landed.code);
-  if(e){Object.assign(cur,{pal:e.pal,gr:e.gr,ink:e.ink,acc:e.acc,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:"",pen:readPen(landed.pen)});told();makeGhosts();drawStudio()}
+  if(e){Object.assign(cur,{pal:e.pal,gr:e.gr,ink:e.ink,acc:e.acc,n0:e.n0,n1:e.n1,s:e.s,g:e.g,dye:e.dye,edited:true,note:"",pen:readPen(landed.pen),fr:readFree(landed.fr)});told();makeGhosts();drawStudio()}
   try{history.replaceState(null,"",location.hash)}catch(e){}})();
 </script>
 </body>
