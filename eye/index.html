@@ -20,9 +20,9 @@ body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-f
 .top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px 16px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
 /* the experiment always fits one screen: the canvas is as big as the space left over */
-.play{--sq:max(240px,min(calc(100vw - 32px),calc(100dvh - var(--top,53px) - 240px),860px));display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"hero" "where" "q" "stage" "say" "act"}
+.play{--sq:max(240px,min(calc(100vw - 32px),calc(100dvh - var(--top,53px) - 240px),860px));display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"hero" "where" "jump" "q" "stage" "say" "act"}
 .side{display:contents}
-.hero{grid-area:hero}.where{grid-area:where}.q{grid-area:q}.stage{grid-area:stage}.say{grid-area:say}.act{grid-area:act}
+.hero{grid-area:hero}.where{grid-area:where}.jump{grid-area:jump}.q{grid-area:q}.stage{grid-area:stage}.say{grid-area:say}.act{grid-area:act}
 .eyebrow{font:500 13px var(--f-display);letter-spacing:.06em;color:var(--pink);margin:0}
 .eyebrow .w{display:none;font:12px var(--f-mono);letter-spacing:0;margin-left:8px}
 h1{font:400 clamp(34px,6.6vw,56px)/.98 var(--f-serif);margin:6px 0 0;letter-spacing:-.01em}
@@ -33,6 +33,11 @@ h1 i{color:var(--pink-ink)}
 .where{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:24px 0 0;font:12px var(--f-mono);color:var(--faint)}
 .hero.folded+.where{margin-top:10px}
 .where b{color:var(--ink);font-weight:600}
+.where .w.quiet{color:var(--faint);text-decoration-color:color-mix(in srgb,var(--faint) 60%,transparent)}
+.where .w.quiet:hover{color:var(--ink)}
+.jump{margin:8px 0 0;font-size:14px;color:var(--muted);line-height:1.9}
+.jump .w{font-size:14px}
+.jump .w[aria-current]{color:var(--ink);font-weight:600;text-decoration:none;cursor:default}
 .q{font:400 clamp(24px,4.2vw,32px)/1.15 var(--f-serif);margin:8px 0 14px;min-height:1.15em}
 .stage{position:relative;justify-self:center;width:var(--sq)}
 #cv{display:block;width:100%;aspect-ratio:1;border:1px solid var(--line);border-radius:6px;background:var(--panel);touch-action:none;cursor:grab;outline:none}
@@ -64,7 +69,7 @@ h1 i{color:var(--pink-ink)}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 #me{display:none}
 .portrait #me{display:block}
-.portrait .stage,.portrait #q,.portrait .say{display:none}
+.portrait .stage,.portrait #q,.portrait .say,.portrait .jump{display:none}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:18px 0 0}
 .card{appearance:none;display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 10px 12px;margin:0;transition:border-color .15s,transform .15s}
 .card:hover,.card:focus-visible{border-color:var(--pink);outline:none;transform:translateY(-1px)}
@@ -97,6 +102,7 @@ h1 i{color:var(--pink-ink)}
         <p class="lede">Small experiments for your eye, in shape, colour and motion. Answer each one with your hand, then see what you did against the maths. After the set comes Endless: a new shape every time, and a model of your eye that guesses your answer before you give it.</p>
       </div>
       <div class="where"><span id="where"></span><button class="w" id="toMe" type="button">your eye</button></div>
+      <p class="jump fade" id="jump" hidden></p>
       <h2 class="q" id="q"></h2>
       <div class="say" id="say" aria-live="polite"></div>
       <div class="act" id="act"></div>
@@ -1169,7 +1175,9 @@ function start(i, again) {
   if (begun && scrollY > 0) scrollTo({ top: 0, behavior: "auto" });
   begun = true;
   $("#main").classList.remove("portrait"); $("#say").after($("#act"));
-  $("#where").innerHTML = f.e.where ? `<b>${f.e.name}</b> · ${f.e.where()}` : `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length} &nbsp;·&nbsp; experiment ${f.ei + 1} of ${E.length}`;
+  $("#where").innerHTML = (f.e.where ? `<b>${f.e.name}</b> · ${f.e.where()}` : `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length}`)
+    + ` &nbsp;·&nbsp; <button class="w quiet" type="button" id="jumpTo" aria-expanded="false" aria-controls="jump">experiment ${f.ei + 1} of ${E.length}</button>`;
+  $("#jump").hidden = true; $("#jumpTo").onclick = jumpList;
   const q = $("#q"); q.textContent = T.q; q.classList.remove("fade"); void q.offsetWidth; q.classList.add("fade");
   const still = T.live && calm.matches && !playAnyway, keys = !toldKeys && matchMedia("(hover: hover)").matches;
   $("#say").innerHTML = `<p class="why" id="hint">${T.hint[0].toUpperCase() + T.hint.slice(1)} until it ${T.feels || "looks"} right.${keys ? " Arrow keys work too, with Shift for bigger steps, and Enter says it looks right." : ""}${still ? ` Your system asks for less motion, so it holds still. <button class="w" type="button" id="playIt">play it anyway</button>` : ""}</p>`;
@@ -1180,6 +1188,20 @@ function start(i, again) {
   draw(); live();
 }
 let toldKeys = false, begun = false;
+/* every experiment by name, in one sentence you open from "experiment n of m" */
+function jumpList() {
+  const j = $("#jump"), open = j.hidden, here = flat[cur].ei;
+  j.hidden = !open; $("#jumpTo").setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  const names = E.map((e, ei) => `<button class="w" type="button" data-ei="${ei}"${ei === here ? ' aria-current="step"' : ""}>${e.name}</button>`);
+  j.innerHTML = "Go to " + names.slice(0, -1).join(", ") + " or " + names[names.length - 1] + ".";
+  j.querySelectorAll("[data-ei]").forEach((b) => (b.onclick = () => {
+    const ei = +b.dataset.ei; if (ei === here) return;
+    start(E[ei].endless ? flat.findIndex((f) => f.e.endless) : flat.findIndex((f) => f.ei === ei));
+    if (E[ei].endless) start(pickEndless());
+  }));
+  j.querySelector("[data-ei]:not([aria-current])").focus({ preventScroll: true });
+}
 // after the set comes Endless, which never runs out: it asks next where it knows your eye least
 function goNext() { const n = flat[cur + 1]; start(flat[cur].e.endless || (n && n.e.endless) ? pickEndless() : cur + 1); }
 function pickEndless() {
