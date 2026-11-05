@@ -125,6 +125,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #shapepop{left:auto;right:-6px;transform-origin:85% 100%;min-width:268px}
 #shapepop button{grid-template-columns:34px 1fr;align-items:center}
 #shapepop canvas{grid-row:1/3;width:30px;height:30px;justify-self:center}
+#waypop{min-width:262px}#waypop button{grid-template-columns:34px 1fr;align-items:center}#waypop canvas{grid-row:1/3;width:30px;height:30px;justify-self:center}
 /* mirror lines laid over the mark while its symmetry is being changed, fading as each line stops holding */
 #mirrors{position:absolute;pointer-events:none;opacity:0;transition:opacity .35s ease}
 #mirrors.on{opacity:1}
@@ -330,8 +331,9 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <canvas id="inkpad" aria-hidden="true"></canvas>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
-      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–8)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span></span><span id="livenote" hidden>It drifts through its kin. Click it to keep the moment you like; scroll for slower or faster.</span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
+      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–7)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span><span id="drawhint" hidden>Each line <button class="word" id="wayword" aria-haspopup="true" aria-expanded="false" title="Choose where each line lands (7 again for the next)">repeats round the mark</button>. <span id="waytip">Close a loop to fill it; ⇧ straight.</span></span></span><span id="livenote" hidden>It drifts through its kin. Click it to keep the moment you like; scroll for slower or faster.</span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
       <div class="modepop" id="modepop" hidden role="menu" aria-label="What dragging the mark changes"></div>
+      <div class="modepop" id="waypop" hidden role="menu" aria-label="Where each line lands"></div>
       <div class="modepop" id="stylepop" hidden role="menu" aria-label="How the poster sets the mark"></div>
       <div class="tools">
         <span class="tools" id="markhint"><span class="grp" role="group" aria-label="Petals"><button id="fewer" aria-label="Fewer petals" title="Fewer petals (scroll down)">−</button><span id="petn">6 petals</span><button id="more" aria-label="More petals" title="More petals (scroll up)">+</button></span><span class="shapewrap"><button class="word" id="shapeword" aria-haspopup="true" aria-expanded="false" title="Its symmetry: mirrored, one mirror, turning or free (M)">mirrored</button><div class="modepop" id="shapepop" hidden role="menu" aria-label="This mark's symmetry"></div></span></span>
@@ -1010,7 +1012,7 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-8]$/.test(e.key)&&e.target.tagName!=="INPUT")setMode(+e.key-1);else if((e.key==="["||e.key==="]")&&mode===7&&unfT<=0)brushBy(e.key==="]"?1.25:.8);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-8]$/.test(e.key)&&e.target.tagName!=="INPUT"){const k=+e.key-1;if(k===7){if(!way)setWay(1,true);setMode(6)}else if(k===6&&mode===6)setWay(way+1,true);else setMode(k)}else if((e.key==="["||e.key==="]")&&freeOn()&&unfT<=0)brushBy(e.key==="]"?1.25:.8);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -1176,14 +1178,14 @@ function drawInk(pts,free,o){const px=big.width;if(inkC.width!==px)inkC.width=in
   const g=inkC.getContext("2d"),h=inkL.getContext("2d");g.clearRect(0,0,px,px);if(pts.length<2)return;
   const n=free?1:pureN(cur),{w}=petalSize(cur.g,pureN(cur)),c=px/2,closed=o&&o.poly?!!o.shut:closesOn(pts),t=Math.max(1,(free?brushW:w*.95)*c),P=pts.map(([x,y])=>[(x*.5+.5)*px,(y*.5+.5)*px]);
   const L=[0];for(let i=1;i<P.length;i++)L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));const tot=L[L.length-1]||1;
-  const one=(k,fl)=>{h.save();h.translate(c,c);h.rotate(k*Math.PI*2/n);if(fl)h.scale(-1,1);h.translate(-c,-c);h.beginPath();
+  const one=(k,f)=>{h.save();h.translate(c,c);h.rotate(k*Math.PI*2/n);if(f)h.scale(f[0],f[1]);h.translate(-c,-c);h.beginPath();
     if(closed){P.forEach(([X,Y],i)=>i?h.lineTo(X,Y):h.moveTo(X,Y));h.closePath();h.fill();h.lineWidth=t*.44;h.stroke()}
     else if(o&&o.even){h.lineWidth=2*t;P.forEach(([X,Y],i)=>i?h.lineTo(X,Y):h.moveTo(X,Y));h.stroke()}
     else for(let i=1;i<P.length;i++){const s=(L[i-1]+L[i])/2/tot;h.lineWidth=2*t*(.22+.78*Math.sqrt(Math.sin(Math.PI*s)));h.beginPath();h.moveTo(P[i-1][0],P[i-1][1]);h.lineTo(P[i][0],P[i][1]);h.stroke()}
     h.restore()};
-  const layer=(ks,a,fl)=>{h.clearRect(0,0,px,px);h.lineCap=h.lineJoin="round";h.strokeStyle=h.fillStyle=inkOf(cur);ks.forEach(k=>one(k));if(fl)one(0,true);g.globalAlpha=a;g.drawImage(inkL,0,0);g.globalAlpha=1};
-  if(!free)layer(Array.from({length:n-1},(_,i)=>i+1),.42);layer([0],free?1:.92,free&&o&&o.mir);
-  if(free&&o&&o.mir){g.save();g.strokeStyle=inkOf(cur);g.globalAlpha=.28;g.lineWidth=Math.max(1,px/480);g.setLineDash([px/90,px/60]);g.beginPath();g.moveTo(c,px*.03);g.lineTo(c,px*.97);g.stroke();g.restore()}
+  const layer=(ks,a,fl)=>{h.clearRect(0,0,px,px);h.lineCap=h.lineJoin="round";h.strokeStyle=h.fillStyle=inkOf(cur);ks.forEach(k=>one(k));if(fl)fl.forEach(f=>one(0,f));g.globalAlpha=a;g.drawImage(inkL,0,0);g.globalAlpha=1};
+  const ax=free&&o&&o.mir&&o.mir.length?o.mir:null;
+  if(!free)layer(Array.from({length:n-1},(_,i)=>i+1),.42);layer([0],free?1:.92,ax&&flipsOf(ax));if(ax)axesOn(g,ax,px,.28);
   return closed}
 const markAt=(e)=>{const r=big.getBoundingClientRect();return [(e.clientX-r.left)/r.width*2-1,(e.clientY-r.top)/r.height*2-1]};
 function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");clearTimeout(t.dwell);const pts=t.ink;let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
@@ -1201,8 +1203,8 @@ function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");c
 const FR_MAX=192;let brushW=.045;
 // a ring round the pointer the size of the brush (dashed while ⌥ rubs out), so you see the line's width before you draw
 const ring=document.createElement("div");ring.id="brushring";ring.setAttribute("aria-hidden","true");document.body.append(ring);let ringE=null;
-function ringAt(e){ringE={clientX:e.clientX,clientY:e.clientY,altKey:e.altKey,pointerType:e.pointerType};const on=mode===7&&!!cur&&!live&&unfT<=0&&e.pointerType!=="touch"&&!$("studio").hidden;
-  ring.classList.toggle("on",on);if(!on)return;const r=big.getBoundingClientRect(),rub=tune?!!tune.rub:e.altKey,d=Math.max(6,(rub?.056:brushW)*r.width);
+function ringAt(e){ringE={clientX:e.clientX,clientY:e.clientY,altKey:e.altKey,pointerType:e.pointerType};const on=mode===6&&!!cur&&!live&&unfT<=0&&e.pointerType!=="touch"&&!$("studio").hidden;
+  ring.classList.toggle("on",on);if(!on)return;const r=big.getBoundingClientRect(),rub=tune?!!tune.rub:e.altKey,d=Math.max(6,(rub?.056:way?brushW:petalSize(cur.g,pureN(cur)).w*.95)*r.width);
   ring.classList.toggle("rub",rub);ring.style.width=ring.style.height=d+"px";ring.style.transform=`translate(${e.clientX-d/2}px,${e.clientY-d/2}px)`}
 big.addEventListener("pointermove",ringAt);big.addEventListener("pointerleave",()=>{ring.classList.remove("on");ringE=null});
 addEventListener("keydown",(e)=>{if(e.key==="Alt"&&ringE)ringAt({...ringE,altKey:true})});addEventListener("keyup",(e)=>{if(e.key==="Alt"&&ringE)ringAt({...ringE,altKey:false})});
@@ -1226,15 +1228,16 @@ function freeDone(t){inkC.classList.remove("on");clearTimeout(t.dwell);const pts
   const even=!!t.even;let closed=even?!!t.shut:closesOn(pts);
   // finishing on the end of another line, or back on the line this one set off from, lands exactly on it
   const Z=closed?null:nearEnd(pts[pts.length-1],q=>t.join&&q.i===t.join.i&&q.end===t.join.end);if(Z)pts[pts.length-1]=[Z.p[0],Z.p[1],1];
-  const raw=closed?pts.slice(0,-1):pts;let pp;
+  // a mirrored line is laid down a little coarser, since its copies share the mark's budget of points
+  const raw=closed?pts.slice(0,-1):pts,stp=.025*(t.mir?Math.sqrt(t.mir.length+1):1);let pp;
   if(closed&&!even){ // a hand-drawn loop: one soft pass all the way round
-    const N=raw.length,sm=raw.map((p,i)=>{const a=raw[(i-1+N)%N],b=raw[(i+1)%N];return [(a[0]+p[0]*2+b[0])/4,(a[1]+p[1]*2+b[1])/4]});pp=resample(sm,clamp(Math.round(L/.025)+2,4,32),true)}
+    const N=raw.length,sm=raw.map((p,i)=>{const a=raw[(i-1+N)%N],b=raw[(i+1)%N];return [(a[0]+p[0]*2+b[0])/4,(a[1]+p[1]*2+b[1])/4]});pp=resample(sm,clamp(Math.round(L/stp)+2,4,32),true)}
   else{ // corners (where a straight line turns, or a join) stay exactly where they are; only the freehand runs between them are softened
     const ks=[0];for(let i=1;i<raw.length-1;i++)if(raw[i][2])ks.push(i);ks.push(raw.length-1);pp=[raw[0]];
     for(let j=1;j<ks.length;j++){const seg=raw.slice(ks[j-1],ks[j]+1);if(seg.length<=2){pp.push(seg[seg.length-1]);continue}
       let Ls=0;for(let i=1;i<seg.length;i++)Ls+=Math.hypot(seg[i][0]-seg[i-1][0],seg[i][1]-seg[i-1][1]);
       const sm=seg.map((p,i)=>i===0||i===seg.length-1?p:[(seg[i-1][0]+p[0]*2+seg[i+1][0])/4,(seg[i-1][1]+p[1]*2+seg[i+1][1])/4]);
-      pp.push(...resample(sm,clamp(Math.round(Ls/.025)+2,3,32),false).slice(1))}}
+      pp.push(...resample(sm,clamp(Math.round(Ls/stp)+2,3,32),false).slice(1))}}
   pp=pp.map(([x,y])=>[+clamp(x,-1,1).toFixed(4),+clamp(y,-1,1).toFixed(4)]);
   // a line that starts or ends on another line of the same brush becomes one line with it, so the join doesn't pinch
   const S=cur.fr?cur.fr.s.slice():[],nw={p:pp,w:+brushW.toFixed(4),c:closed?1:0};if(even&&!closed)nw.e=1;
@@ -1244,16 +1247,19 @@ function freeDone(t){inkC.classList.remove("on");clearTimeout(t.dwell);const pts
       if(Z&&Z.i===A.i){nw.p.pop();nw.c=1;delete nw.e;closed=true}S[A.i]=null;joined=true}
     if(!closed&&Z&&S[Z.i]&&fits(S[Z.i])){const tail=Z.end?S[Z.i].p.slice().reverse():S[Z.i].p;nw.p=nw.p.slice(0,-1).concat(tail);S[Z.i]=null;joined=true}}
   const keep=S.filter(Boolean);
-  if(t.mir){ // its mirror image too; with both ends on the middle line the two halves close into one filled shape, with one end there they run on as one line
-    const on=(q)=>Math.abs(q[0])<joinR(),P=nw.p,a0=on(P[0]),a1=on(P[P.length-1]),M=(q)=>q.map(([x,y])=>[+(-x).toFixed(4),y]);
-    if(nw.c||joined||(!a0&&!a1))keep.push(nw,{...nw,p:M(P)});
-    else{if(a0)P[0]=[0,P[0][1]];if(a1)P[P.length-1]=[0,P[P.length-1][1]];
-      if(a0&&a1&&P.length>2){nw.p=P.concat(M(P).reverse().slice(1,-1));nw.c=1;delete nw.e;closed=true}
-      else nw.p=a1?P.concat(M(P).reverse().slice(1)):M(P).reverse().concat(P.slice(1));keep.push(nw)}}
+  if(t.mir){ // its mirror images too, across each middle line in turn; with both ends on a middle line the two halves close into one
+    // filled shape, with one end there they run on as one line. So in four ways a quarter from one middle line to the other closes all the way round
+    let L2=[nw];for(const a of t.mir){const out=[];for(const st of L2){const P=st.p,on=(q)=>Math.abs(q[a])<joinR(),a0=on(P[0]),a1=on(P[P.length-1]),M=(q)=>q.map(p=>{const r=[p[0],p[1]];r[a]=+(-r[a]).toFixed(4);return r});
+        if(st.c||(joined&&st===nw)||(!a0&&!a1)){out.push(st,{...st,p:M(P)});continue}
+        const Q=P.map(p=>[p[0],p[1]]);if(a0)Q[0][a]=0;if(a1)Q[Q.length-1][a]=0;const ns={...st};
+        if(a0&&a1&&Q.length>2){ns.p=Q.concat(M(Q).reverse().slice(1,-1));ns.c=1;delete ns.e;closed=true}
+        else ns.p=a1?Q.concat(M(Q).reverse().slice(1)):M(Q).reverse().concat(Q.slice(1));out.push(ns)}
+      L2=out}
+    keep.push(...L2)}
   else keep.push(nw);
   if(keep.reduce((a,st)=>a+st.p.length,0)>FR_MAX){hist.pop();hud("that's as many lines as a mark can hold","step back, or tap the mark to clear them",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},2200);drawStudio();return false}
   cur.fr=frPack(keep);told();drawStudio();
-  const n=cur.fr.s.length;hud(closed?"filled":joined?"joined":t.mir?"mirrored":even?"straight":"drawn",`${n} line${n>1?"s":""} · ⌘Z takes one back · tap the mark to clear`,null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1800);return true}
+  const n=cur.fr.s.length;hud(closed?"filled":joined?"joined":t.mir?mirSay(t.mir):even?"straight":"drawn",`${n} line${n>1?"s":""} · ⌘Z takes one back · tap the mark to clear`,null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1800);return true}
 // hold ⌥ and drag (or tap) to rub out the lines you touch, whole lines at a time
 function lineNear(st,v,r){const q=st.p,n=q.length;let d=1e9,inn=false;
   for(let i=0;i<n;i++){if(i===n-1&&!st.c)break;const a=q[i],b=q[(i+1)%n],bx=b[0]-a[0],by=b[1]-a[1],px=v[0]-a[0],py=v[1]-a[1],h=clamp((px*bx+py*by)/Math.max(bx*bx+by*by,1e-9));
@@ -1263,7 +1269,7 @@ function rubAt(v,t){if(!cur.fr)return 0;let gone=0;const keep=cur.fr.s.filter(st
   cur.fr=keep.length?frPack(keep):null;t.gone=(t.gone||0)+gone;drawStudio();return gone}
 function brushBy(f,x,y){brushW=clamp(brushW*f,.012,.16);const r=big.getBoundingClientRect();if(ringE)ringAt(ringE);
   hud("brush "+brushPx()+" px","at 1024 pixels · [ thinner · ] thicker",x??r.left+r.width*.5,y??r.top+r.height*.9);clearTimeout(brushBy.t);brushBy.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1100)}
-big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}const rub=mode===7&&e.altKey;tune={x:e.clientX,y:e.clientY,moved:false,ink:mode>=6&&!rub?[markAt(e)]:null,free:mode===7,rub};
+big.addEventListener("pointerdown",(e)=>{if(live){if(!live.rec){e.preventDefault();liveOff(true)}return}try{big.setPointerCapture(e.pointerId)}catch(_){}const rub=mode===6&&e.altKey;tune={x:e.clientX,y:e.clientY,moved:false,ink:mode>=6&&!rub?[markAt(e)]:null,free:freeOn(),rub};guideInk(null);
   if(tune.free&&tune.ink){const q=nearEnd(tune.ink[0]);if(q){tune.ink[0]=[q.p[0],q.p[1],1];tune.join=q}}});
 big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune.x,dy=e.clientY-tune.y;
   if(!tune.moved){if(Math.abs(dx)+Math.abs(dy)<3)return;tune.moved=true;settle();remember()}
@@ -1271,8 +1277,9 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
   if(tune.rub){const v=markAt(e),p=tune.rv||v,k=Math.max(1,Math.ceil(Math.hypot(v[0]-p[0],v[1]-p[1])/.02));for(let i=1;i<=k;i++)rubAt([p[0]+(v[0]-p[0])*i/k,p[1]+(v[1]-p[1])*i/k],tune);tune.rv=v;
     hud("rubbing out",tune.gone?`${tune.gone} line${tune.gone>1?"s":""} gone · ⌘Z brings them back`:"touch a line to take it away",e.clientX,e.clientY);return}
   if(tune.ink){const T=tune,fr=T.free,v=markAt(e);
-    // hold ⌘ (or Ctrl) while drawing freely and the line is mirrored left to right; a start on the middle line stays on it
-    T.mir=fr&&(e.metaKey||e.ctrlKey);if(T.mir&&T.ink.length===1&&Math.abs(T.ink[0][0])<.03)T.ink[0]=[0,T.ink[0][1],1];
+    // a mirrored way mirrors every line across its middle lines; just where you draw, ⌘ (or Ctrl) mirrors one line left to right. A start on a middle line stays on it
+    T.mir=fr?(WAYS[way].ax.length?WAYS[way].ax:(e.metaKey||e.ctrlKey)?[0]:null):null;
+    if(T.mir&&T.ink.length===1){const q=[T.ink[0][0],T.ink[0][1]];let on=false;T.mir.forEach(a=>{if(Math.abs(q[a])<.03){q[a]=0;on=true}});if(on)T.ink[0]=[q[0],q[1],1]}
     if(e.shiftKey){ // a straight line from where Shift went down, held to 15° steps; pause to turn a corner, come back to the start to close it
       if(T.anc==null){T.ink[T.ink.length-1][2]=1;T.anc=T.ink.length-1;T.poly=true;if(fr)T.even=true}
       const a=T.ink[T.anc],s0=T.ink[0],L=Math.hypot(v[0]-a[0],v[1]-a[1]),st=Math.PI/12,ang=Math.round(Math.atan2(v[1]-a[1],v[0]-a[0])/st)*st;
@@ -1282,8 +1289,8 @@ big.addEventListener("pointermove",(e)=>{if(!tune)return;const dx=e.clientX-tune
         T.anc=T.ink.length-1;hud("corner","carry on the other way",T.x,T.y)},340)}
     else{if(T.anc!=null){T.anc=null;T.shut=false;clearTimeout(T.dwell)}const q=T.ink[T.ink.length-1];if(Math.hypot(v[0]-q[0],v[1]-q[1])>.006)T.ink.push(v)}
     inkC.classList.add("on");if(!fr)big.classList.add("inking");const closed=drawInk(T.ink,fr,{even:T.even,poly:T.poly,shut:T.shut,mir:T.mir}),x=e.clientX,y=e.clientY;
-    if(T.anc!=null)hud(T.shut?"let go to close it":fr?"straight line":"straight edge",T.shut?"a closed shape fills in":`${T.deg}° · pause to turn a corner · `+(fr?`brush ${brushPx()} px`:`it repeats ${pureN(cur)} times`)+(T.mir?" · mirrored":""),x,y);
-    else if(fr)hud(closed?"let go to fill it":T.mir?"drawing, mirrored":T.join?"carrying the line on":"drawing",closed?"a closed loop fills in":`brush ${brushPx()} px · ⇧ straight · ⌘ mirror · ⌥ rub out`,x,y);
+    if(T.anc!=null)hud(T.shut?"let go to close it":fr?"straight line":"straight edge",T.shut?"a closed shape fills in":`${T.deg}° · pause to turn a corner · `+(fr?`brush ${brushPx()} px`:`it repeats ${pureN(cur)} times`)+(T.mir?" · "+mirSay(T.mir):""),x,y);
+    else if(fr)hud(closed?"let go to fill it":T.mir?"drawing, "+mirSay(T.mir):T.join?"carrying the line on":"drawing",closed?"a closed loop fills in":T.mir&&!T.join&&mirMeet(T)?"end on a middle line and it closes into one shape":`brush ${brushPx()} px · ⇧ straight${WAYS[way].ax.length?"":" · ⌘ mirror"} · ⌥ rub out`,x,y);
     else hud(closed?"let go to fill it":"drawing a petal",closed?"a closed loop fills in":`it repeats ${pureN(cur)} times round the mark · ⇧ straight`,x,y);return}
   // hold Shift and the drag keeps to whichever way it set off in, so one trait changes and the other stays put
   tune.tx=(tune.tx||0)+dx;tune.ty=(tune.ty||0)+dy;let lx=dx,ly=dy;
@@ -1313,25 +1320,71 @@ let nudging=null; // an arrow-key nudging in progress: its own drag state, and t
 const DET=.035,toRaw=(v)=>{const a=v-.5;return a?.5+Math.sign(a)*(Math.abs(a)*(.5-DET)/.5+DET):.5},
   fromRaw=(r)=>{const a=r-.5;return .5+Math.sign(a)*Math.max(Math.abs(a)-DET,0)*.5/(.5-DET)};
 function slide(k,dv,t=tune){const raw=t.raw||(t.raw={});raw[k]=clamp((raw[k]??toRaw(cur.g[k]))+dv);cur.g[k]=fromRaw(raw[k])}
-const end=()=>{const t=tune;tune=null;
+const end=()=>{const t=tune;tune=null;if(t&&t.ink&&t.moved)inkAt=performance.now();
   if(t&&t.rub){if(!cur)return;if(!t.moved){remember();rubAt(markAt({clientX:t.x,clientY:t.y}),t)}if(t.gone){told();hud("rubbed out",`${t.gone} line${t.gone>1?"s":""} gone · ⌘Z brings them back`,null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1400)}else{hist.pop();ro.classList.add("out")}return}
   if(t&&t.ink&&t.free){if(!cur)return;if(t.moved)freeDone(t);else if(cur.fr){remember();cur.fr=null;told();drawStudio();hud("cleared","⌘Z brings the lines back",null,null);clearTimeout(inkDone.t);inkDone.t=setTimeout(()=>ro.classList.add("out"),1400)}return}
   if(t&&t.ink){if(!cur)return;if(t.moved)inkDone(t);else if(cur.pen&&cur.pen.w>0){remember();penTo(null);told();ro.classList.add("out")}return} // a tap in Draw lets the drawing go
   if(t&&t.moved)told();ro.classList.add("out");if(cur&&!mirOn())mirC.classList.remove("on")};
+/* Draw: where each line lands. Round the mark makes the drawing the mark's own petal, repeated as the mark repeats;
+   the other ways lay lines exactly where you draw them, once or mirrored across the middle, over the mark as it is */
+const WAYS=[
+ {k:"petal",w:"repeats round the mark",n:"Round the mark",d:"one petal, repeated as the mark repeats",ax:[]},
+ {k:"once",w:"lands just where you draw",n:"Just where you draw",d:"exactly there, once; hold ⌘ to mirror a line",ax:[]},
+ {k:"lr",w:"is mirrored side to side",n:"Mirrored side to side",d:"start and end on the middle to close a shape",ax:[0]},
+ {k:"ud",w:"is mirrored top to bottom",n:"Mirrored top to bottom",d:"the same across the other middle",ax:[1]},
+ {k:"four",w:"is mirrored four ways",n:"Mirrored four ways",d:"draw a quarter and it closes all the way round",ax:[0,1]}];
+let way=0,guideK="",inkAt=0;try{const v=localStorage.getItem("meadow-draw-way");if(v!==null&&+v>=0&&+v<WAYS.length)way=+v}catch(e){}
+const freeOn=()=>mode===6&&way>0;
+const mirSay=(ax)=>ax.length>1?"mirrored four ways":ax[0]?"mirrored top to bottom":"mirrored side to side";
+const mirMeet=(T)=>T.mir.some(a=>Math.abs(T.ink[0][a])<1e-6);
+const flipsOf=(ax)=>ax.length>1?[[-1,1],[1,-1],[-1,-1]]:ax[0]?[[1,-1]]:[[-1,1]];
+// the middle lines a mirrored way reflects across, dashed
+function axesOn(g,ax,px,a){g.save();g.strokeStyle=inkOf(cur);g.globalAlpha=a;g.lineWidth=Math.max(1,px/480);g.setLineDash([px/90,px/60]);g.beginPath();
+  if(ax.includes(0)){g.moveTo(px/2,px*.03);g.lineTo(px/2,px*.97)}if(ax.includes(1)){g.moveTo(px*.03,px/2);g.lineTo(px*.97,px/2)}g.stroke();g.restore()}
+// faint while the pointer is over the mark in Draw, or while a way is being chosen, so you see where the mirror is before you draw
+function guideInk(i){if(tune&&tune.ink)return;const ax=i==null||!cur||live||unfT>0?[]:WAYS[i].ax;
+  if(!ax.length){if(guideK){guideK="";inkC.classList.remove("on")}return}if(performance.now()-inkAt<700)return;
+  const px=big.width,k=ax.join()+"/"+px;if(k===guideK&&inkC.classList.contains("on"))return;if(inkC.width!==px)inkC.width=inkC.height=px;
+  const g=inkC.getContext("2d");g.clearRect(0,0,px,px);axesOn(g,ax,px,.22);guideK=k;inkC.classList.add("on")}
+big.addEventListener("pointermove",(e)=>{if(!tune&&mode===6&&e.pointerType!=="touch"&&$("waypop").hidden)guideInk(way)});
+big.addEventListener("pointerleave",()=>{if($("waypop").hidden)guideInk(null)});
+function setWay(i,say){way=(i+WAYS.length)%WAYS.length;try{localStorage.setItem("meadow-draw-way",way)}catch(e){}
+  const w=$("wayword"),was=w.textContent;w.textContent=WAYS[way].w;$("waytip").textContent=way?"⇧ straight, ⌥ rub out.":"Close a loop to fill it; ⇧ straight.";
+  if(was!==w.textContent&&!calm&&!$("drawhint").hidden)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});
+  [...$("waypop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===way));if(ringE)ringAt(ringE);
+  if(say&&cur){const r=big.getBoundingClientRect();hud(WAYS[way].n,WAYS[way].d,r.left+r.width*.5,r.top+r.height*.9);guideK="";guideInk(way);clearTimeout(setWay.t);setWay.t=setTimeout(()=>{if(!tune){ro.classList.add("out");if(!big.matches(":hover"))guideInk(null)}},1500)}}
+// each way as a small picture: a line and where its copies land
+function wayIcon(cv,k,col){const r=cv.width,g=cv.getContext("2d"),X=(u)=>(u*.42+.5)*r;g.clearRect(0,0,r,r);g.strokeStyle=g.fillStyle=col;g.lineCap=g.lineJoin="round";g.lineWidth=r*.075;
+  const each=(fl,f)=>fl.forEach(([a,b])=>{g.save();g.translate(r/2,r/2);g.scale(a,b);g.translate(-r/2,-r/2);g.beginPath();f();g.stroke();g.restore()});
+  const dash=(ax)=>{g.save();g.globalAlpha=.45;g.lineWidth=Math.max(1,r/30);g.setLineDash([r/14,r/12]);g.beginPath();if(ax.includes(0)){g.moveTo(r/2,r*.02);g.lineTo(r/2,r*.98)}if(ax.includes(1)){g.moveTo(r*.02,r/2);g.lineTo(r*.98,r/2)}g.stroke();g.restore()};
+  if(k==="petal")for(let i=0;i<6;i++){g.save();g.translate(r/2,r/2);g.rotate(i*Math.PI/3);g.translate(-r/2,-r/2);g.beginPath();g.moveTo(X(0),X(-.2));g.quadraticCurveTo(X(.3),X(-.6),X(0),X(-.95));g.quadraticCurveTo(X(-.3),X(-.6),X(0),X(-.2));g.fill();g.restore()}
+  else if(k==="once"){g.beginPath();g.moveTo(X(-.75),X(.35));g.bezierCurveTo(X(-.3),X(-.95),X(.3),X(.95),X(.75),X(-.35));g.stroke()}
+  else if(k==="lr"){dash([0]);each([[1,1],[-1,1]],()=>{g.moveTo(X(0),X(-.4));g.bezierCurveTo(X(.35),X(-1),X(1),X(-.35),X(0),X(.75))})}
+  else if(k==="ud"){dash([1]);each([[1,1],[1,-1]],()=>{g.moveTo(X(-.8),X(0));g.bezierCurveTo(X(-.4),X(-.85),X(.4),X(-.85),X(.8),X(0))})}
+  else{dash([0,1]);each([[1,1],[-1,1],[1,-1],[-1,-1]],()=>{g.moveTo(X(0),X(-.85));g.quadraticCurveTo(X(.12),X(-.12),X(.85),X(0))})}}
+function popWay(on){const p=$("waypop");if(on===!p.hidden)return;p.hidden=!on;$("wayword").setAttribute("aria-expanded",on);if(!on){guideInk(big.matches(":hover")&&mode===6?way:null);return}
+  popMode(false);p.innerHTML="";const col=getComputedStyle(p).color,dp=Math.min(devicePixelRatio||1,2);
+  WAYS.forEach((W,k)=>{const b=document.createElement("button"),cv=document.createElement("canvas");b.setAttribute("role","menuitemradio");b.setAttribute("aria-checked",k===way);
+    cv.width=cv.height=Math.round(30*dp);wayIcon(cv,W.k,col);b.append(cv);b.insertAdjacentHTML("beforeend",`<b>${W.n}</b><small>${W.d}</small>`);
+    b.onpointerenter=b.onfocus=()=>{guideK="";guideInk(k)};b.onclick=()=>{setWay(k,false);popWay(false)};p.append(b)});
+  const th=p.parentElement.getBoundingClientRect(),wr=$("wayword").getBoundingClientRect();p.style.left=Math.max(0,Math.min(wr.left-th.left-10,th.width-270))+"px";
+  p.querySelector("[aria-checked=true]")?.focus({preventScroll:true})}
+$("wayword").onclick=(e)=>{e.stopPropagation();popWay($("waypop").hidden)};
+$("waypop").onpointerleave=()=>guideInk(null);
+addEventListener("pointerdown",(e)=>{if(!$("waypop").hidden&&!e.target.closest("#waypop,#wayword"))popWay(false)});
+$("waypop").addEventListener("keydown",(e)=>{e.stopPropagation();if(e.key==="Escape"){popWay(false);$("wayword").focus()}else menuKeys(e,$("waypop"))});
 /* what dragging the mark changes. Each mode is the same gesture, sideways and up-down, on two traits that belong together */
 const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],["stretch it","Stretch","wide or tall, and up to square it off softly"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
-  ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw a petal","Draw","draw one petal and it grows all the way round; close a loop to fill it"],
-  ["draw freely","Draw freely","lines land exactly where you draw; Shift for straight lines, ⌥ to rub out, [ and ] for the brush"]];
+  ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw on it","Draw","a petal round the mark, or lines just where you draw, once or mirrored; 7 again for the next way"]];
 let mode=0;
 function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];if(i===6&&typeof firstTime==="function")firstTime("draw");
   if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
-  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw","m-draw"][i];if(i!==7)ring.classList.remove("on");
+  big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw"][i];if(i!==6){ring.classList.remove("on");guideInk(null);popWay(false)}
   // the second half of the hint says what matters in this mode: blending between ghosts, or how to draw
-  const gh=$("ghosthint"),tip=i===6?"Close a loop to fill it; hold ⇧ for straight edges.":i===7?"⇧ straight, ⌘ mirror, ⌥ rub out, [ ] brush.":null;
-  if(tip){if(gh.dataset.was==null)gh.dataset.was=gh.textContent;gh.textContent=tip}else if(gh.dataset.was!=null){gh.textContent=gh.dataset.was;delete gh.dataset.was}big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
+  $("ghosthint").hidden=i===6;$("drawhint").hidden=i!==6;big.setAttribute("aria-label",`Your mark. Dragging it ${MODES[i][2]}.`)}
 MODES.forEach(([,n,d],i)=>{const b=document.createElement("button");b.setAttribute("role","menuitemradio");b.innerHTML=`<kbd>${i+1}</kbd><b>${n}</b><small>${d}</small>`;
-  b.onclick=()=>{setMode(i);popMode(false)};$("modepop").append(b)});setMode(0);
+  b.onclick=()=>{setMode(i);popMode(false)};$("modepop").append(b)});setMode(0);setWay(way);
 function popMode(on){const p=$("modepop");p.hidden=!on;$("modeword").setAttribute("aria-expanded",on);if(on)p.children[mode].focus()}
 $("modeword").onclick=(e)=>{e.stopPropagation();popMode($("modepop").hidden)};
 addEventListener("pointerdown",(e)=>{if(!$("modepop").hidden&&!e.target.closest("#modepop,#modeword"))popMode(false)});
@@ -1370,7 +1423,7 @@ const AXES=[
   [{v:(g,q)=>.5+wrapDeg(q?q.dh:0)/360,say:(v,g,q)=>{const d=Math.round(wrapDeg(q?q.dh:0));return "hue "+(d>0?"+":d<0?"−":"")+Math.abs(d)+"°"}},
    {v:(g,q)=>((q?q.cf:1)-.22)/1.48,say:(v,g,q)=>"vivid "+Math.round((q?q.cf:1)*100)+"%"}]];
 // what each way does, said when the pointer rests on the mark before a drag
-const AXW=["↔ twist · ↕ thicker or thinner","↔ wider or taller · ↕ squarer","↔ bend · ↕ one end heavier","↔ outline · ↕ fuller or finer","↔ frame · ↕ badge","↔ hue · ↕ vivid or calm","draw one petal and it repeats round · ⇧ straight edges","exactly where you draw · ⇧ straight · ⌘ mirror · ⌥ rub out · [ ] brush"];
+const AXW=["↔ twist · ↕ thicker or thinner","↔ wider or taller · ↕ squarer","↔ bend · ↕ one end heavier","↔ outline · ↕ fuller or finer","↔ frame · ↕ badge","↔ hue · ↕ vivid or calm",""];
 function hudNow(t,x,y){const A=AXES[mode];if(!A||!cur)return;const g=cur.g,q=t&&t.tint,v=A.map(a=>a.v(g,q));
   const lock=t&&t.ax?`  ·  ⇧ ${t.ax==="x"?"sideways":"up and down"} only`:"";
   hud(nameNow()||MODES[mode][1],A.map((a,i)=>(i?"↕ ":"↔ ")+a.say(v[i],g,q)).join("  ·  ")+lock,x,y,v)}
@@ -1382,7 +1435,7 @@ function hueName(h){const [L,a,b]=oklab(h),C=Math.hypot(a,b);
 // rest on the mark and it says what dragging it will do in this mode
 let restT=0;const restOff=()=>{clearTimeout(restT);if(ro.dataset.rest){delete ro.dataset.rest;ro.classList.add("out")}};
 big.addEventListener("pointermove",(e)=>{if(tune||e.pointerType==="touch")return;restOff();if(live||unfT>0||!cur||nudging)return;const x=e.clientX,y=e.clientY;
-  restT=setTimeout(()=>{if(tune||nudging||!cur||live||unfT>0)return;hud(MODES[mode][1],(mode===3&&cur.pen&&cur.pen.w>.5?"↔ longer or shorter · ↕ fuller or finer":mode===3&&letPet()?"↔ bolder · ↕ further out":mode===7?`brush ${brushPx()} px · `+AXW[7]:AXW[mode])+(mode<6?"  ·  ⇧ one way":""),x,y);ro.dataset.rest="1"},650)});
+  restT=setTimeout(()=>{if(tune||nudging||!cur||live||unfT>0)return;hud(mode===6?WAYS[way].n:MODES[mode][1],(mode===3&&cur.pen&&cur.pen.w>.5?"↔ longer or shorter · ↕ fuller or finer":mode===3&&letPet()?"↔ bolder · ↕ further out":mode===6?WAYS[way].d+(way?` · brush ${brushPx()} px · ⇧ straight · ⌥ rub out`:" · ⇧ straight edges")+" · 7 for the next way":AXW[mode])+(mode<6?"  ·  ⇧ one way":""),x,y);ro.dataset.rest="1"},650)});
 big.addEventListener("pointerleave",restOff);big.addEventListener("pointerdown",restOff);
 // the arrow keys nudging the mark in whatever mode you're in, Shift for bigger steps; a run of nudges is one step back
 function nudgeKey(e){if(!cur||live||unfT>0||mode>=6||drop||tune)return false;const t=e.target;if(t&&t.closest&&t.closest("input,textarea,[role=menu],.modepop,dialog,#looks"))return false;
@@ -2520,9 +2573,9 @@ const TOUR={
    at:()=>boxOf([$("alive"),$("vid"),$("gif")],8),el:()=>$("alive")},
  ],
  draw:[
-  {t:"Draw one petal",b:"Draw a stroke across the mark and it repeats all the way round, mirrored the way the mark is. Close the loop to fill it.",
-   at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.p=cur&&cur.pen},done:(s)=>cur&&cur.pen!==s.p},
-  {t:"Change it, or let it go",b:"Draw again to replace it. Tap the mark to let the drawing go, and ⌘Z steps back. What you draw travels in the link and into the nursery."},
+  {t:"Draw on the mark",b:"Draw a line across the mark. The word under it says where each line lands: round the mark as a petal, just where you draw, or mirrored. Press 7 again for the next way. Close a loop to fill it.",
+   at:()=>{const r=big.getBoundingClientRect();return r.width?ringOf(r.left+r.width/2,r.top+r.height/2,r.width*.47):null},go:(s)=>{s.p=cur&&cur.pen;s.f=cur&&cur.fr},done:(s)=>cur&&(cur.pen!==s.p||cur.fr!==s.f)},
+  {t:"Change it, or let it go",b:"A new petal replaces the last; lines add up, and ⌥ rubs them out. Tap the mark to let the drawing go, and ⌘Z steps back. What you draw travels in the link and into the nursery."},
  ],
  nursery:[
   {t:"Welcome to the nursery",b:"The two marks you bred sit to the left and the right, and every mix of them grows in between. Drag and scroll as in the field."},
@@ -2552,7 +2605,7 @@ const TOUR={
    at:()=>boxOf([$("kept").hidden?$("keep"):$("kept")],8),el:()=>$("kept").hidden?$("keep"):$("kept")},
  ]};
 let tour=null;const tcard=$("tourcard"),tspot=q("#tour .spot");
-const TOURN={field:"The field",studio:"Your mark",poster:"Posters",live:"Moving marks",draw:"Drawing a petal",nursery:"The nursery"};
+const TOURN={field:"The field",studio:"Your mark",poster:"Posters",live:"Moving marks",draw:"Drawing",nursery:"The nursery"};
 // a walk lasts as long as the thing it shows: leave the poster, the motion, the pen or the nursery, and its walk ends quietly
 const TOURON={field:()=>$("studio").hidden,studio:()=>!$("studio").hidden,poster:()=>!$("studio").hidden&&unfT>0,live:()=>!$("studio").hidden&&!!live,draw:()=>!$("studio").hidden&&mode===6,nursery:()=>$("studio").hidden&&!!nur};
 // the first time you reach a new part, its walk starts by itself, unless another walk is under way
@@ -2599,11 +2652,12 @@ const GUIDE=[
    ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field. A ring shows the mark in the middle."],["<kbd>Enter</kbd>","Open the ringed mark."]]],
  ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. A label beside the pointer names what you're getting and what each way changes. Rest on the mark to see it before you drag."],
    ["Hold <kbd>⇧</kbd> while dragging","Keeps to the way you set off in, so only one thing changes."],["Arrow keys","Nudge the mark in the mode you're in. <kbd>⇧</kbd> for bigger steps."],
-   ["The word, or <kbd>1</kbd>–<kbd>8</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw · Draw freely."],
-   ["Draw <kbd>7</kbd>","Draw one petal on the mark and it repeats all the way round. Close the loop to fill it. Tap the mark to let the drawing go. On a lettered mark the petal sits beside the letters. In Petal mode, sideways makes it longer or shorter."],
-   ["Draw freely <kbd>8</kbd>","Lines land exactly where you draw them, one after another, over the mark and any letters. A closed loop fills; on a badge a line cuts through. <kbd>[</kbd> <kbd>]</kbd> change the brush, <kbd>⌘Z</kbd> takes a line back, a tap clears them all."],
-   ["Straight lines <kbd>⇧</kbd>","Hold Shift while drawing freely for a straight line in 15° steps, one width end to end. Pause to turn a corner; come back to the start and the shape fills."],
-   ["Mirror <kbd>⌘</kbd>","Hold ⌘ (Ctrl) while drawing freely and the line is mirrored left to right. Start and finish on the middle line and the two halves close into one filled shape."],
+   ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],
+   ["Draw <kbd>7</kbd>","Draw on the mark. The word after it says where each line lands: <i>round the mark</i>, as a petal that repeats as the mark does; <i>just where you draw</i>; or mirrored side to side, top to bottom or four ways. Press <kbd>7</kbd> again for the next way; <kbd>8</kbd> goes straight to just where you draw."],
+   ["Round the mark","Draw one petal and it repeats all the way round. Close the loop to fill it. Tap the mark to let it go. On a lettered mark the petal sits beside the letters. In Petal mode, sideways makes it longer or shorter."],
+   ["Lines where you draw","Lines land exactly where you draw them, one after another, over the mark and any letters. A closed loop fills; on a badge a line cuts through. <kbd>[</kbd> <kbd>]</kbd> change the brush, <kbd>⌘Z</kbd> takes a line back, a tap clears them all."],
+   ["Straight lines <kbd>⇧</kbd>","Hold Shift while drawing for a straight line in 15° steps, one width end to end. Pause to turn a corner; come back to the start and the shape fills."],
+   ["Mirrored","Faint dashed lines show the middle the lines mirror across. Start and finish on one and the halves close into one filled shape; in four ways, a quarter from one middle line to the other closes all the way round. Just where you draw, hold <kbd>⌘</kbd> (Ctrl) to mirror one line side to side."],
    ["Rub out <kbd>⌥</kbd>","Hold ⌥ (Alt) and drag or tap over lines to take them away. Start a line on the end of another and it carries that line on."],
    ["− + or scroll over the mark","More or fewer petals."],["The symmetry word, or <kbd>M</kbd>","Mirrored, one mirror, turning or free. Hover each to preview it."],
    ["<kbd>⌘Z</kbd> · <kbd>⇧⌘Z</kbd>","Step back and forward through every change. <kbd>Esc</kbd> goes back to the field."],["Hold <kbd>B</kbd>","See the mark as it was when you opened it. Let go and your changes come back."],["<kbd>?</kbd>","Opens this guide while you're shaping a mark."]]],
@@ -2631,7 +2685,7 @@ function openGuide(){endTour(true);const inStudio=!$("studio").hidden,w=walkHere
 gbox.addEventListener("keydown",(e)=>e.stopPropagation());
 // search: every word you type must appear in a row; American spellings and everyday words find Meadow's own
 const SYN={color:"colour",colors:"colours",export:"save",download:"save",undo:"step back",redo:"step forward",logo:"mark",icon:"icon",favicon:"favicon",animate:"move",animation:"move",
-  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css",brush:"draw freely",straight:"straight",ruler:"straight",symmetric:"mirror",polygon:"straight",erase:"rub out",eraser:"rub out",rub:"rub out",join:"rub out",sketch:"draw freely",freehand:"draw freely"};
+  video:"video",zoom:"deeper",symmetry:"mirror",mirror:"mirror",breed:"nursery",mix:"blend",share:"link",letter:"letter",monogram:"letter",draw:"draw",pen:"draw",accessibility:"contrast",accessible:"contrast",wcag:"contrast",legible:"contrast",readable:"contrast",variables:"css",tailwind:"css",brush:"brush",straight:"straight",ruler:"straight",symmetric:"mirror",polygon:"straight",erase:"rub out",eraser:"rub out",rub:"rub out",join:"rub out",sketch:"draw",freehand:"where you draw",kaleidoscope:"mirrored",reflect:"mirrored"};
 // words people reach for that a section answers without using them
 const GTAGS={"The field":"explore browse wander map","Shaping a mark":"edit change shape tweak","The ghosts":"variations options suggestions","Colour":"palette paint contrast wcag hex","Posters":"print layout",
   "Moving marks":"loop animation","Taking it with you":"save export download file share tokens css developer","Your shelf and the nursery":"keep favourites saved breed"};
