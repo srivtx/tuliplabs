@@ -168,7 +168,8 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .w-app canvas{border-radius:22%}
 .w-tab{cursor:pointer;transition:background .2s}.w-tab:hover{background:#d2d5da}.w-tab:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .w-tab{background:#dfe1e5;align-items:end;justify-items:start;padding:0}
-.w-tab div{background:#fff;color:#222;font:11px system-ui,sans-serif;display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:7px 7px 0 0;margin-left:6px;width:calc(100% - 12px);white-space:nowrap;overflow:hidden}
+.w-tab div{background:#fff;color:#222;font:11px system-ui,sans-serif;display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:7px 7px 0 0;margin-left:6px;width:calc(100% - 12px);white-space:nowrap;overflow:hidden;min-width:0}
+.w-tab div span{overflow:hidden;text-overflow:ellipsis;min-width:0}.w-tab div canvas{flex:none}
 .swatches{display:flex;gap:8px;flex-wrap:wrap}
 .swatches .sw{width:26px;height:26px;border-radius:50%;border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);position:relative;overflow:hidden;display:block}
 .swatches .sw::after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--dot)}
@@ -253,7 +254,8 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #tourcard .row{display:flex;align-items:center;gap:12px;margin-top:12px}
 #tourcard .skip{opacity:.7;text-decoration:underline;text-underline-offset:3px;font-size:11px}#tourcard .skip:hover{opacity:1}
 #tourcard .dots{display:flex;gap:4px;margin-left:auto}
-#tourcard .dots i{width:5px;height:5px;border-radius:3px;background:currentColor;opacity:.25;transition:opacity .3s,width .3s}#tourcard .dots i.on{opacity:.9;width:14px}
+#tourcard .dots i{position:relative;width:5px;height:5px;border-radius:3px;background:currentColor;opacity:.25;transition:opacity .3s,width .3s;cursor:pointer}
+#tourcard .dots i::before{content:"";position:absolute;inset:-7px -2px}#tourcard .dots i:hover{opacity:.6}#tourcard .dots i.on{opacity:.9;width:14px}
 #tourcard .next{background:var(--ground);color:var(--ink);padding:6px 15px;border-radius:999px;font-weight:600}
 #tourcard button:focus-visible{outline:2px solid var(--ground);outline-offset:2px}
 #guidebox{border:0;padding:0;width:min(1000px,calc(100vw - 32px));max-width:none;max-height:min(88vh,900px);border-radius:24px;background:var(--ground);color:var(--ink);
@@ -270,6 +272,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #guidebox .gb{overflow:auto;padding:24px 30px 32px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:28px 36px}
 #guidebox section h3{font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid color-mix(in srgb,var(--ink) 22%,transparent)}
 #guidebox dl{margin:0;display:grid;gap:11px}#guidebox dt{font-weight:600;font-size:12px}#guidebox dd{margin:2px 0 0;opacity:.8;font-size:12px;line-height:1.5}
+#guidebox section.here h3::after{content:"You are here";float:right;font-weight:400;letter-spacing:.02em;text-transform:none;opacity:.6}
 #guidebox kbd{font:10.5px var(--f-mono);padding:1px 6px;border-radius:6px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 45%,transparent);white-space:nowrap}
 @media (prefers-reduced-motion:reduce){#tour .spot,#tourcard{transition:none}#tour .spot::after{animation:none;opacity:0}#guidebox[open]{animation:none}}
 </style>
@@ -277,7 +280,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 <body>
 <canvas id="field" aria-label="A map of marks. Drag to wander, scroll to go deeper, click a mark to pick it."></canvas>
 
-<div class="tag" id="tag"><b>Meadow</b><a href="../">Tulip Labs</a><button class="gw" id="guide" title="What everything does, and a walk round">Guide</button><button id="home" hidden>← Back to the meadow</button><span id="hint">Drag to wander. Scroll to go deeper. Type a letter to plant it. Click a mark to pick it.</span></div>
+<div class="tag" id="tag"><b>Meadow</b><a href="../">Tulip Labs</a><button class="gw" id="guide" title="What everything does, and a walk round (?)">Guide</button><button id="home" hidden>← Back to the meadow</button><span id="hint">Drag to wander. Scroll to go deeper. Type a letter to plant it. Click a mark to pick it.</span></div>
 
 <div class="foot" id="foot">
   <div class="place"><strong id="place">Meadow</strong><small id="scale"></small><small class="symline"> · <button class="word" id="symword" aria-haspopup="true" aria-expanded="false" title="How much of the meadow grows mirror-shaped">half mirrored</button></small><div class="modepop" id="sympop" hidden role="menu" aria-label="How much of the meadow grows mirrored"></div></div>
@@ -310,7 +313,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     </div>
   </div>
   <aside class="sheet">
-    <div class="shead"><button class="back" id="back">← Back to the field</button><button class="gw" id="guide2" title="What everything does, and a walk round">Guide</button></div>
+    <div class="shead"><button class="back" id="back">← Back to the field</button><button class="gw" id="guide2" title="What everything does, and a walk round (?)">Guide</button></div>
     <div><p class="latin" id="latin"></p><p class="found" id="found"></p></div>
     <div><h2>At real size <span class="grp looks" id="looks" role="group" aria-label="Look"></span></h2><div id="sizes"></div></div>
     <div><h2>Out in the world</h2><div class="worlds" id="worlds"></div></div>
@@ -2174,7 +2177,8 @@ const TOUR={
   {t:"Choose what dragging does",b:"Click this word to pick: twist, stretch, lean, petal shape, frame, colour, or draw a petal yourself. The keys 1 to 7 do the same.",
    at:()=>boxOf([$("modeword")],7),go:(s)=>{s.m=mode},done:(s)=>mode!==s.m},
   {t:"The ghosts are where it could go",b:"Each ghost is a nearby version of your mark. Point between two and the mark blends them; click one to become it; double-click to keep a blend.",
-   at:()=>{if(!gLay)return null;const r=stage.getBoundingClientRect();return ringOf(r.left+gLay.cx,r.top+gLay.cy,gLay.R+gLay.gs*.62)}},
+   at:()=>{if(!gLay)return null;const r=stage.getBoundingClientRect(),P=[1,2].map(i=>{const a=-Math.PI/2+i*Math.PI*2/GN;return [r.left+gLay.cx+gLay.R*Math.cos(a),r.top+gLay.cy+gLay.R*Math.sin(a)]}),h=gLay.gs*.62;
+     const x0=Math.min(P[0][0],P[1][0])-h,y0=Math.min(P[0][1],P[1][1])-h,x1=Math.max(P[0][0],P[1][0])+h,y1=Math.max(P[0][1],P[1][1])+h;return {x:x0,y:y0,w:x1-x0,h:y1-y0,r:h}}},
   {t:"Petals and symmetry",b:"− and + change the number of petals, and so does scrolling over the mark. The word beside them says how it's mirrored; click it to change that.",
    at:()=>boxOf([$("markhint")],7)},
   {t:"Step back any time",b:"Every change can be undone and done again, here or with ⌘Z and ⇧⌘Z.",at:()=>boxOf([$("undoWrap")],7)},
@@ -2186,12 +2190,13 @@ const TOUR={
    at:()=>boxOf([q(".acts .do")],8),el:()=>q(".acts")},
   {t:"Take it with you",b:"Save a crisp SVG or PNG, a Video or GIF of it moving, or copy the SVG straight into your design tool. The address bar always holds this exact mark, so you can share the link.",
    at:()=>boxOf([q(".acts .save")],8),el:()=>q(".acts")},
-  {t:"Breed what you keep",b:"Kept marks wait on your shelf. Drag one onto any other mark and the meadow becomes their nursery, every mix of the two laid out between them. Guide, at the top of this panel, brings all of this back."},
+  {t:"Breed what you keep",b:"Kept marks wait on your shelf. Drag one onto any other mark and the meadow becomes their nursery, every mix of the two laid out between them. Guide, at the top of this panel, or the ? key brings all of this back.",
+   at:()=>boxOf([$("kept").hidden?$("keep"):$("kept")],8),el:()=>$("kept").hidden?$("keep"):$("kept")},
  ]};
 let tour=null;const tcard=$("tourcard"),tspot=q("#tour .spot");
 function startTour(kind){endTour(true);if(kind==="studio"&&$("studio").hidden)return;markSeen(kind);
   tour={kind,steps:TOUR[kind],i:-1,s:{},doneAt:0,last:""};$("tour").hidden=tcard.hidden=false;$("tour").classList.remove("out");
-  $("tourdots").innerHTML=tour.steps.map(()=>"<i></i>").join("");requestAnimationFrame(()=>tcard.classList.remove("out"));showStep(0);requestAnimationFrame(tourLoop)}
+  $("tourdots").innerHTML=tour.steps.map((s,k)=>`<i title="${k+1}. ${s.t}"></i>`).join("");requestAnimationFrame(()=>tcard.classList.remove("out"));showStep(0);requestAnimationFrame(tourLoop)}
 function showStep(i){if(!tour)return;if(i>=tour.steps.length){endTour();return}
   const st=tour.steps[i];tour.i=i;tour.s={};tour.doneAt=0;tour.last="";if(st.go)st.go(tour.s);
   $("tourn").textContent=(tour.kind==="field"?"The field":"Your mark")+" · "+(i+1)+" of "+tour.steps.length;$("tourh").textContent=st.t;$("tourb").textContent=st.b;
@@ -2215,9 +2220,11 @@ function tourLoop(){if(!tour)return;requestAnimationFrame(tourLoop);const st=tou
   if(key!==tour.last){tour.last=key;tspot.classList.toggle("none",!r);
     const b=r||{x:innerWidth/2,y:innerHeight/2,w:0,h:0,r:0};Object.assign(tspot.style,{left:b.x+"px",top:b.y+"px",width:b.w+"px",height:b.h+"px",borderRadius:(r?b.r:999)+"px"});placeCard(r)}
   if(st.done&&!tour.doneAt&&st.done(tour.s)){tour.doneAt=1;tcard.classList.add("done");const me=tour,i=tour.i;setTimeout(()=>{if(tour===me&&tour.i===i)showStep(i+1)},1000)}}
-$("tournext").onclick=()=>{if(tour)showStep(tour.i+1)};$("tourskip").onclick=()=>endTour();
+$("tournext").onclick=()=>{if(tour)showStep(tour.i+1)};
+$("tourdots").onclick=(e)=>{const k=[...$("tourdots").children].indexOf(e.target);if(tour&&k>=0&&k!==tour.i)showStep(k)};$("tourskip").onclick=()=>endTour();
 addEventListener("keydown",(e)=>{if(!tour)return;if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();endTour()}},true);
 addEventListener("resize",()=>{if(tour)tour.last=""});
+addEventListener("keydown",(e)=>{if(!(e.key==="?"||(e.code==="Slash"&&e.shiftKey))||e.metaKey||e.ctrlKey||gbox.open)return;const t=e.target;if(t&&(t.isContentEditable||t.tagName==="INPUT"||t.tagName==="TEXTAREA"))return;e.preventDefault();e.stopImmediatePropagation();openGuide()},true);
 // when a mark opens: a walk round the field hands over to the walk round the mark, and a first mark gets it anyway
 function tourOnOpen(){if(tour&&tour.kind==="field"){endTour(true);setTimeout(()=>{if(!$("studio").hidden)startTour("studio")},900);return}
   if(!seenT.studio&&!tour)setTimeout(()=>{if(!$("studio").hidden&&!tour&&!seenT.studio)startTour("studio")},1200)}
@@ -2225,7 +2232,7 @@ function tourOnOpen(){if(tour&&tour.kind==="field"){endTour(true);setTimeout(()=
 const GUIDE=[
  ["The field",[["Drag","Wander. Let go mid-drag and it glides on."],["Scroll or pinch","Go deeper: new marks grow between the ones you see. Zoom out to travel."],
    ["Click a mark","Open it to shape, colour and save it."],["Type a letter","Plant it: marks grow shaped round it. <kbd>Backspace</kbd> takes one away, <kbd>Esc</kbd> clears."],
-   ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field."]]],
+   ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field."],["<kbd>?</kbd>","Opens this guide, wherever you are."]]],
  ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. Sideways and up and down each do something."],
    ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],
    ["Draw <kbd>7</kbd>","Draw one petal on the mark and it repeats all the way round. Close the loop to fill it. Tap the mark to let the drawing go."],
@@ -2248,7 +2255,8 @@ const GUIDE=[
 $("guidebody").innerHTML=GUIDE.map(([h,rows])=>`<section><h3>${h}</h3><dl>${rows.map(([t,d])=>`<div><dt>${t}</dt><dd>${d}</dd></div>`).join("")}</dl></section>`).join("");
 const gbox=$("guidebox");
 function openGuide(){endTour(true);const inStudio=!$("studio").hidden;$("guidewalk").textContent=inStudio?"Walk me round this mark":"Walk me round the field";
-  try{gbox.showModal()}catch(e){gbox.setAttribute("open","")}$("guidebody").scrollTop=0}
+  try{gbox.showModal()}catch(e){gbox.setAttribute("open","")}const at=inStudio?(live?5:unf>=.5?4:1):0;[...$("guidebody").children].forEach((e,k)=>e.classList.toggle("here",k===at));
+  const sec=$("guidebody").children[at];$("guidebody").scrollTop=at?Math.max(0,sec.offsetTop-$("guidebody").offsetTop-16):0}
 gbox.addEventListener("keydown",(e)=>e.stopPropagation());
 gbox.addEventListener("click",(e)=>{if(e.target===gbox)gbox.close()}); // a click on the dimmed backdrop closes it
 $("guidex").onclick=()=>gbox.close();
