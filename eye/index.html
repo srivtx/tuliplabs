@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eye · Tulip Labs</title>
+<meta name="description" content="Small experiments in what looks good. Answer each one with your hand, then see what your eye did against the maths.">
+<meta name="theme-color" content="#0b0c0a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%23ff6fb5' stroke-width='1.6'/><circle cx='8' cy='7.4' r='2.2' fill='%23ff6fb5'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{--bg:#0b0c0a;--panel:#121410;--card:#171a15;--line:#2a2e26;--ink:#f2efe6;--muted:#a3a497;--faint:#6b6d62;--soft:#1d211b;--pink:#ff6fb5;--pink-ink:#ff8cc4;--leaf:#5cc46d;
+  --f-display:"Pixelify Sans",ui-monospace,monospace;--f-serif:"Instrument Serif",Georgia,serif;--f-body:"IBM Plex Sans",system-ui,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:dark}
+:root[data-theme="light"]{--bg:#efebe2;--panel:#f6f3ec;--card:#fffdf8;--line:#dcd5c6;--ink:#1d1b17;--muted:#6a655a;--faint:#8a8475;--soft:#ece7dc;--pink-ink:#d23f87;--leaf:#24803c;color-scheme:light}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px 16px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+main{max-width:720px;margin:0 auto;padding:44px 16px 70px}
+.eyebrow{font:500 13px var(--f-display);letter-spacing:.06em;color:var(--pink);margin:0}
+h1{font:400 clamp(40px,6.6vw,64px)/.98 var(--f-serif);margin:6px 0 0;letter-spacing:-.01em}
+h1 i{color:var(--pink-ink)}
+.lede{color:var(--muted);margin:12px 0 0;font-size:16px;max-width:560px}
+.where{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:36px 0 0;font:12px var(--f-mono);color:var(--faint)}
+.where b{color:var(--ink);font-weight:600}
+.q{font:400 clamp(26px,4.2vw,34px)/1.15 var(--f-serif);margin:8px 0 14px;min-height:1.15em}
+.stage{position:relative}
+#cv{display:block;width:100%;aspect-ratio:1;border:1px solid var(--line);border-radius:6px;background:var(--panel);touch-action:none;cursor:grab;outline:none}
+#cv:focus-visible{border-color:var(--pink)}
+#cv.held{cursor:grabbing}
+#cv.done{cursor:default}
+.say{margin:16px 0 0;min-height:3.2em}
+.say p{margin:0}
+.say .line{color:var(--ink);font-size:16px}
+.say .why{color:var(--muted);margin-top:6px}
+.act{margin:14px 0 0;font:13px var(--f-mono);color:var(--faint);display:flex;gap:6px 18px;flex-wrap:wrap;align-items:baseline}
+.w{appearance:none;background:none;border:0;padding:0;font:inherit;color:var(--pink-ink);cursor:pointer;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
+.w:hover{color:var(--ink)}
+.w.main{font-weight:600}
+.fade{animation:fade .5s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+#me{display:none}
+.portrait #me{display:block}
+.portrait .stage,.portrait .q,.portrait .say{display:none}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:18px 0 0}
+.card{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 10px 12px;margin:0}
+.card canvas{display:block;width:100%;aspect-ratio:1;border-radius:4px;background:var(--bg)}
+.card b{display:block;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:10px 0 2px}
+.card span{font-size:14px;color:var(--ink)}
+.card.empty span{color:var(--faint)}
+@media (prefers-reduced-motion:reduce){.fade{animation:none}}
+</style>
+<link rel="stylesheet" href="../learn/nav.css">
+<script src="../learn/nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Tulip Labs</b></a>
+  <details class="sw k-home"><summary aria-label="Switch section"><i class="sq"></i><span>Eye</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections"><a class="home k-home" href="../"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a><h6>Play</h6><a class="k-worlds" href="../worlds/"><i class="sq"></i><b>3D worlds</b><small>Complexity as 12 voxel worlds you can poke</small></a><a class="k-dz" href="../design/"><i class="sq"></i><b>Design studio</b><small>Match a target in CSS, pixel by pixel</small></a><a style="--kc:#e8476a" href="../meadow/"><i class="sq"></i><b>Meadow</b><small>An endless map of marks to wander</small></a><a style="--kc:#ff6fb5" href="../eye/"><i class="sq"></i><b>Eye</b><small>Experiments in what looks good</small></a><h6>Code along</h6><a class="k-tc" href="../code/"><i class="sq"></i><b>Complexity in code</b><small>The Python behind every world, step by step</small></a><a class="k-ms" href="../modsim/"><i class="sq"></i><b>ModSim</b><small>Modeling and simulation, learnt in code</small></a><h6>Courses</h6><a class="k-bx" href="../build/"><i class="sq"></i><b>Build your own X</b><small>See every part of a real tool, then write it</small></a><a class="k-ps" href="../stats/"><i class="sq"></i><b>Probability & Stats</b><small>Simulate it, then prove it</small></a><a class="k-ds" href="../dsa/"><i class="sq"></i><b>DSA</b><small>From the ground floor to Codeforces</small></a><a class="k-od" href="../ods/"><i class="sq"></i><b>Structures</b><small>Build each data structure, then watch it work</small></a></nav></details>
+  <span class="grow"></span>
+</header>
+<main class="studio" id="main">
+  <p class="eyebrow">eye · experiments in what looks good</p>
+  <h1>What does <i>looking good</i> even mean?</h1>
+  <p class="lede">Small experiments for your eye. Answer each one with your hand, then see what you did against the maths. No answer is wrong; every answer is honest.</p>
+
+  <div class="where"><span id="where"></span><button class="w" id="toMe" type="button">your eye</button></div>
+  <h2 class="q" id="q"></h2>
+  <div class="stage"><canvas id="cv" tabindex="0" aria-describedby="hint"></canvas></div>
+  <div class="say" id="say" aria-live="polite"></div>
+  <div class="act" id="act"></div>
+
+  <section id="me" aria-label="Your eye">
+    <h2 class="q">Your eye, so far.</h2>
+    <p class="lede" style="margin:0">Every answer you've given, drawn as you left it, with the maths beside it.</p>
+    <div class="cards" id="cards"></div>
+  </section>
+</main>
+<script>
+(() => {
+"use strict";
+const $ = (s) => document.querySelector(s);
+const cv = $("#cv"), g = cv.getContext("2d");
+const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+const R2 = (n) => Math.round(n * 100) / 100;
+const pc = (n) => Math.round(n) + "%";
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+
+/* colours come from the page's own tokens, so both themes just work */
+let C = {};
+function colours() {
+  const s = getComputedStyle(document.documentElement);
+  for (const k of ["bg", "panel", "card", "line", "ink", "muted", "faint", "soft", "pink", "pink-ink", "leaf"]) C[k] = s.getPropertyValue("--" + k).trim();
+}
+
+/* drawing kit, in a 1000 × 1000 square */
+let LS = 22; // label size, kept readable on small screens
+function poly(c, pts, fill, stroke, w) {
+  c.beginPath(); pts.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath();
+  if (fill) { c.fillStyle = fill; c.fill(); }
+  if (stroke) { c.strokeStyle = stroke; c.lineWidth = w || 3; c.stroke(); }
+}
+function dot(c, x, y, r, fill) { c.beginPath(); c.arc(x, y, r, 0, 7); c.fillStyle = fill; c.fill(); }
+function ring(c, x, y, r, col, w, dash) {
+  c.save(); c.beginPath(); c.arc(x, y, r, 0, 7); c.strokeStyle = col; c.lineWidth = w || 3; c.setLineDash(dash || []); c.stroke(); c.restore();
+}
+function line(c, a, b, col, w, dash) {
+  c.save(); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.strokeStyle = col; c.lineWidth = w || 3; c.setLineDash(dash || []); c.stroke(); c.restore();
+}
+function label(c, x, y, t, col, align) {
+  c.save(); c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`; c.fillStyle = col || C.leaf;
+  c.textAlign = align || "left"; c.textBaseline = "middle";
+  // a soft tag behind the words, so a label reads on any shape
+  const w = c.measureText(t).width, px = LS * 0.45, h = LS * 1.5, x0 = c.textAlign === "right" ? x - w - px : c.textAlign === "center" ? x - w / 2 - px : x - px;
+  c.save(); c.globalAlpha *= 0.88; c.fillStyle = C.panel; c.beginPath(); c.roundRect ? c.roundRect(x0, y - h / 2, w + 2 * px, h, h / 2) : c.rect(x0, y - h / 2, w + 2 * px, h); c.fill(); c.restore();
+  c.fillText(t, x, y); c.restore();
+}
+/* a truth: a small cross with its name, fading in with k */
+function truth(c, x, y, t, k, side, dy) {
+  c.save(); c.globalAlpha = k;
+  line(c, [x - 16, y], [x + 16, y], C.leaf, 3); line(c, [x, y - 16], [x, y + 16], C.leaf, 3);
+  const r = side === "l"; label(c, x + (r ? -26 : 26), y + (dy || 0), t, C.leaf, r ? "right" : "left");
+  c.restore();
+}
+const Kit = { poly, dot, ring, line, label, truth, cl, dist };
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Experiments. Each is a few trials; each trial is one object:
+     q        the question, in plain words
+     hint     what your hand does
+     init()   fresh state in this.s
+     grab(p)  which handle a press picks (optional)
+     move(h, dx, dy, p)
+     draw(c, k, prev)  the scene; k is null until the reveal, then 0 → 1;
+                       prev holds your earlier answers to this trial
+     read()   → { v, line, why, short } after you say it looks right
+   ──────────────────────────────────────────────────────────────────────────── */
+const E = [];
+
+/* ── Centre ─────────────────────────────────────────────────────────────── */
+{
+  const TRI = [[500, 257.5], [220, 742.5], [780, 742.5]];
+  const SC = [[140, 240], [260, 760], [860, 280]];
+  const cen = (P) => [(P[0][0] + P[1][0] + P[2][0]) / 3, (P[0][1] + P[1][1] + P[2][1]) / 3];
+  const box = (P) => { const xs = P.map((p) => p[0]), ys = P.map((p) => p[1]); return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]; };
+  const inc = (P) => {
+    const a = dist(P[1], P[2]), b = dist(P[2], P[0]), c = dist(P[0], P[1]), s = a + b + c;
+    return [(a * P[0][0] + b * P[1][0] + c * P[2][0]) / s, (a * P[0][1] + b * P[1][1] + c * P[2][1]) / s];
+  };
+  const dotMove = function (h, dx, dy) { this.s.x = cl(this.s.x + dx, 30, 970); this.s.y = cl(this.s.y + dy, 30, 970); };
+  const ghosts = (c, prev) => prev.forEach((p) => ring(c, p.x, p.y, 12, C.faint, 2));
+  E.push({ id: "centre", name: "Centre", trials: [
+    { id: "c-tri", q: "Put the dot in the middle of the triangle.", hint: "drag the dot",
+      init() { this.s = { x: 500, y: 890 }; }, move: dotMove,
+      draw(c, k, prev) {
+        poly(c, TRI, C.ink);
+        if (k != null) {
+          ghosts(c, prev);
+          const m = cen(TRI), b = box(TRI);
+          line(c, [200, b[1]], [800, b[1]], C.leaf, 2, [6, 8]);
+          truth(c, m[0], m[1], "balance point", k); truth(c, b[0], b[1], "middle of its box", k);
+        }
+        dot(c, this.s.x, this.s.y, 14, C.pink);
+      },
+      read() {
+        const m = cen(TRI), b = box(TRI), t = (this.s.y - b[1]) / (m[1] - b[1]);
+        const off = Math.abs(this.s.x - 500) / 5.6;
+        const where = t < -0.15 ? "above the middle of its box" : t < 0.35 ? "near the middle of its box" : t < 0.7 ? "between its box's middle and its balance point" : t < 1.25 ? "near its balance point" : "below its balance point";
+        return { v: R2(t),
+          line: `Your dot sits ${where}${off > 3 ? `, and ${pc(off)} of a side to the ${this.s.x < 500 ? "left" : "right"}` : ""}.`,
+          why: t > 0.65 ? "A triangle has more than one honest centre. You chose the balance point, where its mass would sit still on a pin: your eye weighs the shape, not its frame."
+            : t < 0.35 ? "A triangle has more than one honest centre. You chose the middle of its frame: your eye measured the outline's top and bottom, not where the mass is."
+            : "A triangle has more than one honest centre. You settled between the frame's middle and the balance point, weighing both.",
+          short: t > 0.65 ? "Triangles: you find the balance point" : t < 0.35 ? "Triangles: you centre on the frame" : "Triangles: between frame and mass" };
+      } },
+    { id: "c-sq", q: "Now the middle of the square.", hint: "drag the dot",
+      init() { this.s = { x: 860, y: 880 }; }, move: dotMove,
+      draw(c, k, prev) {
+        poly(c, [[240, 240], [760, 240], [760, 760], [240, 760]], null, C.ink, 4);
+        if (k != null) { ghosts(c, prev); truth(c, 500, 500, "true centre", k); }
+        dot(c, this.s.x, this.s.y, 14, C.pink);
+      },
+      read() {
+        const up = (500 - this.s.y) / 5.2, side = (this.s.x - 500) / 5.2;
+        const vert = Math.abs(up) < 0.6 ? "right on the true centre" : `${R2(Math.abs(up)).toFixed(1)}% of the side ${up > 0 ? "above" : "below"} the true centre`;
+        return { v: R2(up),
+          line: `Your dot sits ${vert}${Math.abs(side) > 1.5 ? `, ${Math.abs(side).toFixed(1)}% to the ${side < 0 ? "left" : "right"}` : ""}.`,
+          why: up > 0.6 ? "That's the optical centre. Designers have long noticed that something placed at the exact middle tends to look a little low, so titles and logos are often set a touch above it."
+            : up < -0.6 ? "Most layout advice nudges things up, not down. Your eye may be setting the dot on an imagined floor, like an object resting rather than floating."
+            : "You found the true centre almost exactly: a literal, measuring eye.",
+          short: up > 0.6 ? `Squares: you lift the centre ${up.toFixed(1)}%` : up < -0.6 ? `Squares: you drop the centre ${(-up).toFixed(1)}%` : "Squares: you hit the true centre" };
+      } },
+    { id: "c-odd", q: "And the middle of this one.", hint: "drag the dot",
+      init() { this.s = { x: 820, y: 860 }; }, move: dotMove,
+      draw(c, k, prev) {
+        poly(c, SC, C.ink);
+        if (k != null) {
+          ghosts(c, prev);
+          const m = cen(SC), i = inc(SC), b = box(SC);
+          truth(c, m[0], m[1], "balance point", k, "", -34); truth(c, i[0], i[1], "roomiest point", k, "l", 30);
+          truth(c, b[0], b[1], "middle of its box", k, "r", 26);
+          c.save(); c.globalAlpha = k * 0.6; ring(c, i[0], i[1], incR(SC), C.leaf, 2, [6, 8]); c.restore();
+        }
+        dot(c, this.s.x, this.s.y, 14, C.pink);
+      },
+      read() {
+        const p = [this.s.x, this.s.y];
+        const opts = [["the balance point", cen(SC)], ["the roomiest point, the centre of the biggest circle that fits", inc(SC)], ["the middle of its box", box(SC)]].map(([n, q]) => [n, dist(p, q)]).sort((a, b) => a[1] - b[1]);
+        const n = opts[0][0];
+        return { v: opts[0][0],
+          line: `Your dot is closest to ${n}, ${pc(opts[0][1] / 6.7)} of the shape's width away.`,
+          why: "Each centre answers a different question: where would it balance, where is it roomiest, where is the middle of its frame? On an odd shape they come apart, and your eye picks one without being asked.",
+          short: `Odd shapes: you pick ${n.split(",")[0]}` };
+      } },
+  ] });
+  function incR(P) { const a = dist(P[1], P[2]), b = dist(P[2], P[0]), c = dist(P[0], P[1]), s = (a + b + c) / 2; return Math.sqrt(s * (s - a) * (s - b) * (s - c)) / s; }
+}
+
+/* ── more experiments ───────────────────────────────────────────────────── */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The runner: one trial on the canvas at a time, answered by hand, then revealed.
+   ──────────────────────────────────────────────────────────────────────────── */
+const KEY = "eye-v1";
+let S = { at: [0, 0], R: {} };
+try { const o = JSON.parse(localStorage.getItem(KEY) || "null"); if (o && o.R) S = o; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const flat = []; E.forEach((e, ei) => e.trials.forEach((t, ti) => flat.push({ e, t, ei, ti })));
+let cur = 0, T = null, rev = null, revT = 0, size = 600, dpr = 1;
+cur = cl(flat.findIndex((f) => f.ei === S.at[0] && f.ti === S.at[1]), 0, flat.length - 1);
+
+function fit() {
+  size = cv.clientWidth || 600; dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(size * dpr); cv.height = Math.round(size * dpr);
+  LS = Math.max(22, Math.round(11.5 * 1000 / size));
+  draw();
+}
+function prev() { return (S.R[T.id] || []).slice(0, -1).map((r) => r.s); }
+function render(c, t, k, pv, px) {
+  c.setTransform(px / 1000, 0, 0, px / 1000, 0, 0); c.clearRect(0, 0, 1000, 1000);
+  t.draw(c, k, pv || []);
+}
+function draw() { if (T) render(g, T, rev, rev == null ? [] : prev(), size * dpr); }
+
+function start(i) {
+  cur = cl(i, 0, flat.length - 1);
+  const f = flat[cur]; T = f.t; T.init(); rev = null;
+  S.at = [f.ei, f.ti]; save();
+  $("#main").classList.remove("portrait"); $("#say").after($("#act"));
+  $("#where").innerHTML = `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length} &nbsp;·&nbsp; experiment ${f.ei + 1} of ${E.length}`;
+  const q = $("#q"); q.textContent = T.q; q.classList.remove("fade"); void q.offsetWidth; q.classList.add("fade");
+  $("#say").innerHTML = `<p class="why" id="hint">${T.hint} until it looks right.</p>`;
+  cv.classList.remove("done");
+  acts([["it looks right", commit, true], ["skip", () => start(cur + 1)]]);
+  draw();
+}
+function acts(list) {
+  const a = $("#act"); a.innerHTML = "";
+  for (const [t, fn, main] of list) { const b = document.createElement("button"); b.type = "button"; b.className = "w" + (main ? " main" : ""); b.textContent = t; b.onclick = fn; a.append(b); }
+}
+function commit() {
+  if (rev != null) return;
+  const r = T.read();
+  (S.R[T.id] = S.R[T.id] || []).push({ s: JSON.parse(JSON.stringify(T.s)), v: r.v, short: r.short, t: Date.now() });
+  if (S.R[T.id].length > 12) S.R[T.id].shift();
+  save();
+  const n = S.R[T.id].length;
+  $("#say").innerHTML = `<p class="line fade">${r.line}</p><p class="why fade">${r.why}${n > 1 ? ` <span style="color:var(--faint)">Your ${n - 1} earlier ${n > 2 ? "answers are" : "answer is"} drawn faintly.</span>` : ""}</p>`;
+  cv.classList.add("done");
+  const last = cur === flat.length - 1;
+  acts([[last ? "see your eye" : "next", last ? portrait : () => start(cur + 1), true], ["again", () => start(cur)]]);
+  rev = 0; revT = performance.now();
+  const step = (now) => { rev = calm.matches ? 1 : Math.min(1, (now - revT) / 650); rev = 1 - (1 - rev) ** 3; draw(); if (rev < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+/* hands: drag moves by how far you moved, so you never jump; arrows nudge */
+let held = null;
+const pt = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * 1000 / r.width, (e.clientY - r.top) * 1000 / r.height]; };
+cv.addEventListener("pointerdown", (e) => {
+  if (rev != null) return;
+  const p = pt(e); held = { p, h: T.grab ? T.grab(p) : 0 };
+  cv.setPointerCapture(e.pointerId); cv.classList.add("held"); e.preventDefault();
+});
+cv.addEventListener("pointermove", (e) => {
+  if (!held) return;
+  const p = pt(e); T.move(held.h, p[0] - held.p[0], p[1] - held.p[1], p); held.p = p; draw();
+});
+const let_go = () => { held = null; cv.classList.remove("held"); };
+cv.addEventListener("pointerup", let_go); cv.addEventListener("pointercancel", let_go);
+let kh = 0;
+cv.addEventListener("keydown", (e) => {
+  const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (d && rev == null) { const m = e.shiftKey ? 20 : 4; T.move(kh, d[0] * m, d[1] * m, null); draw(); e.preventDefault(); }
+  else if (e.key === "Tab" && T.handles && rev == null && !e.altKey) { /* let focus move normally */ }
+  else if (e.key === "Enter") { e.preventDefault(); rev == null ? commit() : (cur === flat.length - 1 ? portrait() : start(cur + 1)); }
+});
+
+/* your eye: every answer you've given, drawn small with its truths */
+function portrait() {
+  $("#main").classList.add("portrait"); $("#cards").after($("#act"));
+  $("#where").innerHTML = `<b>Your eye</b> · ${Object.keys(S.R).length} of ${flat.length} answered`;
+  const box = $("#cards"); box.innerHTML = "";
+  for (const f of flat) {
+    const rs = S.R[f.t.id], fig = document.createElement("figure"); fig.className = "card" + (rs ? "" : " empty");
+    const c = document.createElement("canvas"); fig.append(c);
+    fig.insertAdjacentHTML("beforeend", `<b>${f.e.name}</b><span>${rs ? rs[rs.length - 1].short : "not answered yet"}</span>`);
+    box.append(fig);
+    requestAnimationFrame(() => {
+      const px = Math.round((c.clientWidth || 200) * dpr); c.width = c.height = px;
+      const x = c.getContext("2d"), t = Object.create(f.t);
+      if (rs) { t.s = JSON.parse(JSON.stringify(rs[rs.length - 1].s)); render(x, t, 1, rs.slice(0, -1).map((r) => r.s), px); }
+      else { t.init(); x.globalAlpha = 0.35; render(x, t, null, [], px); }
+    });
+  }
+  acts([["back to the experiments", () => start(cur), true], ["start from the first", () => start(0)]]);
+  scrollTo({ top: $("#main").offsetTop, behavior: calm.matches ? "auto" : "smooth" });
+}
+$("#toMe").onclick = () => ($("#main").classList.contains("portrait") ? start(cur) : portrait());
+
+colours();
+addEventListener("vnl-theme", () => { colours(); draw(); });
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => { colours(); draw(); });
+new ResizeObserver(fit).observe(cv);
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => { start(cur); fit(); });
+window.EYE = { E, S, flat, get T() { return T; }, start, commit, portrait };
+})();
+</script>
+</body>
+</html>
