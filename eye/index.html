@@ -18,19 +18,40 @@
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
 .top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px 16px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-main{max-width:720px;margin:0 auto;padding:44px 16px 70px}
+main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
+/* the experiment always fits one screen: the canvas is as big as the space left over */
+.play{--sq:max(240px,min(calc(100vw - 32px),calc(100dvh - var(--top,53px) - 240px),860px));display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"hero" "where" "q" "stage" "say" "act"}
+.side{display:contents}
+.hero{grid-area:hero}.where{grid-area:where}.q{grid-area:q}.stage{grid-area:stage}.say{grid-area:say}.act{grid-area:act}
 .eyebrow{font:500 13px var(--f-display);letter-spacing:.06em;color:var(--pink);margin:0}
-h1{font:400 clamp(40px,6.6vw,64px)/.98 var(--f-serif);margin:6px 0 0;letter-spacing:-.01em}
+.eyebrow .w{display:none;font:12px var(--f-mono);letter-spacing:0;margin-left:8px}
+h1{font:400 clamp(34px,6.6vw,56px)/.98 var(--f-serif);margin:6px 0 0;letter-spacing:-.01em}
 h1 i{color:var(--pink-ink)}
 .lede{color:var(--muted);margin:12px 0 0;font-size:16px;max-width:560px}
-.where{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:36px 0 0;font:12px var(--f-mono);color:var(--faint)}
+.hero.folded h1,.hero.folded .lede{display:none}
+.hero.folded .w{display:inline}
+.where{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:24px 0 0;font:12px var(--f-mono);color:var(--faint)}
+.hero.folded+.where{margin-top:10px}
 .where b{color:var(--ink);font-weight:600}
-.q{font:400 clamp(26px,4.2vw,34px)/1.15 var(--f-serif);margin:8px 0 14px;min-height:1.15em}
-.stage{position:relative}
+.q{font:400 clamp(24px,4.2vw,32px)/1.15 var(--f-serif);margin:8px 0 14px;min-height:1.15em}
+.stage{position:relative;justify-self:center;width:var(--sq)}
 #cv{display:block;width:100%;aspect-ratio:1;border:1px solid var(--line);border-radius:6px;background:var(--panel);touch-action:none;cursor:grab;outline:none}
 #cv:focus-visible{border-color:var(--pink)}
 #cv.held{cursor:grabbing}
 #cv.done{cursor:default}
+/* landscape: the canvas takes the full height on the left, and words sit beside it */
+@media (orientation:landscape) and (min-width:560px){
+  main{max-width:1320px;padding:16px 16px 0}
+  .play{--sq:max(220px,min(calc(100dvh - var(--top,53px) - 32px),calc(100vw - 32px - 300px - 40px),900px));grid-template-columns:var(--sq) minmax(0,560px);grid-template-areas:none;justify-content:center;gap:0 40px;height:calc(100dvh - var(--top,53px) - 16px)}
+  .stage{grid-area:auto;width:auto}
+  .side{display:block;grid-area:auto;max-height:var(--sq);overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+  .side>*{grid-area:auto}
+  .where{margin-top:18px}
+  .hero.folded+.where{margin-top:8px}
+  h1{font-size:clamp(30px,min(4vw,6.4dvh),52px)}
+  .portrait .play{display:block;height:auto}
+  .portrait .side{max-height:none;overflow:visible}
+}
 .say{margin:16px 0 0;min-height:3.2em}
 .say p{margin:0}
 .say .line{color:var(--ink);font-size:16px}
@@ -43,7 +64,7 @@ h1 i{color:var(--pink-ink)}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 #me{display:none}
 .portrait #me{display:block}
-.portrait .stage,.portrait .q,.portrait .say{display:none}
+.portrait .stage,.portrait #q,.portrait .say{display:none}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:18px 0 0}
 .card{appearance:none;display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 10px 12px;margin:0;transition:border-color .15s,transform .15s}
 .card:hover,.card:focus-visible{border-color:var(--pink);outline:none;transform:translateY(-1px)}
@@ -67,15 +88,20 @@ h1 i{color:var(--pink-ink)}
   <span class="grow"></span>
 </header>
 <main class="studio" id="main">
-  <p class="eyebrow">eye · experiments in what looks good</p>
-  <h1>What does <i>looking good</i> even mean?</h1>
-  <p class="lede">Small experiments for your eye, in shape, colour and motion. Answer each one with your hand, then see what you did against the maths. After the set comes Endless: a new shape every time, and a model of your eye that guesses your answer before you give it.</p>
-
-  <div class="where"><span id="where"></span><button class="w" id="toMe" type="button">your eye</button></div>
-  <h2 class="q" id="q"></h2>
-  <div class="stage"><canvas id="cv" tabindex="0" aria-describedby="hint"></canvas></div>
-  <div class="say" id="say" aria-live="polite"></div>
-  <div class="act" id="act"></div>
+  <section class="play" id="play">
+    <div class="stage"><canvas id="cv" tabindex="0" aria-describedby="hint"></canvas></div>
+    <div class="side">
+      <div class="hero" id="hero">
+        <p class="eyebrow">eye · experiments in what looks good <button class="w" id="about" type="button" aria-expanded="false">about</button></p>
+        <h1>What does <i>looking good</i> even mean?</h1>
+        <p class="lede">Small experiments for your eye, in shape, colour and motion. Answer each one with your hand, then see what you did against the maths. After the set comes Endless: a new shape every time, and a model of your eye that guesses your answer before you give it.</p>
+      </div>
+      <div class="where"><span id="where"></span><button class="w" id="toMe" type="button">your eye</button></div>
+      <h2 class="q" id="q"></h2>
+      <div class="say" id="say" aria-live="polite"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
 
   <section id="me" aria-label="Your eye">
     <h2 class="q">Your eye, so far.</h2>
@@ -1106,18 +1132,20 @@ function start(i, again) {
   cur = cl(i, 0, flat.length - 1);
   const f = flat[cur]; T = f.t; T.init(again); T.s.moved = false; rev = null;
   S.at = [f.ei, f.ti]; save();
+  if (begun && scrollY > 0) scrollTo({ top: 0, behavior: "auto" });
+  begun = true;
   $("#main").classList.remove("portrait"); $("#say").after($("#act"));
   $("#where").innerHTML = f.e.where ? `<b>${f.e.name}</b> · ${f.e.where()}` : `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length} &nbsp;·&nbsp; experiment ${f.ei + 1} of ${E.length}`;
   const q = $("#q"); q.textContent = T.q; q.classList.remove("fade"); void q.offsetWidth; q.classList.add("fade");
   const still = T.live && calm.matches && !playAnyway, keys = !toldKeys && matchMedia("(hover: hover)").matches;
-  $("#say").innerHTML = `<p class="why" id="hint">${T.hint} until it ${T.feels || "looks"} right.${keys ? " Arrow keys work too, with Shift for bigger steps, and Enter says it looks right." : ""}${still ? ` Your system asks for less motion, so it holds still. <button class="w" type="button" id="playIt">play it anyway</button>` : ""}</p>`;
+  $("#say").innerHTML = `<p class="why" id="hint">${T.hint[0].toUpperCase() + T.hint.slice(1)} until it ${T.feels || "looks"} right.${keys ? " Arrow keys work too, with Shift for bigger steps, and Enter says it looks right." : ""}${still ? ` Your system asks for less motion, so it holds still. <button class="w" type="button" id="playIt">play it anyway</button>` : ""}</p>`;
   if (keys) toldKeys = true;
   if (still) $("#playIt").onclick = () => { playAnyway = true; $("#playIt").remove(); live(); };
   cv.classList.remove("done");
   acts([[`it ${T.feels || "looks"} right`, commit, true], ["skip", goNext]]);
   draw(); live();
 }
-let toldKeys = false;
+let toldKeys = false, begun = false;
 // after the set comes Endless, which never runs out: it asks next where it knows your eye least
 function goNext() { const n = flat[cur + 1]; start(flat[cur].e.endless || (n && n.e.endless) ? pickEndless() : cur + 1); }
 function pickEndless() {
@@ -1135,7 +1163,7 @@ function commit() {
   const r = T.read(); r.line += note;
   (S.R[T.id] = S.R[T.id] || []).push({ s: JSON.parse(JSON.stringify(T.s)), v: r.v, short: r.short, t: Date.now() });
   if (S.R[T.id].length > 12) S.R[T.id].shift();
-  save();
+  save(); fold(true);
   const n = S.R[T.id].length;
   $("#say").innerHTML = `<p class="line fade">${r.line}</p><p class="why fade">${r.why}${n > 1 && !T.kind ? ` <span style="color:var(--faint)">Your ${n - 1} earlier ${n > 2 ? "answers are" : "answer is"} drawn faintly.</span>` : ""}</p>`;
   cv.classList.add("done");
@@ -1181,7 +1209,7 @@ function portrait() {
     fig.setAttribute("aria-label", `${f.e.name}, trial ${f.ti + 1}: ${rs ? rs[rs.length - 1].short : "not answered yet"}. Open it.`);
     const c = document.createElement("canvas"); fig.append(c);
     fig.insertAdjacentHTML("beforeend", `<b>${f.e.name} · ${f.ti + 1}${rs && rs.length > 1 ? ` · ${rs.length} answers` : ""}</b><span>${rs ? rs[rs.length - 1].short : "not answered yet"}</span>`);
-    const at = flat.indexOf(f); fig.onclick = () => { start(at); $("#q").scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" }); };
+    const at = flat.indexOf(f); fig.onclick = () => start(at);
     box.append(fig);
     requestAnimationFrame(() => {
       const px = Math.round((c.clientWidth || 200) * dpr); c.width = c.height = px;
@@ -1196,7 +1224,7 @@ function portrait() {
   acts([["back to the experiments", () => start(cur), true], ["start from the first", () => start(0)],
     ...(Object.keys(S.R).length ? [["save my answers", saveFile]] : []), ["load answers", () => $("#load").click()],
     ...(Object.keys(S.R).length ? [["forget my answers", () => { if (confirm("Forget every answer you've given here? This only clears this browser.")) { S = { at: [0, 0], R: {} }; save(); portrait(); } }]] : [])]);
-  scrollTo({ top: $("#main").offsetTop, behavior: calm.matches ? "auto" : "smooth" });
+  scrollTo({ top: 0, behavior: calm.matches ? "auto" : "smooth" });
 }
 /* your answers live in this browser; save them as a file to keep them or move them to another */
 function saveFile() {
@@ -1215,6 +1243,13 @@ $("#load").onchange = async (e) => {
     S = { at: n.at, R: n.R, M: n.M || {} }; save(); portrait();
   } catch (err) { alert("That file doesn't look like saved Eye answers."); }
 };
+/* the intro shows until your first answer, then folds to one line you can open again */
+const hero = $("#hero");
+function fold(on) { hero.classList.toggle("folded", on); $("#about").setAttribute("aria-expanded", String(!on)); }
+$("#about").onclick = () => fold(false);
+fold(Object.keys(S.R).length > 0);
+const setTop = () => document.documentElement.style.setProperty("--top", (($(".top") || {}).offsetHeight || 53) + "px");
+setTop(); addEventListener("resize", setTop);
 $("#toMe").onclick = () => ($("#main").classList.contains("portrait") ? start(cur) : portrait());
 
 colours();
