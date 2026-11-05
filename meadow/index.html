@@ -268,7 +268,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="tray" id="tray"><span class="trayset" id="trayset"></span><span class="mine" id="mine" aria-label="Colours you made"></span></div><div class="hexes" id="hexes" aria-label="This mark's colours"></div><p class="dyehint">Drag any colour onto the mark, its accents, or the ground around it. Pass it over other colours to mix.</p></div>
     <div class="acts">
       <div class="do"><button class="primary" id="keep">Keep it</button><button id="deeper">Grow from here</button><button id="unfold">Make a poster</button><button id="alive">Make it move</button></div>
-      <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><button id="vid" title="One seamless loop of it moving">Video</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
+      <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><button id="vid" title="One seamless loop of it moving">Video</button><button id="gif" title="The loop as a GIF, for chats, emoji and avatars">GIF</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
     </div>
     <p id="say" role="status"></p>
     <div class="kept" id="kept" hidden><span class="kl">Your shelf</span><div class="keptrow" id="keptrow" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span></div>
@@ -397,18 +397,20 @@ void main(){vec2 w=worldAt(gl_FragCoord.xy);int a,b;float e;country(w,a,b,e);
  o=vec4(c,1.);}`;
 const VS_M=`#version 300 es
 precision highp float;
-in vec2 aQ;in vec4 i0;in vec4 i1;in float i2;in vec4 g0;in vec4 g1;in vec4 g2;in vec4 g3;in vec3 g4;in vec4 g5;in vec2 g6;
+in vec2 aQ;in vec4 i0;in vec4 i1;in float i2;in vec4 g0;in vec4 g1;in vec4 g2;in vec4 g3;in vec3 g4;in vec4 g5;in vec2 g6;in float i3;
 uniform vec2 uRes;
-out vec2 vP;out vec4 vI;flat out float vL;out float vS;out vec4 vG0;out vec4 vG1;out vec4 vG2;out vec4 vG3;out vec3 vG4;out vec4 vG5;out vec2 vG6;
+out vec2 vP;out vec4 vI;flat out float vL;out float vS;out vec4 vG0;out vec4 vG1;out vec4 vG2;out vec4 vG3;out vec3 vG4;out vec4 vG5;out vec2 vG6;flat out float vPT;
 void main(){float c=cos(i0.w),s=sin(i0.w);vec2 q=mat2(c,s,-s,c)*aQ*i0.z*.5;vec2 px=i0.xy+q;
  gl_Position=vec4(px.x/uRes.x*2.-1.,1.-px.y/uRes.y*2.,0.,1.);
- vP=aQ;vI=i1;vL=i2;vS=i0.z;vG0=g0;vG1=g1;vG2=g2;vG3=g3;vG4=g4;vG5=g5;vG6=g6;}`;
+ vP=aQ;vI=i1;vL=i2;vS=i0.z;vG0=g0;vG1=g1;vG2=g2;vG3=g3;vG4=g4;vG5=g5;vG6=g6;vPT=i3;}`;
 const FS_M=COMMON+`
 in vec2 vP;in vec4 vI;flat in float vL;in float vS;in vec4 vG0;in vec4 vG1;in vec4 vG2;in vec4 vG3;in vec3 vG4;in vec4 vG5;in vec2 vG6;
 out vec4 o;
 uniform int uFix;uniform vec3 uInk;uniform vec3 uAcc;uniform int uOut;uniform int uHasL;uniform sampler2D uL;uniform sampler2D uL0;uniform float uLm;uniform vec3 uLo;
 uniform vec4 uD[2];uniform vec3 uDC[2];
 uniform vec2 uPen[32];uniform int uPenN;uniform int uPenJ;uniform vec3 uPenS;uniform vec3 uPenB; // a petal drawn by hand: its points, how far its copies reach, (weight, closed, mirrored), its bounding circle
+// in the nursery a second parent's drawing too: each child lies somewhere between the two (vPT), and the points flow from one to the other when both are loops or both strokes (uPenK)
+uniform vec2 uPen2[32];uniform vec3 uPenS2;uniform float uPenK;flat in float vPT;
 const float PI=3.14159265,TAU=6.2831853;
 // dye dropped on the mark soaks out from where it landed; while it is still wet its edge wavers
 vec3 dyed(vec3 c,vec2 q){if(uFix!=1)return c;
@@ -445,6 +447,8 @@ float outline(vec2 c,float l,float w,int i){
  if(i==3){vec2 s=vec2(l,w*1.5);return star4(c/s)*min(s.x,s.y);}
  float r1=w,r2=w*.08,h=max(2.*l-r1-r2,(r1-r2)*1.05+.001);return uneven(vec2(c.y,c.x+l-r1),r1,r2,h)-w*.04*sin(clamp((c.x+l)/(2.*l),0.,1.)*PI);}
 float gPO=0.;
+float gPT=0.,gPW=0.,gPM=0.,gPC=0.; // the drawn petal for this mark: how far toward the second drawing, its weight, its mirror, closed or not
+vec2 pP(int i){return mix(uPen[i],uPen2[i],gPT);}
 float shape(vec2 c,float l,float w,float t){
  float s=clamp(t,0.,1.)*4.,f=smoothstep(.3,.7,fract(s));int k=int(min(floor(s),3.));
  float A,B;
@@ -470,12 +474,12 @@ float frameOf(vec2 p,int i){
 // a petal you drew, in the petal's own units (its length is 1). An open stroke is a brush line that swells in the
 // middle and tapers at both ends; a closed loop is filled
 float penD(vec2 c,float t){int N=uPenN;
- if(uPenS.y>.5){float d=dot(c-uPen[0],c-uPen[0]),sg=1.;int j=N-1;
-  for(int i=0;i<32;i++){if(i>=N)break;vec2 e=uPen[j]-uPen[i],w=c-uPen[i],b=w-e*clamp(dot(w,e)/max(dot(e,e),1e-9),0.,1.);d=min(d,dot(b,b));
-   bvec3 k=bvec3(c.y>=uPen[i].y,c.y<uPen[j].y,e.x*w.y>e.y*w.x);if(all(k)||all(not(k)))sg=-sg;j=i;}
+ if(gPC>.5){float d=dot(c-pP(0),c-pP(0)),sg=1.;int j=N-1;
+  for(int i=0;i<32;i++){if(i>=N)break;vec2 e=pP(j)-pP(i),w=c-pP(i),b=w-e*clamp(dot(w,e)/max(dot(e,e),1e-9),0.,1.);d=min(d,dot(b,b));
+   bvec3 k=bvec3(c.y>=pP(i).y,c.y<pP(j).y,e.x*w.y>e.y*w.x);if(all(k)||all(not(k)))sg=-sg;j=i;}
   return sg*sqrt(d)-t*.22;}
  float d=1e9,fn=float(N-1);
- for(int i=0;i<31;i++){if(i+1>=N)break;vec2 a=uPen[i],pa=c-a,ba=uPen[i+1]-a;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);
+ for(int i=0;i<31;i++){if(i+1>=N)break;vec2 a=pP(i),pa=c-a,ba=pP(i+1)-a;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);
   float ra=t*(.22+.78*sqrt(sin(PI*float(i)/fn))),rb=t*(.22+.78*sqrt(sin(PI*float(i+1)/fn)));
   d=min(d,length(pa-ba*h)-mix(ra,rb,h));}
  return d;}
@@ -508,14 +512,14 @@ vec2 markN(vec2 p0,float n){
   for(int j=-1;j<=1;j++){float c=clamp(c0+float(j),0.,R-1.),off=c-(R-1.)*.5,yy=p.y-off*h-abs(p.x)*(g_ph-.5)*1.3;
    float Lk=L*(1.-(g_r-.5)*.9*abs(off/((R-1.)*.5)));ds=min(ds,shape(vec2(p.x,yy),max(Lk,ws),ws,g_pr));}
   d=mix(d,ds,stk);}
- if(uPenN>1&&uPenS.x>0.){ // the drawn petal, repeated round; its neighbours' copies are checked too, as far as it reaches
+ if(uPenN>1&&gPW>0.){ // the drawn petal, repeated round; its neighbours' copies are checked too, as far as it reaches
   float tp=w*.95/l,dp=1e9;vec2 q0=wheel(p,n,ph);
   for(int j=-6;j<=6;j++){if(abs(j)>uPenJ)continue;vec2 c=(rot(q0,float(j)*TAU/n)-vec2(r1,0.))/l;
    // a copy too far away to matter is skipped, except while the mirror is half made, when every copy counts
-   bool midway=uPenS.z>.001&&uPenS.z<.999;float a=(midway||length(c-uPenB.xy)-uPenB.z-tp<dp)?penD(c,tp):1e9;
-   if(uPenS.z>.001){vec2 cm=vec2(c.x,-c.y);float b=(midway||length(cm-uPenB.xy)-uPenB.z-tp<dp)?penD(cm,tp):1e9;a=midway?mix(a,min(a,b),uPenS.z):min(a,b);}
+   bool midway=gPM>.001&&gPM<.999;float a=(midway||length(c-uPenB.xy)-uPenB.z-tp<dp)?penD(c,tp):1e9;
+   if(gPM>.001){vec2 cm=vec2(c.x,-c.y);float b=(midway||length(cm-uPenB.xy)-uPenB.z-tp<dp)?penD(cm,tp):1e9;a=midway?mix(a,min(a,b),gPM):min(a,b);}
    dp=min(dp,a);}
-  d=mix(d,dp*l,uPenS.x);}
+  d=mix(d,dp*l,gPW);}
  float inv=smoothstep(.67,.73,g_inv); // switches ease over a short ramp, so a shape melts through them instead of jumping
  float ring=smoothstep(.56,.68,g_ring);
  // inside a badge the ring stays well clear of the rim, or it leaves thin slivers
@@ -570,6 +574,7 @@ vec2 mark(vec2 p){p=bend(p);vec2 a=markN(p,vI.y);if(vI.w>.002)a=mix(a,markN(p,vI
  float grown=(1.-vI.x);return a+grown*1.05;}
 void main(){
  vec3 ink,acc;
+ gPT=uNu==1?clamp(vPT,0.,1.):0.;gPW=mix(uPenS.x,uPenS2.x,gPT);gPM=mix(uPenS.z,uPenS2.z,gPT);gPC=uPenK>.5||gPT<.5?uPenS.y:uPenS2.y;if(uPenK<.5)gPT=step(.5,gPT);
  if(uLm<1.){float t=clamp(uLm*1.9-length(gl_FragCoord.xy-uLo.xy)/max(uLo.z,1.)*.9,0.,1.);gLt=t*t*(3.-2.*t);}
  if(uFix==1){ink=uInk;acc=uAcc;}else{
   vec2 w=worldAt(gl_FragCoord.xy);int a,b;float e;country(w,a,b,e);float t=clamp(.5+e*uPPW,0.,1.);
@@ -605,15 +610,15 @@ function makeR(canvas,alpha){
   const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(x));return x};
   const prog=(v,f,binds)=>{const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,v));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,f));
     binds.forEach((b,i)=>gl.bindAttribLocation(p,i,b));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p};
-  const ATTR=["aQ","i0","i1","i2","g0","g1","g2","g3","g4","g5","g6"];
+  const ATTR=["aQ","i0","i1","i2","g0","g1","g2","g3","g4","g5","g6","i3"];
   const pG=prog(VS_G,FS_G,["aQ"]),pM=prog(VS_M,FS_M,ATTR);
   const U=(p,n)=>gl.getUniformLocation(p,n);
   const quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-  const STRIDE=34,MAX=3500,inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,MAX*STRIDE*4,gl.DYNAMIC_DRAW);
+  const STRIDE=35,MAX=3500,inst=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,inst);gl.bufferData(gl.ARRAY_BUFFER,MAX*STRIDE*4,gl.DYNAMIC_DRAW);
   const vao=gl.createVertexArray();gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
   gl.bindBuffer(gl.ARRAY_BUFFER,inst);
-  [[1,4,0],[2,4,4],[3,1,8],[4,4,9],[5,4,13],[6,4,17],[7,4,21],[8,3,25],[9,4,28],[10,2,32]].forEach(([l,n,o])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(l,1)});
+  [[1,4,0],[2,4,4],[3,1,8],[4,4,9],[5,4,13],[6,4,17],[7,4,21],[8,3,25],[9,4,28],[10,2,32],[11,1,34]].forEach(([l,n,o])=>{gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(l,1)});
   gl.bindVertexArray(null);
   const flat=(k)=>new Float32Array(PAL.flatMap(p=>hex(p[k])));
   const palette=(p)=>{gl.useProgram(p);gl.uniform3fv(U(p,"uG"),flat("g"));gl.uniform3fv(U(p,"uI"),flat("i"));gl.uniform3fv(U(p,"uA"),flat("a"))};
@@ -634,7 +639,13 @@ function makeR(canvas,alpha){
     // the drawn petal of the mark about to be drawn, or none; every mark in one draw shares it
     pen(m){gl.useProgram(pM);const P=m&&m.pen;if(!P||!(P.w>0)){gl.uniform1i(U(pM,"uPenN"),0);return}
       gl.uniform2fv(U(pM,"uPen"),P.p);gl.uniform1i(U(pM,"uPenN"),P.p.length>>1);gl.uniform3f(U(pM,"uPenS"),P.w,P.c,P.mir);
-      gl.uniform3f(U(pM,"uPenB"),P.b[0],P.b[1],P.b[2]);gl.uniform1i(U(pM,"uPenJ"),penReach(m))},
+      gl.uniform3f(U(pM,"uPenB"),P.b[0],P.b[1],P.b[2]);gl.uniform1i(U(pM,"uPenJ"),penReach(m));
+      gl.uniform2fv(U(pM,"uPen2"),P.p);gl.uniform3f(U(pM,"uPenS2"),P.w,P.c,P.mir);gl.uniform1f(U(pM,"uPenK"),1)},
+    // the nursery's two drawings (either may have weight 0, when only one parent was drawn): children lie between them
+    pens(N){gl.useProgram(pM);if(!N){gl.uniform1i(U(pM,"uPenN"),0);return}const {a,b,k,box}=N;
+      gl.uniform2fv(U(pM,"uPen"),a.p);gl.uniform2fv(U(pM,"uPen2"),b.p);gl.uniform1i(U(pM,"uPenN"),a.p.length>>1);
+      gl.uniform3f(U(pM,"uPenS"),a.w,a.c,a.mir);gl.uniform3f(U(pM,"uPenS2"),b.w,b.c,b.mir);gl.uniform1f(U(pM,"uPenK"),k);
+      gl.uniform3f(U(pM,"uPenB"),box[0],box[1],box[2]);gl.uniform1i(U(pM,"uPenJ"),6)},
     nursery(on,a,b){[pG,pM].forEach(p=>{gl.useProgram(p);gl.uniform1i(U(p,"uNu"),on?1:0);gl.uniform1i(U(p,"uNA"),a|0);gl.uniform1i(U(p,"uNB"),b|0)})},
     ground(w,h,cam,ppw){gl.viewport(0,0,w,h);gl.disable(gl.BLEND);view(pG,w,h,cam,ppw);gl.bindVertexArray(vao);
       gl.disableVertexAttribArray(1);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);gl.enableVertexAttribArray(1);gl.bindVertexArray(null)},
@@ -651,6 +662,7 @@ function makeR(canvas,alpha){
 function put(buf,o,x,y,size,rotn,grow,m,lens){
   buf[o]=x;buf[o+1]=y;buf[o+2]=size;buf[o+3]=rotn;buf[o+4]=grow;buf[o+5]=m.n0;buf[o+6]=m.n1;buf[o+7]=m.s;buf[o+8]=lens;
   for(let k=0;k<NG;k++)buf[o+9+k]=m.g[k]||0;
+  buf[o+34]=m.pu||0;
 }
 
 /* ---------- state ---------- */
@@ -961,7 +973,7 @@ function openStudio(m,from){ftag.classList.add("out");cancelAnimationFrame(penRa
 let foundAt="";
 const enc=(v)=>(v<0?"n":"p")+Math.round(Math.abs(v)*1e9).toString(36);
 const dec=(s)=>(s[0]==="n"?-1:1)*parseInt(s.slice(1),36)/1e9;
-function closeStudio(){if(live){live=null;stage.classList.remove("living");$("livenote").hidden=true;$("alive").textContent="Make it move";$("vid").disabled=false}cancelAnimationFrame(penRaf);penShow=null;inkC.classList.remove("on");big.classList.remove("inking");$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
+function closeStudio(){if(live){live=null;stage.classList.remove("living");$("livenote").hidden=true;$("alive").textContent="Make it move";$("vid").disabled=$("gif").disabled=false}cancelAnimationFrame(penRaf);penShow=null;inkC.classList.remove("on");big.classList.remove("inking");$("shapepop").hidden=true;mirShow=false;peek=null;mirC.classList.remove("on");if(cur&&!calm){const sc=ppw();regrow([clamp((cur.x-cam.x)*sc+W/2,0,W),clamp((cur.y-cam.y)*sc+H/2,0,H)],3.4)}
   $("studio").hidden=true;$("tag").inert=$("foot").inert=false;cur=null;unf=unfT=0;pv.hidden=true;big.style.visibility="";halo.style.visibility="";stage.classList.remove("unfolded");drop=wet=null;washing=false;document.querySelectorAll(".drop").forEach(e=>e.remove())}
 let keptNow=false;
 function leave(){closeStudio();
@@ -1029,11 +1041,19 @@ function penTo(next){cancelAnimationFrame(penRaf);const A=penShow||cur.pen||null
 // while you draw, the stroke shows with its copies round the mark, so you see the flower forming as you go
 function closesOn(pts){if(pts.length<8)return false;let L=0,x0=9,x1=-9,y0=9,y1=-9;for(let i=0;i<pts.length;i++){const [x,y]=pts[i];x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);if(i)L+=Math.hypot(x-pts[i-1][0],y-pts[i-1][1])}
   const diag=Math.hypot(x1-x0,y1-y0),gap=Math.hypot(pts[0][0]-pts[pts.length-1][0],pts[0][1]-pts[pts.length-1][1]);return diag>.06&&gap<.22*diag&&L>1.5*diag}
-function drawInk(pts){const px=big.width;if(inkC.width!==px)inkC.width=inkC.height=px;const g=inkC.getContext("2d");g.clearRect(0,0,px,px);if(pts.length<2)return;
-  const n=pureN(cur),{w}=petalSize(cur.g,n),c=px/2,closed=closesOn(pts);
-  g.lineCap=g.lineJoin="round";g.strokeStyle=g.fillStyle=inkOf(cur);g.lineWidth=Math.max(2,w*.95*2*c*.85);
-  for(let k=n-1;k>=0;k--){g.save();g.translate(c,c);g.rotate(k*Math.PI*2/n);g.translate(-c,-c);g.globalAlpha=k?.5:.92;g.beginPath();
-    pts.forEach(([x,y],i)=>{const X=(x*.5+.5)*px,Y=(y*.5+.5)*px;i?g.lineTo(X,Y):g.moveTo(X,Y)});if(closed){g.closePath();g.fill()}else g.stroke();g.restore()}
+// the stroke as it's drawn, already shaped as the petal will be (a brush line that swells and tapers, or a filled loop),
+// with its copies round the mark. Each is laid down solid on a layer and then faded as one, so overlaps don't darken
+const inkL=document.createElement("canvas");
+function drawInk(pts){const px=big.width;if(inkC.width!==px)inkC.width=inkC.height=px;if(inkL.width!==px)inkL.width=inkL.height=px;
+  const g=inkC.getContext("2d"),h=inkL.getContext("2d");g.clearRect(0,0,px,px);if(pts.length<2)return;
+  const n=pureN(cur),{w}=petalSize(cur.g,n),c=px/2,closed=closesOn(pts),t=Math.max(1,w*.95*c),P=pts.map(([x,y])=>[(x*.5+.5)*px,(y*.5+.5)*px]);
+  const L=[0];for(let i=1;i<P.length;i++)L.push(L[i-1]+Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]));const tot=L[L.length-1]||1;
+  const one=(k)=>{h.save();h.translate(c,c);h.rotate(k*Math.PI*2/n);h.translate(-c,-c);h.beginPath();
+    if(closed){P.forEach(([X,Y],i)=>i?h.lineTo(X,Y):h.moveTo(X,Y));h.closePath();h.fill();h.lineWidth=t*.44;h.stroke()}
+    else for(let i=1;i<P.length;i++){const s=(L[i-1]+L[i])/2/tot;h.lineWidth=2*t*(.22+.78*Math.sqrt(Math.sin(Math.PI*s)));h.beginPath();h.moveTo(P[i-1][0],P[i-1][1]);h.lineTo(P[i][0],P[i][1]);h.stroke()}
+    h.restore()};
+  const layer=(ks,a)=>{h.clearRect(0,0,px,px);h.lineCap=h.lineJoin="round";h.strokeStyle=h.fillStyle=inkOf(cur);ks.forEach(one);g.globalAlpha=a;g.drawImage(inkL,0,0);g.globalAlpha=1};
+  layer(Array.from({length:n-1},(_,i)=>i+1),.42);layer([0],.92);
   return closed}
 const markAt=(e)=>{const r=big.getBoundingClientRect();return [(e.clientX-r.left)/r.width*2-1,(e.clientY-r.top)/r.height*2-1]};
 function inkDone(t){inkC.classList.remove("on");big.classList.remove("inking");const pts=t.ink;let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
@@ -1416,7 +1436,7 @@ async function recordLoop(){
   const type=window.MediaRecorder&&["video/mp4;codecs=avc1.42E01E","video/mp4","video/webm;codecs=vp9","video/webm"].find(t=>MediaRecorder.isTypeSupported(t));
   const S=1080,cv=document.createElement("canvas");cv.width=cv.height=S;
   if(!type||!cv.captureStream){$("say").textContent="This browser can't record video here. Try Chrome, Edge or Safari.";return}
-  if(!live)liveOn();if(!live||live.rec)return;live.rec=true;$("vid").disabled=true;
+  if(!live)liveOn();if(!live||live.rec)return;live.rec=true;$("vid").disabled=$("gif").disabled=true;
   const g=cv.getContext("2d"),stream=cv.captureStream(0),track=stream.getVideoTracks()[0],rec=new MediaRecorder(stream,{mimeType:type,videoBitsPerSecond:9e6}),chunks=[];
   rec.ondataavailable=(e)=>{if(e.data.size)chunks.push(e.data)};const done=new Promise(r=>rec.onstop=r);
   const FPS=30,frames=Math.round(live.per*FPS),ph0=live.ph,c=colours(cur.pal,cur),ground=groundOf(cur),wait=(ms)=>new Promise(r=>setTimeout(r,ms));
@@ -1425,11 +1445,55 @@ async function recordLoop(){
     g.fillStyle=ground;g.fillRect(0,0,S,S);paint(liveMark(),Math.round(S*.84),lens,c);g.drawImage(tiny,Math.round(S*.08),Math.round(S*.08));track.requestFrame();
     drawBig();if(k%6===0)$("say").textContent=`Recording one loop… ${Math.round(k/frames*100)}%`;
     await wait(Math.max(0,1000/FPS-(performance.now()-t0)))}
-  rec.stop();await done;track.stop();$("vid").disabled=false;
+  rec.stop();await done;track.stop();$("vid").disabled=$("gif").disabled=false;
   if(live){live.rec=false;live.ph=ph0;live.ms=performance.now()}
   if(!cur)return;const blob=new Blob(chunks,{type:type.split(";")[0]});
   if(!blob.size){$("say").textContent="That didn't record. Try again.";return}
   try{await saveFile(slug()+(type.includes("mp4")?".mp4":".webm"),blob);$("say").textContent=`Saved a ${Math.round(live?live.per:frames/FPS)}-second loop.`}catch(e){$("say").textContent="That didn't save."}}
+/* the same loop as a GIF. It's drawn frame by frame as fast as the machine allows (not in real time), from one
+   palette gathered across the whole loop; each frame after the first keeps only what changed, the rest left clear,
+   so a loop of flat colour stays small. */
+async function recordGif(){
+  if(!live)liveOn();if(!live||live.rec)return;live.rec=true;$("vid").disabled=$("gif").disabled=true;
+  const S=480,FPS=25,frames=Math.round(live.per*FPS),ph0=live.ph,c=colours(cur.pal,cur),ground=groundOf(cur),me=live,wait=()=>new Promise(r=>setTimeout(r,0));
+  const cv=document.createElement("canvas");cv.width=cv.height=S;const g=cv.getContext("2d",{willReadFrequently:true});
+  const shot=(k)=>{liveWeights(ph0+k/frames,lw);tw.set(lw);g.fillStyle=ground;g.fillRect(0,0,S,S);paint(liveMark(),Math.round(S*.84),lens,c);g.drawImage(tiny,Math.round(S*.08),Math.round(S*.08));return g.getImageData(0,0,S,S).data};
+  const stop=(msg)=>{$("vid").disabled=$("gif").disabled=false;if(live===me){live.rec=false;live.ph=ph0;live.ms=performance.now()}if(msg)$("say").textContent=msg};
+  // one palette for the whole loop: the commonest colours, merged where they're nearly the same
+  const cnt=new Uint32Array(32768),sum=new Float64Array(32768*3);
+  for(let k=0;k<frames;k+=Math.max(1,frames>>4)){if(live!==me||!cur)return stop();const d=shot(k);
+    for(let i=0;i<d.length;i+=8){const q=(d[i]>>3)<<10|(d[i+1]>>3)<<5|d[i+2]>>3;cnt[q]++;sum[q*3]+=d[i];sum[q*3+1]+=d[i+1];sum[q*3+2]+=d[i+2]}
+    $("say").textContent="Making a GIF…";await wait()}
+  const keys=[];for(let q=0;q<32768;q++)if(cnt[q])keys.push(q);keys.sort((a,b)=>cnt[b]-cnt[a]);
+  const pal=[];const near=(r,gg,b,lim)=>pal.some(p=>(p[0]-r)**2+(p[1]-gg)**2+(p[2]-b)**2<lim);
+  for(const lim of [64,0])for(const q of keys){if(pal.length>=255)break;const n=cnt[q],r=sum[q*3]/n,gg=sum[q*3+1]/n,b=sum[q*3+2]/n;if(!near(r,gg,b,lim||1e-9))pal.push([r,gg,b])}
+  while(pal.length<256)pal.push([0,0,0]);const TR=255,lut=new Int16Array(32768).fill(-1);
+  const idx=(r,gg,b)=>{const q=(r>>3)<<10|(gg>>3)<<5|b>>3;let v=lut[q];if(v<0){let bd=1e9;for(let j=0;j<255;j++){const p=pal[j],e=(p[0]-r)**2+(p[1]-gg)**2+(p[2]-b)**2;if(e<bd){bd=e;v=j}}lut[q]=v}return v};
+  const out=[],B=(...a)=>out.push(Uint8Array.from(a)),le=(v)=>[v&255,v>>8];
+  out.push(new TextEncoder().encode("GIF89a"));B(...le(S),...le(S),0xF7,0,0);B(...pal.flatMap(p=>p.map(Math.round)));
+  B(0x21,0xFF,11,...new TextEncoder().encode("NETSCAPE2.0"),3,1,0,0,0);
+  let prev=null;const cur8=new Uint8Array(S*S);
+  for(let k=0;k<frames;k++){if(live!==me||!cur)return stop();const d=shot(k);
+    for(let i=0,p=0;p<S*S;i+=4,p++)cur8[p]=idx(d[i],d[i+1],d[i+2]);
+    let x0=0,y0=0,x1=S-1,y1=S-1;
+    if(prev){x0=S;y0=S;x1=-1;y1=-1;for(let y=0;y<S;y++)for(let x=0;x<S;x++)if(cur8[y*S+x]!==prev[y*S+x]){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+      if(x1<0){x0=y0=x1=y1=0}}
+    const w=x1-x0+1,h=y1-y0+1,px=new Uint8Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=(y+y0)*S+x+x0;px[y*w+x]=prev&&cur8[p]===prev[p]?TR:cur8[p]}
+    B(0x21,0xF9,4,prev?0x05:0x04,...le(4),TR,0);B(0x2C,...le(x0),...le(y0),...le(w),...le(h),0);out.push(lzw(px));
+    prev=prev||new Uint8Array(S*S);prev.set(cur8);drawBig();
+    if(k%5===0){$("say").textContent=`Making a GIF… ${Math.round(k/frames*100)}%`;await wait()}}
+  B(0x3B);stop();if(!cur)return;
+  const blob=new Blob(out,{type:"image/gif"});
+  try{await saveFile(slug()+".gif",blob);$("say").textContent=`Saved a ${Math.round(frames/FPS)}-second GIF, ${S} by ${S}, ${blob.size>1e6?(blob.size/1e6).toFixed(1)+" MB":Math.round(blob.size/1e3)+" KB"}.`}catch(e){$("say").textContent="That didn't save."}}
+// GIF's own compression (LZW, 8-bit codes), packed into its 255-byte blocks
+const lzwT=new Int32Array(4096*256);let lzwG=0;
+function lzw(ix){const MIN=8,CLR=256,EOI=257,bytes=[MIN];let size=9,next=258,acc=0,bits=0,blk=[];lzwG++;
+  const emit=(c)=>{acc|=c<<bits;bits+=size;while(bits>=8){blk.push(acc&255);acc>>>=8;bits-=8;if(blk.length===255){bytes.push(255,...blk);blk=[]}}};
+  emit(CLR);let p=ix[0];
+  for(let i=1;i<ix.length;i++){const k=ix[i],e=lzwT[p*256+k];if(e>>>12===lzwG){p=e&4095;continue}
+    emit(p);if(next===4096){emit(CLR);next=258;size=9;lzwG++}else{if(next>=1<<size)size++;lzwT[p*256+k]=lzwG<<12|next++}p=k}
+  emit(p);emit(EOI);if(bits>0)blk.push(acc&255);if(blk.length)bytes.push(blk.length,...blk);bytes.push(0);return Uint8Array.from(bytes)}
 function settle(){lw.fill(0);tw.fill(0);pending=-1;peek=null;[...halo.children].forEach(b=>b.style.opacity="");drawBig()}
 // round the ring, the mark leans toward the ghost you're near; between two, it leans toward both at once
 stage.addEventListener("pointermove",(e)=>{
@@ -1742,7 +1806,7 @@ const layers=()=>({t:sstep(.5,1,unf),e:clamp(unf-1),k:clamp(unf-2),f:clamp(unf-3
 function prender(){
   const on=!!cur&&unf>.001;pv.hidden=!on;big.style.visibility=on?"hidden":"";halo.style.visibility=on?"hidden":"";stage.classList.toggle("unfolded",on);
   $("markhint").hidden=unf>=.5;$("leanhint").hidden=unf>=.5||!!live;$("livenote").hidden=unf>=.5||!live;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Poster PNG":"PNG";
-  $("unfold").hidden=$("alive").hidden=$("vid").hidden=unf>=.5;{const n=Math.floor(unfT+1e-3);$("layer").textContent=n>=4?"Peel back to the words":n===3?"Add the "+["field","sky","field","field"][pstyle]:n===2?"Add its kin":"Add the "+["echoes","reflection","wallpaper","guides"][pstyle]}
+  $("unfold").hidden=$("alive").hidden=$("vid").hidden=$("gif").hidden=unf>=.5;{const n=Math.floor(unfT+1e-3);$("layer").textContent=n>=4?"Peel back to the words":n===3?"Add the "+["field","sky","field","field"][pstyle]:n===2?"Add its kin":"Add the "+["echoes","reflection","wallpaper","guides"][pstyle]}
   if(!on)return;pbuild();
   const sr=stage.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2),cw=Math.round(sr.width*dp),ch=Math.round(sr.height*dp);
   if(pv.width!==cw||pv.height!==ch){pv.width=cw;pv.height=ch}
@@ -1778,7 +1842,7 @@ stage.addEventListener("wheel",(e)=>{if(!cur||drop)return;e.preventDefault();con
   if(unfT>=1){foldTo(Math.max(1,unfT+d*.0032));return}
   const now=performance.now();if(now-wheelAt>400)wheelAcc=0;wheelAt=now;wheelAcc+=d;
   if(Math.abs(wheelAcc)>=60){petals(wheelAcc>0?-1:1);wheelAcc=0}},{passive:false});
-$("unfold").onclick=()=>{if(live)liveOff(false);foldTo(2)};$("alive").onclick=()=>{if(live){if(!live.rec)liveOff(true)}else liveOn()};$("vid").onclick=()=>recordLoop();$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
+$("unfold").onclick=()=>{if(live)liveOff(false);foldTo(2)};$("alive").onclick=()=>{if(live){if(!live.rec)liveOff(true)}else liveOn()};$("vid").onclick=()=>recordLoop();$("gif").onclick=()=>recordGif();$("fold").onclick=()=>foldTo(0);$("layer").onclick=()=>foldTo(unfT>=3.99?1:Math.floor(unfT+1e-3)+1);
 (function buildFmts(){$("fmts").innerHTML=FMT.map((f,i)=>`<button data-f="${i}" aria-pressed="${!i}">${f[0]}</button>`).join("");
   $("fmts").onclick=(e)=>{const b=e.target.closest("button");if(!b||+b.dataset.f===fmt)return;fadeFrom();fmt=+b.dataset.f;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";
     [...$("fmts").children].forEach(x=>x.setAttribute("aria-pressed",x===b));prender()}})();
@@ -1809,26 +1873,37 @@ function hybrid(x,y){
   const key=x+"|"+y;let m=hyCache.get(key);if(m)return m;
   const {A,B}=nur,u=clamp(x+.5,-.6,1.6),up=clamp(-y*.9,0,1),down=clamp(y*.9,0,1.4);
   const at=Math.abs(y)<1e-9&&(Math.abs(u)<1e-9||Math.abs(u-1)<1e-9);
-  if(at){const P=u<.5?A:B;m={x,y,pal:P.pal,g:genes(P.g),n0:P.n0,n1:P.n1,s:P.s,genus:P.genus,roots:P.roots,from:P.from,ok:true,parent:true}}
+  if(at){const P=u<.5?A:B;m={x,y,pal:P.pal,g:genes(P.g),n0:P.n0,n1:P.n1,s:P.s,genus:P.genus,roots:P.roots,from:P.from,ok:true,parent:true,pen:P.pen||undefined,pu:u<.5?0:1}}
   else{const g=new Float32Array(NG);
     for(let k=0;k<NG;k++){let v=A.g[k]+(B.g[k]-A.g[k])*u;
       if(up>0&&k<19)v=lerp(v,1/(1+Math.exp(-fbm(x*3,y*3,k)*24)),up*.85);
       if(down>0)v=.5+(v-.5)*(1+down*1.8);
       g[k]=clamp(v)}
     const f=clamp(lerp(SYM.indexOf(petalOf(A)),SYM.indexOf(petalOf(B)),u),0,SYM.length-1),i0=Math.min(SYM.length-2,Math.floor(f));
-    m={x,y,pal:x<0?A.pal:B.pal,g,n0:SYM[i0],n1:SYM[i0+1],s:sstep(.3,.7,f-i0),genus:nur.genus,roots:nur.roots,from:nur.from}}
+    m={x,y,pal:x<0?A.pal:B.pal,g,n0:SYM[i0],n1:SYM[i0+1],s:sstep(.3,.7,f-i0),genus:nur.genus,roots:nur.roots,from:nur.from};
+    if(nur.pens){const t=clamp(u,0,1);m.pu=t;m.pen=childPen(nur.pens,t)}}
   if(hyCache.size>9000)hyCache.clear();hyCache.set(key,m);return m;
 }
+// a drawn petal passes to the children: across the nursery it fades from one parent's drawing into the other's,
+// the points flowing between them when both are loops or both strokes
+const penCopy=(P)=>P&&P.w>.01?{...P,p:Float32Array.from(P.p),b:[...P.b]}:null;
+function penPair(A,B){if(!A&&!B)return null;const a=A||{...B,w:0},b0=B||{...A,w:0},k=a.c===b0.c?1:0,b=k?lineUp(a,b0):b0;
+  // one circle round both drawings holds every drawing in between
+  const d=Math.hypot(a.b[0]-b.b[0],a.b[1]-b.b[1]),ra=a.b[2],rb=b.b[2],f=ra>=d+rb?0:rb>=d+ra?1:(d+rb-ra)/(2*d),r=ra>=d+rb?ra:rb>=d+ra?rb:(d+ra+rb)/2;
+  return {a,b,k,box:[a.b[0]+(b.b[0]-a.b[0])*f,a.b[1]+(b.b[1]-a.b[1])*f,r]}}
+function childPen(N,t){const {a,b,k}=N,w=lerp(a.w,b.w,t);if(w<.01)return undefined;
+  const q=k?null:(t<.5?a:b),pts=[];for(let i=0;i<PEN_N;i++)pts.push(q?[q.p[i*2],q.p[i*2+1]]:[lerp(a.p[i*2],b.p[i*2],t),lerp(a.p[i*2+1],b.p[i*2+1],t)]);
+  const P=makePen(pts,q?q.c:a.c,lerp(a.mir,b.mir,t));P.w=w;return P}
 function breed(a,b){
-  const P=(m)=>({g:genes(m.g),n0:m.n0,n1:m.n1,s:m.s,pal:m.pal,genus:genusOf(m),roots:rootsOf(m),from:m.from,name:latin(m)});
+  const P=(m)=>({g:genes(m.g),n0:m.n0,n1:m.n1,s:m.s,pal:m.pal,genus:genusOf(m),roots:rootsOf(m),from:m.from,name:latin(m),pen:penCopy(m.pen)});
   const A=P(a),B=P(b),home=nur?nur.home:{x:cam.x,y:cam.y,z:cam.zt},roots=[A.roots[0],B.roots[B.roots.length-1]];
-  nur={A,B,home,roots,genus:cross(roots),from:A.name+" × "+B.name};hyCache.clear();
+  nur={A,B,home,roots,genus:cross(roots),from:A.name+" × "+B.name,pens:penPair(A.pen,B.pen)};hyCache.clear();R.pens(nur.pens);
   if(!$("studio").hidden)leave();
   R.nursery(true,A.pal,B.pal);cam.x=0;cam.y=0;cam.vx=cam.vy=0;cam.z=cam.zt=innerWidth<1100?-1.1:-.9;cam.ax=W/2;cam.ay=H/2;
   regrow([W/2,H/2]);lastPlace="";$("home").hidden=false;
   say2(`${A.name} on the left, ${B.name} on the right. Up grows wilder, down bolder.`);
 }
-function leaveNursery(){if(!nur)return;const h=nur.home;nur=null;hyCache.clear();R.nursery(false);
+function leaveNursery(){if(!nur)return;const h=nur.home;nur=null;hyCache.clear();R.nursery(false);R.pens(null);
   cam.x=h.x;cam.y=h.y;cam.z=cam.zt=h.z;cam.vx=cam.vy=0;regrow([W/2,H/2]);lastPlace="";$("home").hidden=true;
   say2("Back in the meadow.")}
 $("home").onclick=leaveNursery;
