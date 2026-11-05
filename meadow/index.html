@@ -1047,13 +1047,28 @@ function say2(t){$("hint").textContent=t;$("tag").classList.remove("quiet")}
 
 /* ---------- the picked mark ---------- */
 let cur=null;
-const paint=(m,px,l,fix)=>{tiny.width=tiny.height=px;const gl=T.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);T.pen(m);
+// the drawing canvas only ever grows: resizing it costs far more than the drawing, so a mark is drawn into its
+// bottom-left corner and copied out from there (tinyAt), whatever size it is
+let tinyPx=0;
+const paint=(m,px,l,fix)=>{const gl=T.gl;if(tiny.width<px||tiny.height<px||tiny.width!==tiny.height)tiny.width=tiny.height=Math.max(px,tiny.width,tiny.height);tinyPx=px;
+  gl.clearColor(0,0,0,0);gl.enable(gl.SCISSOR_TEST);gl.scissor(0,0,px,px);gl.clear(gl.COLOR_BUFFER_BIT);gl.disable(gl.SCISSOR_TEST);T.pen(m);
   put(one,0,px/2,px/2,px,0,1,m,l);T.marks(one,1,px,px,[0,0],1,fix,false)};
+const tinyAt=(x,y)=>[tiny,0,tiny.height-tinyPx,tinyPx,tinyPx,x,y,tinyPx,tinyPx];
+// many marks drawn side by side before any is copied out: each copy straight after its own draw makes the browser
+// wait for the graphics card, while copying all of them after one pass waits once. Gives each its source rectangle
+function paintMany(jobs){const gl=T.gl,ev=(v)=>v+(v&1),W0=Math.max(tiny.width,...jobs.map(j=>ev(j.px+4)));let x=0,b=0,row=0;
+  // laid out from the bottom-left, as the graphics card counts, each on even pixels: it shades pixels in twos, so a mark
+  // starting on an odd one comes out a hair different at its edges. A clear gap of 4 pixels round each keeps neighbours apart
+  const at=jobs.map(j=>{const w=ev(j.px+4);if(x+w>W0){x=0;b+=row;row=0}const a=[x+2,b+2];x+=w;row=Math.max(row,w);return a});
+  const need=ev(Math.max(W0,b+row));if(tiny.width<need||tiny.height<need||tiny.width!==tiny.height||tiny.width&1)tiny.width=tiny.height=ev(Math.max(need,tiny.width,tiny.height));const S=tiny.width;
+  const top=at.map((a,k)=>[a[0],S-a[1]-jobs[k].px]);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  jobs.forEach((j,k)=>{T.pen(j.m);put(one,0,top[k][0]+j.px/2,top[k][1]+j.px/2,j.px,0,1,j.m,j.l);T.marks(one,1,S,S,[0,0],1,j.fix,false)});
+  return top.map((a,k)=>[tiny,a[0],a[1],jobs[k].px,jobs[k].px])}
 const colours=(p,m)=>({i:new Float32Array(hex(m&&m.ink||PAL[p].i)),a:new Float32Array(hex(m&&m.acc||PAL[p].a)),d:m&&m.dye});
 const inkOf=(m)=>m.ink||PAL[m.pal].i,accOf=(m)=>m.acc||PAL[m.pal].a;
 const K=(c)=>new Float32Array(hex(c));
 function copyTo(cv,size,l,fix,scale){const r=scale||(devicePixelRatio||1);const px=Math.round(size*r);if(cv.width!==px){cv.width=cv.height=px;cv.style.width=cv.style.height=size+"px"}
-  paint(cur,px,l,fix);const g=cv.getContext("2d");g.clearRect(0,0,px,px);g.drawImage(tiny,0,0)}
+  paint(cur,px,l,fix);const g=cv.getContext("2d");g.clearRect(0,0,px,px);g.drawImage(...tinyAt(0,0))}
 const groundOf=(m)=>m.gr||PAL[m.pal].g;
 function theme(p){const s=$("studio").style,gr=cur?groundOf(cur):PAL[p].g,ink=cur?inkOf(cur):PAL[p].i;
   // the page wears the mark's colours, unless its ink is too faint on its ground to read words by
@@ -1064,14 +1079,26 @@ function latin(m){const n=m.s>.5?m.n1:m.n0;let name=(m.genus||PAL[biome(m.x,m.y)
 function drawStudio(){
   if(!cur)return;theme(cur.pal);const c=colours(cur.pal,cur);
   drawBig();drawGhosts();
-  [16,24,32,48,64].forEach((s)=>copyTo($("sz"+s),s,lens,c));
-  worlds(c);
+  previews(c);
   [...$("swatches").children].forEach((w,i)=>w.setAttribute("aria-pressed",i===cur.pal&&!cur.ink&&!cur.gr));
   if(unf>0)prender();
 }
 // a mark set on its own ground, for the places that give it a tile or a circle
 function onGround(cv,size,c,inset){const r=devicePixelRatio||1,px=Math.round(size*r);if(cv.width!==px){cv.width=cv.height=px;cv.style.width=cv.style.height=size+"px"}
-  const g=cv.getContext("2d");g.fillStyle=groundOf(cur);g.fillRect(0,0,px,px);const m=Math.round(px*(1-2*inset));paint(cur,m,lens,c);g.drawImage(tiny,(px-m)/2,(px-m)/2)}
+  const g=cv.getContext("2d");g.fillStyle=groundOf(cur);g.fillRect(0,0,px,px);const m=Math.round(px*(1-2*inset));paint(cur,m,lens,c);g.drawImage(...tinyAt((px-m)/2,(px-m)/2))}
+// the sizes and the places it's seen, all drawn in one pass (see paintMany): each as copyTo or onGround would
+const pvC=document.createElement("canvas");
+function previews(c){const r=devicePixelRatio||1,jobs=[],outs=[];
+  const add=(cv,size,fix,inset)=>{const px=Math.round(size*r);if(cv.width!==px){cv.width=cv.height=px;cv.style.width=cv.style.height=size+"px"}
+    const m=inset==null?px:Math.round(px*(1-2*inset));jobs.push({m:cur,px:m,fix,l:lens});outs.push({cv,px,m,ground:inset!=null})};
+  [16,24,32,48,64].forEach(s=>add($("sz"+s),s,c));
+  add($("wPaper"),56,{i:K("#111111"),a:K("#111111")});add($("wNight"),56,{i:K("#f5f5f5"),a:K("#f5f5f5")});
+  add($("wApp"),46,c,.09);const pale=contrast(inkOf(cur),"#ffffff")<1.9;add($("wTab"),16,c,pale?.1:null);$("wTab").style.borderRadius=pale?"4px":"";
+  const src=paintMany(jobs);
+  // one set inside its tile lands between pixels, so it goes through a canvas of its own size first and is placed whole, as it always was
+  outs.forEach((o,k)=>{const g=o.cv.getContext("2d");if(o.ground){if(pvC.width!==o.m)pvC.width=pvC.height=o.m;const h=pvC.getContext("2d");h.clearRect(0,0,o.m,o.m);h.drawImage(...src[k],0,0,o.m,o.m);
+      g.fillStyle=groundOf(cur);g.fillRect(0,0,o.px,o.px);g.drawImage(pvC,(o.px-o.m)/2,(o.px-o.m)/2)}
+    else{g.clearRect(0,0,o.px,o.px);g.drawImage(...src[k],0,0,o.m,o.m)}})}
 function worlds(c){
   copyTo($("wPaper"),56,lens,{i:K("#111111"),a:K("#111111")});
   copyTo($("wNight"),56,lens,{i:K("#f5f5f5"),a:K("#f5f5f5")});
@@ -1638,7 +1665,7 @@ function drawBig(){
   const bs=Math.min(1100,Math.round(big.clientWidth*Math.min(devicePixelRatio||1,2)))||900;
   let m=peek?{...cur,g:peek.g}:leant()?mix(lw):cur;
   if(penShow)m={...m,pen:penShow};else if(peek&&peek.pm!=null&&cur.pen)m={...m,pen:{...cur.pen,mir:peek.pm}};
-  if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal,cur));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(tiny,0,0);
+  if(big.width!==bs)big.width=big.height=bs;paint(m,bs,lens,colours(cur.pal,cur));const g=big.getContext("2d");g.clearRect(0,0,bs,bs);g.drawImage(...tinyAt(0,0));
   if(mirOn())drawMirrors(m);else mirC.classList.remove("on");
   if(tune&&tune.moved&&!peek)shapeWord(true); // the symmetry word follows a drag as it goes, not only when you let go
 }
@@ -1674,7 +1701,7 @@ function scan(m){const n=m.s>.5?m.n1:m.n0,g=m.g,pen=m.pen&&m.pen.w>.02?m.pen:nul
     if(al>.01)lines.push({th,al})}
   let turns=bd>.02||hv>.02||fan>.01||stk>.01||(frm>.01&&hx<.99)?1:wd>.02?(n%2?1:2):sqb>.1?gcd(n,4):frm>.01?gcd(n,6):n;if(mid>.01&&m.n0!==m.n1)turns=gcd(turns,n===m.n0?m.n1:m.n0);
   if((letters||pen||m.fr)&&lines.length+turns>1){ // fold the drawn mark over each line and turn it, and keep only what holds
-    paint(m,SP,0,{i:K("#000000"),a:K("#000000")});scx.clearRect(0,0,SP,SP);scx.drawImage(tiny,0,0);
+    paint(m,SP,0,{i:K("#000000"),a:K("#000000")});scx.clearRect(0,0,SP,SP);scx.drawImage(...tinyAt(0,0));
     const px=scx.getImageData(0,0,SP,SP).data;let a=new Float32Array(SP*SP);for(let i=0;i<SP*SP;i++)a[i]=px[i*4+3]/255;
     for(let pass=0;pass<2;pass++){const b=new Float32Array(SP*SP);for(let y=1;y<SP-1;y++)for(let x=1;x<SP-1;x++){let s=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++)s+=a[(y+j)*SP+x+i];b[y*SP+x]=s/9}a=b}
     const at=(x,y)=>{const x0=Math.floor(x),y0=Math.floor(y),fx=x-x0,fy=y-y0,G=(X,Y)=>X<0||Y<0||X>=SP||Y>=SP?0:a[Y*SP+X];
@@ -1717,7 +1744,7 @@ function popShape(on){const p=$("shapepop");if(on===!p.hidden)return;p.hidden=!o
   const now=kindOfScan(scan(cur)),c=colours(cur.pal,cur);p.innerHTML="";
   for(const k of Object.keys(SHAPES)){const t=symTo(k,cur),pm=penSided(cur)?(k==="mirrored"||k==="one"?1:0):null,m={...cur,g:t,pen:pm==null?cur.pen:{...cur.pen,mir:pm}},s=scan(m),b=document.createElement("button");
     b.setAttribute("role","menuitemradio");b.setAttribute("aria-checked",k===now);
-    const cv=document.createElement("canvas"),r=Math.round(30*Math.min(devicePixelRatio||1,2));cv.width=cv.height=r;paint(m,r,lens,c);cv.getContext("2d").drawImage(tiny,0,0);
+    const cv=document.createElement("canvas"),r=Math.round(30*Math.min(devicePixelRatio||1,2));cv.width=cv.height=r;paint(m,r,lens,c);cv.getContext("2d").drawImage(...tinyAt(0,0));
     const got=kindOfScan(s),hint=got===k?(k==="mirrored"?(s.mirrors===s.n?"all "+s.n+" mirror lines":s.mirrors+" mirror lines, as it's stretched"):SHAPE_SAY[k]):"not with "+(letters?"a letter in it":cur.pen?"this drawing":"this shape");
     b.append(cv);b.insertAdjacentHTML("beforeend",`<b>${SHAPES[k]}</b><small>${hint}</small>`);
     b.onpointerenter=b.onfocus=()=>peekTo(t,pm);b.onclick=()=>{popShape(false);setShape(t,pm)};p.append(b)}
@@ -1746,7 +1773,8 @@ function ghostSay(G){if(G.say)return G.say;if(G.far)return "a stranger"+(G.pet?"
     else if(k in TOGGLE)t=SAYS[k]?SAYS[k][to>TOGGLE[k]?1:0]:"";else if(SAYS[k])t=SAYS[k][G.d[k]>0?1:0];if(t&&!w.includes(t))w.push(t)}
   return w.join(" · ")}
 function drawGhosts(){if(!ghosts.length)return;const c=colours(cur.pal,cur);[...halo.children].forEach((b,i)=>{if(ghosts[i])b.dataset.say=ghostSay(ghosts[i])});
-  [...halo.children].forEach((b,i)=>{const cv=b.firstChild;paint(blend(ghosts[i],1),cv.width,lens,c);const g=cv.getContext("2d");g.clearRect(0,0,cv.width,cv.width);g.drawImage(tiny,0,0)})}
+  const cs=[...halo.children].map(b=>b.firstChild),src=paintMany(cs.map((cv,i)=>({m:blend(ghosts[i],1),px:cv.width,fix:c,l:lens})));
+  cs.forEach((cv,i)=>{const g=cv.getContext("2d");g.clearRect(0,0,cv.width,cv.width);g.drawImage(...src[i],0,0,cv.width,cv.width)})}
 function leanTo(){if(!leaning){leaning=true;leanMs=performance.now();requestAnimationFrame(leanStep)}}
 function leanOne(k,w){tw.fill(0);if(k>=0)tw[k]=w;leanTo()}
 function leanStep(ms){
@@ -1795,7 +1823,7 @@ async function recordLoop(){
   const FPS=30,frames=Math.round(live.per*FPS),ph0=live.ph,c=colours(cur.pal,cur),ground=groundOf(cur),wait=(ms)=>new Promise(r=>setTimeout(r,ms));
   rec.start();
   for(let k=0;k<frames;k++){if(!live||!cur)break;const t0=performance.now();liveWeights(ph0+k/frames,lw);tw.set(lw);
-    g.fillStyle=ground;g.fillRect(0,0,S,S);paint(liveMark(),Math.round(S*.84),lens,c);g.drawImage(tiny,Math.round(S*.08),Math.round(S*.08));track.requestFrame();
+    g.fillStyle=ground;g.fillRect(0,0,S,S);paint(liveMark(),Math.round(S*.84),lens,c);g.drawImage(...tinyAt(Math.round(S*.08),Math.round(S*.08)));track.requestFrame();
     drawBig();if(k%6===0)$("say").textContent=`Recording one loop… ${Math.round(k/frames*100)}%`;
     await wait(Math.max(0,1000/FPS-(performance.now()-t0)))}
   rec.stop();await done;track.stop();$("vid").disabled=$("gif").disabled=false;
@@ -1810,7 +1838,7 @@ async function recordGif(){
   if(!live)liveOn();if(!live||live.rec)return;live.rec=true;$("vid").disabled=$("gif").disabled=true;
   const S=480,FPS=25,frames=Math.round(live.per*FPS),ph0=live.ph,c=colours(cur.pal,cur),ground=groundOf(cur),me=live,wait=()=>new Promise(r=>setTimeout(r,0));
   const cv=document.createElement("canvas");cv.width=cv.height=S;const g=cv.getContext("2d",{willReadFrequently:true});
-  const shot=(k)=>{liveWeights(ph0+k/frames,lw);tw.set(lw);g.fillStyle=ground;g.fillRect(0,0,S,S);paint(liveMark(),Math.round(S*.84),lens,c);g.drawImage(tiny,Math.round(S*.08),Math.round(S*.08));return g.getImageData(0,0,S,S).data};
+  const shot=(k)=>{liveWeights(ph0+k/frames,lw);tw.set(lw);g.fillStyle=ground;g.fillRect(0,0,S,S);paint(liveMark(),Math.round(S*.84),lens,c);g.drawImage(...tinyAt(Math.round(S*.08),Math.round(S*.08)));return g.getImageData(0,0,S,S).data};
   const stop=(msg)=>{$("vid").disabled=$("gif").disabled=false;if(live===me){live.rec=false;live.ph=ph0;live.ms=performance.now()}if(msg)$("say").textContent=msg};
   // one palette for the whole loop: the commonest colours, merged where they're nearly the same
   const cnt=new Uint32Array(32768),sum=new Float64Array(32768*3);
@@ -1904,7 +1932,7 @@ const tabIcon=document.querySelector('link[rel="icon"]'),tabHome=[tabIcon.href,d
 function tabMark(){clearTimeout(tabT);if(!cur){tabIcon.href=tabHome[0];document.title=tabHome[1];return}
   document.title=latin(cur)+" · Meadow";
   tabT=setTimeout(()=>{if(!cur)return;const cv=document.createElement("canvas");cv.width=cv.height=64;const g=cv.getContext("2d");
-    g.fillStyle=groundOf(cur);g.beginPath();g.roundRect(0,0,64,64,14);g.fill();paint(cur,52,lens,colours(cur.pal,cur));g.drawImage(tiny,6,6);
+    g.fillStyle=groundOf(cur);g.beginPath();g.roundRect(0,0,64,64,14);g.fill();paint(cur,52,lens,colours(cur.pal,cur));g.drawImage(...tinyAt(6,6));
     try{tabIcon.href=cv.toDataURL("image/png")}catch(e){}},260)}
 $("undo").onclick=stepBack;$("redo").onclick=stepAgain;
 addEventListener("resize",()=>{if(cur){layoutHalo();drawStudio();prender()}});
@@ -2064,7 +2092,7 @@ const FMT=[["post",1080,1350],["story",1080,1920],["square",1080,1080],["poster"
 const pv=$("poster");
 let unf=0,unfT=0,unfOn=false,unfMs=0,unfIdle=0,fmt=0,pk="",pc=null,off=[0,0],pDrag=null,pgeo=null,pfade=null;
 const echo=Array.from({length:EN},()=>[0,0]);
-function snap(m,px,l,fix){paint(m,px,l,fix);const c=document.createElement("canvas");c.width=c.height=px;c.getContext("2d").drawImage(tiny,0,0);return c}
+function snap(m,px,l,fix){paint(m,px,l,fix);const c=document.createElement("canvas");c.width=c.height=px;c.getContext("2d").drawImage(...tinyAt(0,0));return c}
 function sheet(items,w,h,l,fix){ // many marks in one draw
   tiny.width=w;tiny.height=h;const gl=T.gl;gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
   const b=new Float32Array(items.length*T.STRIDE);items.forEach((it,k)=>put(b,k*T.STRIDE,it.x,it.y,it.s,it.r||0,1,it.m,l));T.pen(items[0]&&items[0].m);
@@ -2337,7 +2365,7 @@ function breeder(b,k){
 }
 
 /* ---------- keeping ---------- */
-function thumb(m){const keep=cur;cur=m;paint(m,96,0,colours(m.pal,m));const u=tiny.toDataURL("image/png");cur=keep;return u}
+function thumb(m){const keep=cur;cur=m;const u=snap(m,96,0,colours(m.pal,m)).toDataURL("image/png");cur=keep;return u}
 // the same mark, in the same colours and letters, is only kept once
 const keyOf=(m)=>codeOf({...m,g:Float32Array.from(m.g),dye:m.dye||[],gr:m.gr||null,ink:m.ink||null,acc:m.acc||null})+"|"+(m.letters||"")+(m.pen?"|"+penCode(m.pen):"")+(m.fr?"|f"+frCode(m.fr):m.frc?"|f"+m.frc:"");
 shelf.forEach(k=>{if(!k.key)k.key=keyOf(k)});
@@ -2474,7 +2502,7 @@ async function saveSheet(){if(!cur)return;$("say").textContent="Setting out the 
   const c=colours(cur.pal,cur),ground=groundOf(cur),ink=inkOf(cur),acc=accOf(cur),paper="#f6f4ef",text="#17161b",soft="#6e6c72",line="rgba(23,22,27,.14)";
   const SERIF='"Instrument Serif",Georgia,serif',MONO='"IBM Plex Mono",ui-monospace,Menlo,monospace';
   const fit=(t,w,size,face)=>{let z=size;g.font=face.replace("Z",z+"px");while(g.measureText(t).width>w&&z>12){z-=2;g.font=face.replace("Z",z+"px")}};
-  const mark=(size,x,y,fix)=>{paint(cur,size,lens,fix||c);g.drawImage(tiny,x,y)};
+  const mark=(size,x,y,fix)=>{paint(cur,size,lens,fix||c);g.drawImage(...tinyAt(x,y))};
   g.fillStyle=paper;g.fillRect(0,0,SW,SH);
   g.fillStyle=ground;g.fillRect(0,0,SH,SH);mark(860,(SH-860)/2,(SH-860)/2);
   const X=SH+110,CW=SW-X-110;let y=168;
@@ -2504,7 +2532,7 @@ async function saveShelfAll(){if(!shelf.length||saveShelfAll.busy)return;saveShe
       cur=m;let nm=slug()+(L?"-"+L.toLowerCase().replace(/[^\p{L}\p{N}]+/gu,""):"");used[nm]=(used[nm]||0)+1;if(used[nm]>1)nm+="-"+used[nm];
       files.push({name:"meadow-shelf/"+nm+".svg",data:svgText()});
       const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=groundOf(m);g.fillRect(0,0,1024,1024);
-      paint(m,900,lens,colours(m.pal,m));g.drawImage(tiny,62,62);pngs.push([nm,c])}}
+      paint(m,900,lens,colours(m.pal,m));g.drawImage(...tinyAt(62,62));pngs.push([nm,c])}}
   finally{cur=keep;if(gl!==letters)T.glyph(lastGlyph,384,null)}
   for(const [nm,c] of pngs)files.push({name:"meadow-shelf/"+nm+".png",data:new Uint8Array(await (await new Promise(r=>c.toBlob(r,"image/png"))).arrayBuffer())});
   try{await saveFile("meadow-shelf.zip",zipOf(files));$("say").textContent=`Saved ${shelf.length===1?"the one mark":"all "+shelf.length+" marks"} on your shelf.`}catch(e){$("say").textContent="That didn't save."}
@@ -2520,7 +2548,7 @@ async function saveSiteIcons(){if(!cur)return;
   // a pale mark would vanish on a white tab, so there it sits on a little tile of its own ground, as in the preview
   const png=(size,tile,inset,round)=>{const cv=document.createElement("canvas");cv.width=cv.height=size;const g=cv.getContext("2d");
     if(tile){g.fillStyle=ground;g.beginPath();g.roundRect(0,0,size,size,size*round);g.fill()}
-    const m=Math.round(size*(1-2*inset));paint(cur,m,lens,c);g.drawImage(tiny,Math.round((size-m)/2),Math.round((size-m)/2));
+    const m=Math.round(size*(1-2*inset));paint(cur,m,lens,c);g.drawImage(...tinyAt(Math.round((size-m)/2),Math.round((size-m)/2)));
     return new Promise(r=>cv.toBlob(b=>b.arrayBuffer().then(a=>r(new Uint8Array(a))),"image/png"))};
   const fav=[];for(const s of [16,32,48])fav.push(await png(s,pale,pale?.1:0,.2));
   const apple=await png(180,true,.12,0),i192=await png(192,true,.12,0),i512=await png(512,true,.12,0),mask=await png(512,true,.2,0);
@@ -2540,7 +2568,7 @@ $("wSite").onmouseenter=()=>{$("wSiteT").textContent="Save icons"};$("wSite").on
 $("svg").onclick=async()=>{try{await saveFile(slug()+".svg",new Blob([svgText()],{type:"image/svg+xml"}));$("say").textContent="Saved."+note()}catch(e){$("say").textContent="That didn't save. Try Copy SVG."}};
 $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(svgText());$("say").textContent="Copied."+note()}catch(e){$("say").textContent="Your browser blocked copying here. Try Save SVG."}};
 $("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=groundOf(cur);g.fillRect(0,0,1024,1024);
-  paint(cur,900,lens,colours(cur.pal,cur));g.drawImage(tiny,62,62);
+  paint(cur,900,lens,colours(cur.pal,cur));g.drawImage(...tinyAt(62,62));
   c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
 /* ---------- keys ---------- */
