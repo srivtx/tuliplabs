@@ -536,6 +536,7 @@ uniform highp sampler2D uFrS;uniform int uFrM;uniform float uFrX; // lines drawn
 vec4 frP(int i){return texelFetch(uFrT,ivec2(i,0),0);}
 vec4 frMap(vec2 p,float row){vec2 u=clamp((p*.5+.5)*128.,.5,127.5);return texture(uFrS,vec2(u.x/128.,(u.y+row*128.)/256.));}
 float frSet(vec4 m,float sc){return sc<.02?1e9:min(mix(m.x,m.y,sc),sc<.5?1e9:m.z);}
+float gPx=.01;int gL=0; // a screen pixel in the mark's units, and the lens
 vec2 gP0=vec2(0.); // the point in the mark's own square, before anything bends or twists it
 float gPT=0.,gPW=0.,gPM=0.,gPC=0.; // the drawn petal for this mark: how far toward the second drawing, its weight, its mirror, closed or not
 vec2 pP(int i){return mix(uPen[i],uPen2[i],gPT);}
@@ -575,16 +576,19 @@ float penD(vec2 c,float t){int N=uPenN;
  return d;}
 // every free line in one pass: a brush line that swells and tapers, or a loop filled to its rim. A point starting a
 // new line has .z of exactly 0, so no segment is drawn across from the line before it
-float freeD(vec2 p){float d=1e9,dc=1e9,sg=1.;int s0=0;
- for(int i=0;i<192;i++){if(i>=uFrN)break;vec4 b=frP(i);
-  if(b.z>0.){vec4 a=frP(i-1);vec2 pa=p-a.xy,ba=b.xy-a.xy;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);
+// a line at a time. Each line's box, grown by its width, sits in the texture's second row; a pixel well clear of the box
+// (by more than any lens looks: the soft lens reads .2 deep, dots .07, plus ten pixels for the edges) passes it over whole
+float freeD(vec2 p){float d=1e9,M=(gL==4?.24:.09)+10.*gPx;int i=0;
+ for(int n=0;n<192;n++){if(i>=uFrN)break;vec4 bx=texelFetch(uFrT,ivec2(i,1),0);int e=int(texelFetch(uFrT,ivec2(i+1,1),0).x+.5);
+  if(p.x<bx.x-M||p.y<bx.y-M||p.x>bx.z+M||p.y>bx.w+M){i=e;continue;}
+  float dc=1e9,sg=1.;vec4 a=frP(i),b=a;
+  for(int j=i+1;j<e;j++){a=b;b=frP(j);vec2 pa=p-a.xy,ba=b.xy-a.xy;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);
    if(b.w>0.){float ra=b.z>1.5?b.w:b.w*(.22+.78*sqrt(sin(PI*a.z))),rb=b.z>1.5?b.w:b.w*(.22+.78*sqrt(sin(PI*b.z)));d=min(d,length(pa-ba*h)-mix(ra,rb,h));}
    else{dc=min(dc,length(pa-ba*h));bvec3 k=bvec3(p.y>=a.y,p.y<b.y,ba.x*pa.y>ba.y*pa.x);if(all(k)||all(not(k)))sg=-sg;}}
-  bool last=i+1>=uFrN||frP(i+1).z<=0.;
-  if(last&&b.w<0.){vec2 a=b.xy,c=frP(s0).xy,pa=p-a,ba=c-a;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);dc=min(dc,length(pa-ba*h));
-   bvec3 k=bvec3(p.y>=a.y,p.y<c.y,ba.x*pa.y>ba.y*pa.x);if(all(k)||all(not(k)))sg=-sg;
-   d=min(d,sg*dc+b.w*.22);dc=1e9;sg=1.;}
-  if(last)s0=i+1;}
+  if(b.w<0.){vec2 a2=b.xy,c=frP(i).xy,pa=p-a2,ba=c-a2;float h=clamp(dot(pa,ba)/max(dot(ba,ba),1e-9),0.,1.);dc=min(dc,length(pa-ba*h));
+   bvec3 k=bvec3(p.y>=a2.y,p.y<c.y,ba.x*pa.y>ba.y*pa.x);if(all(k)||all(not(k)))sg=-sg;
+   d=min(d,sg*dc+b.w*.22);}
+  i=e;}
  return d;}
 vec2 markN(vec2 p0,float n){
  gPO=vG6.x;
@@ -689,7 +693,7 @@ void main(){
  vec3 ink,acc;
  gPT=uNu==1?clamp(vPT,0.,1.):0.;gPW=mix(uPenS.x,uPenS2.x,gPT);gPM=mix(uPenS.z,uPenS2.z,gPT);gPC=uPenK>.5||gPT<.5?uPenS.y:uPenS2.y;if(uPenK<.5)gPT=step(.5,gPT);
  if(uLm<1.){float t=clamp(uLm*1.9-length(gl_FragCoord.xy-uLo.xy)/max(uLo.z,1.)*.9,0.,1.);gLt=t*t*(3.-2.*t);}
- vec2 p=vP,dq=vP;float px=2./vS;int L=int(vL+.5);float ca=0.,cb=0.;float shade=1.,spec=0.;
+ vec2 p=vP,dq=vP;float px=2./vS;int L=int(vL+.5);gPx=px;gL=L;float ca=0.,cb=0.;float shade=1.,spec=0.;
  if(L==2){
   float N=16.;vec2 u=(p*.5+.5)*N,c=floor(u),f=fract(u);dq=(c+.5)/N*2.-1.;vec2 m=mark(dq);
   float gap=vS/N>7.?.05:0.;float inside=step(gap,f.x)*step(gap,f.y);
@@ -764,7 +768,7 @@ function makeR(canvas,alpha){
       gl.uniform1i(U(pM,"uFrS"),4);gl.uniform1i(U(pM,"uFrM"),1);gl.uniform1f(U(pM,"uFrX"),N.same?0:1)},
     pen(m){gl.useProgram(pM);const F=m&&m.fr;
       if(F&&F.n>1){this.frTex();
-        if(this.frId!==F.id){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,FR_MAX,1,0,gl.RGBA,gl.FLOAT,F.v);this.frId=F.id}
+        if(this.frId!==F.id){gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,FR_MAX,2,0,gl.RGBA,gl.FLOAT,F.v);this.frId=F.id}
         gl.activeTexture(gl.TEXTURE0);gl.uniform1i(U(pM,"uFrT"),3);gl.uniform1i(U(pM,"uFrN"),F.n)}
       else gl.uniform1i(U(pM,"uFrN"),0);
       const P=m&&m.pen;if(!P||!(P.w>0)){gl.uniform1i(U(pM,"uPenN"),0);return}
@@ -1253,8 +1257,10 @@ function ringAt(e){ringE={clientX:e.clientX,clientY:e.clientY,altKey:e.altKey,po
   ring.classList.toggle("rub",rub);ring.style.width=ring.style.height=d+"px";ring.style.transform=`translate(${e.clientX-d/2}px,${e.clientY-d/2}px)`}
 big.addEventListener("pointermove",ringAt);big.addEventListener("pointerleave",()=>{ring.classList.remove("on");ringE=null});
 addEventListener("keydown",(e)=>{if(e.key==="Alt"&&ringE)ringAt({...ringE,altKey:true})});addEventListener("keyup",(e)=>{if(e.key==="Alt"&&ringE)ringAt({...ringE,altKey:false})});
-function frPack(strokes){if(!strokes.length)return null;const v=new Float32Array(FR_MAX*4);let n=0;
-  strokes.forEach(st=>{const q=st.p,A=[0];for(let i=1;i<q.length;i++)A.push(A[i-1]+Math.hypot(q[i][0]-q[i-1][0],q[i][1]-q[i-1][1]));const tot=A[A.length-1]||1;
+function frPack(strokes){if(!strokes.length)return null;const v=new Float32Array(FR_MAX*8);let n=0;
+  strokes.forEach(st=>{const q=st.p,A=[0],s=n,B=FR_MAX*4;let x0=9,y0=9,x1=-9,y1=-9;q.forEach(([x,y])=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y)});
+    // the second row: the line's box grown by its width, and where the line ends
+    v.set([x0-st.w,y0-st.w,x1+st.w,y1+st.w],B+s*4);v[B+(s+1)*4]=s+q.length;for(let i=1;i<q.length;i++)A.push(A[i-1]+Math.hypot(q[i][0]-q[i-1][0],q[i][1]-q[i-1][1]));const tot=A[A.length-1]||1;
     q.forEach(([x,y],i)=>{v[n*4]=x;v[n*4+1]=y;v[n*4+2]=i?Math.max(A[i]/tot,1e-4)+(st.e&&!st.c?2:0):0;v[n*4+3]=st.c?-st.w:st.w;n++})});
   return {s:strokes,v,n,id:++penId}}
 const frCode=(F)=>F?F.s.map(st=>{const k=st.p.length,d=st.c?1:st.e?2:0;return (k>35?d+3:d)+B36(st.w/.2,2)+(k>35?k.toString(36).padStart(2,"0"):k.toString(36))+st.p.map(([x,y])=>B36((x+1)/2,2)+B36((y+1)/2,2)).join("")}).join(""):"";
