@@ -716,7 +716,7 @@ const E = [];
   }
   function axes(c, top, bot, what) {
     line(c, [PL, bot], [PR, bot], C.line, 2); line(c, [PL, bot], [PL, top], C.line, 2);
-    label(c, PR, bot + 36, "time →", C.faint, "right"); label(c, PL - 14, top + 14, what, C.faint, "right");
+    label(c, PR, bot + 36, "time →", C.faint, "right"); label(c, PL - 4, top - 30, what, C.faint);
   }
 
   /* easing: one dot crossing back and forth, its curve drawn underneath */
