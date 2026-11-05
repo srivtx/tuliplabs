@@ -277,7 +277,14 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 #guidebox dl{margin:0;display:grid;gap:11px}#guidebox dt{font-weight:600;font-size:12px}#guidebox dd{margin:2px 0 0;opacity:.8;font-size:12px;line-height:1.5}
 #guidebox section.here h3::after{content:"You are here";float:right;font-weight:400;letter-spacing:.02em;text-transform:none;opacity:.6}
 #guidebox kbd{font:10.5px var(--f-mono);padding:1px 6px;border-radius:6px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 45%,transparent);white-space:nowrap}
-@media (prefers-reduced-motion:reduce){#tour .spot,#tourcard{transition:none}#tour .spot::after{animation:none;opacity:0}#guidebox[open]{animation:none}}
+#kbring{position:fixed;z-index:3;pointer-events:none;border-radius:50%;box-shadow:0 0 0 2px var(--ink),0 0 0 7px color-mix(in srgb,var(--ink) 14%,transparent);
+  transition:left .28s cubic-bezier(.2,.8,.2,1),top .28s cubic-bezier(.2,.8,.2,1),width .28s,height .28s,opacity .3s;opacity:0}
+#kbring.on{opacity:1}
+#kbring::after{content:"Enter to open";position:absolute;left:50%;top:calc(100% + 12px);translate:-50% 0;white-space:nowrap;font:600 10.5px var(--f-mono);
+  background:var(--ink);color:var(--ground);padding:3px 9px;border-radius:999px}
+#beforetag{position:absolute;top:18px;left:50%;translate:-50% 0;z-index:4;font:600 11px var(--f-mono);letter-spacing:.03em;background:var(--ink);color:var(--ground);
+  padding:5px 12px;border-radius:999px;pointer-events:none;animation:gin .25s cubic-bezier(.2,.8,.2,1)}
+@media (prefers-reduced-motion:reduce){#kbring{transition:opacity .2s}#tour .spot,#tourcard{transition:none}#tour .spot::after{animation:none;opacity:0}#guidebox[open]{animation:none}}
 </style>
 </head>
 <body>
@@ -290,6 +297,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
   <div class="lenses" id="lenses" role="group" aria-label="Look at the field as"></div>
   <div class="right"><div class="shelf" id="shelf" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span><button class="plant" id="plant">Plant a letter</button></div>
 </div>
+<div id="kbring" hidden aria-hidden="true"></div>
 <div class="toast out" id="toast" hidden role="status"><span id="toastmsg"></span><button id="toastundo">Undo</button></div>
 <div id="tour" hidden aria-hidden="true"><div class="spot none"></div></div>
 <div id="tourcard" class="out" hidden role="dialog" aria-live="polite" aria-labelledby="tourh"><div class="n" id="tourn"></div><h3 id="tourh"></h3><p id="tourb"></p><div class="did" id="tourdid"><span>Try it, or press Next.</span><b>✓ That's it</b></div>
@@ -299,6 +307,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 
 <section id="studio" hidden aria-label="The mark you picked">
   <div class="stage">
+    <div id="beforetag" hidden>As you opened it</div>
     <canvas id="big" width="900" height="900" aria-label="Your mark. Drag sideways to twist it, up and down to thicken it."></canvas>
     <div id="halo" aria-label="Ways your mark could grow"></div>
     <canvas id="mirrors" aria-hidden="true"></canvas>
@@ -323,7 +332,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <div><h2>Colours <button id="wash" hidden>wash it off</button></h2><div class="swatches" id="swatches"></div><div class="tray" id="tray"><span class="trayset" id="trayset"></span><span class="mine" id="mine" aria-label="Colours you made"></span></div><div class="hexes" id="hexes" aria-label="This mark's colours"></div><p class="dyehint">Drag any colour onto the mark, its accents, or the ground around it. Pass it over other colours to mix.</p></div>
     <div class="acts">
       <div class="do"><button class="primary" id="keep">Keep it</button><button id="deeper">Grow from here</button><button id="unfold">Make a poster</button><button id="alive">Make it move</button></div>
-      <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><button id="vid" title="One seamless loop of it moving">Video</button><button id="gif" title="The loop as a GIF, for chats, emoji and avatars">GIF</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
+      <div class="save" role="group" aria-label="Save"><span>Save as</span><button id="svg">SVG</button><button id="png">PNG</button><button id="sheet" title="One image to hand over: its name, colours, real sizes, and on light and dark">Sheet</button><button id="vid" title="One seamless loop of it moving">Video</button><button id="gif" title="The loop as a GIF, for chats, emoji and avatars">GIF</button><span class="dot" aria-hidden="true">·</span><button id="copy">Copy SVG</button></div>
     </div>
     <p id="say" role="status"></p>
     <div class="kept" id="kept" hidden><button class="kl" id="shelfall" title="Save every mark on your shelf, as SVG and PNG">Your shelf</button><div class="keptrow" id="keptrow" aria-label="Marks you kept"></div><span class="letgo" aria-hidden="true">let go</span></div>
@@ -865,7 +874,7 @@ let drag=null,pts=new Map(),pinch=0,moved=0;
 field.addEventListener("pointerdown",(e)=>{field.setPointerCapture(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);
   if(pts.size===2){const [a,b]=[...pts.values()];pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);drag=null;return}
   drag={x:e.clientX,y:e.clientY,t:performance.now()};moved=0;cam.vx=cam.vy=0;field.classList.add("dragging")});
-field.addEventListener("pointermove",(e)=>{pointer.x=e.clientX;pointer.y=e.clientY;pointer.in=e.pointerType==="mouse";
+field.addEventListener("pointermove",(e)=>{if(e.movementX||e.movementY)kbT=0;pointer.x=e.clientX;pointer.y=e.clientY;pointer.in=e.pointerType==="mouse";
   if(pts.has(e.pointerId))pts.set(e.pointerId,[e.clientX,e.clientY]);
   if(pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pinch){cam.zt=clamp(cam.zt+Math.log2(d/pinch),ZMIN,ZMAX);cam.ax=(a[0]+b[0])/2*dpr;cam.ay=(a[1]+b[1])/2*dpr}pinch=d;moved=99;return}
   if(!drag)return;
@@ -947,6 +956,7 @@ addEventListener("keydown",(e)=>{
   if(e.target.tagName==="BUTTON"&&(e.key===" "||e.key==="Enter"))return;
   if(e.key==="Enter"&&!nur){const m=nearest(innerWidth/2,innerHeight/2);if(m){e.preventDefault();openStudio(m,onField(m))}return}
   if(e.key.length===1&&/\p{L}|\p{N}|[&?!#@]/u.test(e.key)){plant((letters+e.key).slice(-3))}
+  if(/^Arrow/.test(e.key))kbShow();
   const step=base/ppw()*1.2;if(e.key==="ArrowLeft")cam.vx=-step*4;if(e.key==="ArrowRight")cam.vx=step*4;if(e.key==="ArrowUp")cam.vy=-step*4;if(e.key==="ArrowDown")cam.vy=step*4;
 });
 $("plant").onclick=()=>{$("letters").focus();if(matchMedia("(hover:hover)").matches&&!letters)say2("Type a letter on your keyboard")};
@@ -1018,7 +1028,7 @@ function openStudio(m,from){ftag.classList.add("out");cancelAnimationFrame(penRa
   $("keep").textContent="Keep it";
   cur.at="#at-"+enc(cur.x)+"-"+enc(cur.y)+"-"+Math.round(cam.z*4)+(letters?"-"+encodeURIComponent(letters):"");
   try{history.pushState({mark:1},"",cur.at)}catch(e){}
-  hist=[];fut=[];lw.fill(0);tw.fill(0);pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
+  hist=[];fut=[];beforeNow=null;$("beforetag").hidden=true;opened={pen:cur.pen||null,g:Float32Array.from(cur.g),n0:cur.n0,n1:cur.n1,s:cur.s,pal:cur.pal,gr:cur.gr,ink:cur.ink,acc:cur.acc,dye:cur.dye.map(d=>({...d}))};lw.fill(0);tw.fill(0);pending=-1;cur.sp=S0*2**-(Math.floor(cam.z)+1);unf=unfT=0;off=[0,0];echo.forEach(e=>{e[0]=e[1]=0});pk="";pc=null;prender();told();
   layoutHalo();makeGhosts();drawStudio();trayAt=-1;showTray(cur.pal);tourOnOpen();
   // the mark lifts out of the field and grows into place while the studio fades up round it
   if(!calm){const st=$("studio");st.animate([{opacity:0},{opacity:1}],{duration:240,easing:"ease-out"});
@@ -1862,7 +1872,7 @@ const layers=()=>({t:sstep(.5,1,unf),e:clamp(unf-1),k:clamp(unf-2),f:clamp(unf-3
 function prender(){
   const on=!!cur&&unf>.001;pv.hidden=!on;big.style.visibility=on?"hidden":"";halo.style.visibility=on?"hidden":"";stage.classList.toggle("unfolded",on);
   $("markhint").hidden=unf>=.5;$("leanhint").hidden=unf>=.5||!!live;$("livenote").hidden=unf>=.5||!live;$("posterhint").hidden=$("posternote").hidden=unf<.5;$("png").textContent=unf>=.5?"Poster PNG":"PNG";
-  $("unfold").hidden=$("alive").hidden=$("vid").hidden=$("gif").hidden=unf>=.5;{const n=Math.floor(unfT+1e-3);$("layer").textContent=n>=4?"Peel back to the words":n===3?"Add the "+["field","sky","field","field"][pstyle]:n===2?"Add its kin":"Add the "+["echoes","reflection","wallpaper","guides"][pstyle]}
+  $("unfold").hidden=$("alive").hidden=$("vid").hidden=$("gif").hidden=$("sheet").hidden=unf>=.5;{const n=Math.floor(unfT+1e-3);$("layer").textContent=n>=4?"Peel back to the words":n===3?"Add the "+["field","sky","field","field"][pstyle]:n===2?"Add its kin":"Add the "+["echoes","reflection","wallpaper","guides"][pstyle]}
   if(!on)return;pbuild();
   const sr=stage.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2),cw=Math.round(sr.width*dp),ch=Math.round(sr.height*dp);
   if(pv.width!==cw||pv.height!==ch){pv.width=cw;pv.height=ch}
@@ -2126,6 +2136,31 @@ function zipOf(files){const enc=new TextEncoder(),parts=[],cen=[],now=new Date()
 function icoOf(pngs,sizes){const n=pngs.length,h=new Uint8Array(6+16*n),v=new DataView(h.buffer);v.setUint16(2,1,true);v.setUint16(4,n,true);let off=h.length;
   pngs.forEach((d,i)=>{const o=6+i*16;h[o]=h[o+1]=sizes[i];v.setUint16(o+4,1,true);v.setUint16(o+6,32,true);v.setUint32(o+8,d.length,true);v.setUint32(o+12,off,true);off+=d.length});
   const out=new Uint8Array(off);out.set(h);let p=h.length;pngs.forEach(d=>{out.set(d,p);p+=d.length});return out}
+// a sheet to hand over: the mark on its ground, its name, its three colours, its real sizes, and on light and dark
+async function saveSheet(){if(!cur)return;$("say").textContent="Setting out the sheet…";
+  try{await Promise.all(['italic 400 90px "Instrument Serif"','400 22px "IBM Plex Mono"','600 18px "IBM Plex Mono"'].map(f=>document.fonts.load(f)))}catch(e){}
+  const SW=2400,SH=1350,cv=document.createElement("canvas");cv.width=SW;cv.height=SH;const g=cv.getContext("2d");
+  const c=colours(cur.pal,cur),ground=groundOf(cur),ink=inkOf(cur),acc=accOf(cur),paper="#f6f4ef",text="#17161b",soft="#6e6c72",line="rgba(23,22,27,.14)";
+  const SERIF='"Instrument Serif",Georgia,serif',MONO='"IBM Plex Mono",ui-monospace,Menlo,monospace';
+  const fit=(t,w,size,face)=>{let z=size;g.font=face.replace("Z",z+"px");while(g.measureText(t).width>w&&z>12){z-=2;g.font=face.replace("Z",z+"px")}};
+  const mark=(size,x,y,fix)=>{paint(cur,size,lens,fix||c);g.drawImage(tiny,x,y)};
+  g.fillStyle=paper;g.fillRect(0,0,SW,SH);
+  g.fillStyle=ground;g.fillRect(0,0,SH,SH);mark(860,(SH-860)/2,(SH-860)/2);
+  const X=SH+110,CW=SW-X-110;let y=168;
+  g.fillStyle=text;g.textBaseline="alphabetic";fit(latin(cur),CW,96,"italic 400 Z "+SERIF);g.fillText(latin(cur),X,y);
+  g.fillStyle=soft;fit(foundAt,CW,21,"400 Z "+MONO);g.fillText(foundAt,X,y+=54);
+  const head=(t,yy)=>{g.fillStyle=text;g.font="600 17px "+MONO;g.letterSpacing="3px";g.fillText(t,X,yy);g.letterSpacing="0px";g.fillStyle=line;g.fillRect(X,yy+16,CW,2)};
+  head("COLOURS",y+=104);y+=58;
+  [["Ground",ground],["Ink",ink],["Accent",acc]].forEach(([n,h],i)=>{const cx=X+i*Math.floor(CW/3);g.fillStyle=h;g.beginPath();g.arc(cx+52,y+52,52,0,Math.PI*2);g.fill();
+    g.strokeStyle=line;g.lineWidth=2;g.stroke();g.fillStyle=text;g.font="600 22px "+MONO;g.fillText(h.toUpperCase(),cx+128,y+46);g.fillStyle=soft;g.font="400 19px "+MONO;g.fillText(n,cx+128,y+76)});
+  head("AT REAL SIZE, TWICE OVER",y+=186);y+=50;
+  const sz=[16,24,32,48,64];g.fillStyle=ground;g.beginPath();g.roundRect(X,y,CW,196,24);g.fill();
+  let sx=X+48;sz.forEach(s=>{const d=s*2;mark(d,sx,y+(150-d)/2+14);g.fillStyle=text;g.font="400 16px "+MONO;g.globalAlpha=.6;g.fillText(String(s),sx+d/2-g.measureText(String(s)).width/2,y+180);g.globalAlpha=1;sx+=d+72});
+  head("ON LIGHT AND ON DARK",y+=270);y+=50;
+  const tw2=(CW-36)/2;[["#ffffff","#111111"],["#111111","#f5f5f5"]].forEach(([bg,fg],i)=>{const tx=X+i*(tw2+36);g.fillStyle=bg;g.beginPath();g.roundRect(tx,y,tw2,280,24);g.fill();g.strokeStyle=line;g.lineWidth=2;g.stroke();
+    mark(200,tx+(tw2-200)/2,y+40,{i:K(fg),a:K(fg)})});
+  g.fillStyle=soft;g.font="400 17px "+MONO;g.fillText("Grown in Meadow · Tulip Labs",X,SH-64);
+  cv.toBlob(async(b)=>{try{await saveFile(slug()+"-sheet.png",b);$("say").textContent="Saved the sheet."}catch(e){$("say").textContent="That didn't save."}},"image/png")}
 // the whole shelf in one zip: every kept mark as an SVG and a 1024-pixel PNG, in the way you're looking now
 function glyphTex(str){const n=384,tex=new Uint8Array(n*n*4);FACES.forEach((f,c)=>{const d=face(str,f,n);for(let i=0;i<n*n;i++)tex[i*4+c]=clamp(d[i]*1.6+.5)*255});return tex}
 async function saveShelfAll(){if(!shelf.length||saveShelfAll.busy)return;saveShelfAll.busy=true;$("say").textContent="Gathering your shelf…";
@@ -2158,7 +2193,7 @@ async function saveSiteIcons(){if(!cur)return;
   try{await saveFile(slug()+"-icons.zip",zipOf(files));$("say").textContent="Saved the icons for your site, with the lines to paste into its <head>."+note()}catch(e){$("say").textContent="That didn't save."}}
 const note=()=>lens>=3?" Dots and Soft are PNG looks, so the SVG holds the plain shape.":"";
 $("wSite").onclick=saveSiteIcons;
-$("shelfall").onclick=saveShelfAll;$("shelfall").onmouseenter=$("shelfall").onfocus=()=>{$("shelfall").textContent="Save all"};$("shelfall").onmouseleave=$("shelfall").onblur=()=>{$("shelfall").textContent="Your shelf"};
+$("shelfall").onclick=saveShelfAll;$("sheet").onclick=saveSheet;$("shelfall").onmouseenter=$("shelfall").onfocus=()=>{$("shelfall").textContent="Save all"};$("shelfall").onmouseleave=$("shelfall").onblur=()=>{$("shelfall").textContent="Your shelf"};
 $("latin").onclick=async()=>{try{await navigator.clipboard.writeText(location.href);$("say").textContent="Link copied. It opens this exact mark, colours and all."}catch(e){$("say").textContent="Your browser blocked copying. The address bar holds the same link."}};
 $("latin").onkeydown=(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("latin").click()}};$("wSite").onkeydown=(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();saveSiteIcons()}};
 $("wSite").onmouseenter=()=>{$("wSiteT").textContent="Save icons"};$("wSite").onmouseleave=()=>{$("wSiteT").textContent="Your site"};
@@ -2168,6 +2203,22 @@ $("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.crea
   paint(cur,900,lens,colours(cur.pal,cur));g.drawImage(tiny,62,62);
   c.toBlob(async(b)=>{try{await saveFile(slug()+".png",b);$("say").textContent="Saved."}catch(e){$("say").textContent="That didn't save."}},"image/png")};
 
+/* ---------- keys ---------- */
+// once you drift with the arrow keys, a soft ring shows which mark Enter will open; the mouse moving puts it away
+let kbT=0;const kbr=$("kbring");
+function kbShow(){kbT=performance.now();if(kbr.hidden){kbr.hidden=false;requestAnimationFrame(kbLoop)}}
+function kbLoop(){const on=kbT&&$("studio").hidden&&!nur&&!tour&&performance.now()-kbT<5000,m=on&&nearest(innerWidth/2,innerHeight/2);
+  if(!m){kbr.classList.remove("on");if(performance.now()-kbT>5400||!kbT){kbr.hidden=true;return}requestAnimationFrame(kbLoop);return}
+  const sc=ppw(),R=base*.86/dpr*.64,x=((m.x-cam.x)*sc+W/2)/dpr,y=((m.y-cam.y)*sc+H/2)/dpr;
+  Object.assign(kbr.style,{left:x-R+"px",top:y-R+"px",width:R*2+"px",height:R*2+"px"});kbr.classList.add("on");requestAnimationFrame(kbLoop)}
+// hold B while shaping to see the mark as it was when you opened it; let go and every change comes back
+let opened=null,beforeNow=null;const BF=["pen","g","n0","n1","s","pal","gr","ink","acc","dye"];
+function showBefore(on){if(!cur||on===!!beforeNow)return;
+  if(on){if(!opened||!hist.length||live||unf>0||tune)return;beforeNow={};BF.forEach(k=>beforeNow[k]=cur[k]);BF.forEach(k=>cur[k]=k==="dye"?opened.dye.map(d=>({...d})):opened[k])}
+  else{BF.forEach(k=>cur[k]=beforeNow[k]);beforeNow=null}
+  cancelAnimationFrame(penRaf);penShow=null;$("beforetag").hidden=!on;$("latin").textContent=latin(cur);$("petn").textContent=(cur.s>.5?cur.n1:cur.n0)+" petals";drawStudio()}
+addEventListener("keydown",(e)=>{if((e.key==="b"||e.key==="B")&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&!$("studio").hidden){const t=e.target;if(t.isContentEditable||t.tagName==="INPUT")return;e.preventDefault();if(!e.repeat)showBefore(true)}});
+addEventListener("keyup",(e)=>{if(e.key==="b"||e.key==="B")showBefore(false)});addEventListener("blur",()=>showBefore(false));
 /* ---------- the guide ----------
    The first visit gets a short walk round: a soft light on one thing at a time and a line about what it does.
    A step moves on by itself once you've done what it shows, or with Next. The field and the mark each have their
@@ -2204,14 +2255,14 @@ const TOUR={
      const x0=Math.min(P[0][0],P[1][0])-h,y0=Math.min(P[0][1],P[1][1])-h,x1=Math.max(P[0][0],P[1][0])+h,y1=Math.max(P[0][1],P[1][1])+h;return {x:x0,y:y0,w:x1-x0,h:y1-y0,r:h}}},
   {t:"Petals and symmetry",b:"− and + change the number of petals, and so does scrolling over the mark. The word beside them says how it's mirrored; click it to change that.",
    at:()=>boxOf([$("markhint")],7)},
-  {t:"Step back any time",b:"Every change can be undone and done again, here or with ⌘Z and ⇧⌘Z.",at:()=>boxOf([$("undoWrap")],7)},
+  {t:"Step back any time",b:"Every change can be undone and done again, here or with ⌘Z and ⇧⌘Z. Hold B to see the mark as you first opened it.",at:()=>boxOf([$("undoWrap")],7)},
   {t:"See it where it will live",b:"At its real sizes, from a 16-pixel favicon up, and out in the world: a browser tab, a phone, print, on black. Click “Your site” to save every icon a website needs.",
    at:()=>boxOf([$("sizes"),$("worlds")],10),el:()=>$("worlds")},
   {t:"Colour it",b:"Pick a set of colours, or drag any colour onto the mark, its accents or the ground round it. Pass one colour over another to mix them, or type a new code into any of its colours.",
    at:()=>boxOf([$("swatches"),$("tray"),$("hexes")],10),el:()=>$("hexes")},
   {t:"Keep it, grow it, show it",b:"Keep it puts the mark on your shelf. Grow from here makes it the centre of a new ring of ghosts. Make a poster sets it on a poster, and Make it move sets it drifting through its kin.",
    at:()=>boxOf([q(".acts .do")],8),el:()=>q(".acts")},
-  {t:"Take it with you",b:"Save a crisp SVG or PNG, a Video or GIF of it moving, or copy the SVG straight into your design tool. The address bar always holds this exact mark, so you can share the link.",
+  {t:"Take it with you",b:"Save a crisp SVG or PNG, a Sheet to hand over, a Video or GIF of it moving, or copy the SVG straight into your design tool. The address bar always holds this exact mark, so you can share the link.",
    at:()=>boxOf([q(".acts .save")],8),el:()=>q(".acts")},
   {t:"Breed what you keep",b:"Kept marks wait on your shelf. Drag one onto any other mark and the meadow becomes their nursery, every mix of the two laid out between them. Guide, at the top of this panel, or the ? key brings all of this back.",
    at:()=>boxOf([$("kept").hidden?$("keep"):$("kept")],8),el:()=>$("kept").hidden?$("keep"):$("kept")},
@@ -2255,12 +2306,12 @@ function tourOnOpen(){if(tour&&tour.kind==="field"){endTour(true);setTimeout(()=
 const GUIDE=[
  ["The field",[["Drag","Wander. Let go mid-drag and it glides on."],["Scroll or pinch","Go deeper: new marks grow between the ones you see. Zoom out to travel."],
    ["Click a mark","Open it to shape, colour and save it."],["Type a letter","Plant it: marks grow shaped round it. <kbd>Backspace</kbd> takes one away, <kbd>Esc</kbd> clears."],
-   ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field."],["<kbd>Enter</kbd>","Open the mark in the middle."]]],
+   ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field. A ring shows the mark in the middle."],["<kbd>Enter</kbd>","Open the ringed mark."]]],
  ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. Sideways and up and down each do something."],
    ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],
    ["Draw <kbd>7</kbd>","Draw one petal on the mark and it repeats all the way round. Close the loop to fill it. Tap the mark to let the drawing go."],
    ["− + or scroll over the mark","More or fewer petals."],["The symmetry word, or <kbd>M</kbd>","Mirrored, one mirror, turning or free. Hover each to preview it."],
-   ["<kbd>⌘Z</kbd> · <kbd>⇧⌘Z</kbd>","Step back and forward through every change. <kbd>Esc</kbd> goes back to the field."],["<kbd>?</kbd>","Opens this guide while you're shaping a mark."]]],
+   ["<kbd>⌘Z</kbd> · <kbd>⇧⌘Z</kbd>","Step back and forward through every change. <kbd>Esc</kbd> goes back to the field."],["Hold <kbd>B</kbd>","See the mark as it was when you opened it. Let go and your changes come back."],["<kbd>?</kbd>","Opens this guide while you're shaping a mark."]]],
  ["The ghosts",[["Point between two ghosts","The mark blends them, exactly half of each at the midpoint."],["Click a ghost","Become it. A new ring grows round the new mark."],
    ["Double-click","Keep the blend you're looking at."],["Grow from here","A fresh ring of ghosts round the mark as it is now."]]],
  ["Colour",[["A colour set","Ground, ink and accent chosen to go together. Rest on a set to see its three colours."],
@@ -2269,7 +2320,7 @@ const GUIDE=[
    ["Drag the mark","Move it on the page. Pick the poster's shape below it, then save a Poster PNG."]]],
  ["Moving marks",[["Make it move","The mark drifts through its ghosts in a loop that never jumps."],["Click it, or Hold still","Keep the moment you like as the new mark."],
    ["Scroll","A slower or faster loop, from 3 to 30 seconds."],["Video · GIF","Save exactly one loop: a 1080-pixel video, or a GIF for chats, emoji and avatars."]]],
- ["Taking it with you",[["SVG · PNG","A crisp vector or a 1024-pixel image."],["Copy SVG","Straight onto the clipboard for Figma and the like."],
+ ["Taking it with you",[["SVG · PNG","A crisp vector or a 1024-pixel image."],["Sheet","One image to hand over: the mark on its ground, its name, its three colours, its real sizes, and on light and dark."],["Copy SVG","Straight onto the clipboard for Figma and the like."],
    ["Your site","Under Out in the world: a zip with a favicon, an SVG icon, home-screen icons, a manifest and the lines for your page."],["The link","The address always holds this exact mark, colours and drawing included. Click the mark's name to copy it."],["Your shelf","Click the words Your shelf, under the actions, to save every kept mark as SVG and PNG in one zip."]]],
  ["Your shelf and the nursery",[["Keep it","The mark joins your shelf, bottom right in the field. It stays in this browser."],
    ["Drag a kept mark onto another","Onto a mark in the field, another kept mark, or the one you're shaping: the meadow becomes their nursery, every mix of the two between them."],
