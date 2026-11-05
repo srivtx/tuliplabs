@@ -331,7 +331,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
     <canvas id="inkpad" aria-hidden="true"></canvas>
     <canvas id="poster" hidden aria-label="Your mark as a poster. Scroll to add or peel off layers, drag the mark to move it."></canvas>
     <div class="tunehint">
-      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–7)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span><span id="drawhint" hidden>Each line <button class="word" id="wayword" aria-haspopup="true" aria-expanded="false" title="Choose where each line lands (7 again for the next)">repeats round the mark</button>. <span id="waytip">Close a loop to fill it; ⇧ straight.</span></span></span><span id="livenote" hidden>It drifts through its kin. Click it to keep the moment you like; scroll for slower or faster.</span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
+      <p class="hint"><span id="leanhint">Drag the mark to <button class="word" id="modeword" aria-haspopup="true" aria-expanded="false" title="Choose what dragging changes (1–7, or Tab over the mark)">twist it</button>. <span id="ghosthint">Between two ghosts it blends; double-click to keep.</span><span id="drawhint" hidden>Each line <button class="word" id="wayword" aria-haspopup="true" aria-expanded="false" title="Choose where each line lands (7 again for the next)">repeats round the mark</button>. <span id="waytip">Close a loop to fill it; ⇧ straight.</span></span></span><span id="livenote" hidden>It drifts through its kin. Click it to keep the moment you like; scroll for slower or faster.</span><span id="posternote" hidden>This poster <button class="word" id="styleword" aria-haspopup="true" aria-expanded="false" title="Choose how the poster sets the mark (1–4)">echoes it</button>. Scroll for more or fewer layers; drag the mark to move it.</span></p>
       <div class="modepop" id="modepop" hidden role="menu" aria-label="What dragging the mark changes"></div>
       <div class="modepop" id="waypop" hidden role="menu" aria-label="Where each line lands"></div>
       <div class="modepop" id="stylepop" hidden role="menu" aria-label="How the poster sets the mark"></div>
@@ -1012,7 +1012,8 @@ addEventListener("keydown",(e)=>{
     if(k==="z"||(k==="y"&&e.ctrlKey)){e.preventDefault();const again=k==="y"||e.shiftKey;
       if(!$("studio").hidden){again?stepAgain():stepBack()}else{const t=again?fieldRedo:fieldUndo,o=again?fieldUndo:fieldRedo;if(t.length){const s=t.pop();o.push(s);again?s.redo():s.undo()}}return}}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
-  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(/^[1-8]$/.test(e.key)&&e.target.tagName!=="INPUT"){const k=+e.key-1;if(k===7){if(!way)setWay(1,true);setMode(6)}else if(k===6&&mode===6)setWay(way+1,true);else setMode(k)}else if((e.key==="["||e.key==="]")&&freeOn()&&unfT<=0)brushBy(e.key==="]"?1.25:.8);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
+  if(!$("studio").hidden){if(e.target.isContentEditable)return;if(e.key==="Escape"){if(live){if(!live.rec)liveOff(false)}else if(unfT>0)foldTo(0);else leave()}else if(e.key==="Backspace"){e.preventDefault();stepBack()}else if(/^Arrow/.test(e.key)&&nudgeKey(e)){}else if(unfT>=1&&/^[1-4]$/.test(e.key))setStyle(+e.key-1);else if(e.key==="Tab"&&unfT<=0&&!live&&stage.matches(":hover")&&!e.target.closest("input,textarea,dialog,.modepop")){e.preventDefault();setMode((mode+(e.shiftKey?6:1))%7);sayMode()}
+    else if(/^[1-8]$/.test(e.key)&&e.target.tagName!=="INPUT"){const k=+e.key-1;if(k===7){if(!way)setWay(1,true);setMode(6)}else if(k===6&&mode===6)setWay(way+1,true);else{setMode(k);sayMode()}}else if((e.key==="["||e.key==="]")&&freeOn()&&unfT<=0)brushBy(e.key==="]"?1.25:.8);else if((e.key==="m"||e.key==="M")&&unfT<=0&&e.target.tagName!=="INPUT")popShape($("shapepop").hidden);return}
   if(e.target===$("letters"))return;
   if(/^[1-5]$/.test(e.key)){setLens(+e.key-1,true);return}
   if(e.key==="Backspace"){plant(letters.slice(0,-1));return}
@@ -1378,6 +1379,9 @@ const MODES=[["twist it","Twist","sideways twists it, up and down thickens it"],
   ["lean it","Lean","bends it, and makes one end heavier"],["reshape its petals","Petals","heart, teardrop, crescent, star, flame, and fuller or finer"],
   ["frame it","Frame","sets it in a circle, hexagon, shield, drop or arch"],["turn its colours","Colour","turns every colour together, vivid or calm"],["draw on it","Draw","a petal round the mark, or lines just where you draw, once or mirrored; 7 again for the next way"]];
 let mode=0;
+// switching mode from the keys says which one you're in beside the pointer, since the word that names it sits below the mark
+function sayMode(){if(!cur||tune)return;const r=big.getBoundingClientRect(),over=ringE&&big.matches(":hover"),x=over?ringE.clientX:r.left+r.width*.5,y=over?ringE.clientY:r.top+r.height*.9;restOff();
+  hud(mode===6?"Draw · "+WAYS[way].n.toLowerCase():MODES[mode][1],(mode===6?WAYS[way].d:AXW[mode])+" · Tab for the next",x,y);clearTimeout(sayMode.t);sayMode.t=setTimeout(()=>{if(!tune)ro.classList.add("out")},1400)}
 function setMode(i){const w=$("modeword"),was=w.textContent;mode=i;w.textContent=MODES[i][0];if(i===6&&typeof firstTime==="function")firstTime("draw");
   if(was&&was!==w.textContent&&!calm)w.animate([{opacity:0,translate:"0 4px"},{opacity:1,translate:"0 0"}],{duration:260,easing:"cubic-bezier(.2,.8,.3,1)"});[...$("modepop").children].forEach((b,k)=>b.setAttribute("aria-checked",k===i));
   big.className=["","m-stretch","m-lean","m-stretch","m-stretch","m-colour","m-draw"][i];if(i!==6){ring.classList.remove("on");guideInk(null);popWay(false)}
@@ -1472,13 +1476,17 @@ const TOGGLE={8:.62,9:.67,10:.66,11:.6,15:.74,16:.6,17:.6,18:.6}; // traits that
 function roll(far){ // every other ghost is a bigger leap, so the ring holds near cousins and strangers
   const d=new Float32Array(NG),pool=TRAITS.slice().sort(()=>Math.random()-.5),k=2;let pet=0;
   if(Math.random()<.26){const more=[...FAMS.filter(f=>f!==16||symI!==0),23,...(cur.g[14]>.74?[24,24]:[])];pool[0]=more[Math.floor(Math.random()*more.length)]} // now and then a ghost is another kind of mark altogether
-  if(far){ // a stranger from somewhere else in the meadow wanders in and they meet halfway
-    const s=specimen(Math.round((cur.x+(Math.random()-.5)*9)*40)/40,Math.round((cur.y+(Math.random()-.5)*9)*40)/40),mix=.42+Math.random()*.2;
-    TRAITS.forEach(t=>{d[t]=(s.g[t]-cur.g[t])*mix});pet=s.s>.5?s.n1:s.n0;
+  // a ghost is still recognisably this mark: at most one of its switches (a core, a ring, a kind) flips, and the rest moves by degrees
+  const flips=(t)=>t in TOGGLE&&(cur.g[t]>TOGGLE[t])!==(clamp(cur.g[t]+d[t])>TOGGLE[t]);
+  if(far){ // a stranger from somewhere else in the meadow wanders in and lends it a few of its ways, a third of the way over
+    const s=specimen(Math.round((cur.x+(Math.random()-.5)*9)*40)/40,Math.round((cur.y+(Math.random()-.5)*9)*40)/40),mix=.28+Math.random()*.14,cn=cur.s>.5?cur.n1:cur.n0,sn=s.s>.5?s.n1:s.n0;
+    let flipped=false;TRAITS.slice().sort(()=>Math.random()-.5).slice(0,5).forEach(t=>{d[t]=(s.g[t]-cur.g[t])*mix;if(flips(t)){if(flipped)d[t]=0;else flipped=true}});
+    if(Math.abs(sn-cn)<=2&&sn>=3)pet=sn;
   }
-  for(let i=0;i<k;i++){const t=pool[i],v=cur.g[t];
+  if(pool[0] in TOGGLE&&pool[1] in TOGGLE){const j=pool.findIndex((t,i)=>i>1&&!(t in TOGGLE));if(j>1)[pool[1],pool[j]]=[pool[j],pool[1]]}
+  for(let i=0;i<k;i++){const t=pool[i],v=cur.g[t];if(far&&t in TOGGLE&&TRAITS.some(u=>u!==t&&flips(u)))continue;
     if(t in TOGGLE){const th=TOGGLE[t];d[t]=(v>th?th-.22:Math.min(.97,th+.18))-v}
-    else{const s=(far?.28+Math.random()*.2:.17+Math.random()*.13)*(Math.random()<.5?-1:1);d[t]=clamp(v+s)===v+s?s:-s}}
+    else{const s=(far?.22+Math.random()*.14:.15+Math.random()*.12)*(Math.random()<.5?-1:1);d[t]=clamp(v+s)===v+s?s:-s}}
   return {d,pet,far};
 }
 function blend(G,w){
@@ -2652,7 +2660,7 @@ const GUIDE=[
    ["<kbd>1</kbd>–<kbd>5</kbd> or Ink · Line · Pixel · Dots · Soft","Look at every mark another way."],["The word after the place name","How much of the meadow grows mirror-shaped, from all mirrored to all free."],["Arrow keys","Drift across the field. A ring shows the mark in the middle."],["<kbd>Enter</kbd>","Open the ringed mark."]]],
  ["Shaping a mark",[["Drag the mark","Changes what the word in the line below it says. A label beside the pointer names what you're getting and what each way changes. Rest on the mark to see it before you drag."],
    ["Hold <kbd>⇧</kbd> while dragging","Keeps to the way you set off in, so only one thing changes."],["Arrow keys","Nudge the mark in the mode you're in. <kbd>⇧</kbd> for bigger steps."],
-   ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],
+   ["The word, or <kbd>1</kbd>–<kbd>7</kbd>","Twist · Stretch · Lean · Petal · Frame · Colour · Draw."],["<kbd>Tab</kbd> over the mark","Steps to the next mode, <kbd>⇧Tab</kbd> back. A label beside the pointer says which one you're in."],
    ["Draw <kbd>7</kbd>","Draw on the mark. The word after it says where each line lands: <i>round the mark</i>, as a petal that repeats as the mark does; <i>just where you draw</i>; or mirrored side to side, top to bottom or four ways. Press <kbd>7</kbd> again for the next way; <kbd>8</kbd> goes straight to just where you draw."],
    ["Round the mark","Draw one petal and it repeats all the way round. Close the loop to fill it. Tap the mark to let it go. On a lettered mark the petal sits beside the letters. In Petal mode, sideways makes it longer or shorter."],
    ["Lines where you draw","Lines land exactly where you draw them, one after another, over the mark and any letters. A closed loop fills; on a badge a line cuts through. <kbd>[</kbd> <kbd>]</kbd> change the brush, <kbd>⌘Z</kbd> takes a line back, a tap clears them all."],
