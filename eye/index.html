@@ -933,6 +933,114 @@ const Endless = {};
     } }];
 }
 
+/* Endless · size and spacing: each answer sits somewhere between two truths,
+   and the model is one number, how far along you tend to go. */
+{
+  const { place, paintAt, newSeed, best, M, mean, recent } = Endless;
+  function lean(kind, prior) {
+    const L = M(kind), W = L.reduce((s, e) => s + e.w, 0), w0 = 0.5 * (L.length ? W / L.length : 0) + 0.02;
+    return (L.reduce((s, e) => s + e.w * e.t, 0) + w0 * prior) / (W + w0);
+  }
+  const guesses = (kind, fixed) => { const r = recent(kind, 6).slice(1); return r.length ? ` My recent guesses were ${pc(mean(r.map((x) => x.pe)))} off; ${fixed} would be ${pc(mean(r.map((x) => x.pb)))} off.` : ""; };
+  const mine = (err) => (err < 3 ? "My guess, made before you moved, landed within 3% of it." : `My guess, made before you moved, was ${pc(err)} off.`);
+
+  /* size: make a new shape look as big as the square */
+  const SQ = 280, SQX = 255, SY = 450, RX = 690;
+  const qOf = (seed) => place(seed, 0, 0, 100).q;
+  Endless.size = { summary() {
+    const L = M("size"); if (!L.length) return "";
+    return `<b>Size</b> Across ${L.length} shape${L.length > 1 ? "s" : ""}, you size a shape ${pc(lean("size", 0.5) * 100)} of the way from matching the square's outline to matching its ink.` + guesses("size", "a fixed halfway guess");
+  } };
+  Endless.trials.push({ id: "x-size", kind: "size", q: "Make this shape look as big as the square.", hint: "drag right or up to grow it, left or down to shrink it",
+    init(again) {
+      if (!(again && this.s)) {
+        // the most telling shapes have much less ink than their outline promises, but still fit
+        const s = best(() => ({ seed: newSeed() }), (s) => { const q = qOf(s.seed); return q * SQ > 470 ? -1 : Math.log(q); }, 14);
+        s.pred = Math.round(SQ * qOf(s.seed) ** lean("size", 0.5)); this.s = s;
+      }
+      this.s.k = Math.round(130 + Math.random() * 300);
+    },
+    move(h, dx, dy) { this.s.k = cl(this.s.k + (dx - dy) * 0.6, 80, 480); },
+    draw(c, k) {
+      poly(c, [[SQX - SQ / 2, SY - SQ / 2], [SQX + SQ / 2, SY - SQ / 2], [SQX + SQ / 2, SY + SQ / 2], [SQX - SQ / 2, SY + SQ / 2]], C.ink);
+      const seed = this.s.seed;
+      paintAt(c, place(seed, RX, SY, this.s.k), C.pink);
+      if (k == null) return;
+      c.save(); c.globalAlpha = k;
+      paintAt(c, place(seed, RX, SY, SQ), C.leaf, true, 3, [10, 9]);
+      paintAt(c, place(seed, RX, SY, SQ * qOf(seed)), C.leaf, true, 3, [2, 7]);
+      paintAt(c, place(seed, RX, SY, this.s.pred), C.ink, true, 3, [5, 6]);
+      c.restore();
+      legend(c, [[[10, 9], "same widest side"], [[2, 7], "same ink"], [[5, 6], "my guess", C.ink]], 860, k);
+    },
+    learn() {
+      const q = qOf(this.s.seed), k = this.s.k, err = Math.abs(Math.log(k / this.s.pred)), base = Math.abs(Math.log(k / (SQ * Math.sqrt(q))));
+      M("size").push({ t: cl(Math.log(k / SQ) / Math.log(q), -1, 2), w: Math.log(q) ** 2, pe: (Math.exp(err) - 1) * 100, pb: (Math.exp(base) - 1) * 100 });
+      if (M("size").length > 80) M("size").shift();
+    },
+    read() {
+      const q = qOf(this.s.seed), k = this.s.k, t = Math.log(k / SQ) / Math.log(q), ink = (k / SQ) ** 2 / q ** 2;
+      const err = (Math.exp(Math.abs(Math.log(k / this.s.pred))) - 1) * 100;
+      const how = t < -0.15 ? "smaller than both truths" : t < 0.25 ? "by its outline" : t <= 0.75 ? "between its outline and its ink" : t <= 1.15 ? "by its ink" : "bigger than both truths";
+      return { v: R2(t),
+        line: `You matched it ${how}: at its widest it is ${pc(k / SQ * 100)} of the square's width, with ${pc(ink * 100)} of its ink. ${mine(err)}`,
+        why: "Spiky and thin shapes have less ink than their outline promises: match the outline and they look small, match the ink and they spill out. " + Endless.size.summary().replace(/<b>.*?<\/b> /, ""),
+        short: `Any shape: you size ${how.replace("between its outline and its ink", "between outline and ink")}` };
+    } });
+
+  /* spacing: set the middle of three shapes so the row looks even */
+  const SZ = 190, XA = 175, XC = 825, EY = 450;
+  const row = (s, x) => ({ A: place(s.a, XA, EY, SZ), B: place(s.b, x, EY, SZ), C: place(s.c, XC, EY, SZ) });
+  const marks = (s) => {
+    const { A, C, B } = row(s, 0), xe = (A.x1 + C.x0) / 2, xc = (A.cen[0] + C.cen[0]) / 2 - B.cen[0];
+    return { xe, xc, lo: A.x1 + B.w / 2 + 8, hi: C.x0 - B.w / 2 - 8 };
+  };
+  Endless.even = { summary() {
+    const L = M("even"); if (!L.length) return "";
+    return `<b>Spacing</b> Across ${L.length} row${L.length > 1 ? "s" : ""}, you place the middle shape ${pc(lean("even", 0.5) * 100)} of the way from even gaps to evenly spaced balance points.` + guesses("even", "always guessing even gaps");
+  } };
+  Endless.trials.push({ id: "x-even", kind: "even", q: "Slide the middle shape until the row looks evenly spaced.", hint: "drag the pink shape sideways",
+    init(again) {
+      if (!(again && this.s)) {
+        // the most telling rows are the ones where even gaps and even balance points disagree most
+        const s = best(() => ({ a: newSeed(), b: newSeed(), c: newSeed() }), (s) => { const m = marks(s); return Math.abs(m.xc - m.xe); }, 14);
+        const m = marks(s); s.pred = cl(m.xe + lean("even", 0.5) * (m.xc - m.xe), m.lo, m.hi); this.s = s;
+      }
+      const m = marks(this.s); this.s.x = cl(m.xe + (Math.random() < 0.5 ? -1 : 1) * 75, m.lo, m.hi);
+    },
+    move(h, dx) { const m = marks(this.s); this.s.x = cl(this.s.x + dx, m.lo, m.hi); },
+    draw(c, k) {
+      const { A, B, C: Cc } = row(this.s, this.s.x);
+      paintAt(c, A, C.ink); paintAt(c, Cc, C.ink); paintAt(c, B, C.pink);
+      if (k == null) return;
+      const m = marks(this.s), gl = B.x0 - A.x1, gr = Cc.x0 - B.x1, ev = (gl + gr) / 2, gy = EY + 150;
+      c.save(); c.globalAlpha = k;
+      paintAt(c, row(this.s, m.xe).B, C.leaf, true, 3, [10, 9]);
+      paintAt(c, row(this.s, m.xc).B, C.leaf, true, 3, [2, 7]);
+      paintAt(c, row(this.s, this.s.pred).B, C.ink, true, 3, [5, 6]);
+      for (const [a, b, g] of [[A.x1, B.x0, gl], [B.x1, Cc.x0, gr]]) {
+        line(c, [a, gy], [b, gy], C.pink, 3); line(c, [a, gy - 12], [a, gy + 12], C.pink, 3); line(c, [b, gy - 12], [b, gy + 12], C.pink, 3);
+        label(c, (a + b) / 2, gy + 42, pc(g / ev * 100), C.pink, "center");
+      }
+      c.restore();
+      legend(c, [[[10, 9], "even gaps"], [[2, 7], "even balance points"], [[5, 6], "my guess", C.ink]], 860, k);
+    },
+    learn() {
+      const m = marks(this.s), x = this.s.x, d = m.xc - m.xe;
+      M("even").push({ t: Math.abs(d) > 2 ? cl((x - m.xe) / d, -1, 2) : 0.5, w: (d / SZ) ** 2, pe: Math.abs(x - this.s.pred) / SZ * 100, pb: Math.abs(x - m.xe) / SZ * 100 });
+      if (M("even").length > 80) M("even").shift();
+    },
+    read() {
+      const m = marks(this.s), x = this.s.x, { A, B, C: Cc } = row(this.s, x), gl = B.x0 - A.x1, gr = Cc.x0 - B.x1, ev = (gl + gr) / 2;
+      const t = Math.abs(m.xc - m.xe) > 2 ? (x - m.xe) / (m.xc - m.xe) : 0.5, err = Math.abs(x - this.s.pred) / SZ * 100;
+      const how = t < -0.25 ? "past even gaps, away from the balance points" : t < 0.25 ? "near even gaps, edge to edge" : t <= 0.75 ? "between even gaps and evenly spaced balance points" : t <= 1.25 ? "near evenly spaced balance points" : "past the balance points";
+      return { v: R2(t),
+        line: `Your gaps are ${pc(gl / ev * 100)} and ${pc(gr / ev * 100)} of an even gap: the middle shape sits ${how}. ${mine(err)}`,
+        why: "When shapes lean or carry their weight to one side, equal gaps between their edges stop looking equal; type designers space letters by eye for this reason. " + Endless.even.summary().replace(/<b>.*?<\/b> /, ""),
+        short: `Any row: you space ${t < 0.25 ? "by edges" : t <= 0.75 ? "between edges and weight" : "by weight"}` };
+    } });
+}
+
 E.push({ id: "endless", name: "Endless", endless: true, trials: Endless.trials,
   where() {
     const all = ["centre", "size", "even"].flatMap((k) => Endless.recent(k, 4).slice(1)), n = ["centre", "size", "even"].reduce((s, k) => s + Endless.M(k).length, 0);
