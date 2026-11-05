@@ -166,6 +166,7 @@ body.live .tag,body.live .foot{transition:background .5s,color .5s}
 .w-paper{background:#fff}.w-night{background:#0b0b0d}
 .w-app{background:#d7dde6}
 .w-app canvas{border-radius:22%}
+.w-tab{cursor:pointer;transition:background .2s}.w-tab:hover{background:#d2d5da}.w-tab:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .w-tab{background:#dfe1e5;align-items:end;justify-items:start;padding:0}
 .w-tab div{background:#fff;color:#222;font:11px system-ui,sans-serif;display:flex;align-items:center;gap:5px;padding:6px 7px;border-radius:7px 7px 0 0;margin-left:6px;width:calc(100% - 12px);white-space:nowrap;overflow:hidden}
 .swatches{display:flex;gap:8px;flex-wrap:wrap}
@@ -591,7 +592,7 @@ void main(){
   if(m.y<m.x)cb=cov;else ca=cov;
  }else{
   vec2 m=mark(p);
-  if(L==1){m=abs(m)-.017;}
+  if(L==1){m=abs(m)-max(.017,px*.5);} // at small sizes the line thickens to about a pixel, as type is cut heavier for small print, or it breaks into dashes
   if(uOut==1){vec2 v=clamp(m*.5+.5,0.,1.);vec2 hi=floor(v*255.)/255.,lo=fract(v*255.);o=vec4(hi.x,lo.x,hi.y,lo.y);return;}
   // the edge is one screen pixel wide however the shape was bent or blended, so nothing goes soft or jagged
   vec2 e=clamp(sqrt(dFdx(m)*dFdx(m)+dFdy(m)*dFdy(m)),vec2(px*.25),vec2(px*1.5));
@@ -934,7 +935,7 @@ function worlds(c){
   if(pale)onGround($("wTab"),16,c,.1);else copyTo($("wTab"),16,lens,c);$("wTab").style.borderRadius=pale?"4px":""}
 (function buildSheet(){
   $("sizes").innerHTML=[16,24,32,48,64].map(s=>`<figure><canvas id="sz${s}"></canvas><figcaption>${s}</figcaption></figure>`).join("");
-  $("worlds").innerHTML=`<div class="world w-tab" title="In a browser tab"><div><canvas id="wTab"></canvas>Your site</div></div><div class="world w-app" title="On a phone"><canvas id="wApp"></canvas></div><div class="world w-paper" title="Printed in black"><canvas id="wPaper"></canvas></div><div class="world w-night" title="On black"><canvas id="wNight"></canvas></div>`;
+  $("worlds").innerHTML=`<div class="world w-tab" id="wSite" role="button" tabindex="0" title="Save the icons for your site: a favicon, an SVG icon, home-screen icons and the lines for your page"><div><canvas id="wTab"></canvas><span id="wSiteT">Your site</span></div></div><div class="world w-app" title="On a phone"><canvas id="wApp"></canvas></div><div class="world w-paper" title="Printed in black"><canvas id="wPaper"></canvas></div><div class="world w-night" title="On black"><canvas id="wNight"></canvas></div>`;
   PAL.forEach((p,i)=>{
     const b=document.createElement("button");b.className="sw";b.dataset.set=i;b.style.background=p.g;b.style.setProperty("--dot",p.i);b.setAttribute("aria-label",p.place+" colours");
     b.onclick=()=>{if(performance.now()-dropEnd<350||(cur.pal===i&&!cur.gr&&!cur.ink&&!cur.acc))return;remember();cur.pal=i;cur.gr=cur.ink=cur.acc=null;showTray(i);told();drawStudio()};
@@ -2052,7 +2053,41 @@ async function saveFile(name,blob){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 }
 const slug=()=>latin(cur).toLowerCase().replace(/\s+/g,"-");
+/* everything a website needs to wear the mark, in one zip: favicon.ico (16, 32, 48), icon.svg, apple-touch-icon,
+   two home-screen icons and a maskable one, site.webmanifest, and the lines to paste into the page's <head> */
+const crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc32=(d)=>{let c=~0;for(let i=0;i<d.length;i++)c=crcT[(c^d[i])&255]^(c>>>8);return ~c>>>0};
+function zipOf(files){const enc=new TextEncoder(),parts=[],cen=[],now=new Date();let off=0;
+  const tm=now.getHours()<<11|now.getMinutes()<<5|now.getSeconds()>>1,dy=(now.getFullYear()-1980)<<9|(now.getMonth()+1)<<5|now.getDate();
+  for(const f of files){const nm=enc.encode(f.name),d=typeof f.data==="string"?enc.encode(f.data):f.data,crc=crc32(d);
+    const L=new Uint8Array(30+nm.length),v=new DataView(L.buffer);
+    v.setUint32(0,0x04034b50,true);v.setUint16(4,20,true);v.setUint16(6,0x800,true);v.setUint16(10,tm,true);v.setUint16(12,dy,true);v.setUint32(14,crc,true);v.setUint32(18,d.length,true);v.setUint32(22,d.length,true);v.setUint16(26,nm.length,true);L.set(nm,30);
+    const C=new Uint8Array(46+nm.length),w=new DataView(C.buffer);
+    w.setUint32(0,0x02014b50,true);w.setUint16(4,20,true);w.setUint16(6,20,true);w.setUint16(8,0x800,true);w.setUint16(12,tm,true);w.setUint16(14,dy,true);w.setUint32(16,crc,true);w.setUint32(20,d.length,true);w.setUint32(24,d.length,true);w.setUint16(28,nm.length,true);w.setUint32(42,off,true);C.set(nm,46);
+    parts.push(L,d);cen.push(C);off+=L.length+d.length}
+  const E=new Uint8Array(22),e=new DataView(E.buffer);e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cen.reduce((a,c)=>a+c.length,0),true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,E],{type:"application/zip"})}
+function icoOf(pngs,sizes){const n=pngs.length,h=new Uint8Array(6+16*n),v=new DataView(h.buffer);v.setUint16(2,1,true);v.setUint16(4,n,true);let off=h.length;
+  pngs.forEach((d,i)=>{const o=6+i*16;h[o]=h[o+1]=sizes[i];v.setUint16(o+4,1,true);v.setUint16(o+6,32,true);v.setUint32(o+8,d.length,true);v.setUint32(o+12,off,true);off+=d.length});
+  const out=new Uint8Array(off);out.set(h);let p=h.length;pngs.forEach(d=>{out.set(d,p);p+=d.length});return out}
+async function saveSiteIcons(){if(!cur)return;
+  const c=colours(cur.pal,cur),ground=groundOf(cur),pale=contrast(inkOf(cur),"#ffffff")<1.9,name=latin(cur),dir=slug()+"-icons/";
+  // a pale mark would vanish on a white tab, so there it sits on a little tile of its own ground, as in the preview
+  const png=(size,tile,inset,round)=>{const cv=document.createElement("canvas");cv.width=cv.height=size;const g=cv.getContext("2d");
+    if(tile){g.fillStyle=ground;g.beginPath();g.roundRect(0,0,size,size,size*round);g.fill()}
+    const m=Math.round(size*(1-2*inset));paint(cur,m,lens,c);g.drawImage(tiny,Math.round((size-m)/2),Math.round((size-m)/2));
+    return new Promise(r=>cv.toBlob(b=>b.arrayBuffer().then(a=>r(new Uint8Array(a))),"image/png"))};
+  const fav=[];for(const s of [16,32,48])fav.push(await png(s,pale,pale?.1:0,.2));
+  const apple=await png(180,true,.12,0),i192=await png(192,true,.12,0),i512=await png(512,true,.12,0),mask=await png(512,true,.2,0);
+  let svg=svgText();if(pale)svg=svg.replace(/(<\/title>)([\s\S]*)(<\/svg>)$/,`$1<rect width="1024" height="1024" rx="205" fill="${ground}"/><g transform="translate(102.4 102.4) scale(.8)">$2</g>$3`);
+  const head=`<link rel="icon" href="/favicon.ico" sizes="32x32">\n<link rel="icon" href="/icon.svg" type="image/svg+xml">\n<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n<link rel="manifest" href="/site.webmanifest">\n<meta name="theme-color" content="${ground}">\n`;
+  const man=JSON.stringify({name,short_name:name.split(" ")[0],icons:[{src:"/icon-192.png",sizes:"192x192",type:"image/png"},{src:"/icon-512.png",sizes:"512x512",type:"image/png"},{src:"/icon-mask.png",sizes:"512x512",type:"image/png",purpose:"maskable"}],theme_color:ground,background_color:ground,display:"standalone"},null,2);
+  const files=[["favicon.ico",icoOf(fav,[16,32,48])],["icon.svg",svg],["apple-touch-icon.png",apple],["icon-192.png",i192],["icon-512.png",i512],["icon-mask.png",mask],["site.webmanifest",man],
+    ["add-to-head.html","<!-- "+name+", from Meadow. Put these files at the root of your site, then paste these lines into <head>. -->\n"+head]].map(([n,d])=>({name:dir+n,data:d}));
+  try{await saveFile(slug()+"-icons.zip",zipOf(files));$("say").textContent="Saved the icons for your site, with the lines to paste into its <head>."+note()}catch(e){$("say").textContent="That didn't save."}}
 const note=()=>lens>=3?" Dots and Soft are PNG looks, so the SVG holds the plain shape.":"";
+$("wSite").onclick=saveSiteIcons;$("wSite").onkeydown=(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();saveSiteIcons()}};
+$("wSite").onmouseenter=()=>{$("wSiteT").textContent="Save icons"};$("wSite").onmouseleave=()=>{$("wSiteT").textContent="Your site"};
 $("svg").onclick=async()=>{try{await saveFile(slug()+".svg",new Blob([svgText()],{type:"image/svg+xml"}));$("say").textContent="Saved."+note()}catch(e){$("say").textContent="That didn't save. Try Copy SVG."}};
 $("copy").onclick=async()=>{try{await navigator.clipboard.writeText(svgText());$("say").textContent="Copied."+note()}catch(e){$("say").textContent="Your browser blocked copying here. Try Save SVG."}};
 $("png").onclick=async()=>{if(unf>=.5){savePoster();return}const c=document.createElement("canvas");c.width=c.height=1024;const g=c.getContext("2d");g.fillStyle=groundOf(cur);g.fillRect(0,0,1024,1024);
