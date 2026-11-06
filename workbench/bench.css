@@ -75,7 +75,7 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 .tree .f.flash{animation:wflash .9s}
 @keyframes wflash{from{background:color-mix(in srgb,var(--w-amber) 30%,transparent)}}
 .tree .root{display:flex;align-items:center;gap:6px;padding:4px 12px;font:600 12px var(--f-mono);color:var(--w-mute)}
-.tree .empty{padding:2px 12px 6px 26px;color:var(--w-faint);font:11.5px var(--f-mono)}
+.tree .empty{text-align:left;padding:2px 14px 6px;color:var(--w-faint);font:11.5px var(--f-mono)}
 :root{--py:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.9 1C4.3 1 4.5 2.6 4.5 2.6V4.3h3.5v.5H3.1S1 4.5 1 8.1s1.8 3.5 1.8 3.5h1.1V9.9s-.1-1.8 1.8-1.8h3.4s1.7 0 1.7-1.7V2.8S11 1 7.9 1zM6 2.1a.6.6 0 110 1.2.6.6 0 010-1.2z M8.1 15c3.6 0 3.4-1.6 3.4-1.6v-1.7H8v-.5h4.9S15 11.5 15 7.9s-1.8-3.5-1.8-3.5h-1.1v1.7s.1 1.8-1.8 1.8H6.9s-1.7 0-1.7 1.7v3.6S5 15 8.1 15zm1.9-1.1a.6.6 0 110-1.2.6.6 0 010 1.2z'/%3E%3C/svg%3E")}
 .hist{list-style:none;margin:0;padding:0 0 14px;position:relative}
 .hist li button{display:grid;grid-template-columns:14px 1fr;gap:2px 8px;width:100%;padding:5px 12px 5px 14px;text-align:left}
@@ -89,7 +89,7 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 .hist li.drop .node{animation:wdrop .7s cubic-bezier(.3,1.4,.5,1)}
 @keyframes wdrop{from{transform:translateY(-40px) scale(1.8);background:var(--w-pink)}}
 
-.wmid{display:grid;grid-template-rows:auto auto minmax(80px,1fr) 6px var(--panel-h,38%);min-height:0;min-width:0;background:var(--w-bg)}
+.wmid{display:grid;grid-template-rows:auto auto minmax(80px,1fr) 6px var(--panel-h,30%);min-height:0;min-width:0;background:var(--w-bg)}
 .tabs{display:flex;background:var(--w-side);border-bottom:1px solid var(--w-line);overflow-x:auto;scrollbar-width:none}
 .tabs button{display:flex;align-items:center;gap:7px;padding:0 14px;height:36px;font:12.5px var(--f-mono);color:var(--w-mute);border-right:1px solid var(--w-line);position:relative;white-space:nowrap}
 .tabs button.on{color:var(--w-ink);background:var(--w-bg)}
@@ -120,6 +120,12 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 .ed .cm-matchingBracket{background:none;outline:1px solid var(--w-mute);border-radius:2px;color:inherit}
 .ed .cm-selectionMatch{background:color-mix(in srgb,var(--w-amber) 16%,transparent)}
 .ed .cm-foldGutter .cm-gutterElement{color:var(--w-faint);padding:0 4px;cursor:pointer}
+/* fold arrows appear when the pointer is over the gutter, as in a real editor; a folded block keeps its arrow */
+.ed .cm-foldGutter .fo{opacity:0;transition:opacity .15s}
+.ed .cm-gutters:hover .cm-foldGutter .fo{opacity:1}
+.ed .cm-foldGutter .fc{color:var(--w-pink)}
+.ed .cm-ig{box-shadow:inset 1px 0 0 color-mix(in srgb,var(--w-line2) 70%,transparent)}
+.ed .cm-activeLine .cm-ig{box-shadow:inset 1px 0 0 var(--w-line2)}
 .ed .cm-foldPlaceholder{background:var(--w-raise);border:1px solid var(--w-line2);color:var(--w-mute);padding:0 6px;border-radius:4px}
 .ed .cm-tooltip{background:var(--w-raise);border:1px solid var(--w-line2);border-radius:8px;color:var(--w-ink);box-shadow:0 12px 30px #0006;overflow:hidden}
 .ed .cm-tooltip-autocomplete ul li{font:12.5px var(--f-mono);padding:3px 10px!important}

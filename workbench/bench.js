@@ -172,12 +172,30 @@
     { key: "Shift-Mod-Enter", run: () => { doTest(); return true; } },
     { key: "Mod-s", run: () => { openCommit(); return true; }, preventDefault: true },
   ]);
+  // Indent guides, as real editors draw them: a faint line at the start of each four-space step of indentation,
+  // so you can see which block a line belongs to.
+  const guide = CM.Decoration.mark({ class: "cm-ig" });
+  const indentGuides = CM.ViewPlugin.fromClass(class {
+    constructor(v) { this.decorations = this.build(v); }
+    update(u) { if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view); }
+    build(v) {
+      const out = [];
+      for (const { from, to } of v.visibleRanges) {
+        for (let pos = from; pos <= to;) {
+          const line = v.state.doc.lineAt(pos), lead = (line.text.match(/^ +/) || [""])[0].length;
+          for (let c = 0; c + 4 <= lead; c += 4) out.push(guide.range(line.from + c, line.from + c + 4));
+          pos = line.to + 1;
+        }
+      }
+      return CM.Decoration.set(out, true);
+    }
+  }, { decorations: (p) => p.decorations });
   function editorState(file, doc) {
     return CM.EditorState.create({
       doc,
       extensions: [
         keys,
-        CM.lineNumbers(), CM.highlightActiveLineGutter(), CM.highlightSpecialChars(), CM.history(), CM.foldGutter({ markerDOM: (open) => h("span", {}, open ? "⌄" : "›") }),
+        CM.lineNumbers(), CM.highlightActiveLineGutter(), CM.highlightSpecialChars(), CM.history(), CM.foldGutter({ markerDOM: (open) => h("span", { class: open ? "fo" : "fc" }, open ? "⌄" : "›") }), indentGuides,
         CM.drawSelection(), CM.dropCursor(), CM.EditorState.allowMultipleSelections.of(true), CM.indentOnInput(),
         CM.syntaxHighlighting(tagsHL), CM.bracketMatching(), CM.closeBrackets(), CM.autocompletion({ override: [complete] }),
         CM.rectangularSelection(), CM.crosshairCursor(), CM.highlightActiveLine(), CM.highlightSelectionMatches(),
@@ -303,7 +321,7 @@
     const later = P.files.filter((f) => !(f in ST.files));
     const firstTicket = (f) => P.tickets.findIndex((t) => f in t.start || f in t.solution);
     side.append(
-      h("div", { class: "wh" }, "Explorer", h("em", {}, `${have.length} files`)),
+      h("div", { class: "wh" }, "Explorer", h("em", {}, `${have.length} file${have.length === 1 ? "" : "s"}`)),
       h("ul", { class: "tree" },
         h("li", {}, h("div", { class: "root" }, "▾ " + P.title.toLowerCase())),
         have.map((f) => h("li", {}, h("button", { class: "f" + (f === ST.active ? " on" : ""), onclick: () => { stash(); openFile(f); } },
