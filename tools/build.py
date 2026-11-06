@@ -59,8 +59,20 @@ def md(text):
             out.append(f'<div class="tw"><table><thead>{h}</thead><tbody>{b}</tbody></table></div>')
             table = []
 
+    code = None  # lines of a ~~~ block (~~~, so it can sit inside a ``` block of the source)
     for raw in text.splitlines():
         line = raw.rstrip()
+        if line.startswith("~~~"):
+            if code is None:
+                flush()
+                code = []
+            else:
+                out.append('<pre class="pic code">' + html.escape("\n".join(code), quote=False) + "</pre>")
+                code = None
+            continue
+        if code is not None:
+            code.append(raw)
+            continue
         if not line.strip():
             flush()
             continue

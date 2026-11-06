@@ -65,6 +65,8 @@ def parse_project(path, md, inline):
         "id": meta["id"], "num": int(meta["num"]), "title": meta["title"], "kind": meta.get("kind", ""),
         "tagline": meta.get("tagline", ""), "main": meta["main"], "prompt": meta.get("prompt", "> "),
         "files": files, "minutes": int(meta.get("minutes", 60)), "map": [], "tickets": [],
+        # py (Pyodide, learn/harness.py) or js (Node in a box, learn/wb-node.js); series groups the shelf
+        "lang": meta.get("lang", "py"), "series": meta.get("series", "programs"),
         # what the learner reads when every ticket is committed
         "finish": md(meta["finish"]) if meta.get("finish") else "",
     }
@@ -98,7 +100,8 @@ def parse_project(path, md, inline):
         t["start"] = {**have, **t["starter"]}
         have = {**have, **t["solution"]}
         t["after"] = dict(have)
-        assert proj["main"] + ".py" in t["after"], f"{path} {t['id']}: {proj['main']}.py doesn't exist yet"
+        ext = "." + proj["lang"]
+        assert proj["main"] + ext in t["after"], f"{path} {t['id']}: {proj['main']}{ext} doesn't exist yet"
     return proj
 
 
@@ -141,7 +144,18 @@ def build(md, inline):
 
 
 def verify_project(proj):
-    """Returns (id, checks, problems). Runs in CPython with the same harness the page uses."""
+    """Returns (id, checks, problems). Runs in CPython with the same harness the page uses, or for a
+    JavaScript project in Node with the same runtime the page uses (tools/wb-node-check.js)."""
+    if proj.get("lang") == "js":
+        import json
+        import subprocess
+        out = subprocess.run(["node", os.path.join(ROOT, "tools", "wb-node-check.js"), "--json", proj["id"]],
+                             capture_output=True, text=True, timeout=600)
+        try:
+            r = json.loads(out.stdout.strip().splitlines()[-1])
+            return proj["id"], r["count"], r["problems"]
+        except (ValueError, IndexError, KeyError):
+            return proj["id"], 0, [f"wb-node-check.js failed: {out.stderr.strip()[-800:] or out.stdout.strip()[-800:]}"]
     import sys
     import tempfile
     sys.path.insert(0, os.path.join(ROOT, "learn"))
