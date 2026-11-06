@@ -158,6 +158,13 @@ async function workbench(page, browser, errors) {
     await page.waitForSelector(".lamps", { timeout: 20000 });
     return page.locator(".wact .commit").isEnabled();
   };
+  // a Node project's disk lives in its worker: wipe it the way a learner would, from the Disk panel
+  const wipeJs = async () => {
+    if (proj.lang !== "js") return;
+    await page.locator(".ptabs button", { hasText: "Disk" }).click();
+    const wipe = page.locator(".ptabs .act", { hasText: "wipe disk" });
+    if (await wipe.count()) { await wipe.click(); await page.waitForSelector(".disk-v .hintline"); }
+  };
   for (const [i, t] of proj.tickets.entries()) {
     await page.waitForFunction((k) => (document.querySelector(".tk-no") || {}).textContent?.includes("#" + k), i + 1);
     if (await test()) bad.push(`${t.id}: the starting code passes Test`);
@@ -165,6 +172,7 @@ async function workbench(page, browser, errors) {
     if (!(await test())) bad.push(`${t.id}: the solution doesn't pass Test: ` + (await page.locator(".fail").first().innerText().catch(() => "")).slice(0, 300));
     // the session transcript, typed into the terminal, from an empty disk like the build's replay
     await page.evaluate((pid) => fetch("/__run", { method: "POST", body: JSON.stringify({ op: "project_load", pid, files: {}, main: "nothing", wipe: true }) }), proj.id);
+    await wipeJs();
     await page.locator(".ptabs button", { hasText: "Terminal" }).click();
     await runProg();
     let want = null, cmd = null, tabbed = 0;
@@ -193,6 +201,8 @@ async function workbench(page, browser, errors) {
   }
   // the finale: Ledger survives a power cut; a Node backend answers a whole conversation
   await page.waitForSelector(".wfin");
+  await wipeJs();
+  await page.locator(".ptabs button", { hasText: "Terminal" }).click();
   await runProg();
   // a Node backend's last session, as [command, expected lines] pairs
   const steps = [];
