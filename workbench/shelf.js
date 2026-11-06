@@ -85,7 +85,7 @@
       ${loop()}
       ${cur ? `<a class="resume" href="bench.html#${cur.num}"><span class="r-k">${have ? "Continue" : "Start"}</span><span class="r-t">${esc(cur.title)}</span><span class="r-c">${next ? `ticket ${cur.tickets.indexOf(next) + 1} · ${esc(next.title)}` : "all tickets committed"}</span><i class="r-a">→</i></a>` : ""}
       <div class="sh-head"><h2>Projects</h2><p class="sh-n"><b>${have}</b> of ${total} tickets committed<span>·</span>${data.projects.length} of ${PROGRAMS.length} projects open</p></div>
-      <div class="sl">${all.join("")}</div>`;
+      <div class="sh-grid">${all.join("")}</div>`;
   }
 
   // The four steps of every ticket, drawn as a strip: what you do, and what the bench does back.
@@ -139,7 +139,7 @@
       <p class="lede">Every experiment is a small live system. Guess what happens, push users at it, and watch requests queue, latency climb and parts fail. Then learn the law that did it.</p>
       ${next ? `<a class="resume" href="lab.html#${X.indexOf(next) + 1}"><span class="r-k">${have ? "Continue" : "Start"}</span><span class="r-t">${esc(next.title)}</span><span class="r-c">experiment ${X.indexOf(next) + 1}</span><i class="r-a">→</i></a>` : ""}
       <div class="sh-head"><h2>Experiments</h2><p class="sh-n"><b>${have}</b> of ${live.length} done<span>·</span>${live.length} of ${X.length} open</p></div>
-      <div class="sl">${X.map(wtCard).join("")}</div>`;
+      <div class="sh-grid">${X.map(wtCard).join("")}</div>`;
   }
 
   lab === "wt" ? tunnel() : workbench();
