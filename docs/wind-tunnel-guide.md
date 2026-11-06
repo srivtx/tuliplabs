@@ -53,10 +53,12 @@ The problem card turns green once the task is done, so the arc closes where it o
 
 ## What's next, problem-first
 
+Experiments 1 to 6 are live. Experiment 6, **Queues absorb bursts**, is the newest: a newsletter job hands the website
+900 emails a minute, and the fix is a job queue with workers sized for the average, not the burst. Its sim parts
+(`batch`, `jobWorkers`, `jobStats`) and its `teeth` chart are reusable for any experiment about background work.
+
 The planned experiments in `tunnel/experiments.js` are already written in this shape:
 
-- **6 · Queues absorb bursts.** A midnight batch job takes the website down. The fix: a bounded queue and workers sized
-  with Little's law.
 - **7 · The database is the bottleneck.** A read replica makes reads fast, and users stop seeing their own comments.
   The fix: route reads and writes, and read your own writes from the primary.
 - **8 · Rate limits.** One customer's script slows everyone. The fix: a token bucket per customer.
@@ -67,5 +69,5 @@ The planned experiments in `tunnel/experiments.js` are already written in this s
   operation.
 - **12 · Design review.** Three designs, each with a target and a budget, defended with runs.
 
-Experiments 6 and 8 reuse the most of what's built. Experiment 6 needs a worker pool behind a queue in the sim, and
-experiment 8 needs a token bucket in front of the server.
+Experiment 8 reuses the most of what's built, so it comes next: it needs a token bucket per customer in front of the
+server, a noisy customer, and 429s with Retry-After.
