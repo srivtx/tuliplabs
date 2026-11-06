@@ -320,6 +320,208 @@
     },
   };
 
+  // ------------------------------------------------------------ express --
+  // Express 5's API, the parts tutorials and real apps use: routes and params, middleware and routers,
+  // res.json/send/status/redirect/cookie, express.json/urlencoded/text/static, async errors, app.route,
+  // app.all, settings. The same design Trellis (the "your own Express" project) builds by hand.
+  // Differences from the real one, on purpose: the default 404 and 500 answers are plain text, not HTML pages.
+  function makeExpress({ http, fs, path, log }) {
+    const METHODS = ["get", "post", "put", "patch", "delete", "options", "head"];
+    const TYPES = { html: "text/html; charset=utf-8", text: "text/plain; charset=utf-8", json: "application/json; charset=utf-8",
+      css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8", txt: "text/plain; charset=utf-8", svg: "image/svg+xml",
+      png: "image/png", jpg: "image/jpeg", ico: "image/x-icon", xml: "application/xml; charset=utf-8", form: "application/x-www-form-urlencoded" };
+    // like mime-types' contentType: text and JSON types get a charset
+    const withCharset = (t) => (/charset=/i.test(t) || !/^(text\/|application\/(json|javascript)|[^;]*\+json)/.test(t) ? t : t + "; charset=utf-8");
+    const typeOf = (t) => withCharset(t.includes("/") ? t : TYPES[t.replace(/^\./, "")] || "application/octet-stream");
+    // Express's ETag: weak, the body's length and the start of its SHA-1
+    const etag = (buf) => `W/"${buf.length.toString(16)}-${sha1(buf).toString("base64").slice(0, 27)}"`;
+    function compile(p, prefix, opts = {}) {
+      if (p instanceof RegExp) return { re: p, keys: [] };
+      const keys = [];
+      const pattern = String(p).replace(/\/$/, "").replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*(\w+)/g, (_, k) => { keys.push(k); return "(.+)"; })
+        .replace(/:(\w+)/g, (_, k) => { keys.push(k); return "([^/]+)"; });
+      return { re: new RegExp(`^${pattern}${prefix ? "(?=/|$)" : "/?$"}`, opts.caseSensitive ? "" : "i"), keys };
+    }
+    function decorate(app, req, res) {
+      req.res = res; res.req = req; req.app = res.app = app;
+      req.get = req.header = (n) => { const k = String(n).toLowerCase(); return req.headers[k === "referrer" ? "referer" : k]; };
+      req.ip = "127.0.0.1"; req.ips = []; req.hostname = "localhost"; req.protocol = "http"; req.secure = false;
+      req.is = (t) => { const ct = (req.headers["content-type"] || "").split(";")[0].trim(); return ct && (ct === typeOf(t).split(";")[0] || ct.endsWith("/" + t)) ? ct : false; };
+      res.locals = res.locals || {};
+      res.status = (code) => { res.statusCode = code; return res; };
+      res.set = res.header = (n, v) => { if (typeof n === "object") { for (const k in n) res.setHeader(k, n[k]); } else res.setHeader(n, String(n).toLowerCase() === "content-type" ? typeOf(String(v)) : Array.isArray(v) ? v.map(String) : String(v)); return res; };
+      res.get = (n) => res.getHeader(n);
+      res.append = (n, v) => { const old = res.getHeader(n); res.setHeader(n, old === undefined ? v : [].concat(old, v)); return res; };
+      res.type = (t) => res.set("Content-Type", typeOf(t));
+      res.location = (u) => res.set("Location", u);
+      res.json = (data) => { if (!res.getHeader("Content-Type")) res.setHeader("Content-Type", TYPES.json); return res.send(JSON.stringify(data)); };
+      res.send = (body) => {
+        if (body === null || body === undefined) body = "";
+        if (typeof body === "object" && !(body instanceof Uint8Array)) return res.json(body);
+        if (typeof body === "number" || typeof body === "boolean") return res.json(body);
+        if (!res.getHeader("Content-Type")) res.setHeader("Content-Type", typeof body === "string" ? TYPES.html : "application/octet-stream");
+        const buf = Buffer.from(body);
+        if (!res.getHeader("ETag") && app.enabled("etag")) res.setHeader("ETag", etag(buf));
+        // the client already has this exact body: 304, and nothing to send
+        const inm = req.headers["if-none-match"], tag = res.getHeader("ETag");
+        const ok = (res.statusCode >= 200 && res.statusCode < 300) || res.statusCode === 304;
+        if (ok && tag && inm && (req.method === "GET" || req.method === "HEAD") && (inm.trim() === "*" || inm.split(",").map((x) => x.trim().replace(/^W\//, "")).includes(String(tag).replace(/^W\//, "")))) {
+          res.statusCode = 304;
+          res.removeHeader("Content-Type");
+          return res.end();
+        }
+        if (res.statusCode === 204 || res.statusCode === 304) { res.removeHeader("Content-Type"); return res.end(); }
+        res.end(req.method === "HEAD" ? undefined : buf);
+        return res;
+      };
+      res.sendStatus = (code) => res.status(code).type("text").send(http.STATUS_CODES[code] || String(code));
+      res.redirect = (a, b) => {
+        const [code, url] = typeof a === "number" ? [a, b] : [302, a];
+        res.status(code).location(url);
+        return res.type("text").send(`${http.STATUS_CODES[code]}. Redirecting to ${url}`);
+      };
+      res.cookie = (name, value, o = {}) => {
+        let c = `${name}=${encodeURIComponent(typeof value === "object" ? "j:" + JSON.stringify(value) : value)}`;
+        if (o.maxAge != null) { c += `; Max-Age=${Math.floor(o.maxAge / 1000)}`; o = { ...o, expires: new Date(Date.now() + o.maxAge) }; }
+        c += `; Path=${o.path || "/"}`;
+        if (o.expires) c += `; Expires=${o.expires.toUTCString()}`;
+        if (o.domain) c += `; Domain=${o.domain}`;
+        if (o.httpOnly) c += "; HttpOnly";
+        if (o.secure) c += "; Secure";
+        if (o.sameSite) c += `; SameSite=${o.sameSite === true ? "Strict" : o.sameSite[0].toUpperCase() + o.sameSite.slice(1).toLowerCase()}`;
+        return res.append("Set-Cookie", c);
+      };
+      res.clearCookie = (name, o = {}) => res.cookie(name, "", { ...o, maxAge: undefined, expires: new Date(1) });
+    }
+    function finish(err, req, res) {
+      if (res.headersSent) { if (!res.writableEnded) res.end(); return; }
+      res.removeHeader("Content-Type");
+      if (!err) return res.status(404).type("text").send(`Cannot ${req.method} ${req.originalUrl.split("?")[0]}`);
+      const status = err.status >= 400 && err.status < 600 ? err.status : err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
+      if (status >= 500) log.error(err && err.stack ? `${err.name}: ${err.message}` : err);
+      res.status(status).type("text").send(status < 500 ? err.message : http.STATUS_CODES[status]);
+    }
+    function Router(opts = {}) {
+      const stack = [];
+      function router(req, res, out) {
+        const url = req.url, baseUrl = req.baseUrl || "", parent = req.params || {};
+        let i = 0;
+        function next(err) {
+          if (err === "router") return out();
+          if (err === "route") err = undefined;
+          req.url = url; req.baseUrl = baseUrl; req.path = url.split("?")[0];
+          while (i < stack.length) {
+            const layer = stack[i++];
+            if (layer.method && layer.method !== req.method && !(layer.method === "GET" && req.method === "HEAD") && layer.method !== "*") continue;
+            const m = layer.re.exec(req.path);
+            if (!m) continue;
+            if (Boolean(err) !== (layer.handler.length === 4)) continue;
+            const own = {};
+            layer.keys.forEach((k, j) => { try { own[k] = decodeURIComponent(m[j + 1]); } catch (e) { own[k] = m[j + 1]; } });
+            req.params = opts.mergeParams ? { ...parent, ...own } : own;
+            if (!layer.method && m[0]) {
+              req.baseUrl = baseUrl + m[0];
+              req.url = url.slice(m[0].length);
+              if (!req.url.startsWith("/")) req.url = "/" + req.url;
+              req.path = req.url.split("?")[0];
+            }
+            try {
+              const r = err ? layer.handler(err, req, res, next) : layer.handler(req, res, next);
+              if (r && typeof r.then === "function") r.then(null, (e) => next(e || new Error("Rejected promise")));
+            } catch (e) { next(e); }
+            return;
+          }
+          out(err);
+        }
+        next();
+      }
+      const flat = (hs) => hs.flat(Infinity);
+      router.use = (p, ...hs) => {
+        if (typeof p === "function" || Array.isArray(p)) { hs.unshift(p); p = "/"; }
+        for (const h of flat(hs)) stack.push({ method: null, ...compile(p, true, opts), handler: h });
+        return router;
+      };
+      for (const m of [...METHODS, "all"]) {
+        router[m] = (p, ...hs) => {
+          for (const h of flat(hs)) stack.push({ method: m === "all" ? "*" : m.toUpperCase(), ...compile(p, false, opts), handler: h });
+          return router;
+        };
+      }
+      router.route = (p) => {
+        const r = {};
+        for (const m of [...METHODS, "all"]) r[m] = (...hs) => { router[m](p, ...hs); return r; };
+        return r;
+      };
+      router.stack = stack;
+      return router;
+    }
+    function express() {
+      const router = Router();
+      const settings = { env: "development", "x-powered-by": true, etag: true };
+      function app(req, res, next) {
+        if (next) return router(req, res, next);
+        decorate(app, req, res);
+        if (settings["x-powered-by"]) res.setHeader("X-Powered-By", "Express");
+        req.originalUrl = req.url;
+        req.baseUrl = "";
+        req.params = {};
+        req.query = Object.fromEntries(new URL(req.url, "http://localhost").searchParams);
+        router(req, res, (err) => finish(err, req, res));
+      }
+      app.locals = {};
+      app.use = (...a) => { router.use(...a); return app; };
+      for (const m of [...METHODS, "all"]) app[m] = (...a) => { if (m === "get" && a.length === 1 && typeof a[0] === "string") return settings[a[0]]; router[m](...a); return app; };
+      app.route = (p) => router.route(p);
+      app.set = (k, v) => { settings[k] = v; return app; };
+      app.enable = (k) => app.set(k, true);
+      app.disable = (k) => app.set(k, false);
+      app.enabled = (k) => !!settings[k];
+      app.disabled = (k) => !settings[k];
+      app.listen = (...a) => http.createServer(app).listen(...a);
+      return app;
+    }
+    // body parsers: read the stream once, for every route after them
+    function reader(match, parse, opts = {}) {
+      const limit = typeof opts.limit === "number" ? opts.limit : 100 * 1024;
+      return (req, res, next) => {
+        const ct = (req.headers["content-type"] || "").split(";")[0].trim().toLowerCase();
+        if (req._body || !match(ct)) return next();
+        const length = Number(req.headers["content-length"] || 0);
+        if (!length && !req.headers["transfer-encoding"]) return next();
+        req._body = true;
+        if (length > limit) { req.resume(); const e = new Error("request entity too large"); e.status = 413; e.type = "entity.too.large"; return next(e); }
+        let raw = "";
+        req.setEncoding("utf8");
+        req.on("data", (c) => { raw += c; });
+        req.on("end", () => {
+          try { req.body = parse(raw); } catch (e) { e.status = 400; e.type = "entity.parse.failed"; e.body = raw; return next(e); }
+          next();
+        });
+      };
+    }
+    express.json = (opts = {}) => reader((t) => t === "application/json" || t.endsWith("+json"), (raw) => {
+      if (opts.strict !== false && !/^\s*[[{]/.test(raw)) throw new SyntaxError(`Unexpected token '${raw.trim()[0]}', "${raw.trim().slice(0, 10)}" is not valid JSON`);
+      return JSON.parse(raw);
+    }, opts);
+    express.urlencoded = (opts = {}) => reader((t) => t === "application/x-www-form-urlencoded", (raw) => {
+      const o = {};
+      for (const [k, v] of new URLSearchParams(raw)) o[k] = k in o ? [].concat(o[k], v) : v;
+      return o;
+    }, opts);
+    express.text = (opts = {}) => reader((t) => t.startsWith("text/"), (raw) => raw, opts);
+    // files from the program's own disk (the Disk tab): express.static("public")
+    express.static = (root) => (req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      let rel = decodeURIComponent(req.path);
+      if (rel.endsWith("/")) rel += "index.html";
+      const file = path.join(root, rel);
+      if (rel.includes("..") || !fs.existsSync(file) || !fs.statSync(file).isFile()) return next();
+      res.type(path.extname(file) || "application/octet-stream").send(fs.readFileSync(file));
+    };
+    express.Router = Router;
+    return express;
+  }
+
   // ----------------------------------------------------------- the box --
   function create(host) {
     const compile = host.compile;              // (source, filename) -> the value of the source
@@ -446,6 +648,8 @@
         timers: T, "timers/promises": { setTimeout: (ms, v) => new Promise((r) => T.setTimeout(() => r(v), ms)) },
         process: process_, string_decoder: { StringDecoder: class { constructor(e) { this.e = e || "utf8"; } write(b) { return Buffer.from(b).toString(this.e); } end() { return ""; } } },
         stream: { EventEmitter, Readable: EventEmitter, Writable: EventEmitter },
+        // the one package that comes with the sandbox: Express 5's API, built on the http above
+        express: makeExpress({ http, fs: fsSync, path, log: console_ }),
       };
       const globalsList = { console: console_, process: process_, Buffer, fetch: http._fetch, ...T };
 
@@ -453,7 +657,7 @@
         const bare = spec.replace(/^node:/, "");
         if (!/^\.{0,2}\//.test(spec)) {
           if (bare in builtins) return { builtin: bare };
-          throw nodeErr(Error, "MODULE_NOT_FOUND", `Cannot find module '${spec}'\nRequire stack:\n- /app/${from}\n(There's no npm here: every module this project uses is one you write.)`);
+          throw nodeErr(Error, "MODULE_NOT_FOUND", `Cannot find module '${spec}'\nRequire stack:\n- /app/${from}\n(There's no npm here: express is the one package that comes with the sandbox, and every other module is one you write.)`);
         }
         let p = spec.startsWith("/") ? fname(spec) : normalize(path.dirname(from) + "/" + spec).replace(/^\.\//, "");
         for (const cand of [p, p + ".js", p + ".json", p + "/index.js"]) if (cand in c.files) return { file: cand };
@@ -509,7 +713,7 @@
           }
           this.socket = this.connection = { remoteAddress: "127.0.0.1", remotePort: 51000 + Math.floor(Math.random() * 1000), encrypted: false, destroy() {} };
           this.complete = false; this.readable = true; this.aborted = false;
-          this._body = body; this._enc = null; this._flowing = false;
+          this.__bytes = body; this._enc = null; this._flowing = false;
           this._listening = (n) => { if (n === "data" || n === "readable") this._flow(); };
         }
         setEncoding(e) { this._enc = e; return this; }
@@ -522,7 +726,7 @@
           this._flowing = true;
           // data arrives after the handler that asked for it has returned, as it does from a socket
           T(() => {
-            if (this._body.length) this.emit("data", this._enc ? this._body.toString(this._enc) : this._body);
+            if (this.__bytes.length) this.emit("data", this._enc ? this.__bytes.toString(this._enc) : this.__bytes);
             this.complete = true; this.readable = false;
             this.emit("end");
             this.emit("close");
@@ -531,7 +735,7 @@
         async *[Symbol.asyncIterator]() {
           this._flowing = true;
           await null;
-          if (this._body.length) yield this._enc ? this._body.toString(this._enc) : this._body;
+          if (this.__bytes.length) yield this._enc ? this.__bytes.toString(this._enc) : this.__bytes;
           this.complete = true; this.readable = false;
           this.emit("end");
         }
@@ -747,7 +951,8 @@
       let where = fr.length ? fr[0] : null;
       if (!where && err && err.name === "SyntaxError" && err.__file) where = [err.__file, 0];
       // Node puts a SyntaxError's location at the top of the stack instead of in a frame
-      if (err && err.name === "SyntaxError") { const m = /wb\/([^\s:()]+):(\d+)/.exec(String(err.stack)); if (m && m[1] in files) where = [m[1], +m[2]]; }
+      // (only its first line: a browser's SyntaxError has no location, and its frames are the require chain)
+      if (err && err.name === "SyntaxError") { const m = /^wb\/([^\s:()]+):(\d+)/.exec(String(err.stack)); if (m && m[1] in files) where = [m[1], +m[2]]; }
       const lines = fr.slice(0, 4).reverse().map(([f, n]) => `  ${f}, line ${n}: ${((files[f] || "").split("\n")[n - 1] || "").trim()}`);
       if (where && !lines.length) lines.push(`  ${where[0]}${where[1] ? `, line ${where[1]}` : ""}`);
       const extra = err && err.cause && err.cause.message ? `\n  cause: ${err.cause.message}` : "";
