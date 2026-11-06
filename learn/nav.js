@@ -133,7 +133,8 @@ window.TLMARK = (() => {
   if (document.querySelector(".foot, main.ide, main.wt") || !document.querySelector("main")) return;
   const root = document.querySelector(".top .brand")?.getAttribute("href") || "../";
   const T = [["worlds", "worlds/", "Worlds", "#ff5fa8"], ["dz", "design/", "Design", "#1fa8c9"], ["tc", "code/", "Complexity", "#2fb38f"], ["ms", "modsim/", "ModSim", "#3d8fe0"],
-    ["bx", "build/", "Build X", "#e6a21a"], ["ps", "stats/", "Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "Structures", "#ee6a4c"]];
+    ["bx", "build/", "Build X", "#e6a21a"], ["ps", "stats/", "Stats", "#9a6be0"], ["ds", "dsa/", "DSA", "#3caa4c"], ["od", "ods/", "Structures", "#ee6a4c"],
+    ["wb", "workbench/", "Workbench", "#f0643c"], ["wt", "tunnel/", "Tunnel", "#1f9fb4"]];
   const f = document.createElement("footer");
   const logo = `<span class="logo" aria-hidden="true">${"<i></i>".repeat(9)}</span>`;
   const base = `<div class="gf-base"><span class="gf-brand">${logo}<b>Tulip Labs</b><em>· a product by ${SVX}</em></span>
