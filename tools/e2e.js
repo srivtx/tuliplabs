@@ -14,6 +14,7 @@ const shots = process.env.SHOTS || ".";
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/fonts.g|Failed to load resource/.test(m.text())) errors.push("console: " + m.text()); });
   if (track === "design") return studio(page, browser, errors);
+  if (track === "workbench") return workbench(page, browser, errors);
   await page.goto(`${BASE}/${track}/?runner=local#${chap}`);
   await page.waitForSelector(".stephead");
   const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), ({ code: "tc", modsim: "ms", build: "bx", stats: "ps", dsa: "ds", ods: "od" })[track]);
@@ -113,6 +114,90 @@ async function studio(page, browser, errors) {
     if (!answerWon) bad.push(`${i} ${title}: the answer doesn't match (${s1})`);
   }
   console.log(`design: ${n} levels checked, ${bad.length} failed`);
+  bad.forEach((b) => console.log("  FAIL " + b));
+  errors.forEach((e) => console.log("  " + e));
+  await browser.close();
+  process.exit(bad.length || errors.length ? 1 : 0);
+}
+// Workbench: every ticket of a project, through the real buttons. The starting code must fail Test,
+// the reference solution must pass it and commit, and each session transcript must replay in the terminal.
+//   node tools/e2e.js workbench [project number]
+async function workbench(page, browser, errors) {
+  const num = process.argv[3] || "1";
+  await page.goto(`${BASE}/workbench/bench.html?runner=local#${num}`);
+  await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("vnl-code-v1") || "{}"); s.wb = {}; localStorage.setItem("vnl-code-v1", JSON.stringify(s)); });
+  await page.reload();
+  await page.waitForSelector(".wact .run");
+  const data = await page.evaluate(async () => (await (await fetch("/content/wb.json")).json()));
+  const proj = data.projects.find((p) => String(p.num) === num);
+  const bad = [];
+  const lines = () => page.locator(".term .ln").count();
+  // a command's reply: the out/err lines after its own echoed command line
+  const term = async (line) => {
+    const before = await page.locator(".term .ln.cmd").count();
+    await page.locator(".term .inp input").fill(line);
+    await page.locator(".term .inp input").press("Enter");
+    await page.waitForFunction((n) => document.querySelectorAll(".term .ln.cmd").length > n && document.querySelector(".term .inp:not(.off)"), before);
+    return page.evaluate(() => {
+      const ls = [...document.querySelectorAll(".term .ln")];
+      const at = ls.map((e) => e.classList.contains("cmd")).lastIndexOf(true);
+      return ls.slice(at + 1).filter((e) => e.matches(".out,.err")).map((e) => e.textContent);
+    });
+  };
+  const starts = () => page.evaluate(() => [...document.querySelectorAll(".term .ln.sys")].filter((e) => /▶|↻/.test(e.textContent)).length);
+  const runProg = async () => {
+    const k = await starts();
+    await page.locator(".wact .run").click();
+    await page.waitForFunction((k) => [...document.querySelectorAll(".term .ln.sys")].filter((e) => /▶|↻/.test(e.textContent)).length > k && document.querySelector(".term .inp:not(.off)"), k);
+  };
+  const test = async () => {
+    await page.locator(".wact .test").click();
+    await page.waitForSelector(".lamps", { timeout: 20000 });
+    return page.locator(".wact .commit").isEnabled();
+  };
+  for (const [i, t] of proj.tickets.entries()) {
+    await page.waitForFunction((k) => (document.querySelector(".tk-no") || {}).textContent?.includes("#" + k), i + 1);
+    if (await test()) bad.push(`${t.id}: the starting code passes Test`);
+    for (const [f, src] of Object.entries(t.solution)) await page.evaluate(([f, src]) => document.querySelector("#ide").wbSet(f, src), [f, src]);
+    if (!(await test())) bad.push(`${t.id}: the solution doesn't pass Test: ` + (await page.locator(".fail").first().innerText().catch(() => "")).slice(0, 300));
+    // the session transcript, typed into the terminal, from an empty disk like the build's replay
+    await page.evaluate((pid) => fetch("/__run", { method: "POST", body: JSON.stringify({ op: "project_load", pid, files: {}, main: "nothing", wipe: true }) }), proj.id);
+    await page.locator(".ptabs button", { hasText: "Terminal" }).click();
+    await runProg();
+    let want = null, cmd = null;
+    const check = async () => {
+      if (cmd === null) return;
+      if (cmd === "!restart") {
+        const n = await lines();
+        await page.locator(".ptabs .act", { hasText: "restart" }).click();
+        await page.waitForFunction((k) => document.querySelectorAll(".term .ln").length > k, n);
+        return;
+      }
+      const got = (await term(cmd)).join("\n");
+      if (got !== want.join("\n")) bad.push(`${t.id}: terminal "${cmd}" printed ${JSON.stringify(got)}, expected ${JSON.stringify(want.join("\n"))}`);
+    };
+    for (const line of t.session.split("\n")) {
+      if (line.startsWith(proj.prompt) || line === "!restart") { await check(); cmd = line.startsWith(proj.prompt) ? line.slice(proj.prompt.length) : line; want = []; }
+      else if (cmd !== null) want.push(line);
+    }
+    await check();
+    await page.screenshot({ path: `${shots}/workbench-${t.id}.png` });
+    await page.locator(".wact .commit").click();
+    await page.locator(".csheet input").press("Enter");
+  }
+  // the finale: write, pull the plug, and read the data back
+  await page.waitForSelector(".wfin");
+  await runProg();
+  await term("SET survivor yes");
+  await term("SET doomed maybe");
+  await page.locator(".ptabs .act.plug").click();
+  await page.waitForFunction(() => /power back on/.test(document.querySelector(".term").textContent));
+  const a = (await term("GET survivor")).join(), b = (await term("GET doomed")).join();
+  if (a !== "yes" || b !== "(nil)") bad.push(`pull the plug: survivor=${a}, doomed=${b} (want yes, (nil))`);
+  const commits = await page.locator(".hist li").count();
+  if (commits !== proj.tickets.length) bad.push(`history shows ${commits} commits, want ${proj.tickets.length}`);
+  await page.screenshot({ path: `${shots}/workbench-done.png` });
+  console.log(`workbench ${proj.title}: ${proj.tickets.length} tickets driven, ${bad.length} failed`);
   bad.forEach((b) => console.log("  FAIL " + b));
   errors.forEach((e) => console.log("  " + e));
   await browser.close();
