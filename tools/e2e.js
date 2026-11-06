@@ -134,9 +134,11 @@ async function workbench(page, browser, errors) {
   const bad = [];
   const lines = () => page.locator(".term .ln").count();
   // a command's reply: the out/err lines after its own echoed command line
-  const term = async (line) => {
+  const term = async (line, tab) => {
     const before = await page.locator(".term .ln.cmd").count();
-    await page.locator(".term .inp input").fill(line);
+    if (tab) { await page.locator(".term .inp input").focus(); await page.keyboard.press("Tab"); }
+    else await page.locator(".term .inp input").fill(line);
+    if (tab && (await page.locator(".term .inp input").inputValue()) !== line) bad.push(`Tab didn't type the ghost "${line}"`);
     await page.locator(".term .inp input").press("Enter");
     await page.waitForFunction((n) => document.querySelectorAll(".term .ln.cmd").length > n && document.querySelector(".term .inp:not(.off)"), before);
     return page.evaluate(() => {
@@ -165,16 +167,19 @@ async function workbench(page, browser, errors) {
     await page.evaluate((pid) => fetch("/__run", { method: "POST", body: JSON.stringify({ op: "project_load", pid, files: {}, main: "nothing", wipe: true }) }), proj.id);
     await page.locator(".ptabs button", { hasText: "Terminal" }).click();
     await runProg();
-    let want = null, cmd = null;
+    let want = null, cmd = null, tabbed = 0;
     const check = async () => {
       if (cmd === null) return;
+      // the terminal's ghost always shows the session's next step
+      const gh = await page.locator(".term .ghost-cmd span").first().textContent({ timeout: 2000 }).catch(() => null);
+      if (cmd === "!restart" ? !/restart/.test(gh || "") : gh !== cmd) bad.push(`${t.id}: the terminal's ghost says ${JSON.stringify(gh)} where the next step is ${JSON.stringify(cmd)}`);
       if (cmd === "!restart") {
         const n = await lines();
         await page.locator(".ptabs .act", { hasText: "restart" }).click();
         await page.waitForFunction((k) => document.querySelectorAll(".term .ln").length > k, n);
         return;
       }
-      const got = (await term(cmd)).join("\n");
+      const got = (await term(cmd, i === 0 && !tabbed++)).join("\n");
       if (got !== want.join("\n")) bad.push(`${t.id}: terminal "${cmd}" printed ${JSON.stringify(got)}, expected ${JSON.stringify(want.join("\n"))}`);
     };
     for (const line of t.session.split("\n")) {
@@ -198,6 +203,34 @@ async function workbench(page, browser, errors) {
   const commits = await page.locator(".hist li").count();
   if (commits !== proj.tickets.length) bad.push(`history shows ${commits} commits, want ${proj.tickets.length}`);
   await page.screenshot({ path: `${shots}/workbench-done.png` });
+  // the layout: drag the explorer's seam, fold the panel by its grip (Run opens it again), fold the explorer with Mod-B,
+  // and find it all as you left it after a reload
+  {
+    const size = () => page.evaluate(() => [document.querySelector(".wside").getBoundingClientRect().width, document.querySelector(".pbody").getBoundingClientRect().height, document.querySelector(".wtick").getBoundingClientRect().width]);
+    const [e0] = await size();
+    const sl = await page.locator(".wseam.l").boundingBox();
+    await page.mouse.move(sl.x + 1, sl.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(sl.x + 61, sl.y + 200, { steps: 6 });
+    await page.mouse.up();
+    const [e1] = await size();
+    if (Math.abs(e1 - e0 - 60) > 4) bad.push(`layout: dragging the explorer's seam 60 px changed it by ${Math.round(e1 - e0)}`);
+    const gb = await page.locator(".grip").boundingBox();
+    await page.mouse.dblclick(gb.x + gb.width / 2, gb.y + gb.height / 2);
+    if ((await size())[1] > 1) bad.push("layout: double-clicking the grip didn't fold the panel");
+    await page.locator(".wact .run").click();
+    await page.waitForFunction(() => document.querySelector(".pbody").getBoundingClientRect().height > 50);
+    await page.locator(".wtick").click({ position: { x: 20, y: 20 } });
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+b" : "Control+b");
+    if ((await size())[0] > 1) bad.push("layout: Mod-B didn't fold the explorer");
+    await page.reload();
+    await page.waitForSelector(".wact .run");
+    const [e2, , t2] = await size();
+    if (e2 > 1 || t2 < 200) bad.push(`layout: after a reload the explorer is ${Math.round(e2)} px and the ticket ${Math.round(t2)} px`);
+    const tab = await page.locator(".wseam.l").boundingBox();
+    await page.mouse.click(tab.x + 8, tab.y + tab.height / 2);
+    if (Math.abs((await size())[0] - e1) > 4) bad.push("layout: the explorer's tab didn't bring it back at its width");
+  }
   // the download: a real zip whose run.py answers the same commands with plain Python, no browser
   {
     const fs = require("fs"), os = require("os"), path = require("path"), { execFileSync } = require("child_process");

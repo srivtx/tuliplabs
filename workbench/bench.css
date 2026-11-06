@@ -55,7 +55,28 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 .wpanes{display:none}
 
 /* ---- the body: explorer | editor + panel | ticket ---- */
-.wbody{display:grid;grid-template-columns:236px minmax(0,1fr) 372px;min-height:0}
+.wbody{display:grid;grid-template-columns:var(--ew,236px) 0 minmax(0,1fr) 0 var(--tw,372px);min-height:0}
+.ide.ex-off .wbody{grid-template-columns:0 0 minmax(0,1fr) 0 var(--tw,372px)}
+.ide.tk-off .wbody{grid-template-columns:var(--ew,236px) 0 minmax(0,1fr) 0 0}
+.ide.ex-off.tk-off .wbody{grid-template-columns:0 0 minmax(0,1fr) 0 0}
+.ide.ex-off .wside,.ide.tk-off .wtick{visibility:hidden;overflow:hidden;border:0}
+.ide.pn-off .wmid{grid-template-rows:auto auto minmax(80px,1fr) 6px auto}
+.ide.pn-off .wpanel{grid-template-rows:auto}
+.ide.pn-off .pbody{display:none}
+.ide.pn-off .ptabs > button.on::after{display:none}
+.ide.resizing{user-select:none;cursor:col-resize}
+.ide.resizing .ed{pointer-events:none}
+/* the seams: hairlines that light up pink under the pointer; folded, a tab on the edge brings the pane back */
+.wseam{position:relative;z-index:8;touch-action:none}
+.wseam::before{content:"";position:absolute;top:0;bottom:0;left:-4px;width:8px;cursor:col-resize;transition:background .15s}
+.wseam:hover::before,.wseam.drag::before,.wseam:focus-visible::before{background:linear-gradient(var(--w-pink),var(--w-pink)) center/2px 100% no-repeat}
+.wseam:focus-visible{outline:none}
+.wseam.folded::before{display:none}
+.wseam.folded::after{content:attr(data-tab);position:absolute;top:50%;translate:0 -50%;writing-mode:vertical-rl;padding:12px 5px;border:1px solid var(--w-line2);background:var(--w-side);color:var(--w-mute);
+  font:600 10px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s}
+.wseam.l.folded::after{left:0;border-left:0;border-radius:0 8px 8px 0}
+.wseam.r.folded::after{right:0;border-right:0;border-radius:8px 0 0 8px;rotate:180deg}
+.wseam.folded:hover::after{color:var(--w-pink);border-color:var(--w-pink)}
 .wside{background:var(--w-side);border-right:1px solid var(--w-line);display:flex;flex-direction:column;min-height:0;overflow:auto}
 .wh{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 6px;font:600 10.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--w-mute)}
 .wh em{font-style:normal;letter-spacing:0;color:var(--w-faint);text-transform:none;font-weight:400}
@@ -169,6 +190,13 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 .term .inp .pr{color:var(--w-pink);white-space:pre}
 .term .inp input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--w-ink);font:inherit;padding:0;caret-color:var(--w-pink)}
 .term .inp.off{opacity:.55}
+/* the next step of the ticket's session, as a ghost after the prompt */
+.term .inp{position:relative}
+.term .ghost-cmd{position:absolute;top:0;display:flex;align-items:baseline;gap:8px;font:inherit;color:color-mix(in srgb,var(--w-mute) 75%,transparent)!important;white-space:pre}
+.term .inp .pr + input + .ghost-cmd{left:calc(var(--prw,8) * 1ch)}
+.term .ghost-cmd:hover{color:var(--w-mute)!important}
+.term .ghost-cmd kbd{font:10px var(--f-mono);padding:0 5px;border:1px solid var(--w-line2);border-radius:4px;color:var(--w-faint)}
+.term .ghost-cmd[hidden]{display:none}
 .lamps{display:flex;flex-direction:column;gap:12px}
 .lgrp{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center}
 .lgrp h5{margin:0;font:500 12.5px var(--f-body);color:var(--w-ink)}
@@ -289,7 +317,7 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 .toastw{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:var(--w-ink);color:var(--w-bg);font:13px var(--f-body);padding:8px 16px;border-radius:8px;z-index:60;animation:wfade .2s;pointer-events:none}
 
 /* ---- narrower screens ---- */
-@media (max-width:1180px){.wbody{grid-template-columns:200px minmax(0,1fr) 320px}.wact button kbd{display:none}}
+@media (max-width:1180px){.wbody{grid-template-columns:var(--ew,200px) 0 minmax(0,1fr) 0 var(--tw,320px)}.wact button kbd{display:none}}
 @media (max-width:900px){
   .ide{grid-template-rows:auto auto 1fr auto}
   .wbar{height:auto;flex-wrap:wrap;row-gap:6px;padding:8px 12px}
@@ -304,8 +332,10 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
   .wpanes button.on::after{content:"";position:absolute;left:25%;right:25%;bottom:0;height:2px;background:var(--w-pink);border-radius:2px}
   .wbody{display:flex;overflow:hidden;touch-action:pan-y}
   .wbody > *{flex:0 0 100%;min-width:0;transition:transform .28s cubic-bezier(.3,.8,.3,1);transform:translateX(calc(var(--pane,1) * -100%))}
-  .wside{display:none}
+  .wside,.wseam{display:none}
   .wtick{order:-1;border:0}
+  .ide.tk-off .wtick{visibility:visible;overflow:auto}
+  .ide.pn-off .pbody{display:block}
   .wmid{grid-template-rows:auto auto minmax(120px,1fr) 6px var(--panel-h,42%)}
   .csheet{left:12px;right:12px;width:auto}
   .wstat .hide-s{display:none}

@@ -256,23 +256,72 @@
     h("div", { class: "grip", title: "Drag to resize", role: "separator" }),
     h("div", { class: "wpanel" }, h("div", { class: "ptabs" }), h("div", { class: "pbody" })));
   const tick = h("aside", { class: "wtick", "aria-label": "Ticket" });
-  const body = h("div", { class: "wbody" }, side, mid, tick);
+  const seamL = h("div", { class: "wseam l", role: "separator", tabindex: 0, "aria-orientation": "vertical", "aria-label": "Explorer width", "data-tab": "Explorer", title: `Drag to resize · double-click to fold · ${MOD}B` });
+  const seamR = h("div", { class: "wseam r", role: "separator", tabindex: 0, "aria-orientation": "vertical", "aria-label": "Ticket width", "data-tab": "Ticket", title: `Drag to resize · double-click to fold · ${MOD}⌥B` });
+  const body = h("div", { class: "wbody" }, side, seamL, mid, seamR, tick);
   const stat = h("footer", { class: "wstat" });
   root.append(bar, panes, body, stat);
 
-  // the panel's height is yours to drag
+  // ------------------------------------------------------------- layout --
+  // Every pane's size is yours: drag the seams beside the explorer and the ticket, or the grip above the panel.
+  // Double-click any of them to fold that pane (a tab on the edge brings it back; a folded panel keeps its tabs).
+  // Remembered per browser.
+  const LAY_KEY = "wb-layout-v1";
+  const lay = (() => { try { return JSON.parse(localStorage.getItem(LAY_KEY) || "{}"); } catch (e) { return {}; } })();
+  const saveLay = () => { try { localStorage.setItem(LAY_KEY, JSON.stringify(lay)); } catch (e) { /* private mode */ } };
+  function applyLay() {
+    root.style.setProperty("--ew", lay.ew ? lay.ew + "px" : null);
+    root.style.setProperty("--tw", lay.tw ? lay.tw + "px" : null);
+    mid.style.setProperty("--panel-h", lay.ph ? lay.ph + "px" : null);
+    root.classList.toggle("ex-off", !!lay.ef);
+    root.classList.toggle("tk-off", !!lay.tf);
+    root.classList.toggle("pn-off", !!lay.pf);
+    seamL.classList.toggle("folded", !!lay.ef);
+    seamR.classList.toggle("folded", !!lay.tf);
+    if (view) requestAnimationFrame(() => view.requestMeasure());
+  }
+  function setLay(patch) { Object.assign(lay, patch); applyLay(); saveLay(); }
+  function seam(el, size) {
+    el.addEventListener("pointerdown", (e) => {
+      if (e.button) return;
+      const x0 = e.clientX, y0 = e.clientY, box = body.getBoundingClientRect(), mr = mid.getBoundingClientRect();
+      let moved = false;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("drag");
+      root.classList.add("resizing");
+      el.onpointermove = (ev) => {
+        if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+        moved = true;
+        size(ev, box, mr);
+      };
+      el.onpointerup = el.onpointercancel = () => {
+        el.onpointermove = el.onpointerup = el.onpointercancel = null;
+        el.classList.remove("drag");
+        root.classList.remove("resizing");
+        if (!moved && el.classList.contains("folded")) el.dispatchEvent(new Event("dblclick"));
+      };
+      e.preventDefault();
+    });
+  }
   const grip = $(".grip", mid);
-  grip.addEventListener("pointerdown", (e) => {
-    grip.setPointerCapture(e.pointerId);
-    const r = mid.getBoundingClientRect();
-    const move = (ev) => {
-      const px = Math.max(90, Math.min(r.height - 150, r.bottom - ev.clientY));
-      mid.style.setProperty("--panel-h", px + "px");
-    };
-    const up = () => { grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up); };
-    grip.addEventListener("pointermove", move);
-    grip.addEventListener("pointerup", up);
+  grip.setAttribute("title", "Drag to resize · double-click to fold");
+  seam(seamL, (ev, box) => { const w = ev.clientX - box.left; setLay(w < 120 ? { ef: true } : { ef: false, ew: Math.round(Math.max(160, Math.min(w, 420))) }); });
+  seam(seamR, (ev, box) => { const w = box.right - ev.clientX; setLay(w < 200 ? { tf: true } : { tf: false, tw: Math.round(Math.max(280, Math.min(w, 640, box.width * 0.5))) }); });
+  seam(grip, (ev, box, mr) => { const px = mr.bottom - ev.clientY; setLay(px < 60 ? { pf: true } : { pf: false, ph: Math.round(Math.max(90, Math.min(mr.height - 150, px))) }); });
+  seamL.addEventListener("dblclick", () => setLay({ ef: !lay.ef }));
+  seamR.addEventListener("dblclick", () => setLay({ tf: !lay.tf }));
+  grip.addEventListener("dblclick", () => setLay({ pf: !lay.pf }));
+  for (const [el, k, ax] of [[seamL, "ew", 1], [seamR, "tw", -1]]) el.addEventListener("keydown", (e) => {
+    const w = (k === "ew" ? side : tick).getBoundingClientRect().width;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") { setLay({ [k === "ew" ? "ef" : "tf"]: false, [k]: Math.round(Math.max(k === "ew" ? 160 : 280, w + (e.key === "ArrowRight" ? 24 : -24) * ax)) }); e.preventDefault(); }
+    if (e.key === "Enter" || e.key === " ") { el.dispatchEvent(new Event("dblclick")); e.preventDefault(); }
   });
+  addEventListener("keydown", (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "b" || e.shiftKey) return;
+    setLay(e.altKey ? { tf: !lay.tf } : { ef: !lay.ef });
+    e.preventDefault();
+  });
+  applyLay();
 
   // on a phone: two panes, Ticket and Code; tap the word or swipe the ticket sideways
   const phone = () => matchMedia("(max-width:900px)").matches;
@@ -518,7 +567,7 @@
     const pt = $(".ptabs", mid);
     pt.innerHTML = "";
     const r = tested;
-    const tab = (id, label, extra) => h("button", { class: panelTab === id ? "on" : "", onclick: () => showPanel(id) }, label, extra ? [" ", extra] : null);
+    const tab = (id, label, extra) => h("button", { class: panelTab === id ? "on" : "", onclick: () => showPanel(id, true) }, label, extra ? [" ", extra] : null);
     pt.append(
       tab("term", "Terminal"),
       tab("tests", "Tests", r ? h("b", { class: r.passed ? "" : "bad" }, `${r.ok}/${r.total}`) : null),
@@ -532,7 +581,8 @@
     }
     if (panelTab === "disk" && disk.length) pt.append(h("button", { class: "act", onclick: wipeDisk, title: "Delete every file the program wrote" }, "wipe disk"));
   }
-  function showPanel(id) {
+  function showPanel(id, user) {
+    if (lay.pf && user) setLay({ pf: false });
     panelTab = id;
     renderPanelTabs();
     const pb = $(".pbody", mid);
@@ -558,7 +608,11 @@
       } else pb.append(h("div", { class: "ln " + l.kind, html: l.html || esc(l.text) }));
     }
     const input = h("input", { "aria-label": "Type a command for your program", autocomplete: "off", autocapitalize: "off", spellcheck: "false", enterkeyhint: "send" });
-    const row = h("div", { class: "inp" + (running ? "" : " off") }, h("span", { class: "pr" }, P.prompt), input);
+    const g = ghostStep();
+    const ghost = g ? h("button", { class: "ghost-cmd", title: g.act ? "" : "Tab, or click, to type it", onclick: (e) => { e.stopPropagation(); acceptGhost(input); } },
+      g.act ? h("span", {}, g.act === "restart" ? "now ↻ restart it" : "now ⚡ pull the plug") : [h("span", {}, g.cmd), h("kbd", {}, "tab")]) : null;
+    const row = h("div", { class: "inp" + (running ? "" : " off"), style: `--prw:${P.prompt.length}` }, h("span", { class: "pr" }, P.prompt), input, ghost);
+    input.addEventListener("input", () => { if (ghost) ghost.hidden = !!input.value; });
     pb.append(row);
     if (!termLog.length) pb.prepend(h("div", { class: "ln sys" }, running ? "" : `Press Run (${MOD}↵) to start ${P.title.toLowerCase()}, then type commands here.`));
     input.addEventListener("keydown", async (e) => {
@@ -570,13 +624,42 @@
       } else if (e.key === "ArrowUp" && hist.length) { histAt = Math.max(0, histAt - 1); input.value = hist[histAt]; e.preventDefault(); }
       else if (e.key === "ArrowDown" && hist.length) { histAt = Math.min(hist.length, histAt + 1); input.value = hist[histAt] || ""; e.preventDefault(); }
       else if (e.key === "l" && e.ctrlKey) { termLog = []; showPanel("term"); }
+      else if (e.key === "Tab" && !input.value && ghostStep()) { acceptGhost(input); e.preventDefault(); }
     });
     pb.onclick = (e) => { if (!e.target.closest("a") && !getSelection().toString()) input.focus({ preventScroll: true }); };
     requestAnimationFrame(() => { pb.scrollTop = pb.scrollHeight; if (focusTerm) { input.focus({ preventScroll: true }); focusTerm = false; } });
   }
   let focusTerm = false;
+  // The ticket's session, as steps you can follow: each command it types, and each restart or power cut.
+  // The ghost shows the next one; typing it (or anything that matches) moves on.
+  let ghostAt = 0, ghostFor = null;
+  function ghostSteps() {
+    const t = P.tickets[ticketIx] || cur();
+    if (!t || !t.session) return [];
+    return t.session.split("\n").map((l) => (l.startsWith(P.prompt) ? { cmd: l.slice(P.prompt.length) } : l === "!restart" ? { act: "restart" } : l === "!plug" ? { act: "plug" } : null)).filter(Boolean);
+  }
+  function ghostStep() {
+    const t = P.tickets[ticketIx] || cur();
+    if (ghostFor !== (t && t.id)) { ghostFor = t && t.id; ghostAt = 0; }
+    return ghostSteps()[ghostAt] || null;
+  }
+  function ghostDone(kind, text) {
+    const g = ghostStep();
+    if (!g) return;
+    if (kind === "cmd" ? g.cmd && g.cmd.trim().toLowerCase() === text.trim().toLowerCase() : g.act === kind) ghostAt++;
+  }
+  function acceptGhost(input) {
+    const g = ghostStep();
+    if (!g) return;
+    if (g.act === "restart") return restart();
+    if (g.act === "plug") return disk.length ? plug() : toast("Nothing on disk yet to cut the power on.");
+    input.value = g.cmd;
+    input.dispatchEvent(new Event("input"));
+    input.focus({ preventScroll: true });
+  }
   async function send(line) {
     if (!running) { await doRun(); if (!running) return; }
+    ghostDone("cmd", line);
     termLog.push({ kind: "cmd", text: line });
     focusTerm = true;
     const r = await Runner.run({ op: "project_call", pid: P.id, line });
@@ -614,16 +697,19 @@
     showPanel("term");
   }
   async function doRun() {
+    if (lay.pf) setLay({ pf: false });
     const b = $(".wact .run", bar); b && b.classList.add("busy");
     const n = Object.keys(ST.files).length;
     await start(`<b>▶</b> ${esc(P.title.toLowerCase())} started · ${n} file${n > 1 ? "s" : ""}${disk.length ? " · disk kept" : ""}`);
     b && b.classList.remove("busy");
   }
   async function restart() {
+    ghostDone("restart");
     if (!running && !disk.length) return doRun();
     await start("<b>↻</b> restarted: memory is empty again, the disk is just as it was");
   }
   async function plug() {
+    ghostDone("plug");
     const target = [...disk].sort((a, b) => b.size - a.size)[0];
     termLog.push({ kind: "crash", text: `⚡ power cut while writing ${target.name}: its last record is only half on disk` });
     running = false;
@@ -642,6 +728,7 @@
 
   // tests
   async function doTest() {
+    if (lay.pf) setLay({ pf: false });
     const t = cur() || P.tickets[P.tickets.length - 1];
     const upto = P.tickets.slice(0, P.tickets.indexOf(t) + 1);
     const b = $(".wact .test", bar); b && b.classList.add("busy");
