@@ -1,6 +1,6 @@
 /* Workbench: build one real program, ticket by ticket, in a real editor.
-   The program is a few Python files. Run starts it (learn/harness.py project_load) and the terminal sends each
-   line to its handle(line). Test runs this ticket's checks and every earlier ticket's. When they all pass you
+   The program is a few Python files (learn/harness.py, in Pyodide) or JavaScript files (learn/wb-node.js, Node in
+   a box). Run starts it (project_load) and the terminal sends each line to its handle(line). Test runs this ticket's checks and every earlier ticket's. When they all pass you
    commit, the history grows a node, the map grows a block, and the next ticket opens.
    Progress lives in the shared store (vnl-code-v1) under S.wb, merged on save like the design studio. */
 (async () => {
@@ -51,12 +51,24 @@
 
   // ------------------------------------------------------------- runner --
   // The same two runners the lessons use: Pyodide in a worker, or the dev server's CPython (?runner=local).
-  const LOCAL = new URLSearchParams(location.search).get("runner") === "local";
+  // JavaScript projects always run in their own worker (Node in a box), which starts at once.
+  const WANT_LOCAL = new URLSearchParams(location.search).get("runner") === "local";
+  let LOCAL = WANT_LOCAL;
+  const JS = () => !!P && P.lang === "js";
+  const RT = () => (JS() ? "Node" : "Python");
   const Runner = {
-    worker: null, seq: 0, pending: new Map(), status: LOCAL ? "ready" : "idle",
+    worker: null, lang: null, seq: 0, pending: new Map(), status: LOCAL ? "ready" : "idle",
+    // switching to a project in another language swaps the worker
+    use(lang) {
+      LOCAL = WANT_LOCAL && lang !== "js";
+      if (this.lang === lang) return;
+      if (this.worker) { this.worker.terminate(); this.worker = null; for (const p of this.pending.values()) p({ error: "Switched projects." }); this.pending.clear(); }
+      this.lang = lang;
+      this.status = LOCAL ? "ready" : "idle";
+    },
     start() {
       if (LOCAL || this.worker) return;
-      this.worker = new Worker("../learn/py-worker.js");
+      this.worker = new Worker(this.lang === "js" ? "../learn/js-worker.js" : "../learn/py-worker.js");
       this.worker.onmessage = (e) => {
         const d = e.data;
         if (d.status) { this.status = d.text; pyStatus(); return; }
@@ -70,11 +82,11 @@
         this.worker && this.worker.terminate();
         this.worker = null;
         this.status = "failed";
-        for (const p of this.pending.values()) p({ error: "Python couldn't start (the connection dropped?). Press Run to try again." });
+        for (const p of this.pending.values()) p({ error: `${RT()} couldn't start (the connection dropped?). Press Run to try again.` });
         this.pending.clear();
         pyStatus();
       };
-      this.status = "Starting Python…";
+      this.status = `Starting ${RT()}…`;
       this.worker.postMessage({ id: ++this.seq, req: { op: "warm" } });
       pyStatus();
     },
@@ -98,7 +110,7 @@
       if (LOCAL || !this.worker) return;
       this.worker.terminate();
       this.worker = null;
-      for (const p of this.pending.values()) p({ error: "Stopped. Python restarted, so the program and its disk start fresh." });
+      for (const p of this.pending.values()) p({ error: `Stopped. ${RT()} restarted, so the program and its disk start fresh.` });
       this.pending.clear();
       this.busy = false;
       this.start();
@@ -125,8 +137,9 @@
     let st = S.wb[proj.id];
     if (!st) {
       st = S.wb[proj.id] = { cur: 0, files: { ...proj.tickets[0].start }, commits: [], todo: {}, hints: {}, open: [], active: null };
-      st.open = Object.keys(st.files);
-      st.active = st.open[0];
+      st.open = proj.files.filter((f) => f in st.files);
+      // open on the file the first ticket is about, not a helper that came with it
+      st.active = proj.tickets[0].touches.find((f) => f in st.files) || st.open[0];
     }
     return st;
   }
@@ -159,21 +172,24 @@
     { tag: CM.tags.propertyName, class: "tk-prop" },
   ]);
   const PYWORDS = "False None True and as assert break class continue def del elif else except finally for from global if import in is lambda not or pass raise return try while with yield print len range sorted dict list str int open isinstance enumerate zip self".split(" ");
+  const JSWORDS = "async await break case catch class const continue default delete else export extends false finally for function if in instanceof let new null return super switch this throw true try typeof undefined var void while yield require module exports console process Buffer JSON Object Array Promise Number String Boolean Error Map Set Date Math fetch setTimeout setInterval clearTimeout".split(" ");
+  const WORDS = () => (JS() ? JSWORDS : PYWORDS);
+  const IND = () => (JS() ? 2 : 4);
   // Autocomplete from every file in the project, not just the open one: import store, then store.<names>.
   function complete(ctx) {
     const w = ctx.matchBefore(/[A-Za-z_]\w*/);
     if (!w || (w.from === w.to && !ctx.explicit)) return null;
-    const seen = new Set(PYWORDS);
+    const seen = new Set(WORDS());
     for (const src of Object.values(ST.files)) for (const m of src.matchAll(/[A-Za-z_]\w{2,}/g)) seen.add(m[0]);
     seen.delete(w.text);
-    return { from: w.from, options: [...seen].map((label) => ({ label, type: PYWORDS.includes(label) ? "keyword" : "variable" })), validFor: /^\w*$/ };
+    return { from: w.from, options: [...seen].map((label) => ({ label, type: WORDS().includes(label) ? "keyword" : "variable" })), validFor: /^\w*$/ };
   }
   const keys = CM.keymap.of([
     { key: "Mod-Enter", run: () => { doRun(); return true; } },
     { key: "Shift-Mod-Enter", run: () => { doTest(); return true; } },
     { key: "Mod-s", run: () => { openCommit(); return true; }, preventDefault: true },
   ]);
-  // Indent guides, as real editors draw them: a faint line at the start of each four-space step of indentation,
+  // Indent guides, as real editors draw them: a faint line at the start of each step of indentation,
   // so you can see which block a line belongs to.
   const guide = CM.Decoration.mark({ class: "cm-ig" });
   const indentGuides = CM.ViewPlugin.fromClass(class {
@@ -184,7 +200,8 @@
       for (const { from, to } of v.visibleRanges) {
         for (let pos = from; pos <= to;) {
           const line = v.state.doc.lineAt(pos), lead = (line.text.match(/^ +/) || [""])[0].length;
-          for (let c = 0; c + 4 <= lead; c += 4) out.push(guide.range(line.from + c, line.from + c + 4));
+          const n = IND();
+          for (let c = 0; c + n <= lead; c += n) out.push(guide.range(line.from + c, line.from + c + n));
           pos = line.to + 1;
         }
       }
@@ -200,7 +217,7 @@
         CM.drawSelection(), CM.dropCursor(), CM.EditorState.allowMultipleSelections.of(true), CM.indentOnInput(),
         CM.syntaxHighlighting(tagsHL), CM.bracketMatching(), CM.closeBrackets(), CM.autocompletion({ override: [complete] }),
         CM.rectangularSelection(), CM.crosshairCursor(), CM.highlightActiveLine(), CM.highlightSelectionMatches(),
-        CM.indentUnit.of("    "), CM.lintGutter(), CM.python(),
+        CM.indentUnit.of(" ".repeat(IND())), CM.lintGutter(), JS() ? [CM.javascript(), syntaxLint] : CM.python(),
         CM.keymap.of([...CM.closeBracketsKeymap, ...CM.defaultKeymap, ...CM.searchKeymap, ...CM.historyKeymap, ...CM.foldKeymap, ...CM.completionKeymap, ...CM.lintKeymap, CM.indentWithTab]),
         CM.EditorView.updateListener.of((u) => {
           if (u.docChanged) { ST.files[file] = u.state.doc.toString(); saved(false); save(); refreshMarks(); }
@@ -208,6 +225,20 @@
         }),
       ],
     });
+  }
+  // JavaScript: the parser marks what it can't read, so a syntax error is underlined as you type, before you Run
+  const syntaxLint = CM.linter((v) => {
+    const out = [];
+    CM.syntaxTree(v.state).iterate({ enter: (n) => { if (n.type.isError && out.length < 1) { const ln = v.state.doc.lineAt(n.from); out.push({ from: n.from, to: Math.max(n.to, Math.min(ln.to, n.from + 1)), severity: "error", message: "JavaScript can't read this: a missing bracket, quote or comma nearby?" }); } } });
+    return out;
+  }, { delay: 600 });
+  // the line of the first syntax error in a file, for errors the runtime can't place (a browser SyntaxError has no line)
+  function firstSyntaxLine(file) {
+    const st = states.get(file) || editorState(file, ST.files[file]);
+    states.set(file, st);
+    let at = 0;
+    CM.syntaxTree(st).iterate({ enter: (n) => { if (n.type.isError && !at) at = st.doc.lineAt(n.from).number; } });
+    return at || 1;
   }
   function openFile(file) {
     if (!(file in ST.files)) return;
@@ -232,6 +263,7 @@
   }
   function markError(where, message) {
     for (const f of Object.keys(diags)) diags[f] = [];
+    if (where && where[0] in ST.files && !where[1]) where[1] = firstSyntaxLine(where[0]);
     if (where && where[0] in ST.files) {
       const st = states.get(where[0]) || editorState(where[0], ST.files[where[0]]);
       states.set(where[0], st);
@@ -372,7 +404,7 @@
     const firstTicket = (f) => P.tickets.findIndex((t) => f in t.start || f in t.solution);
     side.append(
       h("div", { class: "wh" }, "Explorer", h("em", {}, `${have.length} file${have.length === 1 ? "" : "s"}`,
-        h("button", { class: "wdl", onclick: download, title: `Download ${P.title.toLowerCase()}.zip, to run with your own Python`, "aria-label": "Download the project as a zip", html: ICON.down }))),
+        h("button", { class: "wdl", onclick: download, title: `Download ${P.title.toLowerCase()}.zip, to run with your own ${RT()}`, "aria-label": "Download the project as a zip", html: ICON.down }))),
       h("ul", { class: "tree" },
         h("li", {}, h("div", { class: "root" }, "▾ " + P.title.toLowerCase())),
         have.map((f) => h("li", {}, h("button", { class: "f" + (f === ST.active ? " on" : ""), onclick: () => { stash(); openFile(f); } },
@@ -408,16 +440,21 @@
     const size = dir.reduce((a, b) => a + b.length, 0);
     return new Blob([...parts, ...dir, new Uint8Array([...u32(0x06054b50), 0, 0, 0, 0, ...u16(files.length), ...u16(files.length), ...u32(size), ...u32(off), 0, 0])], { type: "application/zip" });
   }
+  // a Node project that uses the sandbox's Express needs the real one from npm once it's downloaded
+  const usesExpress = () => Object.values(ST.files).some((src) => /require\(\s*["']express["']\s*\)/.test(src));
   function download() {
     stash();
     const name = P.title.toLowerCase(), done = P.tickets.slice(0, ST.cur).map((t, i) => `${i + 1}. ${t.title}`);
     const files = fileOrder(Object.keys(ST.files)).map((f) => [`${name}/${f}`, (states.get(f) ? states.get(f).doc.toString() : ST.files[f])]);
-    files.push([`${name}/run.py`, `"""Run ${P.title} in your own terminal:  python3 run.py\nEach line you type goes to ${P.main}.handle(line), the same as the Workbench terminal."""\nimport ${P.main}\n\nwhile True:\n    try:\n        line = input(${JSON.stringify(P.prompt || "> ")})\n    except (EOFError, KeyboardInterrupt):\n        print()\n        break\n    reply = ${P.main}.handle(line)\n    if reply is not None:\n        print(reply)\n`]);
-    files.push([`${name}/README.md`, `# ${P.title}\n\n${P.kind[0].toUpperCase() + P.kind.slice(1)}, built ticket by ticket in the Workbench at Tulip Labs.\n\n    cd ${name}\n    python3 run.py\n\nIt writes its data files next to the code, so you can stop it, start it again, and your data is still there.\n\n## Tickets committed\n\n${done.length ? done.join("\n") : "None yet: this is the starting code."}\n`]);
+    if (JS()) {
+      files.push([`${name}/run.js`, `// Run ${P.title} in your own terminal:  node run.js\n// Each line you type goes to ${P.main}.js's handle(line), the same as the Workbench terminal.\nconst readline = require("readline");\nconst { handle } = require("./${P.main}");\n\nconst rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: ${JSON.stringify(P.prompt || "> ")} });\n// one line at a time, in order, even when they're piped in faster than they're answered\nlet queue = Promise.resolve();\nrl.prompt();\nrl.on("line", (line) => {\n  queue = queue.then(async () => {\n    const reply = await handle(line);\n    if (reply !== null && reply !== undefined) console.log(reply);\n    rl.prompt();\n  });\n});\nrl.on("close", () => queue.then(() => process.exit(0)));\n`]);
+      files.push([`${name}/package.json`, JSON.stringify({ name, version: "1.0.0", private: true, description: P.kind, main: `${P.main}.js`, scripts: { start: "node run.js" }, engines: { node: ">=18" }, ...(usesExpress() ? { dependencies: { express: "^5.1.0" } } : {}) }, null, 2) + "\n"]);
+    } else files.push([`${name}/run.py`, `"""Run ${P.title} in your own terminal:  python3 run.py\nEach line you type goes to ${P.main}.handle(line), the same as the Workbench terminal."""\nimport ${P.main}\n\nwhile True:\n    try:\n        line = input(${JSON.stringify(P.prompt || "> ")})\n    except (EOFError, KeyboardInterrupt):\n        print()\n        break\n    reply = ${P.main}.handle(line)\n    if reply is not None:\n        print(reply)\n`]);
+    files.push([`${name}/README.md`, `# ${P.title}\n\n${P.kind[0].toUpperCase() + P.kind.slice(1)}, built ticket by ticket in the Workbench at Tulip Labs.\n\n    cd ${name}\n${usesExpress() ? "    npm install\n" : ""}    ${JS() ? "node run.js" : "python3 run.py"}\n\n${!JS() ? "" : usesExpress() ? "It needs Node 18 or newer. npm install fetches the real Express 5, which answers the same as the one in the Workbench. " : "It needs Node 18 or newer, and nothing from npm: every module is one you wrote. "}It writes its data files next to the code, so you can stop it, start it again, and your data is still there.\n\n## Tickets committed\n\n${done.length ? done.join("\n") : "None yet: this is the starting code."}\n`]);
     const a = h("a", { href: URL.createObjectURL(zip(files)), download: `${name}.zip` });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast(`Downloaded ${name}.zip. Unzip it and run python3 run.py.`);
+    toast(`Downloaded ${name}.zip. Unzip it and run ${!JS() ? "python3 run.py" : usesExpress() ? "npm install, then node run.js" : "node run.js"}.`);
   }
   const bytes = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB");
 
@@ -441,8 +478,10 @@
     // the function you're in, for the breadcrumb
     let fn = null;
     for (let n = ln.number; n >= 1 && !fn; n--) {
-      const m = /^(\s*)(def|class)\s+(\w+)/.exec(state.doc.line(n).text);
-      if (m && (n === ln.number || m[1].length < (/^\s*/.exec(ln.text)[0].length) || ln.text.trim() === "")) fn = m[3];
+      const m = JS() ? /^(\s*)(?:(?:async\s+)?function\s*\*?\s*(\w+)|class\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|\w+\s*=>)|(\w+(?:\.\w+)+)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>))/.exec(state.doc.line(n).text)
+        : /^(\s*)(?:def|class)\s+(\w+)/.exec(state.doc.line(n).text);
+      const name = m && (m[2] || m[3] || m[4] || m[5]);
+      if (name && (n === ln.number || m[1].length < (/^\s*/.exec(ln.text)[0].length) || ln.text.trim() === "")) fn = name;
     }
     crumbs(fn);
   }
@@ -456,7 +495,7 @@
     const r = tested;
     stat.append(
       h("span", { class: "py " + pyClass() }, pyText()),
-      h("span", { class: "hide-s" }, "Python 3 · UTF-8"),
+      h("span", { class: "hide-s" }, JS() ? "Node 22 · CommonJS · UTF-8" : "Python 3 · UTF-8"),
       h("span", { class: "grow" }),
       h("span", { class: r ? (r.passed ? "ok" : "bad") : "" }, r ? (r.passed ? `✓ ${r.total} checks pass` : `${r.ok} of ${r.total} checks`) : ""),
       h("span", { class: "caret" }, ""),
@@ -465,7 +504,7 @@
   }
   function saved(yes) { const s = $(".sv", stat); if (s) s.textContent = yes ? "saved" : "saving…"; }
   const pyClass = () => (Runner.busy ? "busy" : Runner.status === "ready" ? "ready" : Runner.status === "failed" ? "" : "busy");
-  const pyText = () => (Runner.busy ? "running…" : Runner.status === "ready" ? (LOCAL ? "Python ready (local)" : "Python ready") : Runner.status === "failed" ? "Python couldn't download · press Run to retry" : Runner.status === "idle" ? "Python loads on first Run" : Runner.status);
+  const pyText = () => (Runner.busy ? "running…" : Runner.status === "ready" ? (LOCAL ? `${RT()} ready (local)` : `${RT()} ready`) : Runner.status === "failed" ? `${RT()} couldn't start · press Run to retry` : Runner.status === "idle" ? `${RT()} loads on first Run` : Runner.status);
   function pyStatus() { const el = $(".py", stat); if (el) { el.className = "py " + pyClass(); el.textContent = pyText(); } }
 
   // ------------------------------------------------------------- ticket --
@@ -513,7 +552,7 @@
         (next.length ? `<p>Next on ${esc(P.title)}'s board: ${next.map((m) => `<b>${m.name}</b>`).join(", ")}. They're being written now.</p>` : "") }),
       h("div", { class: "wfin-go" },
         h("button", { class: "wdl-big", onclick: download, html: ICON.down + `<span>Download ${esc(P.title.toLowerCase())}.zip</span>` }),
-        h("span", {}, "Your code, plus ", h("code", {}, "run.py"), ". It runs with any Python 3, no browser needed.")),
+        h("span", {}, "Your code, plus ", h("code", {}, JS() ? "run.js" : "run.py"), JS() ? ". It runs with Node 18 or newer, no browser and no npm needed." : ". It runs with any Python 3, no browser needed.")),
       h("p", { class: "prose" }, h("a", { href: "./", style: "color:var(--w-pink)" }, "← All projects"))));
   }
 
@@ -522,7 +561,7 @@
   let snapPart = null;
   function renderMap() {
     const wrap = h("div", { class: "wmap" }, h("div", { class: "wh", style: "padding:0 0 8px" }, "What you're building", h("em", {}, `${ST.cur} of ${P.map.length} parts`)));
-    const cols = P.files, W = 360, colW = W / cols.length;
+    const cols = P.files.filter((f) => P.map.some((m) => m.file === f)), W = 360, colW = W / cols.length;
     const maxH = Math.max(...cols.map((f) => P.map.filter((m) => m.file === f).length));
     const step = 21, base = 40 + maxH * step;
     const svg = h("svg:svg", { viewBox: `0 0 ${W} ${base + 48}`, role: "img", "aria-label": "The program's parts, by file" });
@@ -665,6 +704,7 @@
     const r = await Runner.run({ op: "project_call", pid: P.id, line });
     if (r.stdout) for (const l of r.stdout.replace(/\n$/, "").split("\n")) termLog.push({ kind: "out", text: l });
     if (r.error) { termLog.push({ kind: "err", text: r.error, where: r.where }); markError(r.where, r.error); }
+    if (r.exited) { running = false; termLog.push({ kind: "sys", html: `<b>■</b> ${esc(P.title.toLowerCase())} stopped · press Run (${MOD}↵) to start it again` }); }
     setDisk(r.disk);
     focusTerm = true;
     showPanel("term");
@@ -910,6 +950,7 @@
     const r = route();
     if (P !== r.proj) {
       P = r.proj;
+      Runner.use(P.lang || "py");
       ST = stateFor(P);
       // files a ticket introduces must exist once you reach it (also fixes state saved by an older version)
       for (const t of P.tickets.slice(0, ST.cur + 1)) for (const [f, src] of Object.entries(t.starter)) if (!(f in ST.files)) ST.files[f] = src;
