@@ -5,6 +5,10 @@
      task     a goal on the live numbers: the crowd is fixed at task.set, the learner changes the server (task.knobs).
               goal rows are [metric or knob, op, value]. start is what the page opens the task with; reference is one answer.
      quotes   every number the text states, with the setup that produces it, so tools/tunnel-check.js can prove it
+              ({zipf: n} is the theoretical share of the hottest n keys; then/window replay a change mid-run)
+   Optional: free (knobs you may change before the task; default workers), parts (ghosts you can drag onto the wire),
+   names (what to call the server), scatter (the dot chart's axes, when it isn't load against p99), and
+   predict.axis (when the guess isn't about the crowd) with predict.tolRatio for a log axis.
    The rest are planned, so the shelf can show what's coming. */
 (function (root) {
   "use strict";
@@ -76,8 +80,82 @@
         { cfg: { users: 600, workers: 6 }, metric: "p99", min: 0.4 },
       ],
     },
-    { id: "wt03", title: "Scale out", curve: "split", law: "load balancing", teaser: "Add a second server behind a load balancer. Then make one of them slow." },
-    { id: "wt04", title: "Cache it", curve: "cache", law: "Zipf's law", teaser: "A few keys get most of the reads. How small can a cache be and still save the database?" },
+    {
+      id: "wt03", live: true, title: "Scale out", curve: "split", law: "load balancing",
+      teaser: "Three servers behind a load balancer, and one of them is slow. Round robin finds out the hard way.",
+      system: { mode: "open", rate: 40, servers: 3, workers: 4, service: 0.05, slow: 3, lb: "rr", timeout: 10, queueMax: 2000 },
+      crowd: { knob: "rate", min: 0, max: 300, step: 5, unit: "requests/s", short: "req/s" },
+      free: ["servers", "lb"], parts: ["server"],
+      brief: "One server tops out at <b>80 req/s</b>. You bought two more and put a <b>load balancer</b> in front that hands each request to the next server in turn: <b>round robin</b>. Server 1 is an older machine: each request takes it <b>3× longer</b>.",
+      predict: {
+        q: "Three servers now. How many requests per second before waiting explodes?",
+        answer: 80, tol: 12, theory: "rr",
+        reveal: "Round robin gives every server a third of the traffic, whatever its speed. Server 1 finishes only 4 ÷ 0.15 s ≈ <b>27 a second</b>, so it drowns once a third of the load passes 27: at <b>80 req/s</b>. Three servers, and the capacity of one.",
+      },
+      explore: "Push the crowd and watch server 1's queue grow while the others idle. Then click the balancer's policy to change it, or drag a spare server from the parts onto the wire.",
+      why: [
+        "With round robin, p99 is already about <b>0.6 s</b> at 60 req/s, and past <b>80</b> server 1's queue never drains while the other two still have room.",
+        "<b>Least connections</b> sends each request to the server with the fewest in flight. Slow server 1 stays busy longer, so it simply gets fewer. At <b>120 req/s</b> p99 stays under half a second, and the ceiling becomes the sum of the speeds: 80 + 80 + 27 ≈ <b>187</b>. Push to <b>200</b> and even least connections drowns.",
+        "Adding servers to round robin barely helps: with four, server 1 still gets a quarter of the traffic, and at <b>120 req/s</b> that's 30 a second, more than its 27. A balancer that can't see load is only as fast as its slowest machine.",
+      ],
+      task: {
+        title: "Launch week",
+        brief: "Launch week brings <b>180 requests a second</b>. Keep p99 under <b>500 ms</b> with no errors, on a budget of <b>4 servers</b>. Server 1 stays: it's paid for. Drag a server onto the wire to add one; click the balancer to change how it picks.",
+        set: { rate: 180 }, knobs: ["servers", "lb"], start: { servers: 3, lb: "rr" }, reference: { servers: 4, lb: "least" },
+        goal: [["p99", "<", 0.5, "p99 under 500 ms"], ["errors", "==", 0, "no errors"], ["servers", "<=", 4, "4 servers or fewer"]],
+        done: "Least connections over four servers has 80 + 80 + 80 + 27 ≈ 267 req/s of capacity for 180. Round robin over the same four would still hand server 1 45 a second, and drown it.",
+      },
+      quotes: [
+        { cfg: { rate: 60 }, metric: "p99", value: 0.6, tol: 0.15 },
+        { cfg: { rate: 90 }, metric: "p99", min: 5 },
+        { cfg: { rate: 70 }, metric: "p99", max: 1.2 },
+        { cfg: { rate: 120, lb: "least" }, metric: "p99", max: 0.5 },
+        { cfg: { rate: 200, lb: "least" }, metric: "p99", min: 2 },
+        { cfg: { rate: 120, servers: 4 }, metric: "p99", min: 2 },
+        { cfg: { rate: 180, servers: 4 }, metric: "p99", min: 2 },
+        { cfg: { rate: 180, servers: 3, lb: "least" }, metric: "p99", min: 0.5 },
+      ],
+    },
+    {
+      id: "wt04", live: true, title: "Cache it", curve: "cache", law: "Zipf's law",
+      teaser: "A few keys get most of the reads. How small can a cache be and still save the database?",
+      system: { mode: "open", rate: 60, servers: 1, workers: 4, service: 0.05, timeout: 10, queueMax: 2000, cache: 0, keys: 10000, zipf: 1 },
+      crowd: { knob: "rate", min: 0, max: 300, step: 5, unit: "reads/s", short: "reads/s" },
+      names: { server: "database" }, free: ["cache"], parts: ["cache"],
+      scatter: { x: "cache", log: true, min: 10, max: 10000, y: "hit", ymax: 1, label: "hit rate against cache size" },
+      brief: "The <b>database</b> answers a read in <b>50 ms</b> with 4 workers: <b>80 reads a second</b> at most. It holds <b>10,000</b> keys, but reads aren't spread evenly: a few keys are hot, most are rarely read.",
+      predict: {
+        q: "Traffic will reach 150 reads a second. How many keys must a cache in front hold to keep the database afloat?",
+        axis: { knob: "cache", min: 10, max: 10000, log: true, short: "keys" },
+        answer: 250, tolRatio: 1.6, theory: "cache", atLoad: 150,
+        reveal: "The database can take 80 of the 150 reads, so the cache must answer the other 70: <b>47%</b> of reads. A cache of about <b>250 keys</b>, just 2.5% of them, does it.",
+      },
+      explore: "Drag the cache from the parts onto the wire, click it to change its size, and push the crowd to 150. Each steady second puts a dot: cache size against hit rate. The dashed line is the hit rate the database needs at the load you're sending.",
+      why: [
+        "That's <b>Zipf's law</b>: the k-th most read key is read about 1/k as often as the hottest. So the hottest <b>1%</b> of keys get <b>53%</b> of all reads. An LRU cache of that size catches less, about <b>35%</b>, because a key read once still pushes a hot one out.",
+        "Each doubling of the cache adds about the same few points: <b>500</b> keys catch about <b>59%</b>, <b>1,000</b> about <b>68%</b>, <b>2,000</b> about <b>77%</b>. Hit rate grows with the log of the size, so the first keys are worth the most.",
+        "A cache only helps once it's warm, and it warms only as fast as the database answers. Add a small one to a database that's already drowning and the backlog may never drain. Turn the crowd down, let it recover, then push again.",
+      ],
+      task: {
+        title: "Black Friday",
+        brief: "Black Friday brings <b>250 reads a second</b>. The cache is warm but holds only <b>300 keys</b>. Keep p99 under <b>400 ms</b> with no errors. The cache machine has RAM for <b>2,000 keys</b>. Click the cache to resize it.",
+        set: { rate: 250, warm: true }, knobs: ["cache"], start: { cache: 300 }, reference: { cache: 2000 },
+        goal: [["p99", "<", 0.4, "p99 under 400 ms"], ["errors", "==", 0, "no errors"], ["cache", "<=", 2000, "2,000 keys or fewer"]],
+        done: "A warm cache of 2,000 keys answers about 77% of reads, so the database sees about 58 a second of the 250 and is 72% busy. The database itself didn't change at all.",
+      },
+      quotes: [
+        { zipf: 100, value: 0.53, tol: 0.02 },
+        { cfg: { rate: 150, cache: 100 }, metric: "hit", value: 0.35, tol: 0.08 },
+        { cfg: { rate: 150, cache: 500 }, metric: "hit", value: 0.59, tol: 0.04 },
+        { cfg: { rate: 150, cache: 1000 }, metric: "hit", value: 0.68, tol: 0.04 },
+        { cfg: { rate: 150, cache: 2000 }, metric: "hit", value: 0.77, tol: 0.04 },
+        { cfg: { rate: 150, cache: 250, warm: true }, metric: "hit", min: 0.47 },
+        { cfg: { rate: 250, cache: 2000, warm: true }, metric: "misses", value: 58, tol: 0.05 },
+        { cfg: { rate: 250, cache: 2000, warm: true }, metric: "util", value: 0.72, tol: 0.05 },
+        // the trap: drowning first, then a 250-key cache at 20 s, and two minutes later it still hasn't recovered
+        { cfg: { rate: 150, cache: 0 }, then: { at: 20, set: { cache: 250 } }, window: [110, 140], metric: "p99", min: 2 },
+      ],
+    },
     { id: "wt05", title: "The database is the bottleneck", curve: "lag", law: "replication lag", teaser: "Read replicas take the reads. Writes still go to one place." },
     { id: "wt06", title: "Queues absorb bursts", curve: "burst", law: "backpressure", teaser: "Put a queue between the web and the workers and watch a spike flatten." },
     { id: "wt07", title: "Retry storms", curve: "storm", law: "metastable failure", teaser: "Retries turn a blip into an outage that won't end. Then fix it with backoff and jitter." },
