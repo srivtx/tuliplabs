@@ -17,6 +17,7 @@
    A client gives up after `timeout` seconds (also an error), but its request still uses a worker if it got one.
 
    new Sim(cfg, seed) · sim.set({...}) · sim.advance(toTime) · sim.view() for drawing · sim.stats(t0, t1) for a window ·
+   Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
 (function (root) {
@@ -275,6 +276,14 @@
       let a = 0, c = 0;
       for (let i = Math.floor(t0); i < Math.ceil(t1); i++) { a += this.area[i] || 0; c += this.capA[i] || 0; }
       return c ? a / c : 0;
+    }
+    // rewind: the same seed and the same changes at the same moments give the same run, so any moment can be rebuilt
+    // from the start. changes: [{t, patch}], oldest first, each made right after the sim reached t.
+    static replay(cfg, seed, changes, T) {
+      const s = new Sim(cfg, seed);
+      for (const c of changes) { if (c.t > T) break; s.advance(c.t); s.set(c.patch); }
+      s.advance(T);
+      return s;
     }
     static measure(cfg, o = {}) {
       const s = new Sim(cfg, o.seed || 7), warm = o.warm ?? 30, span = o.span ?? 300;

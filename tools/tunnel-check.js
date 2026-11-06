@@ -10,7 +10,7 @@
 // And for the simulator itself: queue waits agree with M/M/c theory (Erlang C), for one server and for random
 // routing over several; an LRU cache never beats the ideal one; the same seed gives the same run.
 const path = require("path");
-const { Sim, erlangC, zipfShare } = require(path.join(__dirname, "..", "tunnel", "sim.js"));
+const { Sim, erlangC, zipfShare, rng } = require(path.join(__dirname, "..", "tunnel", "sim.js"));
 const { experiments } = require(path.join(__dirname, "..", "tunnel", "experiments.js"));
 
 const bad = [];
@@ -127,6 +127,29 @@ for (const size of [100, 1000]) {
 const a = Sim.measure(experiments[0].system, { seed: 3 }), b = Sim.measure(experiments[0].system, { seed: 3 });
 checks++;
 if (JSON.stringify(a) !== JSON.stringify(b)) bad.push("the sim isn't deterministic for a fixed seed");
+
+// rewind: a run driven the way the page drives it (uneven frame steps, knobs turned mid-run) is rebuilt exactly by
+// Sim.replay at any moment, both before and after the changes; utilisation may differ only by float rounding
+for (const x of experiments.filter((e) => e.live)) {
+  const cfg = { ...x.system, ...x.task.set, ...x.task.start }, seed = 9, changes = [];
+  const live = new Sim(cfg, seed), r = rng(5);
+  const plan = [[12.3, { ...x.task.reference }], [31.7, { [x.crowd.knob]: (x.task.set || x.system)[x.crowd.knob] * 1.1 }]];
+  const marks = [8.9, 20.05, 47.2];
+  let snaps = [];
+  while (live.t < 50) {
+    const next = Math.min(50, live.t + 0.004 + r() * 0.09);
+    for (const m of marks) if (live.t < m && next >= m) { live.advance(m); snaps.push([m, live.stats(0, m), live.view().srv.map((s) => [s.queue.length, s.busy.length])]); }
+    live.advance(next);
+    while (plan.length && live.t >= plan[0][0]) { const [, patch] = plan.shift(); changes.push({ t: live.t, patch }); live.set(patch); }
+  }
+  for (const [T, st, v] of snaps) {
+    const re = Sim.replay(cfg, seed, changes, T), rs = re.stats(0, T), rv = re.view();
+    checks++;
+    const same = ["sent", "ok", "errors", "p50", "p99", "hit"].every((k) => rs[k] === st[k]) && Math.abs(rs.util - st.util) < 1e-9 &&
+      JSON.stringify(rv.srv.map((s) => [s.queue.length, s.busy.length])) === JSON.stringify(v);
+    if (!same) bad.push(`${x.id} rewind to ${T} s doesn't rebuild the run (sent ${rs.sent} vs ${st.sent}, p99 ${ms(rs.p99)} vs ${ms(st.p99)})`);
+  }
+}
 
 console.log(`wind tunnel: ${checks} checks, ${bad.length ? bad.length + " failed" : "ALL GOOD"}`);
 bad.forEach((m) => console.log("  FAIL " + m));

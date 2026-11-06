@@ -278,6 +278,36 @@ async function tunnel(page, browser, errors) {
   }
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("vnl-code-v1") || "{}").done || {});
   for (const x of X.filter((x) => x.live)) if (!kept[x.id]) bad.push(`${x.id}: not saved as done`);
+  // rewind: drag back along a timeline, see that moment exactly as it was, then carry on from it
+  {
+    const x = X.filter((x) => x.live)[2];
+    await page.goto(`${BASE}/tunnel/lab.html#${x.n}`);
+    await page.reload();
+    await page.locator(".wt-link", { hasText: "Run the task again" }).click();
+    const st = () => page.evaluate(() => document.querySelector("#wt").wtState());
+    await page.evaluate(() => document.querySelector("#wt").wtRun(20));
+    const at20 = await st();
+    await page.evaluate(() => { document.querySelector("#wt").wtSet({ servers: 4 }); document.querySelector("#wt").wtRun(25); });
+    const head = (await st()).head;
+    const ch = await page.locator(".ch", { hasText: "served per second" }).locator("canvas").boundingBox();
+    const fx = (t) => ch.x + 4 + ((t - (head - 60)) / 60) * (ch.width - 8);
+    await page.mouse.move(fx(head - 1), ch.y + ch.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(fx(15), ch.y + ch.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    let s = await st();
+    if (!s.rewound || Math.abs(s.t - 15) > 1.5) bad.push(`rewind: dragging the timeline to 0:15 left t=${s.t.toFixed(1)}, rewound=${s.rewound}`);
+    if (s.cfg.servers !== at20.cfg.servers) bad.push(`rewind: at 0:15 the design should have ${at20.cfg.servers} servers, shows ${s.cfg.servers}`);
+    await page.evaluate(() => document.querySelector("#wt").wtSeek(20));
+    s = await st();
+    if (s.sent !== at20.sent || s.p99 !== at20.p99) bad.push(`rewind: 0:20 rebuilt as ${s.sent} sent, p99 ${s.p99}; it was ${at20.sent}, ${at20.p99}`);
+    if (!(await page.locator(".wt-clock.rew").count())) bad.push("rewind: the clock doesn't show you're rewound");
+    await page.locator(".wt-word", { hasText: "play from here" }).click();
+    s = await st();
+    if (s.rewound || Math.abs(s.head - 20) > 0.2 || s.samples > 20) bad.push(`rewind: play didn't carry on from 0:20 (head ${s.head.toFixed(1)}, ${s.samples} samples)`);
+    await page.screenshot({ path: `${shots}/tunnel-rewind.png` });
+  }
   console.log(`tunnel: ${n} experiments driven, ${bad.length} failed`);
   bad.forEach((b) => console.log("  FAIL " + b));
   errors.forEach((e) => console.log("  " + e));

@@ -186,6 +186,10 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .ch figcaption span{overflow:hidden;text-overflow:ellipsis}
 .ch figcaption b{color:var(--wt-ink);font-weight:600}
 .ch canvas{flex:1;width:100%;min-height:0;display:block}
+/* timelines double as the rewind: drag back along one */
+.ch:not(.wide){cursor:ew-resize;touch-action:pan-y;user-select:none}
+.ch.scrub{background:color-mix(in srgb,var(--wt-pink) 5%,var(--wt-side))}
+.wt-clock.rew{color:var(--wt-pink)}
 
 .wt-handle{display:none}
 .wt-toast{position:absolute;left:50%;bottom:24px;translate:-50% 0;padding:9px 16px;border-radius:10px;background:var(--wt-ink);color:var(--wt-bg);font:600 13px var(--f-body);z-index:20;animation:wtin .3s cubic-bezier(.2,.8,.3,1)}
@@ -196,6 +200,7 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 @media (max-width:860px){
   .wt-bar{gap:8px;padding:0 10px}
   .wt-back,.wt-sep,.wt-no,.wt-clock{display:none}
+  .wt-clock.rew{display:inline}
   .wt-body{grid-template-columns:1fr}
   .wt-right{grid-template-rows:minmax(0,1fr) auto}
   .wt-charts{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto;height:auto;padding-bottom:58px}

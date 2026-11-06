@@ -53,6 +53,9 @@
 
   // --------------------------------------------------------------- shell --
   const main = $("#wt");
+  // tape: the run's start and every knob turned since, so any moment can be rebuilt (rewind). While rewound, `live` holds
+  // the run's real head and `sim` is the moment you're looking at.
+  let tape = null, live = null;
   let X, idx, sim, P, speed = 1, paused = false, samples = [], dots = [], lastLoadChange = 0, lastSysChange = 0, flyers = [], sparks = [], before = null;
   const SPEEDS = [[0.1, "slow-mo"], [1, "×1"], [10, "×10"]];
   const WINDOW = 30, MAX_SERVERS = 6;
@@ -85,6 +88,8 @@
     const cfg = { ...startCfg(), ...(patch || {}) };
     sim = new Sim(cfg, 1 + idx);
     sim.feed = [];
+    tape = { cfg, seed: 1 + idx, changes: [] };
+    live = null;
     before = startCfg();
     samples = []; dots = []; flyers = []; sparks = []; lastLoadChange = 0; lastSysChange = 0; lastSample = 0;
     heatOf = []; boomOf = [];
@@ -151,10 +156,14 @@
     updateBar();
     resize();
   }
-  function togglePause() { paused = !paused; updateBar(); }
+  function togglePause() { if (paused && live) branch(); paused = !paused; updateBar(); }
   function cycleSpeed() { const i = SPEEDS.findIndex((s) => s[0] === speed); speed = SPEEDS[(i + 1) % SPEEDS.length][0]; updateBar(); }
   function updateBar() {
-    els.pause.textContent = paused ? "▶ play" : "❚❚ pause";
+    els.pause.textContent = paused ? (live ? "▶ play from here" : "▶ play") : "❚❚ pause";
+    els.clock.classList.toggle("rew", !!live);
+    // say how to rewind while paused, and what play will do once rewound
+    if (paused) els.hint.textContent = live ? `Rewound to ${clock(sim.t).slice(2)}. Play carries on from here; the faint part of each timeline is dropped.` : "Paused. Drag back along a timeline, or press ←, to rewind.";
+    else if (/^(Paused|Rewound)/.test(els.hint.textContent)) els.hint.textContent = "";
     els.speed.textContent = SPEEDS.find((s) => s[0] === speed)[1];
     els.speed.classList.toggle("on", speed !== 1);
   }
@@ -821,18 +830,59 @@
     const { min, max, step } = X.crowd;
     v = Math.max(min, Math.min(max, Math.round(v / step) * step));
     if (v === loadNow()) return;
-    sim.set({ [knob()]: v });
-    lastLoadChange = sim.t;
+    change({ [knob()]: v });
     els.hint.textContent = "";
     renderCode();
   }
   // every design change goes through here, so the goal's window and the dots restart, and the code view updates
   function setKnob(k, v) {
     if (!canTurn(k) || sim.cfg[k] === v) return;
-    sim.set({ [k]: v });
-    lastSysChange = sim.t;
+    change({ [k]: v });
     renderInspect(true); renderParts(); renderCode();
   }
+  // the one way the sim changes: onto the tape, after cutting the future off if you're rewound
+  function change(patch) {
+    branch();
+    sim.set(patch);
+    tape.changes.push({ t: sim.t, patch });
+    for (const k in patch) { if (k === knob()) lastLoadChange = sim.t; else lastSysChange = sim.t; }
+  }
+
+  // ------------------------------------------------------------- rewind --
+  // Drag along any timeline (or ← → while paused) to go back. The stage, the numbers and system.yaml show that moment;
+  // play, or a change, carries on from there and the old future is dropped.
+  const headT = () => (live || sim).t;
+  function seek(T) {
+    const head = headT();
+    T = Math.max(0, Math.min(head, T));
+    if (head - T < 0.05) {
+      if (live) { sim = live; live = null; }
+    } else {
+      if (!live) { live = sim; paused = true; }
+      sim = Sim.replay(tape.cfg, tape.seed, tape.changes, T);
+      sim.feed = [];
+    }
+    flyers = []; sparks = [];
+    updateBar(); drawCharts(); renderInspect(true); renderParts(); renderCode();
+  }
+  let seekWant = null;
+  function seekSoon(T) {
+    if (seekWant === null) requestAnimationFrame(() => { const t = seekWant; seekWant = null; seek(t); });
+    seekWant = T;
+  }
+  function branch() {
+    if (!live) return;
+    const T = sim.t;
+    live = null;
+    tape.changes = tape.changes.filter((c) => c.t <= T);
+    samples = samples.filter((s) => s.t <= T);
+    dots = dots.filter((d) => d.t <= T);
+    lastSample = Math.floor(T);
+    lastLoadChange = lastSysChange = 0;
+    for (const c of tape.changes) for (const k in c.patch) { if (k === knob()) lastLoadChange = c.t; else lastSysChange = c.t; }
+    toast(`Carrying on from ${clock(T).slice(2)}. What happened after it is gone.`);
+  }
+
   function cycleLb() { const K = Object.keys(LB); setKnob("lb", K[(K.indexOf(sim.cfg.lb) + 1) % K.length]); }
 
   // the parts tray: ghosts you drag onto the wire (or click) to add a server or a cache
@@ -966,12 +1016,32 @@
       const el = h("figure", { class: "ch" + (wide ? " wide" : "") }, h("figcaption", {}, h("span", {}, title), val), cv);
       charts[id] = { el, cv, val };
       c.append(el);
+      if (!wide) scrubber(el, id);
     };
     box("load", scat().label, true);
     box("tput", "served per second");
     box("lat", "wait: p50 and p99");
     box("err", "errors per second");
     box("util", X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
+  }
+  // drag along a timeline to go back in time; the window holds still while you drag
+  function scrubber(el, id) {
+    el.title = "Drag back along the timeline to rewind";
+    let win = null;
+    const at = (e) => { const r = charts[id].cv.getBoundingClientRect(), f = (e.clientX - r.left - 4) / Math.max(1, r.width - 8); return win[0] + Math.max(0, Math.min(1, f)) * (win[1] - win[0]); };
+    el.addEventListener("pointerdown", (e) => {
+      if (e.button) return;
+      win = timeWin();
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("scrub");
+      paused = true; updateBar();
+      seekSoon(at(e));
+      e.preventDefault();
+    });
+    el.addEventListener("pointermove", (e) => { if (win) seekSoon(at(e)); });
+    const end = () => { if (!win) return; win = null; el.classList.remove("scrub"); };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
   }
   function sizeCharts() {
     for (const k in charts) {
@@ -1028,6 +1098,7 @@
     }
     // a dot per steady second: older ones fade
     dots.forEach((d, i) => {
+      if (live && d.t > sim.t) return;
       x.globalAlpha = 0.25 + 0.75 * (i / Math.max(1, dots.length - 1));
       const over = !pctY && d.y > YMAX;
       x.fillStyle = over ? css("--wt-bad") : acc;
@@ -1036,20 +1107,20 @@
       else { x.beginPath(); x.arc(xx, yy, 2.6, 0, Math.PI * 2); x.fill(); }
     });
     x.globalAlpha = 1;
-    const last = dots[dots.length - 1];
+    const seen = live ? dots.filter((d) => d.t <= sim.t) : dots, last = seen[seen.length - 1];
     charts[k].val.textContent = last ? (pctY ? `${Math.round(last.y * 100)}% at ${num(last.x)} keys` : `${ms(last.y)} at ${num(last.x)}`) : "";
   }
   function series(k, lines, ymax, fmt, unitMax) {
     if (!charts[k] || !charts[k].w) return;
     const [x, W, H] = chartCtx(k);
     const pad = { l: 4, r: 4, t: 6, b: 4 }, span = 60;
-    const t1 = sim.t, t0 = t1 - span;
+    const [t0, t1] = timeWin(), T = sim.t;
     const px = (t) => pad.l + ((t - t0) / span) * (W - pad.l - pad.r);
     const top = Math.max(ymax, ...samples.flatMap((s) => lines.map((l) => Math.min(unitMax || Infinity, s[l.key] || 0)))) * 1.1 || 1;
     const py = (v) => H - pad.b - (Math.min(v, top) / top) * (H - pad.t - pad.b);
     x.strokeStyle = css("--wt-line"); x.lineWidth = 1;
     x.beginPath(); x.moveTo(pad.l, H - pad.b); x.lineTo(W - pad.r, H - pad.b); x.stroke();
-    for (const l of lines) {
+    const draw = () => { for (const l of lines) {
       x.strokeStyle = l.color; x.lineWidth = l.w || 1.6; x.setLineDash(l.dash || []);
       x.beginPath();
       let first = true;
@@ -1060,13 +1131,27 @@
         const vis = samples.filter((s) => s.t >= t0);
         if (vis.length > 1) {
           x.lineTo(px(vis[vis.length - 1].t), H - pad.b); x.lineTo(px(vis[0].t), H - pad.b); x.closePath();
-          x.globalAlpha = 0.12; x.fillStyle = l.color; x.fill(); x.globalAlpha = 1;
+          const a = x.globalAlpha; x.globalAlpha = a * 0.12; x.fillStyle = l.color; x.fill(); x.globalAlpha = a;
         }
       }
-    }
+    } };
+    if (live) {
+      // rewound: what came after this moment is faint, and a cursor marks where you are
+      const cx = px(T);
+      x.globalAlpha = 0.22; draw(); x.globalAlpha = 1;
+      x.save(); x.beginPath(); x.rect(0, 0, cx, H); x.clip(); draw(); x.restore();
+      x.setLineDash([]); x.strokeStyle = css("--wt-pink"); x.lineWidth = 1.5;
+      x.beginPath(); x.moveTo(cx, 0); x.lineTo(cx, H); x.stroke();
+    } else draw();
     x.setLineDash([]);
-    const s = samples[samples.length - 1];
+    let s = samples[samples.length - 1];
+    if (live) for (let i = samples.length - 1; i >= 0; i--) if (samples[i].t <= T + 1e-9) { s = samples[i]; break; }
     charts[k].val.textContent = s ? fmt(s) : "";
+  }
+  // the timelines' window: the last minute, or around the moment you've rewound to
+  function timeWin() {
+    const head = headT(), T = sim.t, t1 = head - T > 50 ? T + 50 : head;
+    return [t1 - 60, t1];
   }
   function drawCharts() {
     if (!sim) return;
@@ -1094,7 +1179,7 @@
       }
       routeGlow = Math.max(0, routeGlow - dt * 3);
       drawStage(dt);
-      els.clock.textContent = clock(sim.t);
+      els.clock.textContent = live ? `${clock(sim.t)} of ${clock(live.t).slice(2)}` : clock(sim.t);
       if ((chartT += dt) > 0.12) { chartT = 0; drawCharts(); renderInspect(); }
     }
     requestAnimationFrame(frame);
@@ -1129,7 +1214,7 @@
     // a dot only once the load and the design have been steady for the whole 5 s window, so a change doesn't smear it
     const sc = scat(), xv = sc.x === knob() ? s.load : sim.cfg[sc.x];
     if (t - Math.max(lastLoadChange, lastSysChange) >= 6 && st.ok > 3 && xv > 0) {
-      dots.push({ x: xv, y: s[sc.y], load: s.load, p99: s.p99 });
+      dots.push({ t, x: xv, y: s[sc.y], load: s.load, p99: s.p99 });
       if (dots.length > 240) dots.shift();
       if (P.phase === "explore" && !P.revealed && P.guess != null) {
         const A = X.predict.answer;
@@ -1146,13 +1231,18 @@
     if (e.target.closest("input, textarea, [contenteditable], [role=slider]")) return;
     if (e.key === " " && !e.target.closest("button, a")) { togglePause(); e.preventDefault(); }
     if (e.key === "Escape") closeInspect();
+    if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && paused && !e.defaultPrevented && !e.target.closest(".wt-crowd, .wt-pin")) {
+      seek(sim.t + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1));
+      e.preventDefault();
+    }
   });
   addEventListener("vnl-theme", () => drawCharts());
   route();
   requestAnimationFrame(frame);
 
   // for tools/e2e.js: set a knob directly and run the sim forward fast
-  main.wtSet = (patch) => { sim.set(patch); for (const k in patch) { if (k === knob()) lastLoadChange = sim.t; else lastSysChange = sim.t; } renderCode(); };
+  main.wtSet = (patch) => { change(patch); renderCode(); };
+  main.wtSeek = (T) => seek(T);
   main.wtRun = (secs) => { const end = sim.t + secs; while (sim.t < end) { sim.advance(Math.min(end, sim.t + 1)); sim.feed.length = 0; if (sim.t - lastSample >= 1) { lastSample += 1; sample(lastSample); } } drawCharts(); };
-  main.wtState = () => ({ phase: P.phase, guess: P.guess, t: sim.t, cfg: sim.cfg, done: !!S.done[X.id] });
+  main.wtState = () => { const st = sim.stats(0, sim.t); return { phase: P.phase, guess: P.guess, t: sim.t, head: headT(), rewound: !!live, cfg: sim.cfg, done: !!S.done[X.id], samples: samples.length, sent: st.sent, p99: st.p99 }; };
 })();
