@@ -231,3 +231,6 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
   .wt-parts .gi{grid-row:auto;width:20px;height:20px}
 }
 @media (prefers-reduced-motion:reduce){.wt-brief,.wt-handle,.wt-go,.wt-meter .fill{transition:none}.wt-toast{animation:none}}
+
+/* ?shot: only the scene, for the shelf's pictures */
+.wt-shot .wt-tags,.wt-shot .wt-code,.wt-shot .wt-parts,.wt-shot .wt-hint,.wt-shot .wt-insp,.wt-shot .wt-crowd{visibility:hidden}

@@ -29,6 +29,9 @@
     return el;
   };
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // ?shot: draw the stage on transparency, with floors and wires in neutral tones, for tools/lab-thumbs.js to capture
+  const SHOT = /[?&]shot\b/.test(location.search);
+  if (SHOT) document.documentElement.classList.add("wt-shot");
   const num = (n) => Math.round(n).toLocaleString("en-US");
 
   // ------------------------------------------------------------ progress --
@@ -154,7 +157,7 @@
     els.handle = h("button", { class: "wt-handle", onclick: () => main.classList.toggle("sheet-open"), "aria-label": "Show or hide the experiment" }, h("i"), h("span"));
     main.append(els.bar, h("div", { class: "wt-body" }, els.brief, h("div", { class: "wt-right" }, els.stage, els.charts)), els.handle);
     tagEls = new Map();
-    codeOpen = matchMedia("(max-width: 860px)").matches ? false : codeOpen;
+    codeOpen = matchMedia("(max-width: 860px)").matches || SHOT ? false : codeOpen;
     buildCharts();
     renderBrief();
     wireStage();
@@ -536,7 +539,10 @@
     return { x0, x1, y0, y1 };
   }
   function theme() {
-    const dark = document.documentElement.dataset.theme !== "light";
+    if (SHOT) return { ...themeOf(true), grid: "transparent", ground: "rgba(0,0,0,.22)", wire: "rgba(255,255,255,.16)", pad: "rgba(0,0,0,.28)" };
+    return themeOf(document.documentElement.dataset.theme !== "light");
+  }
+  function themeOf(dark) {
     return dark
       ? { bg: "#0b1418", grid: "rgba(95,224,240,.07)", ground: "#10232a", wire: "#1c3a44", text: "#a9d6de", mute: "#5f8a93", q: "#ffc94a", hot: "#ff5a4f", ok: "#5fe0a0", bad: "#ff5a6e", req: "#ffe08a", pad: "#0e2a31", smoke: "120,140,148", cache: "#c7a2ff", lb: "#86b4ff", ghost: "rgb(95,224,240)", spark: "#ffb347", lit: "#5fe0a0" }
       : { bg: "#f2f6f5", grid: "rgba(16,90,104,.08)", ground: "#e3ecea", wire: "#c9dbd8", text: "#1d4a52", mute: "#6d8f95", q: "#e0a412", hot: "#e8453c", ok: "#1fa36a", bad: "#e23d55", req: "#e8a10f", pad: "#cfe2e0", smoke: "90,100,104", cache: "#9a6ce0", lb: "#4f7fd8", ghost: "rgb(15,139,160)", spark: "#f08a1c", lit: "#1fa36a" };
@@ -571,7 +577,7 @@
     else { const k = Math.min(1, dt * 5); V = { u: V.u + (goal.u - V.u) * k, ox: V.ox + (goal.ox - V.ox) * k, oy: V.oy + (goal.oy - V.oy) * k }; }
     VT = goal;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = T.bg; ctx.fillRect(0, 0, cw, chh);
+    if (SHOT) ctx.clearRect(0, 0, cw, chh); else { ctx.fillStyle = T.bg; ctx.fillRect(0, 0, cw, chh); }
     ctx.strokeStyle = T.grid; ctx.lineWidth = 1;
     for (let i = -4; i <= 24; i++) { const [a, b] = [iso(i, -6, 0), iso(i, 12, 0)]; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
     for (let j = -6; j <= 12; j++) { const [a, b] = [iso(-4, j, 0), iso(24, j, 0)]; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
@@ -1310,6 +1316,7 @@
   // for tools/e2e.js: set a knob directly and run the sim forward fast
   main.wtSet = (patch) => { change(patch); renderCode(); };
   main.wtSeek = (T) => seek(T);
+  main.wtFrame = () => els.canvas.toDataURL("image/png");
   main.wtRun = (secs) => { const end = sim.t + secs; while (sim.t < end) { sim.advance(Math.min(end, sim.t + 1)); sim.feed.length = 0; if (sim.t - lastSample >= 1) { lastSample += 1; sample(lastSample); } } drawCharts(); };
   main.wtState = () => { const st = sim.stats(0, sim.t); return { phase: P.phase, guess: P.guess, t: sim.t, head: headT(), rewound: !!live, cfg: sim.cfg, done: !!S.done[X.id], samples: samples.length, sent: st.sent, p99: st.p99 }; };
 })();

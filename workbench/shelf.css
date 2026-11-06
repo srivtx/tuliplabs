@@ -1,89 +1,53 @@
-/* The labs' shelves (Workbench projects, Wind Tunnel experiments): a short head, how the lab works, where to pick up,
-   then a grid of cards. Each card's picture is printed (a tiny editor in Tulip Night, or a curve on a dark grid),
-   so it looks the same in light and dark. The page's accent is the lab's own colour (--kc). */
-.shelf{max-width:1180px;margin:0 auto;padding:56px 16px 90px;--acc:var(--kc,#f0643c)}
-.shelf .eyebrow{margin:0;font:500 13px var(--f-display);letter-spacing:.06em;color:var(--acc)}
-.shelf h1{margin:6px 0 0;font:400 clamp(44px,7vw,84px)/.95 var(--f-serif);letter-spacing:-.01em}
-.shelf h1 i{color:var(--acc)}
-.shelf .lede{max-width:580px;margin:14px 0 0;color:var(--muted);text-wrap:pretty}
+/* The labs' shelves: the course shelf's layout (learn/engine.css) with pictures of the real thing. Each card's soil is
+   a deep colour field (--b) with its bright twin (--a) for type and light. */
+.la-plots{grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:16px}
+.la-plot{border-color:color-mix(in srgb,var(--a) 14%,var(--line))}
+.la-plot:hover{border-color:var(--a)}
+.la-plot .soil.la-soil{height:172px;background:radial-gradient(120% 90% at 70% 100%,color-mix(in srgb,var(--a) 22%,var(--b)),var(--b) 70%);border-bottom:0;overflow:hidden;isolation:isolate}
+.la-plot .ghost{z-index:0;right:6px;bottom:-22px;font-size:112px;color:color-mix(in srgb,var(--a) 20%,transparent)}
+.la-plot:hover .ghost{color:color-mix(in srgb,var(--a) 34%,transparent)}
+.la-tag{position:absolute;top:9px;left:10px;z-index:3;font:600 10px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--a);background:color-mix(in srgb,var(--b) 82%,transparent);padding:2px 7px;border-radius:4px;backdrop-filter:blur(3px)}
+.la-soon-tag{position:absolute;top:9px;right:10px;z-index:3;font:600 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--a);border:1px solid color-mix(in srgb,var(--a) 50%,transparent);padding:1px 6px;border-radius:4px}
+.la-plot .next-tag{z-index:3}
+.la-plot .pbar i{background:var(--a)}
+.la-plot.soon{cursor:default}
+.la-plot.soon:hover{transform:none;border-color:color-mix(in srgb,var(--a) 14%,var(--line))}
 
-/* how a ticket works: four numbered steps joined by a rule */
-.loop{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;max-width:760px;margin:30px 0 0;padding:0;counter-reset:s}
-.loop li{position:relative;display:flex;flex-direction:column;gap:2px;padding:0 16px 0 0}
-.loop li::before{content:"";position:absolute;left:26px;right:6px;top:11px;height:1px;background:var(--line)}
-.loop li:last-child::before{display:none}
-.lp-n{position:relative;display:grid;place-items:center;width:22px;height:22px;margin-bottom:8px;border-radius:6px;background:var(--acc);color:#1d0c06;font:600 11px var(--f-mono)}
-.loop b{font:600 14px var(--f-body)}
-.loop small{font-size:12.5px;line-height:1.4;color:var(--muted);text-wrap:pretty}
+/* Wind Tunnel: a frame from the lab, cropped like a photo: the system large, the crowd running off the left edge */
+.la-shot{position:absolute;z-index:1;right:-4%;bottom:-6%;height:112%;width:auto;max-width:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.35));transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.la-plot:hover .la-shot{transform:translate(-3%,-3%) scale(1.04)}
+/* planned: the question it will answer, in serif */
+.la-ask{position:absolute;z-index:1;left:16px;right:58px;top:38px;margin:0;font:400 30px/1.02 var(--f-serif);color:var(--a);letter-spacing:-.005em}
 
-/* where to pick up */
-.shelf .resume{display:inline-flex;align-items:center;gap:6px 14px;flex-wrap:wrap;margin-top:30px;padding:11px 16px 11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);text-decoration:none;transition:border-color .2s}
-.shelf .resume:hover{border-color:var(--acc)}
-.shelf .resume:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
-.r-k{padding:3px 8px;border-radius:5px;background:var(--acc);color:#1d0c06;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
-.r-t{font:400 22px/1 var(--f-serif)}
-.r-c{font:12px var(--f-mono);color:var(--muted)}
-.r-a{font-style:normal;color:var(--acc);font-family:var(--f-mono);transition:translate .25s cubic-bezier(.2,.8,.3,1)}
-.resume:hover .r-a{translate:4px 0}
+/* Workbench: a tiny terminal showing the finished program at work, bleeding off the card's corner */
+.la-term{position:absolute;z-index:1;left:16px;top:30px;right:-18px;bottom:-14px;border-radius:9px 0 0 0;background:color-mix(in srgb,#000 55%,var(--b));
+  border:1px solid color-mix(in srgb,var(--a) 30%,transparent);box-shadow:0 14px 30px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);overflow:hidden;transition:transform .4s cubic-bezier(.2,.7,.2,1)}
+.la-plot:hover .la-term{transform:translate(-4px,-6px)}
+.la-bar{display:flex;align-items:center;gap:7px;height:22px;padding:0 10px;font:500 9.5px var(--f-mono);color:color-mix(in srgb,var(--a) 70%,#fff);border-bottom:1px solid color-mix(in srgb,var(--a) 18%,transparent);background:color-mix(in srgb,var(--a) 8%,transparent)}
+.la-bar span{width:6px;height:6px;border-radius:1px;background:var(--a);box-shadow:0 0 8px var(--a)}
+.la-body{padding:8px 10px;font:500 10.5px/1.6 var(--f-mono);white-space:pre;color:#e6e2ee}
+.la-ln.p i{font-style:normal;color:var(--a)}
+.la-ln.o{color:#bdb8c9}
+.la-ln.e{color:#fff;font-weight:600;text-shadow:0 0 12px color-mix(in srgb,var(--a) 70%,transparent)}
+.la-ln.c{color:#ffd84a}
+.la-pond{width:62%;margin:2px 0 6px}
+.la-pond svg{display:block;width:100%;height:auto}
+.la-plot.soon .la-term{filter:saturate(.85)}
 
-.sh-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px 20px;flex-wrap:wrap;margin:56px 0 22px;padding-bottom:12px;border-bottom:1px solid var(--line)}
-.sh-head h2{margin:0;font:400 30px/1 var(--f-serif)}
-.sh-n{margin:0;font:12px var(--f-mono);color:var(--muted)}
-.sh-n span{margin:0 6px;opacity:.6}
-.sh-n b{color:var(--ink);font-weight:600}
-.sh-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:44px 22px}
+/* posters: a product shot */
+.la-hero{padding-right:44%}
+.la-hero .p-corner.br{z-index:3;background:rgba(10,10,12,.66);padding:3px 8px;border-radius:5px;backdrop-filter:blur(4px)}
+.la-hero h1 i{font-style:italic;color:var(--a)}
+.la-hero::before{content:"";position:absolute;right:-10%;bottom:-30%;width:70%;height:110%;z-index:0;background:radial-gradient(closest-side,color-mix(in srgb,var(--a) 30%,transparent),transparent);pointer-events:none}
+.la-art{position:absolute;z-index:1;right:0;top:0;bottom:0;width:46%;pointer-events:none;perspective:1400px}
+.la-ide{position:absolute;left:10%;top:15%;width:150%;max-width:none;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+  transform:rotateY(-18deg) rotateX(6deg) rotateZ(1deg);transform-origin:0 50%;box-shadow:-30px 40px 80px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.4)}
+.la-storm{position:absolute;right:2%;bottom:12%;width:100%;max-width:none;filter:drop-shadow(0 20px 30px rgba(0,0,0,.5))}
 
-/* a card */
-.sc{display:flex;flex-direction:column;min-width:0;color:inherit;text-decoration:none}
-.sc:focus-visible{outline:2px solid var(--acc);outline-offset:6px;border-radius:10px}
-.ed-art,.tw-art{position:relative;display:block;aspect-ratio:16/10;overflow:hidden;border-radius:10px;
-  box-shadow:0 1px 2px rgba(0,0,0,.06),0 16px 28px -22px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.06);
-  transition:transform .35s cubic-bezier(.2,.8,.3,1),box-shadow .35s cubic-bezier(.2,.8,.3,1)}
-a.sc:hover .ed-art,a.sc:hover .tw-art{transform:translateY(-4px);box-shadow:0 2px 4px rgba(0,0,0,.06),0 26px 40px -24px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.06)}
-.sc-meta{margin-top:16px;font:600 10.5px/16px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
-.sc-meta em{font-style:normal;color:var(--acc)}
-.sc-t{margin-top:6px;font:400 27px/1.02 var(--f-serif);letter-spacing:-.01em;text-wrap:balance}
-a.sc .sc-t::after{content:"→";display:inline-block;margin-left:8px;font:400 15px var(--f-mono);color:var(--acc);vertical-align:.22em;transition:translate .35s cubic-bezier(.2,.8,.3,1)}
-a.sc:hover .sc-t::after{translate:4px 0}
-.sc-d{margin-top:6px;font-size:14px;line-height:1.4;color:var(--muted);text-wrap:pretty}
-.sc.later .ed-art,.sc.later .tw-art{filter:saturate(.35);opacity:.72}
-.sc.later .sc-t{color:var(--muted)}
-
-/* the tiny editor: Tulip Night, a file tab and a few numbered lines */
-.ed-art{background:#151118;font:clamp(8.5px,.82vw,10.5px)/1.62 var(--f-mono);color:#ede6f1}
-.ed-tab{position:absolute;left:0;top:0;padding:5px 12px 4px;background:#1a151e;border-right:1px solid #2b2432;border-top:2px solid #ff6fb5;color:#ede6f1;font-size:.95em}
-.ed-art::before{content:"";position:absolute;left:0;right:0;top:0;height:calc(2.1em + 2px);background:#100d13;border-bottom:1px solid #2b2432}
-.ed-tab{z-index:1}
-.ed-code{position:absolute;left:0;right:0;top:calc(2.1em + 9px);bottom:0}
-.ed-ln{display:flex;gap:12px;white-space:pre}
-.ed-ln b{width:2.2em;text-align:right;font-weight:400;color:#4d4555;flex:none}
-.ed-ln code{font:inherit;color:inherit;background:none;padding:0;border:0;border-radius:0;overflow:hidden;text-overflow:clip}
-.ed-ln i{font-style:normal}
-.ed-ln .k{color:#ff6fb5}.ed-ln .d{color:#ffc94a}.ed-ln .s{color:#5fd4b0}.ed-ln .n{color:#c7a2ff}.ed-ln .c{color:#6f667a}
-
-/* ticket pips */
-.pips{display:flex;align-items:center;gap:4px;margin-top:12px;min-height:16px}
-.pips i{width:14px;height:6px;border-radius:2px;background:var(--line)}
-.pips i.on{background:var(--acc)}
-.pips em{margin-left:6px;font:11px var(--f-mono);font-style:normal;color:var(--muted)}
-.pips.soon em{margin:0}
-
-/* a Wind Tunnel card: the experiment's curve on a dark grid, and the law's name */
-.tw-art{background:radial-gradient(120% 90% at 20% 0%,#123a44 0%,#0b1c22 60%,#081418 100%)}
-.cv{position:absolute;inset:8% 6% 16% 6%;width:88%;height:76%}
-.cv .g line{stroke:#1f9fb4;stroke-opacity:.16;stroke-width:1;vector-effect:non-scaling-stroke}
-.cv .ax{fill:none;stroke:#6fbfcc;stroke-opacity:.45;stroke-width:1;vector-effect:non-scaling-stroke}
-.cv .ln{fill:none;stroke:#5fe0f0;stroke-width:2.2;stroke-linejoin:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 4px #5fe0f088)}
-.cv.ghost .ln{stroke:#6fbfcc;stroke-opacity:.6;stroke-dasharray:4 4;filter:none}
-.cv-law{position:absolute;left:8%;bottom:7%;font:600 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:#8fd3dd}
-
-@media (max-width:1000px){.sh-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:640px){
-  .shelf{padding-top:36px}
-  .loop{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 0}
-  .loop li:nth-child(2)::before{display:none}
-  .sh-grid{grid-template-columns:minmax(0,1fr);gap:36px}
-  .ed-art{font-size:11px}
-}
-@media (prefers-reduced-motion:reduce){.ed-art,.tw-art,.r-a,a.sc .sc-t::after{transition:none}}
-:root[data-theme="light"] .sc.later .ed-art,:root[data-theme="light"] .sc.later .tw-art{opacity:1;filter:saturate(.45) brightness(.9)}
+.side a.la-soon{color:var(--muted);cursor:default}
+.side a.la-soon:hover{background:none}
+.side a.la-soon small{font:500 10px var(--f-mono);color:var(--muted);opacity:.7}
+.side .branch a .g{flex:none}
+.note code{font:12.5px var(--f-mono)}
+@media (max-width:1100px){.la-hero{padding-right:36px}.la-art{position:relative;width:auto;height:300px;margin:26px -36px -64px 0}.la-ide{left:4%;top:6%;width:120%}.la-storm{width:auto;height:100%;right:4%;bottom:0}}
+@media (max-width:860px){.la-art{height:230px;margin-right:-20px}.la-plots{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}.la-ask{font-size:23px}}
