@@ -15,6 +15,7 @@ const shots = process.env.SHOTS || ".";
   page.on("console", (m) => { if (m.type() === "error" && !/fonts.g|Failed to load resource/.test(m.text())) errors.push("console: " + m.text()); });
   if (track === "design") return studio(page, browser, errors);
   if (track === "workbench") return workbench(page, browser, errors);
+  if (track === "tunnel") return tunnel(page, browser, errors);
   await page.goto(`${BASE}/${track}/?runner=local#${chap}`);
   await page.waitForSelector(".stephead");
   const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), ({ code: "tc", modsim: "ms", build: "bx", stats: "ps", dsa: "ds", ods: "od" })[track]);
@@ -198,6 +199,44 @@ async function workbench(page, browser, errors) {
   if (commits !== proj.tickets.length) bad.push(`history shows ${commits} commits, want ${proj.tickets.length}`);
   await page.screenshot({ path: `${shots}/workbench-done.png` });
   console.log(`workbench ${proj.title}: ${proj.tickets.length} tickets driven, ${bad.length} failed`);
+  bad.forEach((b) => console.log("  FAIL " + b));
+  errors.forEach((e) => console.log("  " + e));
+  await browser.close();
+  process.exit(bad.length || errors.length ? 1 : 0);
+}
+// Wind Tunnel: every live experiment through the page. Lock a guess, open the answer, start the task; the starting
+// server must not meet the goal in 60 simulated seconds, and the reference answer must meet it within 120.
+//   node tools/e2e.js tunnel
+async function tunnel(page, browser, errors) {
+  await page.goto(`${BASE}/tunnel/lab.html#1`);
+  await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("vnl-code-v1") || "{}"); s.wt = {}; for (const k in s.done || {}) if (k.startsWith("wt")) delete s.done[k]; localStorage.setItem("vnl-code-v1", JSON.stringify(s)); });
+  const X = await page.evaluate(() => window.WT.experiments.map((x, i) => ({ n: i + 1, id: x.id, live: !!x.live, title: x.title, ref: x.task && x.task.reference })));
+  const bad = [];
+  let n = 0;
+  for (const x of X.filter((x) => x.live)) {
+    await page.goto(`${BASE}/tunnel/lab.html#${x.n}`);
+    await page.reload();
+    await page.waitForSelector(".wt-step.now .pin");
+    await page.locator(".wt-step.now .pin").press("ArrowRight");
+    await page.locator(".wt-go", { hasText: "Lock in" }).click();
+    await page.locator(".wt-link", { hasText: "Show me now" }).click();
+    await page.locator(".wt-go", { hasText: "→" }).click();
+    const st = () => page.evaluate(() => document.querySelector("#wt").wtState());
+    if ((await st()).phase !== "task") bad.push(`${x.id}: the task didn't start`);
+    await page.evaluate(() => document.querySelector("#wt").wtRun(60));
+    if ((await st()).done) bad.push(`${x.id}: the starting server already meets the goal`);
+    await page.locator(".wt-server").click();
+    for (let i = (await st()).cfg.workers; i < x.ref.workers; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
+    for (let i = 0; i < 12 && !(await st()).done; i++) await page.evaluate(() => document.querySelector("#wt").wtRun(10));
+    const s = await st();
+    if (!s.done) bad.push(`${x.id}: ${x.ref.workers} workers didn't meet the goal (workers now ${s.cfg.workers})`);
+    if (!(await page.locator(".won").count())) bad.push(`${x.id}: no done note`);
+    await page.screenshot({ path: `${shots}/tunnel-${x.id}.png` });
+    n++;
+  }
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("vnl-code-v1") || "{}").done || {});
+  for (const x of X.filter((x) => x.live)) if (!kept[x.id]) bad.push(`${x.id}: not saved as done`);
+  console.log(`tunnel: ${n} experiments driven, ${bad.length} failed`);
   bad.forEach((b) => console.log("  FAIL " + b));
   errors.forEach((e) => console.log("  " + e));
   await browser.close();
