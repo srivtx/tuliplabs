@@ -404,6 +404,8 @@
       await REG[name](api);
       return api;
     },
+    // Load a shared helper from this folder once (e.g. VIZ.lib("ms-plot") sets window.MSPLOT).
+    lib(name) { return script(BASE + name + ".js"); },
     cssColor, sleep,
   };
 })();
