@@ -1,0 +1,1322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eye · Tulip Labs</title>
+<meta name="description" content="Small experiments in what looks good. Answer each one with your hand, then see what your eye did against the maths.">
+<meta name="theme-color" content="#0b0c0a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%23ff6fb5' stroke-width='1.6'/><circle cx='8' cy='7.4' r='2.2' fill='%23ff6fb5'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{--bg:#0b0c0a;--panel:#121410;--card:#171a15;--line:#2a2e26;--ink:#f2efe6;--muted:#a3a497;--faint:#6b6d62;--soft:#1d211b;--pink:#ff6fb5;--pink-ink:#ff8cc4;--leaf:#5cc46d;
+  --f-display:"Pixelify Sans",ui-monospace,monospace;--f-serif:"Instrument Serif",Georgia,serif;--f-body:"IBM Plex Sans",system-ui,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;color-scheme:dark}
+:root[data-theme="light"]{--bg:#efebe2;--panel:#f6f3ec;--card:#fffdf8;--line:#dcd5c6;--ink:#1d1b17;--muted:#6a655a;--faint:#8a8475;--soft:#ece7dc;--pink-ink:#d23f87;--leaf:#24803c;color-scheme:light}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px 16px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+main{max-width:720px;margin:0 auto;padding:20px 16px 40px}
+/* the experiment always fits one screen: the canvas is as big as the space left over */
+.play{--sq:max(240px,min(calc(100vw - 32px),calc(100dvh - var(--top,53px) - 240px),860px));display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"hero" "where" "jump" "q" "stage" "say" "act"}
+.side{display:contents}
+.hero{grid-area:hero}.where{grid-area:where}.jump{grid-area:jump}.q{grid-area:q}.stage{grid-area:stage}.say{grid-area:say}.act{grid-area:act}
+.eyebrow{font:500 13px var(--f-display);letter-spacing:.06em;color:var(--pink);margin:0}
+.eyebrow .w{display:none;font:12px var(--f-mono);letter-spacing:0;margin-left:8px}
+h1{font:400 clamp(34px,6.6vw,56px)/.98 var(--f-serif);margin:6px 0 0;letter-spacing:-.01em}
+h1 i{color:var(--pink-ink)}
+.lede{color:var(--muted);margin:12px 0 0;font-size:16px;max-width:560px}
+.hero.folded h1,.hero.folded .lede{display:none}
+.hero.folded .w{display:inline}
+.where{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:24px 0 0;font:12px var(--f-mono);color:var(--faint)}
+.hero.folded+.where{margin-top:10px}
+.where b{color:var(--ink);font-weight:600}
+.where .w.quiet{color:var(--faint);text-decoration-color:color-mix(in srgb,var(--faint) 60%,transparent)}
+.where .w.quiet:hover{color:var(--ink)}
+.jump{margin:8px 0 0;font-size:14px;color:var(--muted);line-height:1.9}
+.jump .w{font-size:14px}
+.jump .w[aria-current]{color:var(--ink);font-weight:600;text-decoration:none;cursor:default}
+.q{font:400 clamp(24px,4.2vw,32px)/1.15 var(--f-serif);margin:8px 0 14px;min-height:1.15em}
+.stage{position:relative;justify-self:center;width:var(--sq)}
+#cv{display:block;width:100%;aspect-ratio:1;border:1px solid var(--line);border-radius:6px;background:var(--panel);touch-action:none;cursor:grab;outline:none}
+#cv:focus-visible{border-color:var(--pink)}
+#cv.held{cursor:grabbing}
+#cv.done{cursor:default}
+/* landscape: the canvas takes the full height on the left, and words sit beside it */
+@media (orientation:landscape) and (min-width:560px){
+  main{max-width:1320px;padding:16px 16px 0}
+  .play{--sq:max(220px,min(calc(100dvh - var(--top,53px) - 32px),calc(100vw - 32px - 300px - 40px),900px));grid-template-columns:var(--sq) minmax(0,560px);grid-template-areas:none;justify-content:center;gap:0 40px;height:calc(100dvh - var(--top,53px) - 16px)}
+  .stage{grid-area:auto;width:auto}
+  .side{display:block;grid-area:auto;max-height:var(--sq);overflow-y:auto;overscroll-behavior:contain;padding-right:4px}
+  .side>*{grid-area:auto}
+  .where{margin-top:18px}
+  .hero.folded+.where{margin-top:8px}
+  h1{font-size:clamp(30px,min(4vw,6.4dvh),52px)}
+  .portrait .play{display:block;height:auto}
+  .portrait .side{max-height:none;overflow:visible}
+}
+.say{margin:16px 0 0;min-height:3.2em}
+.say p{margin:0}
+.say .line{color:var(--ink);font-size:16px}
+.say .why{color:var(--muted);margin-top:6px}
+.act{margin:14px 0 0;font:13px var(--f-mono);color:var(--faint);display:flex;gap:6px 18px;flex-wrap:wrap;align-items:baseline}
+.w{appearance:none;background:none;border:0;padding:0;font:inherit;color:var(--pink-ink);cursor:pointer;text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
+.w:hover{color:var(--ink)}
+.w.main{font-weight:600}
+.fade{animation:fade .5s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+#me{display:none}
+.portrait #me{display:block}
+.portrait .stage,.portrait #q,.portrait .say,.portrait .jump{display:none}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin:18px 0 0}
+.card{appearance:none;display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:10px 10px 12px;margin:0;transition:border-color .15s,transform .15s}
+.card:hover,.card:focus-visible{border-color:var(--pink);outline:none;transform:translateY(-1px)}
+.card canvas{display:block;width:100%;aspect-ratio:1;border-radius:4px;background:var(--bg)}
+.card b{display:block;font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:10px 0 2px}
+.card span{font-size:14px;color:var(--ink)}
+.card.empty span{color:var(--faint)}
+.learnt{margin:18px 0 0;max-width:640px}
+.learnt h3{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+.learnt p{margin:8px 0 0;color:var(--muted)}
+.learnt p b{color:var(--ink);font-weight:600;margin-right:6px}
+@media (prefers-reduced-motion:reduce){.fade{animation:none}}
+</style>
+<link rel="stylesheet" href="../learn/nav.css">
+<script src="../learn/nav.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../" title="Home"><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>Tulip Labs</b></a>
+  <details class="sw k-home"><summary aria-label="Switch section"><i class="sq"></i><span>Eye</span><span class="sl">· switch</span><em>▼</em></summary><nav class="sw-menu" aria-label="Sections"><a class="home k-home" href="../"><i class="sq"></i><b>Home</b><small>Every track on one page, and your progress</small></a><h6>Play</h6><a class="k-worlds" href="../worlds/"><i class="sq"></i><b>3D worlds</b><small>Complexity as 12 voxel worlds you can poke</small></a><a class="k-dz" href="../design/"><i class="sq"></i><b>Design studio</b><small>Match a target in CSS, pixel by pixel</small></a><a style="--kc:#e8476a" href="../meadow/"><i class="sq"></i><b>Meadow</b><small>An endless map of marks to wander</small></a><a style="--kc:#ff6fb5" href="../eye/"><i class="sq"></i><b>Eye</b><small>Experiments in what looks good</small></a><h6>Code along</h6><a class="k-tc" href="../code/"><i class="sq"></i><b>Complexity in code</b><small>The Python behind every world, step by step</small></a><a class="k-ms" href="../modsim/"><i class="sq"></i><b>ModSim</b><small>Modeling and simulation, learnt in code</small></a><h6>Courses</h6><a class="k-bx" href="../build/"><i class="sq"></i><b>Build your own X</b><small>See every part of a real tool, then write it</small></a><a class="k-ps" href="../stats/"><i class="sq"></i><b>Probability & Stats</b><small>Simulate it, then prove it</small></a><a class="k-ds" href="../dsa/"><i class="sq"></i><b>DSA</b><small>From the ground floor to Codeforces</small></a><a class="k-od" href="../ods/"><i class="sq"></i><b>Structures</b><small>Build each data structure, then watch it work</small></a></nav></details>
+  <span class="grow"></span>
+</header>
+<main class="studio" id="main">
+  <section class="play" id="play">
+    <div class="stage"><canvas id="cv" tabindex="0" aria-describedby="hint"></canvas></div>
+    <div class="side">
+      <div class="hero" id="hero">
+        <p class="eyebrow">eye · experiments in what looks good <button class="w" id="about" type="button" aria-expanded="false">about</button></p>
+        <h1>What does <i>looking good</i> even mean?</h1>
+        <p class="lede">Small experiments for your eye, in shape, colour and motion. Answer each one with your hand, then see what you did against the maths. After the set comes Endless: a new shape every time, and a model of your eye that guesses your answer before you give it.</p>
+      </div>
+      <div class="where"><span id="where"></span><button class="w" id="toMe" type="button">your eye</button></div>
+      <p class="jump fade" id="jump" hidden></p>
+      <h2 class="q" id="q"></h2>
+      <div class="say" id="say" aria-live="polite"></div>
+      <div class="act" id="act"></div>
+    </div>
+  </section>
+
+  <section id="me" aria-label="Your eye">
+    <h2 class="q">Your eye, so far.</h2>
+    <p class="lede" style="margin:0">Every answer you've given, drawn as you left it, with the maths beside it.</p>
+    <div class="learnt" id="learnt"></div>
+    <div class="cards" id="cards"></div>
+    <input type="file" id="load" accept="application/json,.json" hidden>
+  </section>
+</main>
+<script>
+(() => {
+"use strict";
+const $ = (s) => document.querySelector(s);
+const cv = $("#cv"), g = cv.getContext("2d");
+const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+const R2 = (n) => Math.round(n * 100) / 100;
+const pc = (n) => Math.round(n) + "%";
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+
+/* colours come from the page's own tokens, so both themes just work */
+let C = {};
+function colours() {
+  const s = getComputedStyle(document.documentElement);
+  for (const k of ["bg", "panel", "card", "line", "ink", "muted", "faint", "soft", "pink", "pink-ink", "leaf"]) C[k] = s.getPropertyValue("--" + k).trim();
+}
+
+/* drawing kit, in a 1000 × 1000 square */
+let LS = 22; // label size, kept readable on small screens
+function poly(c, pts, fill, stroke, w) {
+  c.beginPath(); pts.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath();
+  if (fill) { c.fillStyle = fill; c.fill(); }
+  if (stroke) { c.strokeStyle = stroke; c.lineWidth = w || 3; c.stroke(); }
+}
+function dot(c, x, y, r, fill) { c.beginPath(); c.arc(x, y, r, 0, 7); c.fillStyle = fill; c.fill(); }
+function ring(c, x, y, r, col, w, dash) {
+  c.save(); c.beginPath(); c.arc(x, y, r, 0, 7); c.strokeStyle = col; c.lineWidth = w || 3; c.setLineDash(dash || []); c.stroke(); c.restore();
+}
+function line(c, a, b, col, w, dash) {
+  c.save(); c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.strokeStyle = col; c.lineWidth = w || 3; c.setLineDash(dash || []); c.stroke(); c.restore();
+}
+let MINI = false; // the small portrait cards draw no words: they're too small to read
+function label(c, x, y, t, col, align) {
+  if (MINI) return;
+  c.save(); c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`; c.fillStyle = col || C.leaf;
+  c.textAlign = align || "left"; c.textBaseline = "middle";
+  // a soft tag behind the words, so a label reads on any shape
+  const w = c.measureText(t).width, px = LS * 0.45, h = LS * 1.5;
+  let x0 = c.textAlign === "right" ? x - w - px : c.textAlign === "center" ? x - w / 2 - px : x - px;
+  // never let a name run off the canvas: slide it back inside, whatever the screen size
+  const nudge = Math.max(0, 6 - x0) - Math.max(0, x0 + w + 2 * px - 994); x0 += nudge; x += nudge;
+  c.save(); c.globalAlpha *= 0.88; c.fillStyle = C.panel; c.beginPath(); c.roundRect ? c.roundRect(x0, y - h / 2, w + 2 * px, h, h / 2) : c.rect(x0, y - h / 2, w + 2 * px, h); c.fill(); c.restore();
+  c.fillText(t, x, y); c.restore();
+}
+/* a truth: a small cross with its name, fading in with k */
+function truth(c, x, y, t, k, side, dy) {
+  c.save(); c.globalAlpha = k;
+  line(c, [x - 16, y], [x + 16, y], C.leaf, 3); line(c, [x, y - 16], [x, y + 16], C.leaf, 3);
+  const r = side === "l"; label(c, x + (r ? -26 : 26), y + (dy || 0), t, C.leaf, r ? "right" : "left");
+  c.restore();
+}
+/* a row of line samples with their names, so each dashed truth says what it is */
+function legend(c, items, y, k) {
+  c.save(); c.globalAlpha = k; c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
+  const ws = items.map(([, t]) => 56 + c.measureText(t).width + LS * 0.5), gap = 40, rows = [[]];
+  // when the names are too wide for one line (big type on a small screen), wrap onto more
+  items.forEach((it, i) => { const r = rows[rows.length - 1], wide = r.reduce((a, j) => a + ws[j] + gap, 0) + ws[i]; if (r.length && wide > 960) rows.push([i]); else r.push(i); });
+  rows.forEach((r, ri) => {
+    let x = 500 - (r.reduce((a, j) => a + ws[j], 0) + gap * (r.length - 1)) / 2;
+    const yy = y + (ri - (rows.length - 1) / 2) * LS * 1.8;
+    for (const j of r) { const [d, t, col] = items[j]; line(c, [x, yy], [x + 44, yy], col || C.leaf, 3, d); label(c, x + 56, yy, t, col || C.leaf); x += ws[j] + gap; }
+  });
+  c.restore();
+}
+/* names beside several marks at once, stacked so no two names overlap */
+function tags(c, items, k) {
+  c.save(); c.globalAlpha = k; c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
+  const step = LS * 2, placed = [];
+  for (const it of [...items].sort((a, b) => a.y - b.y)) {
+    const col = it.col || C.leaf, right = it.x < 640, w = c.measureText(it.t).width + LS;
+    const x0 = cl(right ? it.x + 26 - LS / 2 : it.x - 26 - w + LS / 2, 6, 994 - w);
+    let y = it.y, hit, n = 0;
+    // keep stepping down until this name is clear of every one already placed (a margin, so rounding can't loop)
+    while (n++ < 20 && (hit = placed.find((p) => x0 < p.x1 && x0 + w > p.x0 && Math.abs(y - p.y) < step - 0.5))) y = hit.y + step;
+    placed.push({ x0, x1: x0 + w, y });
+    if (Math.abs(y - it.y) > 4) line(c, [it.x + (right ? 14 : -14), it.y], [right ? x0 : x0 + w, y], col, 1.5);
+    label(c, right ? it.x + 26 : it.x - 26, y, it.t, col, right ? "left" : "right");
+  }
+  c.restore();
+}
+/* names along one line, each centred on its mark; one that would collide moves a row (up, or down with dir 1) */
+function rowNames(c, items, y, dir) {
+  c.save(); c.font = `500 ${LS}px "IBM Plex Mono", ui-monospace, monospace`;
+  const placed = [];
+  for (const it of [...items].sort((a, b) => a.x - b.x)) {
+    const w = c.measureText(it.t).width + LS * 1.4, x0 = it.x - w / 2;
+    let lv = 0; while (placed.some((p) => p.lv === lv && x0 < p.x1 && x0 + w > p.x0)) lv++;
+    placed.push({ x0, x1: x0 + w, lv });
+    placed[placed.length - 1].y = y + (dir || -1) * lv * LS * 1.7;
+    label(c, it.x, placed[placed.length - 1].y, it.t, it.col || C.leaf, "center");
+  }
+  c.restore();
+  return placed;
+}
+/* moving trials read the clock; the small portrait cards and reduced motion hold still */
+let playAnyway = false; // set when someone asks for less motion but chooses to watch a motion trial
+const clock = () => (MINI || (calm.matches && !playAnyway) ? null : performance.now());
+const Kit = { poly, dot, ring, line, label, truth, cl, dist };
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Experiments. Each is a few trials; each trial is one object:
+     q        the question, in plain words
+     hint     what your hand does
+     init()   fresh state in this.s
+     grab(p)  which handle a press picks (optional)
+     move(h, dx, dy, p)
+     draw(c, k, prev)  the scene; k is null until the reveal, then 0 → 1;
+                       prev holds your earlier answers to this trial
+     read()   → { v, line, why, short } after you say it looks right
+   ──────────────────────────────────────────────────────────────────────────── */
+const E = [];
+
+/* ── Centre ─────────────────────────────────────────────────────────────── */
+{
+  const TRI = [[500, 257.5], [220, 742.5], [780, 742.5]];
+  const SC = [[140, 240], [260, 760], [860, 280]];
+  const cen = (P) => [(P[0][0] + P[1][0] + P[2][0]) / 3, (P[0][1] + P[1][1] + P[2][1]) / 3];
+  const box = (P) => { const xs = P.map((p) => p[0]), ys = P.map((p) => p[1]); return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2]; };
+  const inc = (P) => {
+    const a = dist(P[1], P[2]), b = dist(P[2], P[0]), c = dist(P[0], P[1]), s = a + b + c;
+    return [(a * P[0][0] + b * P[1][0] + c * P[2][0]) / s, (a * P[0][1] + b * P[1][1] + c * P[2][1]) / s];
+  };
+  const dotMove = function (h, dx, dy) { this.s.x = cl(this.s.x + dx, 30, 970); this.s.y = cl(this.s.y + dy, 30, 970); };
+  const ghosts = (c, prev) => prev.forEach((p) => ring(c, p.x, p.y, 12, C.faint, 2));
+  E.push({ id: "centre", name: "Centre", trials: [
+    { id: "c-tri", q: "Put the dot in the middle of the triangle.", hint: "drag the dot",
+      init() { this.s = { x: 500, y: 890 }; }, move: dotMove,
+      draw(c, k, prev) {
+        poly(c, TRI, C.ink);
+        if (k != null) {
+          ghosts(c, prev);
+          const m = cen(TRI), b = box(TRI);
+          line(c, [200, b[1]], [800, b[1]], C.leaf, 2, [6, 8]);
+          truth(c, m[0], m[1], "balance point", k); truth(c, b[0], b[1], "middle of its box", k);
+        }
+        dot(c, this.s.x, this.s.y, 14, C.pink);
+      },
+      read() {
+        const m = cen(TRI), b = box(TRI), t = (this.s.y - b[1]) / (m[1] - b[1]);
+        const off = Math.abs(this.s.x - 500) / 5.6;
+        const where = t < -0.15 ? "above the middle of its box" : t < 0.35 ? "near the middle of its box" : t < 0.7 ? "between its box's middle and its balance point" : t < 1.25 ? "near its balance point" : "below its balance point";
+        return { v: R2(t),
+          line: `Your dot sits ${where}${off > 3 ? `, and ${pc(off)} of a side to the ${this.s.x < 500 ? "left" : "right"}` : ""}.`,
+          why: t > 0.65 ? "A triangle has more than one honest centre. You chose the balance point, where its mass would sit still on a pin: your eye weighs the shape, not its frame."
+            : t < 0.35 ? "A triangle has more than one honest centre. You chose the middle of its frame: your eye measured the outline's top and bottom, not where the mass is."
+            : "A triangle has more than one honest centre. You settled between the frame's middle and the balance point, weighing both.",
+          short: t > 0.65 ? "Triangles: you find the balance point" : t < 0.35 ? "Triangles: you centre on the frame" : "Triangles: between frame and mass" };
+      } },
+    { id: "c-sq", q: "Now the middle of the square.", hint: "drag the dot",
+      init() { this.s = { x: 860, y: 880 }; }, move: dotMove,
+      draw(c, k, prev) {
+        poly(c, [[240, 240], [760, 240], [760, 760], [240, 760]], null, C.ink, 4);
+        if (k != null) { ghosts(c, prev); truth(c, 500, 500, "true centre", k); }
+        dot(c, this.s.x, this.s.y, 14, C.pink);
+      },
+      read() {
+        const up = (500 - this.s.y) / 5.2, side = (this.s.x - 500) / 5.2;
+        const vert = Math.abs(up) < 0.6 ? "right on the true centre" : `${R2(Math.abs(up)).toFixed(1)}% of the side ${up > 0 ? "above" : "below"} the true centre`;
+        return { v: R2(up),
+          line: `Your dot sits ${vert}${Math.abs(side) > 1.5 ? `, ${Math.abs(side).toFixed(1)}% to the ${side < 0 ? "left" : "right"}` : ""}.`,
+          why: up > 0.6 ? "That's the optical centre. Designers have long noticed that something placed at the exact middle tends to look a little low, so titles and logos are often set a touch above it."
+            : up < -0.6 ? "Most layout advice nudges things up, not down. Your eye may be setting the dot on an imagined floor, like an object resting rather than floating."
+            : "You found the true centre almost exactly: a literal, measuring eye.",
+          short: up > 0.6 ? `Squares: you lift the centre ${up.toFixed(1)}%` : up < -0.6 ? `Squares: you drop the centre ${(-up).toFixed(1)}%` : "Squares: you hit the true centre" };
+      } },
+    { id: "c-odd", q: "And the middle of this one.", hint: "drag the dot",
+      init() { this.s = { x: 820, y: 860 }; }, move: dotMove,
+      draw(c, k, prev) {
+        poly(c, SC, C.ink);
+        if (k != null) {
+          ghosts(c, prev);
+          const m = cen(SC), i = inc(SC), b = box(SC);
+          truth(c, m[0], m[1], "balance point", k, "", -34); truth(c, i[0], i[1], "roomiest point", k, "l", 30);
+          truth(c, b[0], b[1], "middle of its box", k, "r", 26);
+          c.save(); c.globalAlpha = k * 0.6; ring(c, i[0], i[1], incR(SC), C.leaf, 2, [6, 8]); c.restore();
+        }
+        dot(c, this.s.x, this.s.y, 14, C.pink);
+      },
+      read() {
+        const p = [this.s.x, this.s.y];
+        const opts = [["the balance point", cen(SC)], ["the roomiest point, the centre of the biggest circle that fits", inc(SC)], ["the middle of its box", box(SC)]].map(([n, q]) => [n, dist(p, q)]).sort((a, b) => a[1] - b[1]);
+        const n = opts[0][0];
+        return { v: opts[0][0],
+          line: `Your dot is closest to ${n}, ${pc(opts[0][1] / 6.7)} of the shape's width away.`,
+          why: "Each centre answers a different question: where would it balance, where is it roomiest, where is the middle of its frame? On an odd shape they come apart, and your eye picks one without being asked.",
+          short: `Odd shapes: you pick ${n.split(",")[0]}` };
+      } },
+  ] });
+  function incR(P) { const a = dist(P[1], P[2]), b = dist(P[2], P[0]), c = dist(P[0], P[1]), s = (a + b + c) / 2; return Math.sqrt(s * (s - a) * (s - b) * (s - c)) / s; }
+}
+
+/* ── Same size ──────────────────────────────────────────────────────────── */
+{
+  const SQ = 300, SX = 290, Y = 500, RX = 700; // the fixed square: 300 wide, centred at (290, 500)
+  const square = (c) => poly(c, [[SX - SQ / 2, Y - SQ / 2], [SX + SQ / 2, Y - SQ / 2], [SX + SQ / 2, Y + SQ / 2], [SX - SQ / 2, Y + SQ / 2]], C.ink);
+  const triPts = (b, x = RX) => { const h = b * Math.sqrt(3) / 2; return [[x, Y - h / 2], [x + b / 2, Y + h / 2], [x - b / 2, Y + h / 2]]; };
+  // drag right or up to grow, left or down to shrink
+  const grow = (key, lo, hi) => function (h, dx, dy) { this.s[key] = cl(this.s[key] + (dx - dy) * 0.6, lo, hi); };
+  const verdict = (p, a, b) => p < a ? "below" : p <= b ? "between" : "past";
+  E.push({ id: "size", name: "Same size", trials: [
+    { id: "s-circle", q: "Make the circle look as big as the square.", hint: "drag right or up to grow it, left or down to shrink it",
+      init() { this.s = { r: 105 }; }, move: grow("r", 50, 240),
+      draw(c, k, prev) {
+        square(c);
+        if (k != null) prev.forEach((p) => ring(c, RX, Y, p.r, C.faint, 2));
+        dot(c, RX, Y, this.s.r, C.pink);
+        if (k != null) {
+          c.save(); c.globalAlpha = k;
+          ring(c, RX, Y, SQ / 2, C.leaf, 3, [10, 9]); ring(c, RX, Y, SQ / Math.sqrt(Math.PI), C.leaf, 3, [2, 7]);
+          c.restore(); legend(c, [[[10, 9], "same width"], [[2, 7], "same area"]], 820, k);
+        }
+      },
+      read() {
+        const p = (2 * this.s.r) / SQ * 100, area = 200 / Math.sqrt(Math.PI);
+        const v = verdict(p, 101, area + 1);
+        return { v: R2(p),
+          line: `Your circle is ${p.toFixed(1)}% as wide as the square. Same width would be 100%; same area would be ${area.toFixed(1)}%.`,
+          why: v === "below" ? "You matched the edges. Many type designers would go a little bigger: a round letter like O is drawn slightly taller than H, overshooting the lines, so it doesn't look small beside it."
+            : v === "between" ? "You made it bigger than the square's width, but not by its whole area. That's overshoot: round letters rise above and dip below the lines straight ones sit on, because a circle of the same width looks smaller."
+            : "You went past equal area: to your eye a circle has to be quite large before it holds its own against a square's corners.",
+          short: `Circles: you see them equal at ${p.toFixed(0)}% width` };
+      } },
+    { id: "s-tri", q: "Now make the triangle look as big as the square.", hint: "drag right or up to grow it, left or down to shrink it",
+      init() { this.s = { b: 250 }; }, move: grow("b", 120, 480),
+      draw(c, k, prev) {
+        square(c);
+        if (k != null) prev.forEach((p) => poly(c, triPts(p.b), null, C.faint, 2));
+        poly(c, triPts(this.s.b), C.pink);
+        if (k != null) {
+          const L = [[SQ, [10, 9], "same width"], [SQ * 2 / Math.sqrt(3), [24, 8], "same height"], [Math.sqrt(4 * SQ * SQ / Math.sqrt(3)), [2, 7], "same area"]];
+          c.save(); c.globalAlpha = k;
+          for (const [b, d] of L) { c.setLineDash(d); poly(c, triPts(b), null, C.leaf, 3); }
+          c.restore(); legend(c, L.map(([, d, t]) => [d, t]), 820, k);
+        }
+      },
+      read() {
+        const p = this.s.b / SQ * 100, hgt = 200 / Math.sqrt(3), area = Math.sqrt(4 / Math.sqrt(3)) * 100;
+        return { v: R2(p),
+          line: `Your triangle is ${p.toFixed(0)}% as wide as the square. Same height would be ${hgt.toFixed(0)}%; same area ${area.toFixed(0)}%.`,
+          why: p < hgt - 3 ? "You kept it close to the square's width. Most eyes want more: a triangle's points hold almost no ink, so it reads small. Play buttons are usually drawn larger than the stop square beside them for this reason."
+            : p < area - 5 ? "You grew it well past the square's width. Pointed shapes lose the most size to the eye, because their tips hold so little ink. Icon designers do the same, drawing a play triangle larger than the stop square beside it."
+            : "You went almost to equal area. You judge size by how much ink there is, not by edges, and a triangle hides most of its size in thin points.",
+          short: `Triangles: you see them equal at ${p.toFixed(0)}% width` };
+      } },
+  ] });
+}
+
+/* ── Even ───────────────────────────────────────────────────────────────── */
+{
+  const L0 = 70, L1 = 930, H = 180, ROW = [290, 600, 840];
+  // shapes: their box width, how to draw them centred at (x, y)
+  const SH = {
+    bar: { w: () => 56, draw: (c, x, y, f) => poly(c, [[x - 28, y - H / 2], [x + 28, y - H / 2], [x + 28, y + H / 2], [x - 28, y + H / 2]], f) },
+    circle: { w: () => H, draw: (c, x, y, f) => dot(c, x, y, H / 2, f) },
+    tri: { w: () => H * 1.1, draw: (c, x, y, f) => poly(c, [[x, y - H / 2], [x + H * 0.55, y + H / 2], [x - H * 0.55, y + H / 2]], f) },
+  };
+  // letters are measured from the real font, so their boxes are their ink
+  let FS = 200, CAP = 140;
+  const M = {};
+  function measure(chs) {
+    g.save(); g.font = `600 100px "IBM Plex Sans", system-ui, sans-serif`;
+    for (const ch of new Set(chs)) { const m = g.measureText(ch); M[ch] = { l: m.actualBoundingBoxLeft, w: m.actualBoundingBoxLeft + m.actualBoundingBoxRight }; }
+    const tot = chs.reduce((a, ch) => a + M[ch].w, 0); // the whole row of letters fills 560 of the 860 between the ends
+    CAP = g.measureText("H").actualBoundingBoxAscent; g.restore();
+    FS = 100 * 560 / tot; CAP *= FS / 100;
+  }
+  const glyph = (ch) => ({ w: () => M[ch].w * FS / 100, draw: (c, x, y, f) => {
+    c.save(); c.font = `600 ${FS}px "IBM Plex Sans", system-ui, sans-serif`; c.fillStyle = f; c.textBaseline = "alphabetic";
+    c.fillText(ch, x - M[ch].w * FS / 200 + M[ch].l * FS / 100, y + CAP / 2); c.restore(); } });
+
+  const edges = (items, xs) => items.map((it, i) => [xs[i] - it.w() / 2, xs[i] + it.w() / 2]);
+  const equalGaps = (items) => { const ws = items.map((it) => it.w()), G = (L1 - L0 - ws.reduce((a, b) => a + b, 0)) / (ws.length - 1); let x = L0; return ws.map((w) => { const c = x + w / 2; x += w + G; return c; }); };
+  const equalCentres = (items) => { const a = L0 + items[0].w() / 2, b = L1 - items[items.length - 1].w() / 2; return items.map((_, i) => a + (b - a) * i / (items.length - 1)); };
+  const row = (c, items, xs, y, f) => items.forEach((it, i) => it.draw(c, xs[i], y, f));
+
+  function trial(id, q, kinds, names) {
+    const items = () => { if (kinds.some((k) => !SH[k] && !M[k])) measure(kinds); return kinds.map((k) => (SH[k] || glyph(k))); };
+    return { id, q, hint: "drag the middle shapes sideways",
+      init() {
+        const it = items(), eq = equalGaps(it), off = [0, 64, -46, 52, 0];
+        this.s = { x: eq.map((x, i) => x + off[i]) };
+      },
+      grab(p) { const xs = this.s.x; let b = 1; for (let i = 1; i < xs.length - 1; i++) if (Math.abs(xs[i] - p[0]) < Math.abs(xs[b] - p[0])) b = i; return b; },
+      move(h, dx) {
+        const it = items(), xs = this.s.x, i = cl(h, 1, xs.length - 2);
+        const lo = xs[i - 1] + it[i - 1].w() / 2 + 8 + it[i].w() / 2, hi = xs[i + 1] - it[i + 1].w() / 2 - 8 - it[i].w() / 2;
+        xs[i] = cl(xs[i] + dx, lo, hi);
+      },
+      draw(c, k, prev) {
+        const it = items(), y0 = k == null ? 500 : 500 - (500 - ROW[0]) * k; // your row rises to make room for the truths
+        row(c, it, this.s.x, y0, C.ink);
+        if (k != null) {
+          c.save(); c.globalAlpha = k;
+          row(c, it, equalGaps(it), ROW[1], C.faint);
+          label(c, L0 - 8, ROW[2] - H / 2 - 30, "equal distances between centres", C.leaf);
+          row(c, it, equalCentres(it), ROW[2], C.faint);
+          // your gaps, measured, above your row, where there's room for the numbers to stack
+          const e = edges(it, this.s.x), G = (L1 - L0 - it.reduce((a, b) => a + b.w(), 0)) / (it.length - 1);
+          const gaps = [];
+          for (let i = 0; i < e.length - 1; i++) {
+            const a = e[i][1], b = e[i + 1][0], y = y0 - H / 2 - 30;
+            line(c, [a, y], [b, y], C.pink, 3); line(c, [a, y - 9], [a, y + 9], C.pink, 3); line(c, [b, y - 9], [b, y + 9], C.pink, 3);
+            gaps.push({ x: (a + b) / 2, t: Math.round((b - a) / G * 100) + "%", col: C.pink });
+          }
+          rowNames(c, gaps, y0 - H / 2 - 30 - LS * 1.2, -1);
+          label(c, L0 - 8, ROW[1] - H / 2 - 30, "equal gaps by the ruler", C.leaf);
+          c.restore();
+        }
+      },
+      read() {
+        const it = items(), e = edges(it, this.s.x), G = (L1 - L0 - it.reduce((a, b) => a + b.w(), 0)) / (it.length - 1);
+        const gp = e.slice(0, -1).map((x, i) => (e[i + 1][0] - x[1]) / G * 100);
+        const round = (gp[0] + gp[1]) / 2, point = (gp[2] + gp[3]) / 2;
+        const tight = round < 95 && point < 95;
+        return { v: [R2(round), R2(point)],
+          line: `Measured against an equal gap, you left ${Math.round(round)}% beside the ${names[0]} and ${Math.round(point)}% beside the ${names[1]}.`,
+          why: tight ? `You pulled the ${names[0]} and the ${names[1]} in closer than equal gaps. That's how type is spaced: curves and points leave empty space inside their own box, so they have to come closer to look evenly spaced. An O sits nearer its neighbours than an H does.`
+            : round < 95 || point < 95 ? `You pulled one of them in and not the other. Look at the reveal: does the ${round < point ? names[1] : names[0]} now look a little further away than the rest?`
+            : "You spaced it close to the ruler. Look at the equal-gaps row in the reveal: to most eyes the round and pointed shapes look further away than the straight ones, though every gap is the same.",
+          short: `Spacing: ${names[0]} at ${Math.round(round)}%, ${names[1]} at ${Math.round(point)}% of an equal gap` };
+      } };
+  }
+  E.push({ id: "even", name: "Even", trials: [
+    trial("e-shapes", "Space these so the gaps feel even.", ["bar", "circle", "bar", "tri", "bar"], ["circle", "triangle"]),
+    trial("e-letters", "Now space the letters.", ["H", "O", "H", "V", "H"], ["O", "V"]),
+  ] });
+}
+
+/* ── Cut ────────────────────────────────────────────────────────────────── */
+{
+  const PHI = (Math.sqrt(5) - 1) / 2; // 0.618…
+  const MARKS = [[0.5, "half"], [1 / 3, "a third"], [2 / 3, "a third"], [1 - PHI, "golden"], [PHI, "golden"], [0.25, "a quarter"], [0.75, "a quarter"]];
+  const nearest = (r) => MARKS.map(([m, n]) => [n, Math.abs(r - m)]).sort((a, b) => a[1] - b[1])[0];
+  const ratio = (r) => { const a = Math.round(r * 100); return `${a} : ${100 - a}`; };
+  const famous = "The golden cut (62 : 38) is the most famous proportion in design, but experiments on it since the 1800s disagree about how much people really prefer it.";
+  E.push({ id: "cut", name: "Cut", trials: [
+    { id: "x-rect", q: "Cut the rectangle where it feels best.", hint: "drag the cut sideways",
+      init() { this.s = { r: 0.86 }; },
+      move(h, dx) { this.s.r = cl(this.s.r + dx / 800, 0.04, 0.96); },
+      draw(c, k, prev) {
+        const x0 = 100, w = 800, y0 = 330, h = 340, x = x0 + w * this.s.r;
+        poly(c, [[x0, y0], [x, y0], [x, y0 + h], [x0, y0 + h]], C.ink);
+        poly(c, [[x, y0], [x0 + w, y0], [x0 + w, y0 + h], [x, y0 + h]], C.soft, C.ink, 3);
+        if (k != null) {
+          prev.forEach((p) => line(c, [x0 + w * p.r, y0 - 30], [x0 + w * p.r, y0 + h + 30], C.faint, 2));
+          c.save(); c.globalAlpha = k;
+          for (const [m, n] of [[0.5, "half"], [1 / 3, "third"], [2 / 3, "third"], [1 - PHI, "golden"], [PHI, "golden"]]) {
+            const mx = x0 + w * m, up = n === "golden";
+            line(c, [mx, up ? y0 - 70 : y0 + h], [mx, up ? y0 : y0 + h + 70], C.leaf, 2, [6, 7]);
+            label(c, mx, up ? y0 - 92 : y0 + h + 92, n, C.leaf, "center");
+          }
+          c.restore();
+        }
+        line(c, [x, y0 - 40], [x, y0 + h + 40], C.pink, 6);
+      },
+      read() {
+        const r = this.s.r, [n, d] = nearest(r);
+        return { v: R2(r),
+          line: `Your cut splits it ${ratio(r)}, closest to ${n === "half" ? "the half" : n === "golden" ? "the golden cut" : n}${d > 0.015 ? ` but not on it` : ""}.`,
+          why: n === "half" && d < 0.03 ? "A half feels calm and still: two equal parts with nothing pulling either way. " + famous
+            : n === "golden" && d <= 0.015 ? "That's within a hair of the golden cut. " + famous
+            : "An uneven cut feels like it's going somewhere: one part leads and the other follows. " + famous,
+          short: `Cuts: you split at ${ratio(r)}` };
+      } },
+    { id: "x-horizon", q: "Where should the horizon go?", hint: "drag the horizon up or down",
+      init() { this.s = { r: 0.12 }; },
+      move(h, dx, dy) { this.s.r = cl(this.s.r + dy / 560, 0.04, 0.96); },
+      draw(c, k, prev) {
+        const x0 = 230, w = 540, y0 = 220, h = 560, y = y0 + h * this.s.r;
+        poly(c, [[x0, y0], [x0 + w, y0], [x0 + w, y], [x0, y]], C.soft);
+        poly(c, [[x0, y], [x0 + w, y], [x0 + w, y0 + h], [x0, y0 + h]], C.ink);
+        dot(c, x0 + w * 0.72, y0 + Math.min(h * 0.16, (y - y0) * 0.5), 26, C.faint); // a sun, so it reads as a landscape
+        poly(c, [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]], null, C.line, 2);
+        if (k != null) {
+          prev.forEach((p) => line(c, [x0 - 30, y0 + h * p.r], [x0 + w + 30, y0 + h * p.r], C.faint, 2));
+          c.save(); c.globalAlpha = k;
+          for (const [m, n] of [[0.5, "half"], [1 / 3, "third"], [2 / 3, "third"], [1 - PHI, "golden"], [PHI, "golden"]]) {
+            const my = y0 + h * m, left = n === "golden";
+            line(c, [left ? x0 - 60 : x0 + w, my], [left ? x0 : x0 + w + 60, my], C.leaf, 2, [6, 7]);
+            label(c, left ? x0 - 66 : x0 + w + 66, my, n, C.leaf, left ? "right" : "left");
+          }
+          c.restore();
+        }
+        line(c, [x0 - 20, y], [x0 + w + 20, y], C.pink, 6);
+      },
+      read() {
+        const r = this.s.r, [n] = nearest(r), d = Math.abs(r - 0.5), a = Math.round(r * 100);
+        return { v: R2(r),
+          line: `Your horizon gives ${a}% to the sky and ${100 - a}% to the land, closest to ${n === "golden" ? "the golden cut" : n === "half" ? "the half" : n}.`,
+          why: n === "half" && d < 0.04 ? "Photographers are often taught to keep the horizon off the middle, because a centred horizon makes sky and land compete. You chose the stillness of the middle anyway."
+            : `Photographers are taught to put the horizon on a third, so that one of sky or land leads. You gave the most room to the ${r > 0.5 ? "sky" : "land"}.`,
+          short: `Horizons: ${a}% sky, ${100 - a}% land` };
+      } },
+  ] });
+}
+
+/* ── Belong ─────────────────────────────────────────────────────────────── */
+{
+  // OKLCH → sRGB, so steps in the map are even steps to the eye
+  function ok(L, Cc, h) {
+    const a = Cc * Math.cos(h * Math.PI / 180), b = Cc * Math.sin(h * Math.PI / 180);
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+    const f = (x) => { x = cl(x, 0, 1); return Math.round(255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)); };
+    return `rgb(${f(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s)},${f(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s)},${f(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)})`;
+  }
+  const MX = 100, MW = 800, MY = 500, MH = 400, LHI = 0.92, LLO = 0.32;
+  const toMap = (h, L) => [MX + (((h % 360) + 360) % 360) / 360 * MW, MY + (LHI - L) / (LHI - LLO) * MH];
+  const wrap = (d) => ((d % 360) + 540) % 360 - 180;
+  const meanHue = (P) => { let x = 0, y = 0; P.forEach((p) => { x += Math.cos(p.h * Math.PI / 180); y += Math.sin(p.h * Math.PI / 180); }); return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; };
+  // the map is painted once per strength into a small image, then scaled up smoothly
+  const MAPS = {};
+  function mapOf(Cc) {
+    if (MAPS[Cc]) return MAPS[Cc];
+    const W = 120, Hh = 40, m = document.createElement("canvas"); m.width = W; m.height = Hh; const x = m.getContext("2d");
+    for (let i = 0; i < W; i++) for (let j = 0; j < Hh; j++) { x.fillStyle = ok(LHI - (j + 0.5) / Hh * (LHI - LLO), Cc, (i + 0.5) * 360 / W); x.fillRect(i, j, 1, 1); }
+    return (MAPS[Cc] = m);
+  }
+  const BANDS = [[0, 34, "neighbours"], [180, 30, "opposite"], [120, 14, "a third"], [-120, 14, "a third"]];
+  function trial(id, q, P, Cc, start) {
+    return { id, q, hint: "drag to move your colour around the map below",
+      init() { this.s = { h: start[0], L: start[1] }; },
+      move(hd, dx, dy) { this.s.h = (this.s.h + dx / MW * 360 + 360) % 360; this.s.L = cl(this.s.L - dy / MH * (LHI - LLO), LLO, LHI); },
+      draw(c, k, prev) {
+        const all = [...P, { L: this.s.L, h: this.s.h }];
+        all.forEach((p, i) => { const x = 115 + i * 200; poly(c, [[x, 150], [x + 170, 150], [x + 170, 360], [x, 360]], ok(p.L, Cc, p.h), i === 3 ? C.pink : null, 4); });
+        label(c, 815, 118, "yours", C.pink, "right");
+        // the map: hue across, lightness down, all at the palette's strength
+        c.save(); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high"; c.drawImage(mapOf(Cc), MX, MY, MW, MH); c.restore();
+        P.forEach((p) => { const [x, y] = toMap(p.h, p.L); ring(c, x, y, 13, C.bg, 4); ring(c, x, y, 13, C.ink, 2); });
+        if (k != null) {
+          prev.forEach((p) => { const [x, y] = toMap(p.h, p.L); ring(c, x, y, 9, C.faint, 2); });
+          const m = meanHue(P);
+          c.save(); c.globalAlpha = k;
+          const names = [];
+          for (const [off, half, n] of BANDS) {
+            const a = (m + off - half + 360) % 360, xs = [a, a + 2 * half];
+            for (const sh of [0, -360]) {
+              const x0 = MX + (xs[0] + sh) / 360 * MW, x1 = MX + (xs[1] + sh) / 360 * MW;
+              const l = Math.max(MX, x0), r = Math.min(MX + MW, x1);
+              if (r > l) { line(c, [l, MY - 18], [r, MY - 18], C.leaf, 5); }
+            }
+            const cx = MX + (((m + off) % 360 + 360) % 360) / 360 * MW;
+            names.push({ x: cl(cx, MX + 60, MX + MW - 60), t: n });
+          }
+          rowNames(c, names, MY - 46);
+          c.restore();
+        }
+        const [x, y] = toMap(this.s.h, this.s.L); ring(c, x, y, 16, C.bg, 6); ring(c, x, y, 16, C.pink, 4);
+      },
+      read() {
+        const m = meanHue(P), d = Math.abs(wrap(this.s.h - m)), Ls = P.map((p) => p.L), lo = Math.min(...Ls), hi = Math.max(...Ls);
+        const rel = d < 34 ? "next to them in hue" : d > 150 ? "opposite them in hue" : Math.abs(d - 120) < 14 ? "a third of the way round the wheel from them" : `${Math.round(d)}° round the wheel from them`;
+        const light = this.s.L < lo - 0.04 ? "darker than all three" : this.s.L > hi + 0.04 ? "lighter than all three" : "within their lightness";
+        return { v: [Math.round(d), R2(this.s.L)],
+          line: `You picked a colour ${rel}, ${light}.`,
+          why: d < 34 ? "Neighbouring hues feel like one family: they share almost everything, so a palette like this reads as calm. " + (light === "within their lightness" ? "You kept to their lightness too, so yours blends in." : "You changed the lightness instead, which is how a family gets a leader.")
+            : d > 150 ? "Opposite hues make each other look stronger, which is why complements pop. " + (light === "within their lightness" ? "Keeping the same lightness is what stops them clashing." : "Changing the lightness as well makes yours a clear accent.")
+            : "Colours that belong usually share most things and differ in one. Yours differs in hue by a lot, but not all the way to opposite: an in-between choice that some palettes use for tension.",
+          short: `Colour: you pick ${d < 34 ? "neighbours" : d > 150 ? "opposites" : "in-betweens"}, ${light === "within their lightness" ? "same lightness" : light.split(" ")[0]}` };
+      } };
+  }
+  E.push({ id: "belong", name: "Belong", trials: [
+    trial("b-warm", "Pick a fourth colour that belongs with these three.", [{ L: 0.72, h: 28 }, { L: 0.62, h: 42 }, { L: 0.8, h: 62 }], 0.12, [250, 0.45]),
+    trial("b-cool", "And one for these.", [{ L: 0.48, h: 232 }, { L: 0.58, h: 250 }, { L: 0.68, h: 214 }], 0.07, [60, 0.85]),
+  ] });
+}
+
+/* ── Balance ────────────────────────────────────────────────────────────── */
+{
+  // a simple model of visual weight: area × darkness. The dark square counts fully, the pale circle at 45%.
+  const F = [150, 250, 850, 750], MID = [500, 500], SQ = 150, R = 110, PALE = 0.45;
+  const wH = SQ * SQ, wL = Math.PI * R * R * PALE, K = wH / wL;
+  const bal = (h) => [MID[0] - K * (h[0] - MID[0]), MID[1] - K * (h[1] - MID[1])];
+  const weightAt = (h, p) => [(wH * h[0] + wL * p[0]) / (wH + wL), (wH * h[1] + wL * p[1]) / (wH + wL)];
+  function scene(c, h, p) {
+    poly(c, [[F[0], F[1]], [F[2], F[1]], [F[2], F[3]], [F[0], F[3]]], C.bg, C.line, 3);
+    poly(c, [[h[0] - SQ / 2, h[1] - SQ / 2], [h[0] + SQ / 2, h[1] - SQ / 2], [h[0] + SQ / 2, h[1] + SQ / 2], [h[0] - SQ / 2, h[1] + SQ / 2]], C.ink);
+    c.save(); c.globalAlpha *= PALE; dot(c, p[0], p[1], R, C.ink); c.restore();
+    ring(c, p[0], p[1], R, C.pink, 3);
+  }
+  function trial(id, q, hint, H0, P0, free) {
+    return { id, q, hint,
+      init() { this.s = { x: P0[0], y: P0[1] }; },
+      move(hd, dx, dy) {
+        this.s.x = cl(this.s.x + dx, F[0] + R + 4, F[2] - R - 4);
+        if (free) this.s.y = cl(this.s.y + dy, F[1] + R + 4, F[3] - R - 4);
+        // the circle can't sit on the square
+        const nx = cl(this.s.x, H0[0] - SQ / 2, H0[0] + SQ / 2), ny = cl(this.s.y, H0[1] - SQ / 2, H0[1] + SQ / 2);
+        const d = Math.hypot(this.s.x - nx, this.s.y - ny);
+        if (d < R + 6) { const ux = (this.s.x - nx) / (d || 1), uy = (this.s.y - ny) / (d || 1); this.s.x = nx + ux * (R + 6) || H0[0] + SQ / 2 + R + 6; this.s.y = free ? ny + uy * (R + 6) : this.s.y; }
+      },
+      draw(c, k, prev) {
+        const p = [this.s.x, this.s.y], b = bal(H0);
+        // a pin under the middle, so the frame reads as something that could tip
+        if (!free) poly(c, [[MID[0], F[3] + 4], [MID[0] + 34, F[3] + 60], [MID[0] - 34, F[3] + 60]], C.faint);
+        c.save();
+        if (k != null && !free) {
+          const tq = wH * (H0[0] - MID[0]) + wL * (p[0] - MID[0]), ang = cl(tq / (wH * 170) * 0.16, -0.16, 0.16) * k;
+          c.translate(MID[0], F[3] + 4); c.rotate(ang); c.translate(-MID[0], -(F[3] + 4));
+        }
+        scene(c, H0, p);
+        if (k != null) {
+          prev.forEach((q) => ring(c, q.x, q.y, R, C.faint, 2));
+          c.save(); c.globalAlpha = k;
+          ring(c, b[0], b[1], R, C.leaf, 3, [8, 8]);
+          const w = weightAt(H0, p);
+          line(c, [MID[0] - 16, MID[1]], [MID[0] + 16, MID[1]], C.leaf, 3); line(c, [MID[0], MID[1] - 16], [MID[0], MID[1] + 16], C.leaf, 3);
+          dot(c, w[0], w[1], 9, C.pink);
+          // the marks tilt with the frame, but their names are laid out level, so they read and stack cleanly
+          const M = c.getTransform(), sc = Math.hypot(M.a, M.b), lv = (q) => { const d = M.transformPoint(new DOMPoint(q[0], q[1])); return [d.x / sc, d.y / sc]; };
+          const [m0, w0, b0] = [lv(MID), lv(w), lv([b[0], b[1] + R])];
+          c.save(); c.setTransform(sc, 0, 0, sc, 0, 0);
+          tags(c, [{ x: m0[0], y: m0[1], t: "middle" }, { x: w0[0], y: w0[1], t: "your weight", col: C["pink-ink"] }, { x: b0[0], y: b0[1], t: "balanced, by the model" }], 1);
+          c.restore();
+          c.restore();
+        }
+        c.restore();
+      },
+      read() {
+        const p = [this.s.x, this.s.y], b = bal(H0), v = [b[0] - MID[0], b[1] - MID[1]], L = Math.hypot(v[0], v[1]);
+        const along = ((p[0] - MID[0]) * v[0] + (p[1] - MID[1]) * v[1]) / (L * L) - 1;
+        const across = free ? Math.abs((p[0] - MID[0]) * v[1] - (p[1] - MID[1]) * v[0]) / (L * L) : 0;
+        const pct = Math.round(Math.abs(along) * 100);
+        const way = Math.abs(along) < 0.08 ? "near" : along > 0 ? "past" : "short of";
+        return { v: R2(along),
+          line: `You placed the circle ${way === "near" ? "close to" : `${pct}% ${way}`} the point where a simple size × darkness model balances it${across > 0.15 ? `, and off to one side of the line through the middle` : ""}.`,
+          why: way === "near" ? "Your eye matches the simple model: weight is about size times darkness. A big pale shape can hold up a small dark one."
+            : way === "past" ? "You moved it further out than the model needs, so to your eye the pale circle weighs less than its size suggests: darkness counts for more."
+            : "You kept it closer in than the model needs, so to your eye the pale circle weighs more than its darkness suggests: size counts for a lot.",
+          short: way === "near" ? "Balance: you weigh by size × darkness" : way === "past" ? "Balance: darkness weighs more for you" : "Balance: size weighs more for you" };
+      } };
+  }
+  E.push({ id: "balance", name: "Balance", trials: [
+    trial("w-line", "Slide the pale circle until the frame feels steady.", "drag the circle sideways", [330, 500], [585, 500], false),
+    trial("w-free", "Now the square is up in a corner. Steady it again.", "drag the circle anywhere", [330, 400], [600, 420], true),
+  ] });
+}
+
+/* ── Enough ─────────────────────────────────────────────────────────────── */
+{
+  const grow = function (h, dx, dy) { this.s.f = cl(this.s.f + (dx - dy) / 900, 0.01, 1); };
+  const meter = (c, f, k) => {
+    line(c, [250, 880], [750, 880], C.line, 6);
+    line(c, [250, 880], [250 + 500 * f, 880], C.pink, 6);
+    if (k != null) label(c, 500, 925, `${Math.round(f * 100)}% of the line drawn`, C.pink, "center");
+  };
+  function read(f, what) {
+    const p = Math.round(f * 100);
+    return { v: R2(f),
+      line: `You saw ${what} once ${p}% of its line was there.`,
+      why: p < 35 ? `Your eye drew the other ${100 - p}% itself. Gestalt psychologists called this closure: we see whole shapes from parts, which is why a logo can leave out most of its line and still read.`
+        : p < 70 ? "Your eye filled in the gaps once the pieces were long enough to suggest a path. Gestalt psychologists called this closure; it's why dashed and broken outlines still read as shapes."
+        : "You waited until most of the line was there: a cautious eye that wants proof before it calls it a shape. Many people see the whole from much less; try it again and stop earlier.",
+      short: `Closure: you see ${what} at ${p}%` };
+  }
+  E.push({ id: "enough", name: "Enough", trials: [
+    { id: "n-circle", q: "Stop when you can see a circle.", hint: "drag right or up to draw more of it",
+      init() { this.s = { f: 0.02 }; }, move: grow,
+      draw(c, k, prev) {
+        const N = 12, R = 260, seg = Math.PI * 2 / N;
+        if (k != null) { c.save(); c.globalAlpha = k * 0.5; ring(c, 500, 460, R, C.leaf, 2, [3, 9]); c.restore(); }
+        c.save(); c.lineCap = "round"; c.strokeStyle = C.ink; c.lineWidth = 16;
+        for (let i = 0; i < N; i++) { const a = i * seg - Math.PI / 2, h = seg * this.s.f / 2; c.beginPath(); c.arc(500, 460, R, a - h, a + h); c.stroke(); }
+        c.restore();
+        if (k != null) prev.forEach((p) => line(c, [250 + 500 * p.f, 866], [250 + 500 * p.f, 894], C.faint, 3));
+        meter(c, this.s.f, k);
+      },
+      read() { return read(this.s.f, "a circle"); } },
+    { id: "n-square", q: "Now stop when you can see a square.", hint: "drag right or up to draw more of it",
+      init() { this.s = { f: 0.02 }; }, move: grow,
+      draw(c, k, prev) {
+        const S = 480, x0 = 260, y0 = 220, f = this.s.f, l = (S / 2) * f;
+        if (k != null) { c.save(); c.globalAlpha = k * 0.5; c.setLineDash([3, 9]); poly(c, [[x0, y0], [x0 + S, y0], [x0 + S, y0 + S], [x0, y0 + S]], null, C.leaf, 2); c.restore(); }
+        c.save(); c.lineCap = "square"; c.strokeStyle = C.ink; c.lineWidth = 16;
+        // the line grows out from each corner, so the corners are what you see first
+        for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x0 + S, y0, -1, 1], [x0 + S, y0 + S, -1, -1], [x0, y0 + S, 1, -1]]) {
+          c.beginPath(); c.moveTo(cx + sx * l, cy); c.lineTo(cx, cy); c.lineTo(cx, cy + sy * l); c.stroke();
+        }
+        c.restore();
+        if (k != null) prev.forEach((p) => line(c, [250 + 500 * p.f, 866], [250 + 500 * p.f, 894], C.faint, 3));
+        meter(c, f, k);
+      },
+      read() { return read(this.s.f, "a square"); } },
+  ] });
+}
+
+/* ── Motion ─────────────────────────────────────────────────────────────── */
+{
+  // a CSS-style cubic-bezier: time in, distance out
+  const bez = (x1, y1, x2, y2) => (t) => {
+    if (t <= 0) return 0; if (t >= 1) return 1;
+    let lo = 0, hi = 1, u = t;
+    for (let i = 0; i < 22; i++) { u = (lo + hi) / 2; const x = 3 * (1 - u) * (1 - u) * u * x1 + 3 * (1 - u) * u * u * x2 + u * u * u; x < t ? (lo = u) : (hi = u); }
+    return 3 * (1 - u) * (1 - u) * u * y1 + 3 * (1 - u) * u * u * y2 + u * u * u;
+  };
+  const PL = 200, PR = 800;
+  // a curve of value against time, drawn in the box from top to bot
+  function plot(c, f, top, bot, lo, hi, col, w, dash, alpha) {
+    c.save(); c.globalAlpha *= alpha == null ? 1 : alpha; c.beginPath();
+    for (let i = 0; i <= 90; i++) { const t = i / 90, x = PL + (PR - PL) * t, y = bot - (bot - top) * (f(t) - lo) / (hi - lo); i ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.strokeStyle = col; c.lineWidth = w; c.setLineDash(dash || []); c.lineJoin = "round"; c.stroke(); c.restore();
+  }
+  function axes(c, top, bot, what) {
+    line(c, [PL, bot], [PR, bot], C.line, 2); line(c, [PL, bot], [PL, top], C.line, 2);
+    label(c, PR, bot + 36, "time →", C.faint, "right"); label(c, PL - 4, top - 30, what, C.faint);
+  }
+
+  /* easing: one dot crossing back and forth, its curve drawn underneath */
+  const A0 = 190, A1 = 810, TY = 250, P1 = 420, P2 = 780, DUR = 900, REST = 600;
+  const curve = (s) => bez(s.a * 0.9, 0, 1 - s.b * 0.9, 1);
+  const NAMED = [["linear", bez(0, 0, 1, 1)], ["ease-in", bez(0.42, 0, 1, 1)], ["ease-out", bez(0, 0, 0.58, 1)], ["ease-in-out", bez(0.42, 0, 0.58, 1)], ["CSS ease", bez(0.25, 0.1, 0.25, 1)]];
+  const nearest = (f) => NAMED.map(([n, g]) => { let d = 0; for (let i = 1; i < 40; i++) d += Math.abs(f(i / 40) - g(i / 40)); return [n, d / 39, g]; }).sort((a, b) => a[1] - b[1]);
+  const across = (now, f) => {
+    if (now == null) return 1;
+    const t = now % (2 * (DUR + REST));
+    return t < DUR ? f(t / DUR) : t < DUR + REST ? 1 : t < 2 * DUR + REST ? 1 - f((t - DUR - REST) / DUR) : 0;
+  };
+  const easeTrial = { id: "m-ease", q: "Shape the move until it feels natural.", feels: "feels", live: true,
+    hint: "drag right for a gentler start and up for a gentler landing",
+    init() { this.s = { a: 0.05, b: 0.05 }; },
+    move(h, dx, dy) { this.s.a = cl(this.s.a + dx / 700, 0, 1); this.s.b = cl(this.s.b - dy / 700, 0, 1); },
+    draw(c, k, prev) {
+      const f = curve(this.s);
+      line(c, [A0, TY], [A1, TY], C.line, 4);
+      // where the dot is at each twelfth of the time: bunched rings mean slow, spread rings mean fast
+      for (let i = 0; i <= 12; i++) ring(c, A0 + (A1 - A0) * f(i / 12), TY, 9, C.faint, 2);
+      dot(c, A0 + (A1 - A0) * across(clock(), f), TY, 26, C.pink);
+      axes(c, P1, P2, "distance");
+      if (k != null) {
+        const nn = nearest(f);
+        prev.forEach((p) => plot(c, curve(p), P1, P2, 0, 1, C.faint, 2));
+        NAMED.forEach(([, g]) => plot(c, g, P1, P2, 0, 1, C.leaf, 2, [4, 8], 0.35 * k));
+        plot(c, nn[0][2], P1, P2, 0, 1, C.leaf, 3, [10, 8], k);
+        c.save(); c.globalAlpha = k;
+        label(c, PL + 22, P1 + 16, `closest named curve: ${nn[0][0]}`, C.leaf);
+        label(c, 500, TY + 62, "rings: each twelfth of the time", C.faint, "center");
+        c.restore();
+      }
+      plot(c, f, P1, P2, 0, 1, C.pink, 5);
+    },
+    read() {
+      const { a, b } = this.s, n = nearest(curve(this.s))[0][0];
+      const word = (v, soft, slow, hard) => (v < 0.2 ? hard : v < 0.55 ? soft : slow);
+      const shape = a < 0.2 && b < 0.2 ? "flat" : b > a + 0.15 ? "out" : a > b + 0.15 ? "in" : "both";
+      return { v: n,
+        line: `Your move has ${word(a, "a soft", "a slow", "a sharp")} start and ${word(b, "a soft", "a slow", "a hard")} landing. Of the curves designers name, it's closest to ${n}.`,
+        why: shape === "out" ? "Fast away, gentle landing. It answers at once and settles calmly, which is why most interface motion eases out: things with mass don't stop dead."
+          : shape === "in" ? "A slow start and a quick finish. On its own this tends to feel like lag for something arriving; it suits things leaving the screen, which gather speed as they go."
+          : shape === "both" ? "Speeding up, then slowing down, like an object with weight pushed and caught. It suits a move from one place to another, where both ends are seen."
+          : "Constant speed. To most eyes it looks mechanical, since nothing with mass starts or stops instantly, but it suits loops and spinners, where no start or stop is seen.",
+        short: `Easing: you like ${n}` };
+    } };
+
+  /* timing: a small square opens into a panel, eased out, over a duration you set */
+  const R0 = 120, R1 = 880, RY = 770, MAXD = 1600, rx = (d) => R0 + (R1 - R0) * d / MAXD;
+  const out = bez(0, 0, 0.58, 1);
+  const rrect = (c, cx, cy, w, h, r, fill) => { c.beginPath(); c.roundRect ? c.roundRect(cx - w / 2, cy - h / 2, w, h, r) : c.rect(cx - w / 2, cy - h / 2, w, h); c.fillStyle = fill; c.fill(); };
+  const timeTrial = { id: "m-time", q: "Set how long the panel takes to open: quick, but not abrupt.", feels: "feels", live: true,
+    hint: "drag left to make it quicker and right to make it slower",
+    init() { this.s = { d: 1100 }; },
+    move(h, dx, dy) { this.s.d = Math.round(cl(this.s.d * Math.exp((dx - dy) / 420), 60, MAXD)); },
+    draw(c, k, prev) {
+      const d = this.s.d, now = clock();
+      let p = 1;
+      if (now != null) { const t = now % (2 * d + 1700); p = t < d ? out(t / d) : t < d + 1100 ? 1 : t < 2 * d + 1100 ? 1 - out((t - d - 1100) / d) : 0; }
+      rrect(c, 500, 340, 70 + 500 * p, 70 + 330 * p, 18, C.pink);
+      if (k == null) return;
+      c.save(); c.globalAlpha = k;
+      c.fillStyle = C.faint; c.globalAlpha = k * 0.25; c.fillRect(rx(0), RY - 16, rx(100) - rx(0), 32);
+      c.fillStyle = C.leaf; c.fillRect(rx(150), RY - 16, rx(400) - rx(150), 32); c.globalAlpha = k;
+      line(c, [R0, RY], [R1, RY], C.line, 2);
+      for (const m of [0, 500, 1000, 1500]) { line(c, [rx(m), RY + 18], [rx(m), RY + 30], C.faint, 2); label(c, rx(m), RY + 62, `${m} ms`, C.faint, "center"); }
+      label(c, rx(0), RY - 52, "feels instant", C.faint);
+      label(c, rx(150), RY - 98, "most everyday interface motion", C.leaf);
+      prev.forEach((q) => line(c, [rx(q.d), RY - 26], [rx(q.d), RY + 26], C.faint, 3));
+      line(c, [rx(d), RY - 34], [rx(d), RY + 34], C.pink, 5);
+      label(c, rx(d), RY + 108, `yours: ${d} ms`, C.pink, d > 1300 ? "right" : d < 200 ? "left" : "center");
+      c.restore();
+    },
+    read() {
+      const d = this.s.d;
+      return { v: d,
+        line: `You set ${d} ms: ${d < 100 ? "faster than the eye can follow, so it reads as a jump more than a motion" : d < 150 ? "brisk, right at the edge of what still reads as motion" : d <= 400 ? "inside the range most design systems use for everyday motion" : d <= 700 ? "unhurried, good for a big move or a calm brand, slow for something done a hundred times a day" : "slow enough to watch, more a moment than a transition"}.`,
+        why: "Two limits shape this. Research on response times suggests about a tenth of a second feels instant, so a shorter motion is barely seen. And motion you trigger often has to stay out of your way, so design systems keep everyday interface motion roughly between 150 and 400 ms, longer for big moves.",
+        short: `Timing: ${d} ms feels right` };
+    } };
+
+  /* bounce: a spring that settles a square into place */
+  const W0 = 2 * Math.PI / 0.55, SPAN = 1.6, BY = 260, B1 = 540, B2 = 840, HI = 1.8;
+  const spring = (z) => (u) => {
+    const t = u * SPAN;
+    if (z >= 0.999) return 1 - Math.exp(-W0 * t) * (1 + W0 * t);
+    const q = Math.sqrt(1 - z * z), wd = W0 * q;
+    return 1 - Math.exp(-z * W0 * t) * (Math.cos(wd * t) + (z / q) * Math.sin(wd * t));
+  };
+  const stats = (z) => { const f = spring(z); let mx = 0, n = 0, prevSide = 0; for (let i = 1; i <= 400; i++) { const v = f(i / 400); mx = Math.max(mx, v); const side = v > 1.02 ? 1 : v < 0.98 ? -1 : 0; if (side && side !== prevSide && i > 20) { if (side === 1) n++; prevSide = side; } } return { over: Math.max(0, mx - 1), n }; };
+  const REFS = [["smooth", 1, [2, 7]], ["snappy", 0.85, [10, 9]], ["bouncy", 0.7, [18, 6]]];
+  const bounceTrial = { id: "m-bounce", q: "Add bounce until it feels alive, not silly.", feels: "feels", live: true,
+    hint: "drag right or up to add bounce, left or down to calm it",
+    init() { this.s = { z: 1 }; },
+    move(h, dx, dy) { this.s.z = R2(cl(this.s.z - (dx - dy) / 900, 0.12, 1)); },
+    draw(c, k, prev) {
+      const f = spring(this.s.z), now = clock();
+      const v = now == null ? 1 : (() => { const t = now % 2300; return t < SPAN * 1000 ? f(t / (SPAN * 1000)) : 1; })();
+      c.save(); c.setLineDash([6, 8]); poly(c, [[380, BY - 120], [620, BY - 120], [620, BY + 120], [380, BY + 120]], null, C.faint, 2); c.restore();
+      const side = 240 * Math.max(0, v);
+      rrect(c, 500, BY, side, side, side * 0.12, C.pink);
+      axes(c, B1, B2, "size");
+      const y1 = B2 - (B2 - B1) / HI;
+      line(c, [PL, y1], [PR, y1], C.line, 2, [4, 8]);
+      if (k != null) {
+        prev.forEach((p) => plot(c, spring(p.z), B1, B2, 0, HI, C.faint, 2));
+        REFS.forEach(([, z, d]) => plot(c, spring(z), B1, B2, 0, HI, C.leaf, 3, d, k));
+        legend(c, REFS.map(([n, , d]) => [d, n]), 950, k);
+      }
+      plot(c, f, B1, B2, 0, HI, C.pink, 5);
+    },
+    read() {
+      const z = this.s.z, { over, n } = stats(z), o = Math.round(over * 100);
+      return { v: z,
+        line: `Your spring damps at ${z.toFixed(2)}: it overshoots by ${o}% and ${n === 0 ? "settles without a bounce you can see" : n === 1 ? "bounces once you can see" : `bounces ${n} times you can see`}.`,
+        why: (z > 0.95 ? "No bounce at all: calm and exact, the way most text and layout should move."
+          : z >= 0.7 ? "A little overshoot, so it lands with weight and settles at once."
+          : z >= 0.4 ? "A lively spring: playful, and good for small things you want noticed, like a badge. On a large panel it can start to feel loose."
+          : "A rubbery spring. It reads as fun, sometimes as a cartoon; most products keep this for moments of delight, not everyday motion.")
+          + " For comparison, the springs Apple calls smooth, snappy and bouncy damp at roughly 1, 0.85 and 0.7.",
+        short: `Bounce: damping ${z.toFixed(2)}, ${o}% over` };
+    } };
+
+  E.push({ id: "motion", name: "Motion", trials: [easeTrial, timeTrial, bounceTrial] });
+}
+
+/* ── Endless ────────────────────────────────────────────────────────────────
+   Shapes grown from a seed, so there's always a new one. Every truth is
+   measured from the shape's own pixels (its ink, its box, its roomiest
+   point), so every question works on every shape. Each answer teaches a small
+   model of your eye, and the model guesses your next answer before you give it.
+   ──────────────────────────────────────────────────────────────────────────── */
+const Endless = {};
+{
+  const rng = (seed) => { let a = seed >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const N = 256, GLYPHS = "ALTVYPRFJ7G4K?&bdq";
+  const radial = (f) => { const rs = [], P = []; for (let i = 0; i < 180; i++) rs.push(Math.max(0.05, f(i / 180 * Math.PI * 2))); const m = 112 / Math.max(...rs); rs.forEach((r, i) => { const a = i / 180 * Math.PI * 2; P.push([128 + r * m * Math.cos(a), 128 + r * m * Math.sin(a)]); }); return P; };
+  const pathOf = (P) => (c) => { P.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath(); };
+  function makeShape(seed) {
+    const r = rng(seed), kind = Math.floor(r() * 5);
+    if (kind === 4 && (!document.fonts || document.fonts.check('600 180px "IBM Plex Sans"'))) {
+      const ch = GLYPHS[Math.floor(r() * GLYPHS.length)], it = r() < 0.3;
+      return { paint(c, col, st) { c.font = `${it ? "italic " : ""}600 180px "IBM Plex Sans", system-ui, sans-serif`; c.textAlign = "center"; c.textBaseline = "alphabetic"; if (st) { c.strokeStyle = col; c.strokeText(ch, 128, 196); } else { c.fillStyle = col; c.fillText(ch, 128, 196); } } };
+    }
+    let path, rule = "nonzero";
+    if (kind === 0) { // a blob, pushed off-round by a few waves
+      const A = [0.12 + r() * 0.2, r() * 0.22, r() * 0.14, r() * 0.09], F = A.map(() => r() * 7);
+      path = pathOf(radial((a) => Math.max(0.25, 1 + A.reduce((s, v, i) => s + v * Math.cos((i + 1) * a + F[i]), 0))));
+    } else if (kind === 1) { // petals, longer on one side
+      const n = 3 + Math.floor(r() * 4), p = 0.6 + r() * 1.6, lean = 0.2 + r() * 0.35, ph = r() * 7, rot = r() * 7;
+      path = pathOf(radial((a) => (0.3 + 0.7 * Math.abs(Math.cos(n * (a + rot) / 2)) ** p) * (1 + lean * Math.cos(a + ph))));
+    } else if (kind === 2) { // a polygon with uneven corners
+      const n = 3 + Math.floor(r() * 4), rot = r() * 7, P = [];
+      for (let i = 0; i < n; i++) { const a = (i + 0.2 + r() * 0.6) / n * Math.PI * 2 + rot, d = 112 * (0.55 + r() * 0.45); P.push([128 + d * Math.cos(a), 128 + d * Math.sin(a)]); }
+      path = pathOf(P);
+    } else { // a ring with its hole off to one side
+      const ri = 30 + r() * 42, off = (108 - ri - 12) * (0.45 + r() * 0.55), a = r() * 7, hx = 128 + off * Math.cos(a), hy = 128 + off * Math.sin(a);
+      path = (c) => { c.moveTo(236, 128); c.arc(128, 128, 108, 0, Math.PI * 2); c.moveTo(hx + ri, hy); c.arc(hx, hy, ri, 0, Math.PI * 2); };
+      rule = "evenodd";
+    }
+    return { paint(c, col, st) { c.beginPath(); path(c); if (st) { c.strokeStyle = col; c.stroke(); } else { c.fillStyle = col; c.fill(rule); } } };
+  }
+  // read a shape's truths from its pixels: ink area, balance point, box, and roomiest point
+  const MC = document.createElement("canvas"); MC.width = MC.height = N;
+  const mx = MC.getContext("2d", { willReadFrequently: true });
+  function measure(sh) {
+    mx.setTransform(1, 0, 0, 1, 0, 0); mx.clearRect(0, 0, N, N); sh.paint(mx, "#000");
+    const px = mx.getImageData(0, 0, N, N).data, D = new Float32Array(N * N);
+    let n = 0, sx = 0, sy = 0, x0 = N, y0 = N, x1 = 0, y1 = 0;
+    for (let i = 0; i < N * N; i++) if (px[i * 4 + 3] > 127) {
+      const x = i % N, y = (i / N) | 0; D[i] = 1e9; n++; sx += x; sy += y;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    // distance from each inked pixel to the nearest empty one, in two sweeps
+    const at = (x, y) => (x < 0 || y < 0 || x >= N || y >= N ? 0 : D[y * N + x]), Q = Math.SQRT2;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const i = y * N + x; if (D[i]) D[i] = Math.min(D[i], at(x - 1, y) + 1, at(x, y - 1) + 1, at(x - 1, y - 1) + Q, at(x + 1, y - 1) + Q); }
+    let rr = 0, rx = 128, ry = 128;
+    for (let y = N - 1; y >= 0; y--) for (let x = N - 1; x >= 0; x--) { const i = y * N + x; if (D[i]) { D[i] = Math.min(D[i], at(x + 1, y) + 1, at(x, y + 1) + 1, at(x + 1, y + 1) + Q, at(x - 1, y + 1) + Q); if (D[i] > rr) { rr = D[i]; rx = x; ry = y; } } }
+    n = n || 1;
+    return { area: n, cen: [sx / n + 0.5, sy / n + 0.5], box: [x0, y0, x1 + 1, y1 + 1], room: [rx + 0.5, ry + 0.5], rr };
+  }
+  const cache = new Map();
+  function shape(seed) {
+    let v = cache.get(seed);
+    if (!v) {
+      // a shape too thin or empty to measure is swapped for the next one from the same seed
+      for (let i = 0, sd = seed; i < 5 && (!v || v.m.area < 900 || v.m.box[2] - v.m.box[0] < 12 || v.m.box[3] - v.m.box[1] < 12); i++, sd = (sd ^ 0x9e3779b9) + i >>> 0) { const sh = makeShape(sd); v = { sh, m: measure(sh) }; }
+      cache.set(seed, v); if (cache.size > 300) cache.delete(cache.keys().next().value); }
+    return v;
+  }
+  // put a shape in the scene with its box centred at (cx, cy) and its widest side `size` long
+  function place(seed, cx, cy, size) {
+    const { sh, m } = shape(seed), bw = m.box[2] - m.box[0], bh = m.box[3] - m.box[1], s = size / Math.max(bw, bh);
+    const tx = cx - (m.box[0] + bw / 2) * s, ty = cy - (m.box[1] + bh / 2) * s, to = (p) => [tx + p[0] * s, ty + p[1] * s];
+    return { sh, s, tx, ty, cen: to(m.cen), room: to(m.room), bc: [cx, cy], rr: m.rr * s, w: bw * s, h: bh * s,
+      x0: cx - bw * s / 2, x1: cx + bw * s / 2, y0: cy - bh * s / 2, area: m.area * s * s, q: Math.max(bw, bh) / Math.sqrt(m.area) };
+  }
+  function paintAt(c, sc, col, stroke, w, dash) {
+    c.save(); c.translate(sc.tx, sc.ty); c.scale(sc.s, sc.s);
+    if (stroke) { c.lineWidth = (w || 3) / sc.s; c.setLineDash((dash || []).map((v) => v / sc.s)); c.lineJoin = "round"; }
+    sc.sh.paint(c, col, stroke); c.restore();
+  }
+  const newSeed = () => (Math.random() * 4294967296) >>> 0;
+  // the most telling of several fresh shapes: pick at random among the best three
+  const best = (make, score, n) => { const cs = []; for (let i = 0; i < n; i++) { const v = make(); cs.push([v, score(v)]); } cs.sort((a, b) => b[1] - a[1]); return cs[Math.floor(Math.random() * Math.min(3, cs.length))][0]; };
+  // everything you've answered here, per kind, kept for the model
+  const M = (k) => { S.M = S.M || {}; return (S.M[k] = S.M[k] || []); };
+  const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
+  const recent = (k, n) => M(k).slice(-n);
+  function solve(A, b) {
+    const n = b.length, R = A.map((r, i) => [...r, b[i]]);
+    for (let i = 0; i < n; i++) {
+      let p = i; for (let j = i + 1; j < n; j++) if (Math.abs(R[j][i]) > Math.abs(R[p][i])) p = j;
+      [R[i], R[p]] = [R[p], R[i]]; const d = R[i][i] || 1e-9;
+      for (let j = i; j <= n; j++) R[i][j] /= d;
+      for (let r = 0; r < n; r++) if (r !== i) { const f = R[r][i]; for (let j = i; j <= n; j++) R[r][j] -= f * R[i][j]; }
+    }
+    return R.map((r) => r[n]);
+  }
+  // learn from one answer; answering the same shape again replaces the first answer, and the list stays short
+  function keep(kind, s, entry) {
+    const L = M(kind);
+    if (s.kept && L.length && L[L.length - 1].id === s.id) L.pop();
+    entry.id = s.id; L.push(entry); s.kept = true;
+    while (L.length > 80) L.shift();
+    return "";
+  }
+  const SLIP = " It's far from both truths, so Endless has set it aside as a slip.";
+  Object.assign(Endless, { place, paintAt, newSeed, best, M, mean, recent, solve, keep, SLIP });
+}
+
+/* Endless · centre: your dot is modelled as the balance point, plus some lean
+   toward the box's middle, some toward the roomiest point, and some lift. */
+{
+  const { place, paintAt, newSeed, best, M, mean, recent, solve, keep, SLIP } = Endless, D0 = 500;
+  const sceneOf = (s) => place(s.seed, 500 + s.ox, 440 + s.oy, D0);
+  const feats = (sc) => [[(sc.bc[0] - sc.cen[0]) / D0, (sc.bc[1] - sc.cen[1]) / D0], [(sc.room[0] - sc.cen[0]) / D0, (sc.room[1] - sc.cen[1]) / D0], [0, -sc.h / D0]];
+  function fit() {
+    const L = M("centre"), A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], b = [0, 0, 0];
+    for (const { e, o } of L) for (let i = 0; i < 3; i++) { b[i] += e[i][0] * o[0] + e[i][1] * o[1]; for (let j = 0; j < 3; j++) A[i][j] += e[i][0] * e[j][0] + e[i][1] * e[j][1]; }
+    // a gentle pull toward "the balance point, nothing more", worth half an answer
+    for (let i = 0; i < 3; i++) A[i][i] += 0.5 * (L.length ? A[i][i] / L.length : 0) + 1e-3;
+    return solve(A, b);
+  }
+  const guess = (sc) => { const w = fit(), e = feats(sc); return [0, 1].map((j) => sc.cen[j] + D0 * (w[0] * e[0][j] + w[1] * e[1][j] + w[2] * e[2][j])); };
+  // a shape teaches most when its three centres sit far apart, in different directions
+  const telling = (s) => { const e = feats(sceneOf(s)), l = (v) => Math.hypot(v[0], v[1]); return Math.abs(e[0][0] * e[1][1] - e[0][1] * e[1][0]) + 0.3 * (l(e[0]) + l(e[1])); };
+  Endless.centre = {
+    summary() {
+      const L = M("centre"); if (!L.length) return "";
+      const w = fit(), lift = w[2] * 100, r = recent("centre", 6).slice(1);
+      return `<b>Centre</b> Across ${L.length} shape${L.length > 1 ? "s" : ""}, your dots sit ${pc(w[0] * 100)} of the way from the balance point toward the middle of the box, ${pc(w[1] * 100)} toward the roomiest point, and ${Math.abs(lift) < 0.5 ? "at its height" : `${Math.abs(lift).toFixed(1)}% of the height ${lift > 0 ? "higher" : "lower"}`}.`
+        + (r.length ? ` My recent guesses landed ${pc(mean(r.map((x) => x.err)) * 100)} of a shape from you; always guessing the balance point would land ${pc(mean(r.map((x) => x.base)) * 100)}.` : "");
+    } };
+  Endless.trials = [{ id: "x-centre", kind: "centre", q: "Put the dot in the middle of this shape.", hint: "drag the dot",
+    init(again) {
+      if (!(again && this.s)) {
+        const s = best(() => ({ seed: newSeed(), ox: Math.round((Math.random() - 0.5) * 140), oy: Math.round((Math.random() - 0.5) * 90) }), telling, 16);
+        s.pred = guess(sceneOf(s)); s.id = newSeed(); this.s = s;
+      }
+      this.s.x = 500; this.s.y = 905;
+    },
+    move(h, dx, dy) { this.s.x = cl(this.s.x + dx, 30, 970); this.s.y = cl(this.s.y + dy, 30, 970); },
+    draw(c, k) {
+      const sc = sceneOf(this.s), p = this.s.pred;
+      paintAt(c, sc, C.ink);
+      if (k != null) {
+        c.save(); c.globalAlpha = k * 0.5; c.setLineDash([6, 8]); c.strokeStyle = C.leaf; c.lineWidth = 2; c.strokeRect(sc.x0, sc.y0, sc.w, sc.h); c.restore();
+        c.save(); c.globalAlpha = k * 0.6; ring(c, sc.room[0], sc.room[1], sc.rr, C.leaf, 2, [6, 8]); c.restore();
+        c.save(); c.globalAlpha = k;
+        for (const q of [sc.cen, sc.room, sc.bc]) { line(c, [q[0] - 14, q[1]], [q[0] + 14, q[1]], C.leaf, 3); line(c, [q[0], q[1] - 14], [q[0], q[1] + 14], C.leaf, 3); }
+        ring(c, p[0], p[1], 22, C["pink-ink"], 3, [5, 6]);
+        c.restore();
+        tags(c, [{ x: sc.cen[0], y: sc.cen[1], t: "balance point" }, { x: sc.room[0], y: sc.room[1], t: "roomiest point" }, { x: sc.bc[0], y: sc.bc[1], t: "middle of its box" }, { x: p[0], y: p[1], t: "my guess", col: C["pink-ink"] }], k);
+      }
+      dot(c, this.s.x, this.s.y, 14, C.pink);
+    },
+    learn() {
+      const sc = sceneOf(this.s), p = [this.s.x, this.s.y];
+      if (dist(p, sc.cen) > 0.45 * D0) return SLIP.replace("both truths", "the shape");
+      return keep("centre", this.s, { e: feats(sc), o: [(p[0] - sc.cen[0]) / D0, (p[1] - sc.cen[1]) / D0], err: dist(p, this.s.pred) / D0, base: dist(p, sc.cen) / D0 });
+    },
+    read() {
+      const sc = sceneOf(this.s), p = [this.s.x, this.s.y], err = dist(p, this.s.pred) / D0;
+      const near = [["the balance point", sc.cen], ["the roomiest point", sc.room], ["the middle of its box", sc.bc]].map(([n, q]) => [n, dist(p, q)]).sort((a, b) => a[1] - b[1])[0][0];
+      return { v: near,
+        line: `Your dot is closest to ${near}. ${err < 0.02 ? "My guess, made before you moved, landed right on it." : `My guess, made before you moved, landed ${pc(err * 100)} of the shape's size away.`}`,
+        why: Endless.centre.summary().replace(/<b>.*?<\/b> /, ""),
+        short: `Any shape: you centre near ${near.replace("the ", "")}` };
+    } }];
+}
+
+/* Endless · size and spacing: each answer sits somewhere between two truths,
+   and the model is one number, how far along you tend to go. */
+{
+  const { place, paintAt, newSeed, best, M, mean, recent, keep, SLIP } = Endless;
+  function lean(kind, prior) {
+    const L = M(kind), W = L.reduce((s, e) => s + e.w, 0), w0 = 0.5 * (L.length ? W / L.length : 0) + 0.02;
+    return (L.reduce((s, e) => s + e.w * e.t, 0) + w0 * prior) / (W + w0);
+  }
+  const guesses = (kind, fixed) => { const r = recent(kind, 6).slice(1); return r.length ? ` My recent guesses were ${pc(mean(r.map((x) => x.pe)))} off; ${fixed} would be ${pc(mean(r.map((x) => x.pb)))} off.` : ""; };
+  const mine = (err) => (err < 3 ? "My guess, made before you moved, landed within 3% of it." : `My guess, made before you moved, was ${pc(err)} off.`);
+
+  /* size: make a new shape look as big as the square */
+  const SQ = 280, SQX = 255, SY = 450, RX = 690;
+  const qOf = (seed) => place(seed, 0, 0, 100).q;
+  Endless.size = { summary() {
+    const L = M("size"); if (!L.length) return "";
+    return `<b>Size</b> Across ${L.length} shape${L.length > 1 ? "s" : ""}, you size a shape ${pc(lean("size", 0.5) * 100)} of the way from matching the square's outline to matching its ink.` + guesses("size", "a fixed halfway guess");
+  } };
+  Endless.trials.push({ id: "x-size", kind: "size", q: "Make this shape look as big as the square.", hint: "drag right or up to grow it, left or down to shrink it",
+    init(again) {
+      if (!(again && this.s)) {
+        // the most telling shapes have much less ink than their outline promises, but still fit
+        const s = best(() => ({ seed: newSeed() }), (s) => { const q = qOf(s.seed); return q * SQ > 470 ? -1 : Math.log(q); }, 14);
+        s.pred = Math.round(SQ * qOf(s.seed) ** lean("size", 0.5)); s.id = newSeed(); this.s = s;
+      }
+      this.s.k = Math.round(130 + Math.random() * 300);
+    },
+    move(h, dx, dy) { this.s.k = cl(this.s.k + (dx - dy) * 0.6, 80, 480); },
+    draw(c, k) {
+      poly(c, [[SQX - SQ / 2, SY - SQ / 2], [SQX + SQ / 2, SY - SQ / 2], [SQX + SQ / 2, SY + SQ / 2], [SQX - SQ / 2, SY + SQ / 2]], C.ink);
+      const seed = this.s.seed;
+      paintAt(c, place(seed, RX, SY, this.s.k), C.pink);
+      if (k == null) return;
+      c.save(); c.globalAlpha = k;
+      paintAt(c, place(seed, RX, SY, SQ), C.leaf, true, 3, [10, 9]);
+      paintAt(c, place(seed, RX, SY, SQ * qOf(seed)), C.leaf, true, 3, [2, 7]);
+      paintAt(c, place(seed, RX, SY, this.s.pred), C.ink, true, 3, [5, 6]);
+      c.restore();
+      legend(c, [[[10, 9], "same widest side"], [[2, 7], "same ink"], [[5, 6], "my guess", C.ink]], 860, k);
+    },
+    learn() {
+      const q = qOf(this.s.seed), k = this.s.k, err = Math.abs(Math.log(k / this.s.pred)), base = Math.abs(Math.log(k / (SQ * Math.sqrt(q))));
+      const t = Math.log(k / SQ) / Math.log(q);
+      if (t < -1.5 || t > 2.5) return SLIP;
+      return keep("size", this.s, { t: cl(t, -1, 2), w: Math.log(q) ** 2, pe: (Math.exp(err) - 1) * 100, pb: (Math.exp(base) - 1) * 100 });
+    },
+    read() {
+      const q = qOf(this.s.seed), k = this.s.k, t = Math.log(k / SQ) / Math.log(q), ink = (k / SQ) ** 2 / q ** 2;
+      const err = (Math.exp(Math.abs(Math.log(k / this.s.pred))) - 1) * 100;
+      const how = t < -0.15 ? "smaller than both truths" : t < 0.25 ? "by its outline" : t <= 0.75 ? "between its outline and its ink" : t <= 1.15 ? "by its ink" : "bigger than both truths";
+      return { v: R2(t),
+        line: `You matched it ${how}: at its widest it is ${pc(k / SQ * 100)} of the square's width, with ${pc(ink * 100)} of its ink. ${mine(err)}`,
+        why: "Spiky and thin shapes have less ink than their outline promises: match the outline and they look small, match the ink and they spill out. " + Endless.size.summary().replace(/<b>.*?<\/b> /, ""),
+        short: `Any shape: you size ${how.replace("between its outline and its ink", "between outline and ink")}` };
+    } });
+
+  /* spacing: set the middle of three shapes so the row looks even */
+  const SZ = 190, XA = 175, XC = 825, EY = 450;
+  const row = (s, x) => ({ A: place(s.a, XA, EY, SZ), B: place(s.b, x, EY, SZ), C: place(s.c, XC, EY, SZ) });
+  const marks = (s) => {
+    const { A, C, B } = row(s, 0), xe = (A.x1 + C.x0) / 2, xc = (A.cen[0] + C.cen[0]) / 2 - B.cen[0];
+    return { xe, xc, lo: A.x1 + B.w / 2 + 8, hi: C.x0 - B.w / 2 - 8 };
+  };
+  Endless.even = { summary() {
+    const L = M("even"); if (!L.length) return "";
+    return `<b>Spacing</b> Across ${L.length} row${L.length > 1 ? "s" : ""}, you place the middle shape ${pc(lean("even", 0.5) * 100)} of the way from even gaps to evenly spaced balance points.` + guesses("even", "always guessing even gaps");
+  } };
+  Endless.trials.push({ id: "x-even", kind: "even", q: "Slide the middle shape until the row looks evenly spaced.", hint: "drag the pink shape sideways",
+    init(again) {
+      if (!(again && this.s)) {
+        // the most telling rows are the ones where even gaps and even balance points disagree most
+        const s = best(() => ({ a: newSeed(), b: newSeed(), c: newSeed() }), (s) => { const m = marks(s); return Math.abs(m.xc - m.xe); }, 14);
+        const m = marks(s); s.pred = cl(m.xe + lean("even", 0.5) * (m.xc - m.xe), m.lo, m.hi); s.id = newSeed(); this.s = s;
+      }
+      const m = marks(this.s); this.s.x = cl(m.xe + (Math.random() < 0.5 ? -1 : 1) * 75, m.lo, m.hi);
+    },
+    move(h, dx) { const m = marks(this.s); this.s.x = cl(this.s.x + dx, m.lo, m.hi); },
+    draw(c, k) {
+      const { A, B, C: Cc } = row(this.s, this.s.x);
+      paintAt(c, A, C.ink); paintAt(c, Cc, C.ink); paintAt(c, B, C.pink);
+      if (k == null) return;
+      const m = marks(this.s), gl = B.x0 - A.x1, gr = Cc.x0 - B.x1, ev = (gl + gr) / 2, gy = EY + 150;
+      c.save(); c.globalAlpha = k;
+      paintAt(c, row(this.s, m.xe).B, C.leaf, true, 3, [10, 9]);
+      paintAt(c, row(this.s, m.xc).B, C.leaf, true, 3, [2, 7]);
+      paintAt(c, row(this.s, this.s.pred).B, C.ink, true, 3, [5, 6]);
+      const gaps = [];
+      for (const [a, b, g] of [[A.x1, B.x0, gl], [B.x1, Cc.x0, gr]]) {
+        line(c, [a, gy], [b, gy], C.pink, 3); line(c, [a, gy - 12], [a, gy + 12], C.pink, 3); line(c, [b, gy - 12], [b, gy + 12], C.pink, 3);
+        gaps.push({ x: (a + b) / 2, t: pc(g / ev * 100), col: C.pink });
+      }
+      rowNames(c, gaps, gy + 42, 1);
+      c.restore();
+      legend(c, [[[10, 9], "even gaps"], [[2, 7], "even balance points"], [[5, 6], "my guess", C.ink]], 860, k);
+    },
+    learn() {
+      const m = marks(this.s), x = this.s.x, d = m.xc - m.xe;
+      const t = Math.abs(d) > 2 ? (x - m.xe) / d : 0.5;
+      if (Math.abs(x - m.xe) > 0.45 * SZ && (t < -1.5 || t > 2.5)) return SLIP;
+      return keep("even", this.s, { t: cl(t, -1, 2), w: (d / SZ) ** 2, pe: Math.abs(x - this.s.pred) / SZ * 100, pb: Math.abs(x - m.xe) / SZ * 100 });
+    },
+    read() {
+      const m = marks(this.s), x = this.s.x, { A, B, C: Cc } = row(this.s, x), gl = B.x0 - A.x1, gr = Cc.x0 - B.x1, ev = (gl + gr) / 2;
+      const t = Math.abs(m.xc - m.xe) > 2 ? (x - m.xe) / (m.xc - m.xe) : 0.5, err = Math.abs(x - this.s.pred) / SZ * 100;
+      const how = t < -0.25 ? "past even gaps, away from the balance points" : t < 0.25 ? "near even gaps, edge to edge" : t <= 0.75 ? "between even gaps and evenly spaced balance points" : t <= 1.25 ? "near evenly spaced balance points" : "past the balance points";
+      return { v: R2(t),
+        line: `Your gaps are ${pc(gl / ev * 100)} and ${pc(gr / ev * 100)} of an even gap: the middle shape sits ${how}. ${mine(err)}`,
+        why: "When shapes lean or carry their weight to one side, equal gaps between their edges stop looking equal; type designers space letters by eye for this reason. " + Endless.even.summary().replace(/<b>.*?<\/b> /, ""),
+        short: `Any row: you space ${t < 0.25 ? "by edges" : t <= 0.75 ? "between edges and weight" : "by weight"}` };
+    } });
+}
+
+E.push({ id: "endless", name: "Endless", endless: true, trials: Endless.trials,
+  where() {
+    const all = ["centre", "size", "even"].flatMap((k) => Endless.recent(k, 4).slice(1)), n = ["centre", "size", "even"].reduce((s, k) => s + Endless.M(k).length, 0);
+    return `${n} answered${all.length >= 2 ? ` &nbsp;·&nbsp; my recent guesses: ${pc(Endless.mean(all.map((x) => x.pe != null ? x.pe : x.err * 100)))} off` : " &nbsp;·&nbsp; a new shape every time"}`;
+  } });
+
+/* ── more experiments ───────────────────────────────────────────────────── */
+
+/* ────────────────────────────────────────────────────────────────────────────
+   The runner: one trial on the canvas at a time, answered by hand, then revealed.
+   ──────────────────────────────────────────────────────────────────────────── */
+const KEY = "eye-v1";
+let S = { at: [0, 0], R: {} };
+try { const o = JSON.parse(localStorage.getItem(KEY) || "null"); if (o && o.R) S = o; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const flat = []; E.forEach((e, ei) => e.trials.forEach((t, ti) => flat.push({ e, t, ei, ti })));
+let cur = 0, T = null, rev = null, revT = 0, size = 600, dpr = 1;
+cur = cl(flat.findIndex((f) => f.ei === S.at[0] && f.ti === S.at[1]), 0, flat.length - 1);
+
+function fit() {
+  size = cv.clientWidth || 600; dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(size * dpr); cv.height = Math.round(size * dpr);
+  LS = Math.max(22, Math.round(11.5 * 1000 / size));
+  draw();
+}
+function prev() { return (S.R[T.id] || []).slice(0, -1).map((r) => r.s); }
+function render(c, t, k, pv, px) {
+  c.setTransform(px / 1000, 0, 0, px / 1000, 0, 0); c.clearRect(0, 0, 1000, 1000);
+  t.draw(c, k, pv || []);
+}
+function draw() { if (T) render(g, T, rev, rev == null ? [] : prev(), size * dpr); }
+
+/* moving trials draw every frame while they're on screen */
+let looping = false;
+function live() {
+  if (looping || !T || !T.live || (calm.matches && !playAnyway)) return;
+  looping = true;
+  const f = () => { if (!T || !T.live || $("#main").classList.contains("portrait")) { looping = false; return; } draw(); requestAnimationFrame(f); };
+  requestAnimationFrame(f);
+}
+function start(i, again) {
+  cur = cl(i, 0, flat.length - 1);
+  const f = flat[cur]; T = f.t; T.init(again); T.s.moved = false; rev = null;
+  S.at = [f.ei, f.ti]; save();
+  if (begun && scrollY > 0) scrollTo({ top: 0, behavior: "auto" });
+  begun = true;
+  $("#main").classList.remove("portrait"); $("#say").after($("#act"));
+  $("#where").innerHTML = (f.e.where ? `<b>${f.e.name}</b> · ${f.e.where()}` : `<b>${f.e.name}</b> · ${f.ti + 1} of ${f.e.trials.length}`)
+    + ` &nbsp;·&nbsp; <button class="w quiet" type="button" id="jumpTo" aria-expanded="false" aria-controls="jump">experiment ${f.ei + 1} of ${E.length}</button>`;
+  $("#jump").hidden = true; $("#jumpTo").onclick = jumpList;
+  const q = $("#q"); q.textContent = T.q; q.classList.remove("fade"); void q.offsetWidth; q.classList.add("fade");
+  const still = T.live && calm.matches && !playAnyway, keys = !toldKeys && matchMedia("(hover: hover)").matches;
+  $("#say").innerHTML = `<p class="why" id="hint">${T.hint[0].toUpperCase() + T.hint.slice(1)} until it ${T.feels || "looks"} right.${keys ? " Arrow keys work too, with Shift for bigger steps, and Enter says it looks right." : ""}${still ? ` Your system asks for less motion, so it holds still. <button class="w" type="button" id="playIt">play it anyway</button>` : ""}</p>`;
+  if (keys) toldKeys = true;
+  if (still) $("#playIt").onclick = () => { playAnyway = true; $("#playIt").remove(); live(); };
+  cv.classList.remove("done");
+  acts([[`it ${T.feels || "looks"} right`, commit, true], ["skip", goNext]]);
+  draw(); live();
+}
+let toldKeys = false, begun = false;
+/* every experiment by name, in one sentence you open from "experiment n of m" */
+function jumpList() {
+  const j = $("#jump"), open = j.hidden, here = flat[cur].ei;
+  j.hidden = !open; $("#jumpTo").setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  const names = E.map((e, ei) => `<button class="w" type="button" data-ei="${ei}"${ei === here ? ' aria-current="step"' : ""}>${e.name}</button>`);
+  j.innerHTML = "Go to " + names.slice(0, -1).join(", ") + " or " + names[names.length - 1] + ".";
+  j.querySelectorAll("[data-ei]").forEach((b) => (b.onclick = () => {
+    const ei = +b.dataset.ei; if (ei === here) return;
+    start(E[ei].endless ? flat.findIndex((f) => f.e.endless) : flat.findIndex((f) => f.ei === ei));
+    if (E[ei].endless) start(pickEndless());
+  }));
+  j.querySelector("[data-ei]:not([aria-current])").focus({ preventScroll: true });
+}
+// after the set comes Endless, which never runs out: it asks next where it knows your eye least
+function goNext() { const n = flat[cur + 1]; start(flat[cur].e.endless || (n && n.e.endless) ? pickEndless() : cur + 1); }
+function pickEndless() {
+  const last = flat[cur].t.kind, ks = flat.filter((f) => f.e.endless);
+  return flat.indexOf(ks.map((f) => [f, Endless.M(f.t.kind).length + Math.random() * 1.5 + (f.t.kind === last ? 2 : 0)]).sort((a, b) => a[1] - b[1])[0][0]);
+}
+const isLast = () => !flat[cur].e.endless && cur === flat.length - 1;
+function acts(list) {
+  const a = $("#act"); a.innerHTML = "";
+  for (const [t, fn, main] of list) { const b = document.createElement("button"); b.type = "button"; b.className = "w" + (main ? " main" : ""); b.textContent = t; b.onclick = fn; a.append(b); }
+}
+function commit() {
+  if (rev != null) return;
+  const note = !T.learn ? "" : T.kind && !T.s.moved ? " You left it where it started, so Endless hasn't learnt from this one." : T.learn() || "";
+  const r = T.read(); r.line += note;
+  (S.R[T.id] = S.R[T.id] || []).push({ s: JSON.parse(JSON.stringify(T.s)), v: r.v, short: r.short, t: Date.now() });
+  if (S.R[T.id].length > 12) S.R[T.id].shift();
+  save(); fold(true);
+  const n = S.R[T.id].length;
+  $("#say").innerHTML = `<p class="line fade">${r.line}</p><p class="why fade">${r.why}${n > 1 && !T.kind ? ` <span style="color:var(--faint)">Your ${n - 1} earlier ${n > 2 ? "answers are" : "answer is"} drawn faintly.</span>` : ""}</p>`;
+  cv.classList.add("done");
+  const last = isLast();
+  acts([[last ? "see your eye" : "next", last ? portrait : goNext, true], ["again", () => start(cur, true)]]);
+  rev = 0; revT = performance.now();
+  const step = (now) => { rev = calm.matches ? 1 : Math.min(1, (now - revT) / 650); rev = 1 - (1 - rev) ** 3; draw(); if (rev < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+/* hands: drag moves by how far you moved, so you never jump; arrows nudge */
+let held = null;
+const pt = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * 1000 / r.width, (e.clientY - r.top) * 1000 / r.height]; };
+cv.addEventListener("pointerdown", (e) => {
+  if (rev != null) return;
+  const p = pt(e); held = { p, h: T.grab ? T.grab(p) : 0 };
+  cv.setPointerCapture(e.pointerId); cv.classList.add("held"); e.preventDefault();
+});
+cv.addEventListener("pointermove", (e) => {
+  if (!held) return;
+  const p = pt(e); T.move(held.h, p[0] - held.p[0], p[1] - held.p[1], p); held.p = p; T.s.moved = true; draw();
+});
+const let_go = () => { held = null; cv.classList.remove("held"); };
+cv.addEventListener("pointerup", let_go); cv.addEventListener("pointercancel", let_go);
+let kh = 0;
+cv.addEventListener("keydown", (e) => {
+  const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+  if (d && rev == null) { const m = e.shiftKey ? 20 : 4; T.move(kh, d[0] * m, d[1] * m, null); T.s.moved = true; draw(); e.preventDefault(); }
+  else if (e.key === "Tab" && T.handles && rev == null && !e.altKey) { /* let focus move normally */ }
+  else if (e.key === "Enter") { e.preventDefault(); rev == null ? commit() : (isLast() ? portrait() : goNext()); }
+});
+
+/* your eye: every answer you've given, drawn small with its truths */
+function portrait() {
+  $("#main").classList.add("portrait"); $("#cards").after($("#act"));
+  $("#where").innerHTML = `<b>Your eye</b> · ${Object.keys(S.R).length} of ${flat.length} answered`;
+  // what Endless has learnt about your eye, in words
+  const said = [Endless.centre, Endless.size, Endless.even].map((k) => k.summary()).filter(Boolean);
+  $("#learnt").innerHTML = said.length ? `<h3>What Endless has learnt</h3>${said.map((t) => `<p>${t}</p>`).join("")}` : "";
+  const box = $("#cards"); box.innerHTML = "";
+  for (const f of flat) {
+    const rs = S.R[f.t.id], fig = document.createElement("button"); fig.type = "button"; fig.className = "card" + (rs ? "" : " empty");
+    fig.setAttribute("aria-label", `${f.e.name}, trial ${f.ti + 1}: ${rs ? rs[rs.length - 1].short : "not answered yet"}. Open it.`);
+    const c = document.createElement("canvas"); fig.append(c);
+    fig.insertAdjacentHTML("beforeend", `<b>${f.e.name} · ${f.ti + 1}${rs && rs.length > 1 ? ` · ${rs.length} answers` : ""}</b><span>${rs ? rs[rs.length - 1].short : "not answered yet"}</span>`);
+    const at = flat.indexOf(f); fig.onclick = () => start(at);
+    box.append(fig);
+    requestAnimationFrame(() => {
+      const px = Math.round((c.clientWidth || 200) * dpr); c.width = c.height = px;
+      const x = c.getContext("2d"), t = Object.create(f.t);
+      MINI = true;
+      try {
+        if (rs) { t.s = JSON.parse(JSON.stringify(rs[rs.length - 1].s)); render(x, t, 1, rs.slice(0, -1).map((r) => r.s), px); }
+        else { t.init(); x.globalAlpha = 0.35; render(x, t, null, [], px); }
+      } finally { MINI = false; }
+    });
+  }
+  acts([["back to the experiments", () => start(cur), true], ["start from the first", () => start(0)],
+    ...(Object.keys(S.R).length ? [["save my answers", saveFile]] : []), ["load answers", () => $("#load").click()],
+    ...(Object.keys(S.R).length ? [["forget my answers", () => { if (confirm("Forget every answer you've given here? This only clears this browser.")) { S = { at: [0, 0], R: {} }; save(); portrait(); } }]] : [])]);
+  scrollTo({ top: 0, behavior: calm.matches ? "auto" : "smooth" });
+}
+/* your answers live in this browser; save them as a file to keep them or move them to another */
+function saveFile() {
+  const a = document.createElement("a"), d = new Date().toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(new Blob([JSON.stringify({ eye: 1, saved: d, answers: S }, null, 1)], { type: "application/json" }));
+  a.download = `eye-answers-${d}.json`; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$("#load").onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    const o = JSON.parse(await f.text()), n = o && o.answers;
+    if (!n || typeof n.R !== "object" || !Array.isArray(n.at)) throw 0;
+    if (Object.keys(S.R).length && !confirm("Replace the answers in this browser with the ones in this file?")) return;
+    S = { at: n.at, R: n.R, M: n.M || {} }; save(); portrait();
+  } catch (err) { alert("That file doesn't look like saved Eye answers."); }
+};
+/* the intro shows until your first answer, then folds to one line you can open again */
+const hero = $("#hero");
+function fold(on) { hero.classList.toggle("folded", on); $("#about").setAttribute("aria-expanded", String(!on)); }
+$("#about").onclick = () => fold(false);
+fold(Object.keys(S.R).length > 0);
+const setTop = () => document.documentElement.style.setProperty("--top", (($(".top") || {}).offsetHeight || 53) + "px");
+setTop(); addEventListener("resize", setTop);
+$("#toMe").onclick = () => ($("#main").classList.contains("portrait") ? start(cur) : portrait());
+
+colours();
+addEventListener("vnl-theme", () => { colours(); draw(); });
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => { colours(); draw(); });
+new ResizeObserver(fit).observe(cv);
+// the letters are measured from the real font, so wait for it (and give up waiting after 2.5 s)
+const fontsIn = document.fonts ? Promise.race([Promise.all([document.fonts.load('600 100px "IBM Plex Sans"'), document.fonts.load('500 20px "IBM Plex Mono"'), document.fonts.ready]), new Promise((r) => setTimeout(r, 2500))]) : Promise.resolve();
+fontsIn.then(() => { start(cur); fit(); });
+window.EYE = { E, get S() { return S; }, flat, get T() { return T; }, start, commit, portrait };
+})();
+</script>
+</body>
+</html>

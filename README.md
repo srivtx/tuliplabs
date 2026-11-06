@@ -21,7 +21,7 @@ Do it by hand, watch it run, then build it yourself, all in the browser.
 
 | | |
 |---|---|
-| **8 tracks, 210 chapters, plus Meadow** | From voxel worlds and CSS design to databases, CPUs, statistics and algorithms, and a generative studio for marks |
+| **8 tracks, 210 chapters, plus Meadow and Eye** | From voxel worlds and CSS design to databases, CPUs, statistics and algorithms, a generative studio for marks, and experiments in what looks good |
 | **Everything runs in the tab** | Real Python (NumPy, SciPy, pandas, NetworkX, Matplotlib, SymPy), WebGL 3D and a code editor, with no installs and no servers to wait on |
 | **Every lesson is machine-checked** | Thousands of blocks are run and graded before each release, then walked end to end in a real browser |
 | **Private by design** | No ads, no trackers, no analytics. Learn without an account; sign in only if you want sync |
@@ -172,6 +172,18 @@ Meadow is an endless map of marks: every mark is different, and the ones side by
 - **Every mark is a link:** the address bar always holds the exact mark, so you can share it.
 
 **Built for speed:** WebGL2 draws every mark with a shader. New ground is checked on the GPU in the background, so wandering, zooming and dragging hold 60 fps.
+
+---
+
+## Eye
+
+Eye asks what *looking good* even means, one experiment at a time. You answer each one by hand, then see what your eye did against the maths.
+
+- **Shape:** find the middle of a triangle, make a circle look as big as a square, space letters evenly, cut a rectangle, steady a frame, and stop when a broken circle becomes a circle.
+- **Colour:** pick the fourth colour that belongs with three.
+- **Motion:** shape a move until it feels natural, time a panel's opening, and tune a spring's bounce.
+- **Endless:** after the set, a new shape every time (blobs, petals, polygons, rings and letters). Its truths are measured from its own pixels, so every question works on every shape. Each answer teaches a small model of your eye, which guesses your next answer before you give it.
+- **Your eye:** every answer drawn small with its maths, and what Endless has learnt about you, in words. Everything stays in your browser.
 
 ---
 
