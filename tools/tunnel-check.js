@@ -9,9 +9,16 @@
 //     size where misses meet the database's capacity), and the sim bends there.
 // And for the simulator itself: queue waits agree with M/M/c theory (Erlang C), for one server and for random
 // routing over several; an LRU cache never beats the ideal one; the same seed gives the same run.
+// And for each experiment's "Take it home" (tunnel/home.js): every Python file runs (or parses) for the reference
+// answer and for other designs, prints exactly what its "# →" lines say, and any number it shares with the sim agrees.
 const path = require("path");
+const fs = require("fs");
+const os = require("os");
+const { execFileSync } = require("child_process");
 const { Sim, erlangC, zipfShare, rng } = require(path.join(__dirname, "..", "tunnel", "sim.js"));
 const { experiments } = require(path.join(__dirname, "..", "tunnel", "experiments.js"));
+const HOME = require(path.join(__dirname, "..", "tunnel", "home.js"));
+const { DEFAULTS } = require(path.join(__dirname, "..", "tunnel", "sim.js"));
 
 const bad = [];
 let checks = 0;
@@ -163,6 +170,48 @@ for (const x of experiments.filter((e) => e.live)) {
     if (!same) bad.push(`${x.id} rewind to ${T} s doesn't rebuild the run (sent ${rs.sent} vs ${st.sent}, p99 ${ms(rs.p99)} vs ${ms(st.p99)})`);
   }
 }
+
+// Take it home: the code is real
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wt-home-"));
+for (const x of experiments.filter((e) => e.live)) {
+  const H = HOME[x.id];
+  checks++;
+  if (!H) { bad.push(`${x.id} has no Take it home`); continue; }
+  const base = { ...DEFAULTS, ...x.system, ...x.task.set, ...x.task.start };
+  const designs = [{ ...base, ...x.task.reference }, ...(H.try || []).map((t) => ({ ...base, ...t }))];
+  designs.forEach((c, di) => {
+    for (const f of H.files) {
+      const src = f.src(c), where = `${x.id} ${f.name}${di ? " (design " + di + ")" : ""}`;
+      checks++;
+      const long = src.split("\n").filter((l) => l.length > 60);
+      if (long.length) bad.push(`${where}: ${long.length} line(s) over 60 characters, like "${long[0]}"`);
+      if (f.lang !== "py") continue;
+      const file = path.join(tmp, f.name);
+      fs.writeFileSync(file, src);
+      checks++;
+      let out;
+      try {
+        out = f.run ? execFileSync("python3", ["-I", file], { cwd: tmp, encoding: "utf8", timeout: 30000 })
+          : execFileSync("python3", ["-I", "-c", "import ast,sys; ast.parse(open(sys.argv[1]).read())", file], { encoding: "utf8" });
+      } catch (e) { bad.push(`${where} doesn't run: ${String(e.stderr || e.message).trim().split("\n").pop()}`); continue; }
+      if (!f.run) continue;
+      const said = src.split("\n").filter((l) => l.startsWith("# → ")).map((l) => l.slice(4));
+      const got = out.replace(/\n$/, "").split("\n");
+      for (let i = 0; i < said.length; i++) {
+        checks++;
+        if (got[i] !== said[i]) bad.push(`${where} prints "${got[i]}" where it says "${said[i]}"`);
+      }
+      // a number the code and the sim both produce must agree (the reference design only)
+      if (H.check && di === 0) {
+        checks++;
+        const v = parseFloat(got[H.check.line].match(/[\d.]+/)[0]) / (/%/.test(got[H.check.line]) ? 100 : 1);
+        const st = Sim.measure({ ...c, warm: true }, { seed: 4 });
+        if (Math.abs(v - st[H.check.metric]) > H.check.tol) bad.push(`${where}: Python says ${H.check.metric} ${v}, the sim ${st[H.check.metric].toFixed(2)}`);
+      }
+    }
+  });
+}
+fs.rmSync(tmp, { recursive: true, force: true });
 
 console.log(`wind tunnel: ${checks} checks, ${bad.length ? bad.length + " failed" : "ALL GOOD"}`);
 bad.forEach((m) => console.log("  FAIL " + m));

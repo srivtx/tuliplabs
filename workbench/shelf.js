@@ -147,9 +147,6 @@
 
   // ---------------------------------------------------------- Wind Tunnel --
   const WT_HUE = { wt01: "cyan", wt02: "teal", wt03: "blue", wt04: "violet", wt05: "red", wt06: "amber", wt07: "green", wt08: "yellow", wt09: "orange", wt10: "lilac", wt11: "pink", wt12: "cyan" };
-  // what each planned experiment will ask
-  const ASKS = { wt06: "What if it all arrives at once?", wt07: "Where do the writes go?", wt08: "When should a server say no?", wt09: "What if one key gets famous?",
-    wt10: "How far away is too far?", wt11: "Stay up, or stay right?", wt12: "Would your design pass review?" };
   function tunnel() {
     const X = (window.WT && window.WT.experiments) || [];
     const live = X.filter((x) => x.live), have = live.filter((x) => done[x.id]).length;
@@ -166,7 +163,7 @@
     const plotOf = (x) => {
       const i = X.indexOf(x);
       const media = x.live ? h("img", { class: "la-shot", src: `shots/${x.id}.webp`, alt: "", loading: "lazy" })
-        : h("p", { class: "la-ask" }, ASKS[x.id] || x.teaser);
+        : h("p", { class: "la-ask" }, x.ask || x.teaser);
       return plot({ href: x.live ? `lab.html#${i + 1}` : null, num: i + 1, title: x.title, sub: x.teaser, hue: WT_HUE[x.id] || "cyan", media,
         soon: !x.live, pct: done[x.id] ? 100 : 0, bloomed: !!done[x.id], next: x === next ? (have ? "next" : "start here") : null, tag: x.live ? x.law : null });
     };

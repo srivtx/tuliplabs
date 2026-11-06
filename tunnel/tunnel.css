@@ -34,13 +34,45 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .wt-word:hover{color:var(--wt-ink)!important}
 .wt-word.on{color:var(--wt-acc)!important}
 
-.wt-body{display:grid;grid-template-columns:minmax(300px,360px) 1fr;min-height:0}
-.wt-right{display:grid;grid-template-rows:1fr auto;min-height:0;min-width:0}
+.wt-body{position:relative;display:grid;grid-template-columns:var(--bw,348px) 0 minmax(0,1fr);min-height:0}
+.wt.home-on .wt-body{grid-template-columns:var(--bw,468px) 0 minmax(0,1fr)}
+.wt-right{display:grid;grid-template-rows:minmax(0,1fr) 0 auto;min-height:0;min-width:0}
+.wt.brief-off .wt-body{grid-template-columns:0 0 minmax(0,1fr)}
+.wt.brief-off .wt-brief{visibility:hidden;padding:0;border:0;overflow:hidden}
+.wt.charts-off .wt-charts{height:0;border:0;overflow:hidden}
+.wt.resizing{cursor:col-resize;user-select:none}
+.wt.resizing .wt-cv{pointer-events:none}
+
+/* the seams: a hairline that lights up under the pointer; folded, a tab on the edge brings the side back */
+.wt-split{position:relative;z-index:9;touch-action:none}
+.wt-split::before{content:"";position:absolute;transition:background .15s}
+.wt-split.v::before{top:0;bottom:0;left:-5px;width:10px;cursor:col-resize}
+.wt-split.h::before{left:0;right:0;top:-5px;height:10px;cursor:row-resize}
+.wt-split:hover::before,.wt-split.drag::before,.wt-split:focus-visible::before{background:linear-gradient(var(--wt-acc),var(--wt-acc)) center/2px 100% no-repeat}
+.wt-split.h:hover::before,.wt-split.h.drag::before,.wt-split.h:focus-visible::before{background:linear-gradient(var(--wt-acc),var(--wt-acc)) center/100% 2px no-repeat}
+.wt-split:focus-visible{outline:none}
+.wt-split.folded::after{content:attr(data-tab);position:absolute;padding:6px 9px;border:1px solid var(--wt-line2);background:var(--wt-side);color:var(--wt-mute);font:600 10px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s}
+.wt-split.v.folded::after{left:0;top:50%;translate:0 -50%;writing-mode:vertical-rl;border-left:0;border-radius:0 8px 8px 0;padding:12px 5px}
+.wt-split.h.folded::after{right:14px;bottom:0;border-bottom:0;border-radius:8px 8px 0 0}
+.wt-split.folded:hover::after{color:var(--wt-acc);border-color:var(--wt-acc)}
+.wt-split.folded::before{display:none}
+.wt-split.v.folded{cursor:pointer}
+.wt.charts-off .wt-parts{bottom:40px}
+.wt.brief-off .wt-code{left:34px}
 
 /* the experiment */
 .wt-brief{overflow:auto;padding:22px 22px 40px;border-right:1px solid var(--wt-line);background:var(--wt-side);scrollbar-width:thin}
 .wt-eyebrow{margin:0;font:600 10.5px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--wt-acc)}
 .wt-brief h1{margin:6px 0 10px;font:400 32px/1.02 var(--f-serif);letter-spacing:-.01em;text-wrap:balance}
+.wt-inc{position:relative;margin:4px 0 14px;padding:10px 12px 11px 14px;border-radius:10px;background:color-mix(in srgb,var(--wt-bad) 8%,var(--wt-raise));border:1px solid color-mix(in srgb,var(--wt-bad) 28%,var(--wt-line))}
+.wt-inc p{margin:0;font-size:13.5px;text-wrap:pretty}
+.wt-inc b{font-weight:600}
+.wt-inc .wt-inc-h{display:flex;align-items:center;gap:8px;margin-bottom:4px;font:600 10px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--wt-bad)}
+.wt-inc-h i{width:7px;height:7px;border-radius:50%;background:var(--wt-bad);box-shadow:0 0 0 3px color-mix(in srgb,var(--wt-bad) 22%,transparent);animation:wtpulse 1.6s ease-in-out infinite}
+@keyframes wtpulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--wt-bad) 0%,transparent)}}
+.wt-inc.fixed{background:color-mix(in srgb,var(--wt-ok) 7%,var(--wt-raise));border-color:color-mix(in srgb,var(--wt-ok) 28%,var(--wt-line))}
+.wt-inc.fixed .wt-inc-h{color:var(--wt-ok)}
+.wt-inc.fixed .wt-inc-h i{background:var(--wt-ok);box-shadow:none;animation:none}
 .wt-lede{margin:0 0 18px;color:var(--wt-mute);text-wrap:pretty}
 .wt-lede b,.wt-sb b{color:var(--wt-ink);font-weight:600}
 .wt-step{position:relative;padding:0 0 18px 34px}
@@ -83,6 +115,33 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .wt-meter.ok .fill{background:color-mix(in srgb,var(--wt-ok) 32%,transparent)}
 .wt-meter em{position:relative;display:block;padding:0 10px;font:11px/22px var(--f-mono);font-style:normal;color:var(--wt-mute)}
 .won{padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--wt-ok) 14%,transparent);border:1px solid color-mix(in srgb,var(--wt-ok) 35%,transparent)}
+
+/* take it home: your fix as code and config, then production and other stacks */
+.wt-step:has(.wt-home)>.wt-sb{margin-left:-34px}
+.wt-home>p:first-child{color:var(--wt-mute);font-size:13px}
+.wt-file{margin:10px 0 6px;border-radius:11px;border:1px solid var(--wt-line2);background:color-mix(in srgb,#000 30%,var(--wt-bg));overflow:hidden}
+:root[data-theme="light"] .wt-file{background:#0f2227}
+.wt-file figcaption{display:flex;align-items:stretch;border-bottom:1px solid #ffffff14;background:#ffffff08;font:11px var(--f-mono);overflow-x:auto;scrollbar-width:none}
+.wt-file figcaption button{padding:7px 12px!important;color:#88a9af!important;border-right:1px solid #ffffff10!important;white-space:nowrap}
+.wt-file figcaption button.on{color:#e4f2f4!important;background:color-mix(in srgb,#000 30%,#0b1418)!important;box-shadow:inset 0 2px 0 #5fe0f0}
+.wt-file figcaption button:hover{color:#e4f2f4!important}
+.wt-file figcaption .grow{flex:1}
+.wt-file figcaption .f-copy{border:0!important;border-left:1px solid #ffffff10!important;color:#5d8088!important}
+.wt-file pre{margin:0;padding:10px 0 12px 12px;overflow:auto;font:11.5px/1.6 var(--f-mono);color:#d5e7ea;tab-size:4;scrollbar-width:thin;max-height:420px}
+.wt-file pre i{font-style:normal}
+.wt-file .t-c{color:#5f8088}
+.wt-file .t-s{color:#ffd27a}
+.wt-file .t-n{color:#ff9bce}
+.wt-file .t-k{color:#5fe0f0}
+.wt-file .t-f{color:#a7f0c4}
+.wt-file .t-out{color:#5fe0a0;background:#5fe0a012;display:inline-block;width:calc(100% + 12px);margin-left:-12px;padding-left:12px}
+.wt-file .f-note{margin:0;padding:6px 12px 8px;border-top:1px solid #ffffff10;font:10.5px var(--f-mono);color:#6d9097}
+.wt-home h3{margin:16px 0 6px;font:600 10.5px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--wt-mute)}
+.wt-home p{font-size:13.5px}
+.wt-home code{font:12px var(--f-mono);padding:0 3px;border-radius:4px;background:var(--wt-raise);border:1px solid var(--wt-line)}
+.wt-stack{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;margin:0;font-size:13px}
+.wt-stack dt{font:600 11px/1.9 var(--f-mono);color:var(--wt-acc);white-space:nowrap}
+.wt-stack dd{margin:0;color:var(--wt-mute);text-wrap:pretty}
 
 /* the stage */
 .wt-stage{position:relative;min-height:0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -187,7 +246,7 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .wt-insp dd{margin:0;text-align:right}
 
 /* charts */
-.wt-charts{display:grid;grid-template-columns:2fr repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:1px;height:clamp(180px,30vh,260px);border-top:1px solid var(--wt-line);background:var(--wt-line)}
+.wt-charts{display:grid;grid-template-columns:2fr repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:1px;height:var(--chh,clamp(190px,30vh,280px));border-top:1px solid var(--wt-line);background:var(--wt-line)}
 .ch{margin:0;display:flex;flex-direction:column;padding:8px 10px 6px;background:var(--wt-side);min-width:0;min-height:0}
 .ch.wide{grid-row:span 2}
 .ch figcaption{display:flex;justify-content:space-between;gap:8px;font:10.5px var(--f-mono);color:var(--wt-mute);white-space:nowrap}
@@ -209,7 +268,10 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
   .wt-bar{gap:8px;padding:0 10px}
   .wt-back,.wt-sep,.wt-no,.wt-clock{display:none}
   .wt-clock.rew{display:inline}
-  .wt-body{grid-template-columns:1fr}
+  .wt-body,.wt.home-on .wt-body,.wt.brief-off .wt-body{grid-template-columns:1fr}
+  .wt-split{display:none}
+  .wt.brief-off .wt-brief{visibility:visible;padding:56px 22px 40px;border-top:1px solid var(--wt-line2)}
+  .wt.charts-off .wt-charts{height:auto}
   .wt-right{grid-template-rows:minmax(0,1fr) auto}
   .wt-charts{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:auto;height:auto;padding-bottom:58px}
   .ch{height:110px}
@@ -230,7 +292,7 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
   .wt-parts .ghost{grid-template-rows:auto;padding:5px 9px 5px 7px!important}
   .wt-parts .gi{grid-row:auto;width:20px;height:20px}
 }
-@media (prefers-reduced-motion:reduce){.wt-brief,.wt-handle,.wt-go,.wt-meter .fill{transition:none}.wt-toast{animation:none}}
+@media (prefers-reduced-motion:reduce){.wt-inc-h i{animation:none}.wt-brief,.wt-handle,.wt-go,.wt-meter .fill{transition:none}.wt-toast{animation:none}}
 
 /* ?shot: only the scene, for the shelf's pictures */
 .wt-shot .wt-tags,.wt-shot .wt-code,.wt-shot .wt-parts,.wt-shot .wt-hint,.wt-shot .wt-insp,.wt-shot .wt-crowd{visibility:hidden}

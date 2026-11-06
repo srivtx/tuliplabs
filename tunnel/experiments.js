@@ -12,12 +12,14 @@
    smaller value is the safe side; clients (show the clients' tag: retries and backoff), hint (the stage's first hint),
    task.settle (when the checks start measuring a run from the start, for a run with a surge in it).
    quotes may give a window: [a, b] alone, to measure part of a run (a surge's aftermath).
-   The rest are planned, so the shelf can show what's coming. */
+   incident  the problem as you'd meet it at work, shown first, before any lesson (see docs/wind-tunnel-guide.md).
+   The rest are planned, so the shelf can show what's coming: teaser (the incident), ask, fix and home (what you'll take
+   home: code, config, and what to watch). Each live one's Take it home is in tunnel/home.js. */
 (function (root) {
   "use strict";
   const experiments = [
     {
-      id: "wt01", live: true, title: "One server: where does it break?", curve: "knee", law: "capacity = workers ÷ time",
+      id: "wt01", live: true, incident: "Launch is Friday. Marketing expects <b>120 requests a second</b>, and nobody knows what this server can take.", title: "One server: where does it break?", curve: "knee", law: "capacity = workers ÷ time",
       teaser: "Push more requests at one server and find the point where waiting explodes.",
       system: { mode: "open", rate: 20, workers: 4, service: 0.05, timeout: 10, queueMax: 2000 },
       crowd: { knob: "rate", min: 0, max: 160, step: 1, unit: "requests/s", short: "req/s" },
@@ -51,7 +53,7 @@
       ],
     },
     {
-      id: "wt02", live: true, title: "Users aren't requests", curve: "little", law: "Little's law",
+      id: "wt02", live: true, incident: "Ticket sales close at noon with <b>600 seats</b> sold. At 12:01, all 600 people will be on the site.", title: "Users aren't requests", curve: "little", law: "Little's law",
       teaser: "Real people pause between clicks. How many of them can one server carry?",
       system: { mode: "closed", users: 100, think: 5, workers: 4, service: 0.05, timeout: 10, queueMax: 2000 },
       crowd: { knob: "users", min: 0, max: 800, step: 5, unit: "users", short: "users" },
@@ -84,7 +86,7 @@
       ],
     },
     {
-      id: "wt03", live: true, title: "Scale out", curve: "split", law: "load balancing",
+      id: "wt03", live: true, incident: "You bought two more servers for launch week. In the load test, p99 climbs while one server drowns and the other two have room to spare.", title: "Scale out", curve: "split", law: "load balancing",
       teaser: "Three servers behind a load balancer, and one of them is slow. Round robin finds out the hard way.",
       system: { mode: "open", rate: 40, servers: 3, workers: 4, service: 0.05, slow: 3, lb: "rr", timeout: 10, queueMax: 2000 },
       crowd: { knob: "rate", min: 0, max: 300, step: 5, unit: "requests/s", short: "req/s" },
@@ -120,7 +122,7 @@
       ],
     },
     {
-      id: "wt04", live: true, title: "Cache it", curve: "cache", law: "Zipf's law",
+      id: "wt04", live: true, incident: "Black Friday: <b>250 reads a second</b> at a database that does 80. The cache box has room for 2,000 keys.", title: "Cache it", curve: "cache", law: "Zipf's law",
       teaser: "A few keys get most of the reads. How small can a cache be and still save the database?",
       system: { mode: "open", rate: 60, servers: 1, workers: 4, service: 0.05, timeout: 10, queueMax: 2000, cache: 0, keys: 10000, zipf: 1 },
       crowd: { knob: "rate", min: 0, max: 300, step: 5, unit: "reads/s", short: "reads/s" },
@@ -160,7 +162,7 @@
       ],
     },
     {
-      id: "wt05", live: true, title: "Retry storms", curve: "storm", law: "metastable failure",
+      id: "wt05", live: true, incident: "Monday 09:05: ten seconds of surge, then normal traffic. Five minutes later, the API still answers nothing.", title: "Retry storms", curve: "storm", law: "metastable failure",
       teaser: "Ten seconds of surge, then calm, and the server never comes back. Find what ends it.",
       system: { mode: "open", rate: 60, workers: 4, service: 0.05, timeout: 1, queueMax: 1000, retries: 3, backoff: 0, cancel: false, surge: { at: 5, for: 10, rate: 140 } },
       crowd: { knob: "rate", min: 0, max: 160, step: 1, unit: "requests/s", short: "req/s" },
@@ -204,13 +206,50 @@
         { cfg: {}, then: { at: 40, set: { queueMax: 60 } }, window: [70, 100], metric: "errors", max: 0 },
       ],
     },
-    { id: "wt06", title: "Queues absorb bursts", curve: "burst", law: "backpressure", teaser: "Put a queue between the web and the workers and watch a spike flatten." },
-    { id: "wt07", title: "The database is the bottleneck", curve: "lag", law: "replication lag", teaser: "Read replicas take the reads. Writes still go to one place." },
-    { id: "wt08", title: "Rate limits", curve: "bucket", law: "token bucket", teaser: "Say no early, so the requests you accept stay fast." },
-    { id: "wt09", title: "Sharding and hot keys", curve: "hot", law: "skew", teaser: "Split the data across servers, then watch one celebrity melt a shard." },
-    { id: "wt10", title: "Distance", curve: "far", law: "speed of light", teaser: "A round trip to the other side of the world costs time no server can win back." },
-    { id: "wt11", title: "Split brain", curve: "cap", law: "CAP", teaser: "Cut the network between two data centres. Stay up, or stay correct?" },
-    { id: "wt12", title: "Design review", curve: "review", law: "SLOs and budgets", teaser: "A URL shortener, a chat app and a feed, each with a target and a budget." },
+    // Planned, written problem-first (see docs/wind-tunnel-guide.md): the incident you'll face, the question it asks,
+    // the fix you'll find, and what you'll take home.
+    {
+      id: "wt06", title: "Queues absorb bursts", curve: "burst", law: "backpressure", ask: "What if it all arrives at once?",
+      teaser: "At midnight a batch job sends 5,000 emails in one second, and the website times out for everyone until it's done.",
+      fix: "Put a queue and a few workers between the web and the slow work. Size the workers with Little's law, and bound the queue so a backlog turns into a fast no instead of growing forever.",
+      home: "A worker queue in Python, a task queue's prefetch and acknowledgements, and an alarm on the age of the oldest job.",
+    },
+    {
+      id: "wt07", title: "The database is the bottleneck", curve: "lag", law: "replication lag", ask: "Where do the writes go?",
+      teaser: "You add a read replica and reads get fast. Then users start posting comments they can't see.",
+      fix: "Reads go to replicas and writes to the primary, and for a moment after you write, your own reads go to the primary too.",
+      home: "Read/write routing in code, the replica's lag as a metric, and why read-your-writes is a promise you make on purpose.",
+    },
+    {
+      id: "wt08", title: "Rate limits", curve: "bucket", law: "token bucket", ask: "When should a server say no?",
+      teaser: "One customer's script sends a flood of requests, and everyone else's p99 goes from fast to seconds.",
+      fix: "A token bucket per customer: a burst allowance and a steady rate. The noisy one gets 429s; everyone else stays fast.",
+      home: "A token bucket in twenty lines, nginx's limit_req with a burst, and the Retry-After header that tells clients when to come back.",
+    },
+    {
+      id: "wt09", title: "Sharding and hot keys", curve: "hot", law: "skew", ask: "What if one key gets famous?",
+      teaser: "You split the data across four shards. Then one account goes viral, and one shard melts while three sit idle.",
+      fix: "Hash keys to spread them evenly, then give the hot key special treatment: cache it, or split it across shards.",
+      home: "Consistent hashing in code, how Redis Cluster places a key, and load graphs per shard instead of per fleet.",
+    },
+    {
+      id: "wt10", title: "Distance", curve: "far", law: "speed of light", ask: "How far away is too far?",
+      teaser: "The servers are idle, and users on the other side of the world still wait a second for every page.",
+      fix: "Every round trip pays for the distance, and no server can buy it back. Cut round trips first, then move the data closer: a CDN for what doesn't change, a nearby replica for reads.",
+      home: "Counting round trips in code, Cache-Control headers for a CDN, and latency graphed per region.",
+    },
+    {
+      id: "wt11", title: "Split brain", curve: "cap", law: "CAP", ask: "Stay up, or stay right?",
+      teaser: "The link between two data centres drops for a minute. Both keep selling seats, and afterwards two people own seat 14C.",
+      fix: "Choose per operation: refuse writes that can't reach a majority, or accept them and reconcile later. Seats and payments choose one; likes and views the other.",
+      home: "Quorum reads and writes in code, a database's consistency setting, and what on-call does while the network is split.",
+    },
+    {
+      id: "wt12", title: "Design review", curve: "review", law: "SLOs and budgets", ask: "Would your design pass review?",
+      teaser: "Three designs land on your desk: a URL shortener, a chat app and a feed. Each has a target and a budget.",
+      fix: "Every law so far, on one page: meet each target for the least money, and defend every number with a run.",
+      home: "A design doc whose numbers come from runs, and the error budget that tells a team when to stop shipping and fix.",
+    },
   ];
   root.WT = { experiments };
 })(typeof window !== "undefined" ? window : globalThis);

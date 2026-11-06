@@ -277,6 +277,17 @@ async function tunnel(page, browser, errors) {
     const s = await st();
     if (!s.done) bad.push(`${x.id}: the reference ${JSON.stringify(ref)} didn't meet the goal`);
     if (!(await page.locator(".won").count())) bad.push(`${x.id}: no done note`);
+    // take it home: the fix as code with the numbers just chosen, and a second file a tab away
+    const home = page.locator(".wt-home");
+    if (!(await home.count())) bad.push(`${x.id}: no Take it home step`);
+    else {
+      const code = await home.locator(".wt-file pre").textContent();
+      for (const k in ref) if (typeof ref[k] === "number" && !code.includes(String(ref[k]))) bad.push(`${x.id}: the take-home code doesn't show ${k} = ${ref[k]}`);
+      await home.locator(".wt-file figcaption button").nth(1).click();
+      if ((await home.locator(".wt-file pre").textContent()) === code) bad.push(`${x.id}: the second take-home file didn't open`);
+      if ((await home.locator(".wt-stack dt").count()) < 3) bad.push(`${x.id}: the stack notes are missing`);
+      if (!(await page.locator(".wt-inc.fixed").count())) bad.push(`${x.id}: the problem card didn't turn to fixed`);
+    }
     await page.screenshot({ path: `${shots}/tunnel-${x.id}.png` });
     n++;
   }
@@ -311,6 +322,43 @@ async function tunnel(page, browser, errors) {
     s = await st();
     if (s.rewound || Math.abs(s.head - 20) > 0.2 || s.samples > 20) bad.push(`rewind: play didn't carry on from 0:20 (head ${s.head.toFixed(1)}, ${s.samples} samples)`);
     await page.screenshot({ path: `${shots}/tunnel-rewind.png` });
+  }
+  // the layout: drag the seam to widen the experiment, double-click the charts' seam to fold them, F folds both,
+  // a click on a folded side's tab brings it back, and the stage's canvas follows every change
+  {
+    const W = () => page.evaluate(() => [document.querySelector(".wt-brief").getBoundingClientRect().width, document.querySelector(".wt-charts").getBoundingClientRect().height, document.querySelector(".wt-cv").getBoundingClientRect().width]);
+    const v = await page.locator(".wt-split.v").boundingBox();
+    const [bw0, , cw0] = await W();
+    await page.mouse.move(v.x + 1, v.y + 300);
+    await page.mouse.down();
+    await page.mouse.move(v.x + 121, v.y + 300, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    const [bw1, , cw1] = await W();
+    if (Math.abs(bw1 - bw0 - 120) > 4) bad.push(`layout: dragging the seam 120 px widened the experiment by ${Math.round(bw1 - bw0)}`);
+    if (Math.abs(cw0 - cw1 - 120) > 4) bad.push(`layout: the stage didn't give up the 120 px (${Math.round(cw0 - cw1)})`);
+    // the seams are hairlines with a wider grab area, so drive them with the mouse where they are
+    const hs = await page.locator(".wt-split.h").boundingBox();
+    await page.mouse.dblclick(hs.x + hs.width / 2, hs.y);
+    await page.waitForTimeout(150);
+    if ((await W())[1] > 2) bad.push("layout: double-clicking the charts' seam didn't fold them");
+    const tab = await page.locator(".wt-split.h").boundingBox();
+    await page.mouse.click(tab.x + tab.width - 40, tab.y - 10);
+    await page.waitForTimeout(150);
+    if ((await W())[1] < 100) bad.push("layout: the folded charts' tab didn't bring them back");
+    await page.locator(".wt-cv").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("f");
+    await page.waitForFunction(() => document.querySelector(".wt-cv").getBoundingClientRect().width > 1200, null, { timeout: 3000 }).catch(() => {});
+    const [bwF, chF, cwF] = await W();
+    if (bwF > 2 || chF > 2) bad.push(`layout: F didn't fold both sides (${Math.round(bwF)}, ${Math.round(chF)})`);
+    if (cwF < 1200) bad.push(`layout: with both folded the stage is only ${Math.round(cwF)} px wide`);
+    await page.reload();
+    await page.waitForSelector(".wt-split", { state: "attached" });
+    if (!(await page.locator(".wt.brief-off.charts-off").count())) bad.push("layout: the folds weren't remembered");
+    await page.keyboard.press("f");
+    await page.waitForTimeout(150);
+    if ((await W())[0] < 200) bad.push("layout: F didn't bring the experiment back");
+    await page.screenshot({ path: `${shots}/tunnel-layout.png` });
   }
   console.log(`tunnel: ${n} experiments driven, ${bad.length} failed`);
   bad.forEach((b) => console.log("  FAIL " + b));

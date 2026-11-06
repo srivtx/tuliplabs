@@ -14,6 +14,7 @@
   "use strict";
   const { Sim } = window.WTSim;
   const X_ALL = window.WT.experiments;
+  const HOME = window.WT.home || {};
   const LIVE = X_ALL.filter((x) => x.live);
   const $ = (s, r = document) => r.querySelector(s);
   const h = (tag, attrs, ...kids) => {
@@ -155,7 +156,17 @@
     els.stage = h("section", { class: "wt-stage" }, els.canvas, els.tags, els.crowd, els.code, els.parts, els.inspect, els.hint);
     els.charts = h("section", { class: "wt-charts", "aria-label": "Live numbers" });
     els.handle = h("button", { class: "wt-handle", onclick: () => main.classList.toggle("sheet-open"), "aria-label": "Show or hide the experiment" }, h("i"), h("span"));
-    main.append(els.bar, h("div", { class: "wt-body" }, els.brief, h("div", { class: "wt-right" }, els.stage, els.charts)), els.handle);
+    els.vsplit = h("div", { class: "wt-split v", role: "separator", tabindex: 0, "aria-orientation": "vertical", "aria-label": "Experiment width", "data-tab": "Experiment", title: "Drag to resize · double-click to fold · F folds both" });
+    els.hsplit = h("div", { class: "wt-split h", role: "separator", tabindex: 0, "aria-orientation": "horizontal", "aria-label": "Chart height", "data-tab": "Charts", title: "Drag to resize · double-click to fold · F folds both" });
+    els.right = h("div", { class: "wt-right" }, els.stage, els.hsplit, els.charts);
+    els.body = h("div", { class: "wt-body" }, els.brief, els.vsplit, els.right);
+    main.append(els.bar, els.body, els.handle);
+    splitter(els.vsplit, "v");
+    splitter(els.hsplit, "h");
+    applyLay();
+    ro.disconnect();
+    ro.observe(els.stage);
+    ro.observe(els.charts);
     tagEls = new Map();
     codeOpen = matchMedia("(max-width: 860px)").matches || SHOT ? false : codeOpen;
     buildCharts();
@@ -166,6 +177,65 @@
     updateBar();
     resize();
   }
+  // ------------------------------------------------------------- layout --
+  // The brief, the stage and the charts share the window. Drag the seams between them; double-click one to fold its
+  // side away (a tab stays on the edge to bring it back), or press F to fold both and give the system the room.
+  // Remembered per browser.
+  const LAY_KEY = "wt-layout-v1";
+  const lay = (() => { try { return JSON.parse(localStorage.getItem(LAY_KEY) || "{}"); } catch (e) { return {}; } })();
+  const saveLay = () => { try { localStorage.setItem(LAY_KEY, JSON.stringify(lay)); } catch (e) { /* private mode */ } };
+  function applyLay() {
+    main.style.setProperty("--bw", lay.bw ? `${lay.bw}px` : null);
+    main.style.setProperty("--chh", lay.chh ? `${lay.chh}px` : null);
+    main.classList.toggle("brief-off", !!lay.bf);
+    main.classList.toggle("charts-off", !!lay.cf);
+    if (els.vsplit) { els.vsplit.classList.toggle("folded", !!lay.bf); els.hsplit.classList.toggle("folded", !!lay.cf); }
+  }
+  function setLay(patch) { Object.assign(lay, patch); applyLay(); }
+  let rq = 0;
+  const ro = new ResizeObserver(() => { if (!rq) rq = requestAnimationFrame(() => { rq = 0; if (main.isConnected && X) resize(); }); });
+  function splitter(el, ax) {
+    const fold = ax === "v" ? "bf" : "cf";
+    el.addEventListener("pointerdown", (e) => {
+      if (e.button) return;
+      const box = (ax === "v" ? els.body : els.right).getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY;
+      let moved = false;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("drag");
+      main.classList.add("resizing");
+      el.onpointermove = (ev) => {
+        if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+        moved = true;
+        if (ax === "v") { const w = ev.clientX - box.left; setLay(w < 190 ? { bf: true } : { bf: false, bw: Math.round(Math.max(260, Math.min(w, 640, box.width * 0.55))) }); }
+        else { const hh = box.bottom - ev.clientY; setLay(hh < 80 ? { cf: true } : { cf: false, chh: Math.round(Math.max(120, Math.min(hh, box.height - 180))) }); }
+      };
+      el.onpointerup = el.onpointercancel = () => {
+        el.onpointermove = el.onpointerup = el.onpointercancel = null;
+        el.classList.remove("drag");
+        main.classList.remove("resizing");
+        if (!moved && lay[fold]) setLay({ [fold]: false }); // a click on a folded side's tab opens it
+        saveLay();
+      };
+      e.preventDefault();
+    });
+    el.addEventListener("dblclick", () => { setLay({ [fold]: !lay[fold] }); saveLay(); });
+    el.addEventListener("keydown", (e) => {
+      const k = e.key, cur = ax === "v" ? els.brief.getBoundingClientRect().width : els.charts.getBoundingClientRect().height;
+      const grow = ax === "v" ? k === "ArrowRight" : k === "ArrowUp", shrink = ax === "v" ? k === "ArrowLeft" : k === "ArrowDown";
+      if (k === "Enter" || k === " ") setLay({ [fold]: !lay[fold] });
+      else if (grow || shrink) setLay(ax === "v" ? { bf: false, bw: Math.round(Math.max(260, Math.min(640, cur + (grow ? 24 : -24)))) } : { cf: false, chh: Math.round(Math.max(120, cur + (grow ? 24 : -24))) });
+      else return;
+      saveLay();
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+  function focusStage() {
+    const both = lay.bf && lay.cf;
+    setLay({ bf: !both, cf: !both });
+    saveLay();
+  }
+
   function togglePause() { if (paused && live) branch(); paused = !paused; updateBar(); }
   function cycleSpeed() { const i = SPEEDS.findIndex((s) => s[0] === speed); speed = SPEEDS[(i + 1) % SPEEDS.length][0]; updateBar(); }
   function updateBar() {
@@ -188,6 +258,8 @@
     b.append(
       h("p", { class: "wt-eyebrow" }, `Experiment ${X_ALL.indexOf(X) + 1} · ${X.law}`),
       h("h1", {}, X.title),
+      // the problem comes first, the way it would at work; it turns green once you've fixed it
+      X.incident ? h("div", { class: "wt-inc" + (P.phase === "done" ? " fixed" : "") }, h("p", { class: "wt-inc-h" }, h("i"), P.phase === "done" ? "Fixed" : "The problem"), h("p", { html: X.incident })) : null,
       h("p", { class: "wt-lede", html: X.brief }));
     const step = (k, n, title, body, folded) => h("section", { class: `wt-step ${at > k ? "past" : at === k ? "now" : "next"}` },
       h("h2", {}, h("span", { class: "n" }, at > k ? "✓" : String(n)), title, folded ? h("em", { html: folded }) : null),
@@ -196,6 +268,8 @@
       step(0, 1, "Predict", predictBody, P.guess != null && at > 0 ? `you said ${fmtAxis(P.guess)}` : ""),
       step(1, 2, "Push it", exploreBody),
       step(2, 3, X.task.title, taskBody, at > 2 ? "done" : ""));
+    if (HOME[X.id]) b.append(step(3, 4, "Take it home", homeBody));
+    main.classList.toggle("home-on", P.phase === "done" && !!HOME[X.id]);
     els.handle.querySelector("span").textContent = P.phase === "predict" ? "1 · Predict" : P.phase === "explore" ? "2 · Push it" : `3 · ${X.task.title}`;
     // a new step scrolls into view; re-rendering the same step leaves the reader where they were
     if (shownPhase !== P.phase + (P.revealed ? "+" : "")) {
@@ -310,6 +384,56 @@
     }
     requestAnimationFrame(() => checkGoal(true));
     return wrap;
+  }
+
+  // Take it home: the fix as code with your own numbers, the config a real server reads, what to watch in production,
+  // and where your language changes the picture. Each file's name is a tab; tools/tunnel-check.js runs the code.
+  let homeFile = 0;
+  function homeBody() {
+    const H = HOME[X.id], c = { ...window.WTSim.DEFAULTS, ...startCfg(), ...(P.final || X.task.reference) };
+    const wrap = h("div", { class: "wt-sb wt-home" });
+    wrap.append(h("p", {}, "What you just did, the way you'll meet it outside the tunnel. The numbers are yours, from system.yaml."));
+    const file = h("figure", { class: "wt-file" });
+    const draw = () => {
+      homeFile = Math.min(homeFile, H.files.length - 1);
+      const f = H.files[homeFile], src = f.src(c);
+      file.innerHTML = "";
+      file.append(
+        h("figcaption", {}, H.files.map((F, i) => h("button", { class: i === homeFile ? "on" : "", "aria-pressed": String(i === homeFile), onclick: () => { homeFile = i; draw(); } }, F.name)),
+          h("span", { class: "grow" }),
+          h("button", { class: "f-copy", title: "Copy this file", onclick: (e) => { if (navigator.clipboard) navigator.clipboard.writeText(src); e.currentTarget.textContent = "copied"; } }, "copy")),
+        h("pre", { html: hlCode(src, f.lang) }),
+        f.run ? h("p", { class: "f-note" }, "Runs as it is with python3. The → lines are what it prints.") : null);
+    };
+    draw();
+    wrap.append(file,
+      h("h3", {}, "Watch it in production"), h("p", { html: H.watch(c) }),
+      h("h3", {}, "Where your stack changes it"),
+      h("dl", { class: "wt-stack" }, H.stack.flatMap(([k, v]) => [h("dt", {}, k), h("dd", { html: v })])));
+    return wrap;
+  }
+  // a small highlighter for the take-home files: Python, YAML, and nginx or redis config
+  const PYKW = new Set("def class return import from for in if else elif try except while True False None and or not with as continue global lambda async await".split(" "));
+  function hlCode(src, lang) {
+    const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return src.split("\n").map((line) => {
+      if (line.startsWith("# → ")) return `<span class="t-out">${esc(line.slice(2))}</span>`;
+      let out = "", m, first = true, prev = "";
+      const re = /(#.*$)|([fr]?"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b\d[\d_.]*[a-z]*\b)|([A-Za-z_][\w.-]*)|(\s+)|([\s\S])/g;
+      while ((m = re.exec(line))) {
+        const [t, com, str, numb, word] = m;
+        if (com) out += `<i class="t-c">${esc(com)}</i>`;
+        else if (str) out += `<i class="t-s">${esc(str)}</i>`;
+        else if (numb) out += `<i class="t-n">${esc(numb)}</i>`;
+        else if (word) {
+          const key = lang === "yaml" ? line[m.index + t.length] === ":" : lang === "conf" ? first : PYKW.has(t);
+          out += key ? `<i class="t-k">${esc(t)}</i>` : prev === "def" || prev === "class" ? `<i class="t-f">${esc(t)}</i>` : esc(t);
+          first = false;
+          prev = t;
+        } else out += esc(t);
+      }
+      return out;
+    }).join("\n");
   }
 
   // the task's goal, checked every simulated second over the last 30 s once the design hasn't changed for that long
@@ -451,7 +575,6 @@
     snapView = true;
     sizeCharts();
   }
-  addEventListener("resize", () => { if (main.isConnected && X) resize(); });
   const iso = (x, y, z) => [V.ox + (x - y) * V.u * c30, V.oy + (x + y) * V.u * 0.5 - z * V.u];
 
   // Where every part stands, from the system as it is (or would be, with `over` applied, for a ghost's slot).
@@ -492,7 +615,7 @@
     L.queues.forEach((q) => box({ x: q.x, y: q.y, w: q.cols * 0.5, d: q.cols * 0.5, h: Math.min(q.levels * 0.3, 2) }));
     // room on the right for a column of server labels; on the left for system.yaml, minus what the crowd's empty
     // top-left corner can share with it
-    const wide = cw > 900, left = wide && codeOpen ? els.code.offsetWidth * 0.75 + 20 : 12, right = L.servers.length > 1 ? 110 : 70;
+    const left = codeOpen && !SHOT ? Math.max(12, Math.min(els.code.offsetWidth * 0.75 + 20, cw - 520)) : 12, right = L.servers.length > 1 ? 110 : 70;
     const top = 44, bottom = (cw > 860 ? 34 : 14) + ((X.parts || []).length ? 30 : 0);
     const aw = Math.max(80, cw - left - right), ah = Math.max(80, chh - top - bottom);
     const u = Math.max(8, Math.min(42, aw / (x1 - x0), ah / (y1 - y0)));
@@ -1304,6 +1427,7 @@
     if (e.target.closest("input, textarea, [contenteditable], [role=slider]")) return;
     if (e.key === " " && !e.target.closest("button, a")) { togglePause(); e.preventDefault(); }
     if (e.key === "Escape") closeInspect();
+    if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.altKey && !e.target.closest("button, a")) focusStage();
     if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && paused && !e.defaultPrevented && !e.target.closest(".wt-crowd, .wt-pin")) {
       seek(sim.t + (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 10 : 1));
       e.preventDefault();
