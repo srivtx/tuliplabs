@@ -279,7 +279,7 @@
     const wrap = h("div", { class: "wt-sb" });
     wrap.append(h("p", { html: X.task.brief }));
     els.goal = h("ul", { class: "goal" }, X.task.goal.map((g) => h("li", { "data-k": g[0] }, h("i", { class: "lamp" }), h("span", {}, g[3]), h("b", {}))));
-    els.meter = h("div", { class: "meter" }, h("span", { class: "fill" }), h("em", {}));
+    els.meter = h("div", { class: "wt-meter" }, h("span", { class: "fill" }), h("em", {}));
     wrap.append(els.goal, els.meter);
     if (P.phase === "done") {
       wrap.append(h("div", { class: "won" }, h("p", { html: `<b>Done.</b> ${X.task.done}` }),
@@ -289,12 +289,13 @@
         : h("a", { class: "wt-go", href: "./" }, "Back to all experiments →"));
       wrap.append(h("p", { class: "wt-soft" }, h("a", { href: "#", class: "wt-link", onclick: (e) => { e.preventDefault(); P.phase = "task"; resetSim(); renderBrief(); renderParts(); renderCode(); } }, "Run the task again")));
     }
+    requestAnimationFrame(() => checkGoal(true));
     return wrap;
   }
 
   // the task's goal, checked every simulated second over the last 30 s once the design hasn't changed for that long
-  function checkGoal() {
-    if (!inTask() || !els.goal) return;
+  function checkGoal(quiet) {
+    if (!inTask() || !els.goal || !sim) return;
     const t = sim.t, since = t - lastSysChange, full = since >= WINDOW;
     const st = sim.stats(Math.max(lastSysChange, t - WINDOW), t);
     const rows = X.task.goal.map((g) => {
@@ -311,7 +312,7 @@
     els.meter.querySelector(".fill").style.width = `${Math.min(1, since / WINDOW) * 100}%`;
     els.meter.classList.toggle("ok", all && full);
     els.meter.querySelector("em").textContent = P.phase === "done" ? "met" : full ? (all ? "met for 30 s" : "measuring the last 30 s") : `steady for ${Math.floor(since)} of 30 s${speed < 10 ? " · ×10 to fast-forward" : ""}`;
-    if (full && all && P.phase === "task") win();
+    if (full && all && P.phase === "task" && !quiet) win();
   }
   function win() {
     P.phase = "done";
@@ -465,7 +466,7 @@
     L.queues.forEach((q) => box({ x: q.x, y: q.y, w: q.cols * 0.5, d: q.cols * 0.5, h: Math.min(q.levels * 0.3, 2) }));
     // room on the right for a column of server labels; on the left for system.yaml, minus what the crowd's empty
     // top-left corner can share with it
-    const wide = cw > 900, left = wide && codeOpen ? els.code.offsetWidth * 0.75 + 20 : 12, right = L.servers.length > 1 ? 120 : 24;
+    const wide = cw > 900, left = wide && codeOpen ? els.code.offsetWidth * 0.75 + 20 : 12, right = L.servers.length > 1 ? 110 : 70;
     const top = 44, bottom = (cw > 860 ? 34 : 14) + ((X.parts || []).length ? 30 : 0);
     const aw = Math.max(80, cw - left - right), ah = Math.max(80, chh - top - bottom);
     const u = Math.max(8, Math.min(42, aw / (x1 - x0), ah / (y1 - y0)));
@@ -644,7 +645,7 @@
       if (on && !reduce) { const [bx, by] = iso(x + B.w - 0.3, B.y + 0.3, B.h + 0.3); const g = ctx.createRadialGradient(bx, by, 0, bx, by, V.u * 1.4); g.addColorStop(0, "rgba(255,90,110,.35)"); g.addColorStop(1, "rgba(255,90,110,0)"); ctx.fillStyle = g; ctx.fillRect(bx - V.u * 1.4, by - V.u * 1.4, V.u * 2.8, V.u * 2.8); }
     }
     if (!reduce && !paused && boom > 0.3 && sparks.length < 260 && Math.random() < boom * dt * 14) {
-      sparks.push({ kind: "smoke", x: x + Math.random() * B.w, y: B.y + Math.random() * B.d, z: B.h + 0.2, vx: 0.15, vy: -0.1, vz: 0.7 + Math.random() * 0.4, age: 0, life: 2.4 + Math.random(), s: 0.25 + Math.random() * 0.2 });
+      sparks.push({ kind: "smoke", x: x + Math.random() * B.w, y: B.y + Math.random() * B.d, z: B.h + 0.2, vx: 0.15, vy: -0.1, vz: 0.7 + Math.random() * 0.4, age: 0, life: 2 + Math.random(), s: 0.14 + Math.random() * 0.12 });
     }
     hits.push({ kind: "server", i, r: rectOf(B) });
   }
@@ -691,8 +692,8 @@
       const p = s.age / s.life;
       if (s.kind === "smoke") {
         s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
-        const [x, y] = iso(s.x, s.y, s.z), r = V.u * s.s * (1 + p * 2.2);
-        ctx.fillStyle = `rgba(${T.smoke},${0.42 * (1 - p)})`;
+        const [x, y] = iso(s.x, s.y, s.z), r = V.u * s.s * (1 + p * 1.6);
+        ctx.fillStyle = `rgba(${T.smoke},${0.36 * (1 - p)})`;
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
       } else {
         s.vz -= 9 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.z = Math.max(0, s.z + s.vz * dt);
@@ -741,9 +742,9 @@
       el.classList.toggle("on", !!selected && selected.kind === "server" && selected.i === i);
       el.classList.toggle("many", many);
       el.setAttribute("aria-label", `${cap1(name("server"))} ${i + 1}. Click to look inside`);
-      const slow = i === 0 && sim.cfg.slow > 1 ? `<em>${sim.cfg.slow}× slower</em>` : "";
+      const slow = i === 0 && sim.cfg.slow > 1 ? `<em>${many ? "slow" : `${sim.cfg.slow}× slower`}</em>` : "";
       setHTML(el, srv.gone ? `${many ? i + 1 : name("server")} <small>leaving</small>` : many
-        ? `<span>${i + 1}</span> <b>${srv.busy.length}/${sim.cfg.workers}</b>${slow}${drown ? "<i>drowning</i>" : ""}`
+        ? `<span>${i + 1}</span> <b>${srv.busy.length}/${sim.cfg.workers}</b>${slow}`
         : `${name("server")} <b>${srv.busy.length}/${sim.cfg.workers}</b> busy${drown ? " <i>drowning</i>" : ""}`);
       const Q = LY.queues[i], qn = srv.queue.length;
       const qt = tag("q" + i, "wt-queue");
@@ -1023,7 +1024,7 @@
     if (showAns) {
       const A = X.predict.answer;
       x.strokeStyle = acc; x.beginPath(); x.moveTo(px(A), pad.t); x.lineTo(px(A), H - pad.b); x.stroke();
-      x.fillStyle = acc; x.textAlign = "right"; x.fillText(`${X.predict.axis ? "needs" : "bends"} ≈ ${num(A)}`, px(A) - 4, pad.t + 20);
+      x.fillStyle = acc; x.textAlign = "right"; x.fillText(`${X.predict.axis ? "needs" : "bends"} ≈ ${num(A)}`, px(A) - 4, H - pad.b - 6);
     }
     // a dot per steady second: older ones fade
     dots.forEach((d, i) => {

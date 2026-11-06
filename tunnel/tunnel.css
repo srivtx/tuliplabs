@@ -62,7 +62,7 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 /* the guess: a number line with a pin you drag */
 .line{position:relative;height:46px;margin:30px 8px 14px;touch-action:none;cursor:ew-resize}
 .line.locked{cursor:default}
-.line .rail{position:absolute;left:0;right:0;top:12px;height:4px;border-radius:2px;background:var(--wt-line2)}
+.line .rail{position:absolute;left:0;right:0;top:12px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--wt-mute) 45%,var(--wt-line2))}
 .line .tick{position:absolute;top:24px;translate:-50% 0;font:10px var(--f-mono);color:var(--wt-faint)}
 .line .pin{position:absolute;top:2px;width:18px;height:24px;translate:-50% 0;border-radius:9px 9px 9px 2px;rotate:-45deg;background:var(--wt-pink);box-shadow:0 4px 12px -4px var(--wt-pink)}
 .line .pin.locked{opacity:.85}
@@ -78,10 +78,10 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .goal b{margin-left:auto;font:12px var(--f-mono);color:var(--wt-mute);font-weight:400}
 .goal .lamp{width:9px;height:9px;border-radius:50%;background:var(--wt-bad);box-shadow:0 0 0 3px color-mix(in srgb,var(--wt-bad) 20%,transparent)}
 .goal li.ok .lamp{background:var(--wt-ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--wt-ok) 22%,transparent)}
-.meter{position:relative;height:24px;border-radius:7px;background:var(--wt-raise);border:1px solid var(--wt-line);overflow:hidden;margin-bottom:12px}
-.meter .fill{position:absolute;inset:0 auto 0 0;width:0;background:color-mix(in srgb,var(--wt-amber) 30%,transparent);transition:width .3s}
-.meter.ok .fill{background:color-mix(in srgb,var(--wt-ok) 32%,transparent)}
-.meter em{position:relative;display:block;padding:0 10px;font:11px/22px var(--f-mono);font-style:normal;color:var(--wt-mute)}
+.wt-meter{position:relative;height:24px;border-radius:7px;background:var(--wt-raise);border:1px solid var(--wt-line);overflow:hidden;margin-bottom:12px}
+.wt-meter .fill{position:absolute;inset:0 auto 0 0;width:0;background:color-mix(in srgb,var(--wt-amber) 30%,transparent);transition:width .3s}
+.wt-meter.ok .fill{background:color-mix(in srgb,var(--wt-ok) 32%,transparent)}
+.wt-meter em{position:relative;display:block;padding:0 10px;font:11px/22px var(--f-mono);font-style:normal;color:var(--wt-mute)}
 .won{padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--wt-ok) 14%,transparent);border:1px solid color-mix(in srgb,var(--wt-ok) 35%,transparent)}
 
 /* the stage */
@@ -166,7 +166,7 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .wt-insp .note{margin:8px 0 0;font-size:11.5px;color:var(--wt-faint)}
 .wt-insp .rm{display:block;margin-top:10px;font-size:12px!important}
 .wt-hint{position:absolute;left:16px;bottom:10px;margin:0;font:11px var(--f-mono);color:var(--wt-mute);pointer-events:none}
-.wt-insp{position:absolute;right:14px;top:14px;width:220px;padding:12px 14px;border-radius:12px;background:var(--wt-raise);border:1px solid var(--wt-line2);box-shadow:0 18px 40px -20px rgba(0,0,0,.5);font-size:13px}
+.wt-insp{position:absolute;right:14px;top:14px;z-index:6;width:248px;padding:12px 14px;border-radius:12px;background:var(--wt-raise);border:1px solid var(--wt-line2);box-shadow:0 18px 40px -20px rgba(0,0,0,.5);font-size:13px}
 .wt-insp .ih{margin:0 0 8px;font:600 10.5px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--wt-acc)}
 .wt-insp .row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .wt-insp .row span{flex:1}
@@ -217,4 +217,4 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
   .wt-parts .ghost{grid-template-rows:auto;padding:5px 9px 5px 7px!important}
   .wt-parts .gi{grid-row:auto;width:20px;height:20px}
 }
-@media (prefers-reduced-motion:reduce){.wt-brief,.wt-handle,.wt-go,.meter .fill{transition:none}.wt-toast{animation:none}}
+@media (prefers-reduced-motion:reduce){.wt-brief,.wt-handle,.wt-go,.wt-meter .fill{transition:none}.wt-toast{animation:none}}
