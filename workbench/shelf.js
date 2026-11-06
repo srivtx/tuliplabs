@@ -2,7 +2,9 @@
    learn/engine.css), with pictures of the real thing:
      Wind Tunnel   each live experiment's own stage at the moment it bends, rendered by the lab itself
                    (tunnel/shots, made by tools/lab-thumbs.js); planned ones are the question they'll answer.
-     Workbench     each program as a tiny terminal doing its signature trick: what you'll have built.
+     Workbench     each program as a tiny terminal doing its signature trick: what you'll have built. Two
+                   ladders: whole programs, and Build your own backend (Node first: your own Express, then
+                   everything a backend needs, built on it).
    The posters are the same: the Ledger IDE mid-project, and a retry storm still going.
    Every card has a colour pair, a deep field and its bright twin. Progress comes from the shared store
    (vnl-code-v1): done ids wb01-t1… and wt01…. */
@@ -80,6 +82,39 @@
       term: [["p", "sprout> ", "(define sq (lambda (x) (* x x)))"], ["p", "sprout> ", "(map sq '(1 2 3 12))"], ["e", "(1 4 9 144)"]] },
     { num: 8, title: "Pixelpond", kind: "a 2D game engine", hue: "yellow", bar: "pixelpond · 60 fps", pixels: true },
   ];
+  // Backend, Node first. Two ladders, numbered apart from the programs so routes never collide:
+  //   EXPRESS (101…)  the projects people build to learn Express, from a first route to a realtime app
+  //   DEEP    (150…)  under the hood: your own Express, then the machinery big backends run on
+  // Each card is the moment the project is about: the request that proves it works.
+  const EXPRESS = [
+    { num: 101, title: "Greenhouse", kind: "your first Express API: routes, JSON, params, queries, CRUD, middleware, errors", hue: "green", bar: "greenhouse · :3000",
+      term: [["p", "api> ", "GET /api/plants?water=weekly"], ["o", '[{"id":1,"name":"Tulip","water":"weekly"}]'], ["p", "api> ", 'POST /api/plants {"name": "Rose"}'], ["e", '400 {"error":"water must be daily, weekly or monthly"}']] },
+    { num: 102, title: "Taskflow", kind: "a todo app that keeps its data: a JSON file on disk, filters, pagination, and a page of its own", hue: "amber", bar: "taskflow · :3000",
+      term: [["p", "api> ", "GET /api/tasks?done=false&page=2"], ["o", '{"tasks":[…],"page":2,"pages":3}'], ["c", "⚡ restart"], ["e", "GET /api/tasks/7  200  still there"]] },
+    { num: 103, title: "Shortlink", kind: "a URL shortener: short codes, redirects, click stats, custom aliases, expiry", hue: "cyan", bar: "shortlink · :3000",
+      term: [["p", "api> ", 'POST /api/links {"url":"https://…"}'], ["o", "201 Created · /k3x9"], ["p", "api> ", "GET /k3x9"], ["e", "302 Found · location: https://…"]] },
+    { num: 104, title: "Inkwell", kind: "a blog with accounts: sign-up, hashed passwords, sessions and cookies, only authors edit", hue: "violet", bar: "inkwell · :3000",
+      term: [["p", "api> ", 'POST /login {"email":"ada@…"}'], ["o", "set-cookie: sid=9f2c…; HttpOnly"], ["p", "api> ", "DELETE /posts/4"], ["e", "403 Forbidden · not your post"]] },
+    { num: 105, title: "Keyring", kind: "token auth for an API: JWTs signed by you, refresh tokens, roles and scopes", hue: "pink", bar: "keyring · :3000",
+      term: [["p", "api> ", 'GET /api/admin -H "Authorization: Bearer eyJ…"'], ["o", "401 · token expired 3 s ago"], ["p", "api> ", "POST /auth/refresh"], ["e", '200 {"token":"eyJ…"}']] },
+    { num: 106, title: "Bookshelf", kind: "REST done right: cursor pagination, sorting, ETags and 304s, versions", hue: "blue", bar: "bookshelf · :3000",
+      term: [["p", "api> ", "GET /v1/books?after=40&limit=2"], ["o", '{"books":[…],"next":"/v1/books?after=42"}'], ["p", "api> ", 'GET /v1/books/7 -H "If-None-Match: W/…"'], ["e", "304 Not Modified"]] },
+    { num: 107, title: "Market", kind: "a shop: a cart in a session, stock that can't go negative, checkout that never charges twice", hue: "orange", bar: "market · :3000",
+      term: [["p", "api> ", 'POST /checkout -H "Idempotency-Key: k7"'], ["o", "201 Created · order 1042 · $40"], ["p", "api> ", 'POST /checkout -H "Idempotency-Key: k7"'], ["e", "201 Created · order 1042 again, not a second charge"]] },
+    { num: 108, title: "Chatroom", kind: "realtime with server-sent events: rooms, presence, history", hue: "red", bar: "chatroom · /events",
+      term: [["o", "event: joined   data: ada"], ["o", 'event: message data: {"text":"hi"}'], ["e", "event: left     data: ada  (2 here)"]] },
+  ];
+  const DEEP = [
+    { num: 150, title: "Trellis", kind: "your own Express: routes, middleware, bodies, errors, routers", hue: "teal", bar: "trellis · :3000",
+      term: [["p", "api> ", 'POST /notes {"text": "prune"}'], ["o", "POST /notes → 201"], ["o", "201 Created"], ["e", '{"id":3,"text":"prune"}']] },
+    { num: 151, title: "Tollbooth", kind: "production middleware: rate limits, caching, timeouts, circuit breakers", hue: "yellow", bar: "tollbooth · :3000",
+      term: [["o", "GET /search   200   12 ms   cache miss"], ["o", "GET /search   200    0 ms   cache hit"], ["e", "GET /search   429   retry-after: 3"]] },
+    { num: 152, title: "Courier", kind: "background jobs: a durable queue, retries with backoff, dead letters", hue: "lilac", bar: "courier · worker",
+      term: [["o", "job 41  send-email   failed · retry in 2 s"], ["o", "job 41  send-email   failed · retry in 4 s"], ["o", "job 41  send-email   done (attempt 3)"], ["e", "job 42  dead-lettered after 5 tries"]] },
+    { num: 153, title: "Relay", kind: "webhooks: signed deliveries, retries, and receivers that handle each event once", hue: "violet", bar: "relay · :3000",
+      term: [["o", "→ POST hooks.example/in   503   retry in 8 s"], ["o", "→ POST hooks.example/in   200   delivered"], ["e", "← duplicate evt_91 ignored: seen at 12:04"]] },
+  ];
+  const BACKEND = [...EXPRESS, ...DEEP];
   // a tiny pond for the game engine's card: water, a frog, a lily pad, a fly
   const POND = ["................", "..........y.....", ".........yy.....", "................", "....gg..........", "...gGGg.........",
     "..gGwGwg........", "..gGGGGg...pp...", "...gGGg...pPPp..", "~~~~~~~~~~pPPp~~", "~~~~~~~~~~~pp~~~", "~~~~~~~~~~~~~~~~"];
@@ -108,24 +143,26 @@
       h("h2", {}, h("i", { class: "sq" }), "Workbench"),
       h("a", { class: "top-link", href: "./", "aria-current": "page" }, h("span", { class: "n" }, "✿"), "Your bench"));
     for (const p of data.projects) {
-      side.append(h("div", { class: "part" }, `Project ${p.num} · ${p.title}`),
+      const ex = EXPRESS.findIndex((b) => b.num === p.num), dp = DEEP.findIndex((b) => b.num === p.num);
+      side.append(h("div", { class: "part" }, ex >= 0 ? `Express ${ex + 1} · ${p.title}` : dp >= 0 ? `Under the hood ${dp + 1} · ${p.title}` : `Project ${p.num} · ${p.title}`),
         h("div", { class: "branch" }, p.tickets.map((t, i) => {
           const d = !!done[`${p.id}-${t.id}`];
           return h("a", { href: `bench.html#${p.num}/${t.id}`, class: d ? "done" : null }, h("span", { class: "n" }, i + 1), h("span", { class: "t" }, t.title), glyph(d ? 2 : t === next ? 1 : 0, d ? "committed" : ""));
         })));
     }
     side.append(h("div", { class: "part" }, "Being written"),
-      h("div", { class: "branch" }, PROGRAMS.filter((p) => !live[p.num]).map((p) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, p.num), h("span", { class: "t" }, p.title), h("small", {}, "soon")))));
+      h("div", { class: "branch" }, [...EXPRESS.map((p, i) => ({ ...p, n: `E${i + 1}` })), ...DEEP.map((p, i) => ({ ...p, n: `U${i + 1}` })), ...PROGRAMS.map((p) => ({ ...p, n: p.num }))].filter((p) => !live[p.num])
+        .map((p) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, p.n), h("span", { class: "t" }, p.title), h("small", {}, "soon")))));
 
     const col = h("div", { class: "col wide hero" },
       poster({
         kind: "wb", hue: "orange", corner: "Tulip Labs<br>Lab · Workbench", d: have, of: total, word: "tickets committed",
         title: "Build real <i>software</i>, one ticket at a time",
         code: `└── { git commit -m "<i>${esc(((next || {}).title || "ship it").toLowerCase())}</i>" }`,
-        lede: "Each project is one whole program in a real editor: a database, an editor, a shell, a web server. Write it, run it in a terminal, pull the plug on it, test it, commit it. When it's done, it's yours: download it and run it with your own Python.",
+        lede: "Each project is one whole program in a real editor: a database, an editor, a shell, a backend. Write it, run it in a terminal, pull the plug on it, test it, commit it. When it's done, it's yours: download it and run it with your own Python or Node.",
         cta: [cur ? h("a", { class: "key primary", href: `bench.html#${cur.num}` }, `${have ? "Carry on" : "Start"} · ${cur.title}${next ? ` #${cur.tickets.indexOf(next) + 1}` : ""} →`) : null,
           h("a", { class: "key", href: "#how" }, "How a ticket works")],
-        foot: `${PROGRAMS.length} programs · ${data.projects.length} open · Python in your browser`,
+        foot: `${PROGRAMS.length + BACKEND.length} projects · ${data.projects.length} open · Python and Node in your browser`,
         fig: "fig. 1 — ledger, ticket 8: a torn transaction rolls back whole",
         art: h("img", { class: "la-ide", src: "shots/ide.webp", alt: "The Workbench editor: Ledger's shell.py, its history of commits, and a terminal surviving a power cut" }),
       }),
@@ -136,12 +173,20 @@
         ["Test", "This ticket's checks, and every earlier ticket's too."], ["Commit", "It lands in history, and a part lights up on the map."]]),
       h("div", { class: "note", html: "Python runs on this page with nothing to install. Your files, the program's disk and your history stay in this browser. A finished project downloads as a zip with a <code>run.py</code>, so it runs anywhere." }),
       secH("Your programs", "one whole program each · the card shows what yours will do when it's done"),
-      h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, PROGRAMS.map((p) => {
-        const L = live[p.num], g = L ? got(L) : 0, n = L ? L.tickets.length : 0;
-        return plot({ href: L ? `bench.html#${p.num}` : null, num: p.num, title: p.title, sub: L ? L.kind : p.kind, hue: p.hue, media: term(p),
-          soon: !L, pct: n ? (100 * g) / n : 0, bloomed: L && g === n, next: L && L === cur ? (g ? "carry on" : "start here") : null,
-          tag: L ? `${n} tickets` : null });
-      }))));
+      h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, PROGRAMS.map((p) => card(p, p.num)))),
+      h("div", { id: "backend" }),
+      secH("Learn Express by building", "the projects people build to learn backend · Node · basic to advanced"),
+      h("div", { class: "note", html: "Real Express, built into the page: <code>require(\"express\")</code> just works. Start with one route and end with a realtime app: an API, a todo app that keeps its data, a URL shortener, a blog with accounts, token auth, REST done right, a shop that never charges twice, and a chat. Every answer matches the real Express 5, checked line by line." }),
+      h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, EXPRESS.map((p, i) => card(p, i + 1)))),
+      secH("Under the hood", "write the machinery yourself · your own Express first"),
+      h("div", { class: "note", html: "Once you can use Express, build it: <b>Trellis</b> starts from a bare HTTP server and ends with routes, middleware, body parsing, errors and routers. Then the parts big backends run on: rate limits and caches, job queues, webhooks. Python (your own FastAPI) and Go follow Node." }),
+      h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, DEEP.map((p, i) => card(p, i + 1)))));
+    function card(p, shown) {
+      const L = live[p.num], g = L ? got(L) : 0, n = L ? L.tickets.length : 0;
+      return plot({ href: L ? `bench.html#${p.num}` : null, num: shown, title: p.title, sub: L ? L.kind : p.kind, hue: p.hue, media: term(p),
+        soon: !L, pct: n ? (100 * g) / n : 0, bloomed: L && g === n, next: L && L === cur ? (g ? "carry on" : "start here") : null,
+        tag: L ? `${n} tickets · ${L.lang === "js" ? "Node" : "Python"}` : null });
+    }
     layout(side, col);
   }
 
