@@ -261,6 +261,10 @@ async function tunnel(page, browser, errors) {
         } else await g.click();
       }
     }
+    if (ref.queueMax !== undefined) {
+      await page.locator(".wt-server").first().click();
+      for (let i = 0; i < 12 && (await st()).cfg.queueMax > ref.queueMax; i++) await page.locator('.wt-insp .step[aria-label="queue limit: fewer"]').click();
+    }
     if (ref.lb !== undefined) for (let i = 0; i < 3 && (await st()).cfg.lb !== ref.lb; i++) await page.locator(".wt-lbtag").click();
     if (ref.cache !== undefined) {
       await page.locator(".wt-ctag").click();

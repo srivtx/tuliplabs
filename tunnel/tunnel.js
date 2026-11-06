@@ -60,6 +60,11 @@
   const SPEEDS = [[0.1, "slow-mo"], [1, "×1"], [10, "×10"]];
   const WINDOW = 30, MAX_SERVERS = 6;
   const CACHE_SIZES = [10, 25, 50, 100, 250, 500, 1000, 1500, 2000, 3000, 5000, 10000];
+  const QUEUE_SIZES = [10, 20, 40, 60, 80, 100, 120, 150, 250, 500, 1000];
+  const BACKOFFS = [0, 0.1, 0.25, 0.5, 1, 2];
+  // knobs this experiment ever lets you turn, so the inspector shows their rows (greyed when not yet yours)
+  const knobs = () => new Set([...(X.free || ["workers"]), ...X.task.knobs]);
+  const surging = () => { const g = sim.cfg.surge; return !!g && sim.t >= g.at && sim.t < g.at + g.for; };
   const LB = { rr: ["round robin", "hands each request to the next server in turn"], least: ["least connections", "sends each request to the server with the fewest in flight"], random: ["random", "picks a server at random"] };
   const els = {};
 
@@ -98,7 +103,9 @@
   // restart the run with the knobs as they are now: a way out when a backlog won't drain
   function restart() {
     const keep = {};
-    for (const k of ["rate", "users", "workers", "servers", "lb", "cache"]) keep[k] = sim.cfg[k];
+    for (const k of ["rate", "users", "workers", "servers", "lb", "cache", "queueMax", "cancel", "retries", "backoff", "jitter"]) keep[k] = sim.cfg[k];
+    // a surge lifts the rate for a while: restart from the rate underneath it
+    if (surging()) keep.rate = sim.base;
     const b = before;
     resetSim(keep);
     before = b;
@@ -282,7 +289,7 @@
     renderBrief(); renderParts(); renderCode();
     els.hint.textContent = taskHint();
   }
-  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
+  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : X.clients ? `Click the ${name("server")} or the clients to change them.` : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
 
   function taskBody() {
     const wrap = h("div", { class: "wt-sb" });
@@ -315,7 +322,7 @@
     for (const r of rows) {
       const li = els.goal.querySelector(`[data-k="${r.k}"]`);
       li.classList.toggle("ok", r.ok);
-      li.querySelector("b").textContent = r.k === "p99" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : num(r.x);
+      li.querySelector("b").textContent = r.k === "p99" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : r.k === "errors" && st.span ? `${num(r.x)} (${Math.round(st.errRate * 100)}%)` : num(r.x);
     }
     const all = rows.every((r) => r.ok);
     els.meter.querySelector(".fill").style.width = `${Math.min(1, since / WINDOW) * 100}%`;
@@ -366,8 +373,15 @@
     kv("per_request", `${Math.round(c.service * 1000)}ms`, "average");
     if (c.slow > 1) kv("server_1", `${c.slow}x slower`, "old box");
     if (c.keys && (X.parts || []).includes("cache")) kv("keys", num(c.keys), "Zipf");
+    if (knobs().has("queueMax")) kv("queue_limit", num(c.queueMax), c.queueMax ? `${ms(c.queueMax / (c.workers / c.service))} of work` : "");
+    if (knobs().has("cancel")) kv("when_client_leaves", c.cancel ? "drop_request" : "serve_anyway");
     L.push([0, "clients"]);
     kv("timeout", `${c.timeout}s`);
+    if (X.clients) {
+      kv("retries", String(c.retries));
+      kv("backoff", c.backoff ? `${c.backoff}s` : "none", c.backoff ? (c.jitter ? "doubling, jittered" : "doubling") : "retry at once");
+    }
+    if (c.surge) { L.push([0, "surge"]); kv("at", clock(c.surge.at).slice(2)); kv("for", `${c.surge.for}s`); kv("arrivals", `${num(c.surge.rate)}/s`); }
     return L.map(([ind, k, v, note]) => (ind ? `  ${k}: ${v}${note ? `  # ${note}` : ""}` : `${k}:`));
   }
   // a line diff by longest common subsequence: [" ", line] kept, ["-", line] removed, ["+", line] added
@@ -735,7 +749,8 @@
     for (const el of tagEls.values()) el._seen = false;
     const [cx, cy] = iso(3.7, -0.4, 1.6);
     els.crowd.style.transform = `translate(${cx}px, ${cy}px)`;
-    setHTML(els.crowd, `<b>${fmtLoad(loadNow())}</b><small>${inTask() ? "fixed for the task" : "drag ↕"}</small>`);
+    setHTML(els.crowd, `<b>${fmtLoad(loadNow())}</b><small>${surging() ? "surge" : inTask() ? "fixed for the task" : "drag ↕"}</small>`);
+    els.crowd.classList.toggle("surge", surging());
     els.crowd.classList.toggle("locked", inTask());
     const many = LY.servers.length > 1;
     LY.servers.forEach((B, i) => {
@@ -768,6 +783,15 @@
       el.classList.toggle("can", canTurn("lb"));
       el.title = canTurn("lb") ? "Click to change how the balancer picks" : "The load balancer";
       setHTML(el, `<small>balancer</small><b>${LB[sim.cfg.lb][0]}</b>${canTurn("lb") ? "<i>↻</i>" : ""}`);
+    }
+    if (X.clients) {
+      const el = tag("clients", "wt-cltag", () => toggleInspect({ kind: "clients" }));
+      const [x, y] = iso(7.2, 7.4, 0);
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.classList.toggle("on", !!selected && selected.kind === "clients");
+      const st = samples[samples.length - 1], storm = st && st.tries > st.offered * 1.3;
+      el.classList.toggle("storm", !!storm);
+      setHTML(el, `clients · retry <b>×${sim.cfg.retries}</b>${sim.cfg.backoff ? ` · backoff ${sim.cfg.backoff}s` : ""}${storm ? ` · <i>${Math.round(st.tries)} tries/s</i>` : ""}`);
     }
     if (LY.cache) {
       const el = tag("cache", "wt-ctag", () => toggleInspect({ kind: "cache" }));
@@ -824,7 +848,7 @@
       e.preventDefault();
       setLoad(loadNow() - Math.sign(e.deltaY) * X.crowd.step * 2);
     }, { passive: false });
-    els.hint.textContent = inTask() ? taskHint() : `Drag the crowd up or down to change the load. Click a part to look inside.${(X.parts || []).length ? " Drag a part on from the right." : ""}`;
+    els.hint.textContent = inTask() ? taskHint() : X.hint || `Drag the crowd up or down to change the load. Click a part to look inside.${(X.parts || []).length ? " Drag a part on from the right." : ""}`;
   }
   function setLoad(v) {
     const { min, max, step } = X.crowd;
@@ -954,6 +978,7 @@
     if (selected.kind === "server" && !sim.srv[selected.i]) return closeInspect();
     if (selected.kind === "cache" && !(c.cache > 0)) return closeInspect();
     if (selected.kind === "lb" && sim.srv.length < 2) return closeInspect();
+    if (selected.kind === "clients" && !X.clients) return closeInspect();
     if (rebuild || !ins || ins.kind !== selected.kind || ins.i !== selected.i) {
       els.inspect.innerHTML = "";
       ins = { kind: selected.kind, i: selected.i };
@@ -961,13 +986,26 @@
       if (selected.kind === "server") {
         els.inspect.append(h("p", { class: "ih" }, many ? `${cap1(name("server"))} ${selected.i + 1}` : cap1(name("server"))));
         ins.w = stepper("workers", () => setWorkers(sim.cfg.workers - 1), () => setWorkers(sim.cfg.workers + 1));
-        els.inspect.append(ins.w.row, ins.dl = h("dl", {}));
+        els.inspect.append(ins.w.row);
+        if (knobs().has("queueMax")) {
+          const at = () => QUEUE_SIZES.findIndex((v) => v >= sim.cfg.queueMax);
+          ins.q = stepper("queue limit", () => setKnob("queueMax", QUEUE_SIZES[Math.max(0, at() - 1)]), () => setKnob("queueMax", QUEUE_SIZES[Math.min(QUEUE_SIZES.length - 1, at() + (QUEUE_SIZES[at()] === sim.cfg.queueMax ? 1 : 0))]));
+          els.inspect.append(ins.q.row);
+        }
+        if (knobs().has("cancel")) els.inspect.append(ins.cx = h("p", { class: "pol" }));
+        els.inspect.append(ins.dl = h("dl", {}));
         if (many) els.inspect.append(h("p", { class: "note" }, "Every server has the same workers."));
       } else if (selected.kind === "lb") {
         els.inspect.append(h("p", { class: "ih" }, "Load balancer"));
         ins.pol = h("p", { class: "pol" });
         ins.s = stepper("servers", () => setKnob("servers", Math.max(1, sim.cfg.servers - 1)), () => setKnob("servers", Math.min(MAX_SERVERS, sim.cfg.servers + 1)));
         els.inspect.append(ins.pol, ins.s.row, ins.dl = h("dl", {}));
+      } else if (selected.kind === "clients") {
+        els.inspect.append(h("p", { class: "ih" }, "Clients"));
+        ins.r = stepper("retries", () => setKnob("retries", Math.max(0, sim.cfg.retries - 1)), () => setKnob("retries", Math.min(5, sim.cfg.retries + 1)));
+        const at = () => Math.max(0, BACKOFFS.indexOf(sim.cfg.backoff));
+        ins.b = stepper("backoff", () => setKnob("backoff", BACKOFFS[Math.max(0, at() - 1)]), () => setKnob("backoff", BACKOFFS[Math.min(BACKOFFS.length - 1, at() + 1)]));
+        els.inspect.append(ins.r.row, ins.b.row, ins.jit = h("p", { class: "pol" }), ins.dl = h("dl", {}));
       } else {
         els.inspect.append(h("p", { class: "ih" }, "Cache"));
         const at = () => CACHE_SIZES.findIndex((v) => v >= sim.cfg.cache);
@@ -983,8 +1021,19 @@
       ins.w.out.textContent = c.workers;
       ins.w.minus.disabled = !canTurn("workers") || c.workers <= 1;
       ins.w.plus.disabled = !canTurn("workers") || c.workers >= 16;
+      if (ins.q) {
+        ins.q.out.textContent = num(c.queueMax);
+        ins.q.minus.disabled = !canTurn("queueMax") || c.queueMax <= QUEUE_SIZES[0];
+        ins.q.plus.disabled = !canTurn("queueMax") || c.queueMax >= QUEUE_SIZES[QUEUE_SIZES.length - 1];
+      }
+      if (ins.cx) {
+        ins.cx.innerHTML = "";
+        const w = c.cancel ? "drops it" : "serves it anyway";
+        ins.cx.append("When a client gives up, the server ", canTurn("cancel") ? h("button", { class: "wt-link", onclick: () => setKnob("cancel", !sim.cfg.cancel), title: "Click to change" }, w) : h("b", {}, w), ".");
+      }
+      const wait = c.queueMax && ins.q ? `<dt>a full queue waits</dt><dd>${ms(c.queueMax * svc / c.workers)}</dd>` : "";
       ins.dl.innerHTML = `<dt>each request</dt><dd>≈ ${ms(svc)}</dd><dt>capacity</dt><dd>${Math.round(c.workers / svc)} req/s</dd>
-        <dt>busy</dt><dd>${s.busy.length} of ${c.workers}</dd><dt>queue</dt><dd>${s.queue.length}</dd>${sim.srv.length === 1 ? `<dt>busy, last 5 s</dt><dd>${Math.round(st.util * 100)}%</dd>` : ""}`;
+        <dt>busy</dt><dd>${s.busy.length} of ${c.workers}</dd><dt>queue</dt><dd>${s.queue.length}${ins.q ? ` of ${num(c.queueMax)}` : ""}</dd>${wait}${sim.srv.length === 1 ? `<dt>busy, last 5 s</dt><dd>${Math.round(st.util * 100)}%</dd>` : ""}`;
     } else if (selected.kind === "lb") {
       const [w, d] = LB[c.lb];
       ins.pol.innerHTML = "";
@@ -993,6 +1042,20 @@
       ins.s.minus.disabled = !canTurn("servers") || c.servers <= 1;
       ins.s.plus.disabled = !canTurn("servers") || c.servers >= MAX_SERVERS;
       ins.dl.innerHTML = sim.srv.map((s, i) => `<dt>${name("server")} ${i + 1}${i === 0 && c.slow > 1 ? " (slow)" : ""}</dt><dd>${s.busy.length + s.queue.length} in flight</dd>`).join("");
+    } else if (selected.kind === "clients") {
+      ins.r.out.textContent = c.retries;
+      ins.r.minus.disabled = !canTurn("retries") || c.retries <= 0;
+      ins.r.plus.disabled = !canTurn("retries") || c.retries >= 5;
+      ins.b.out.textContent = c.backoff ? `${c.backoff}s` : "none";
+      ins.b.minus.disabled = !canTurn("backoff") || c.backoff <= 0;
+      ins.b.plus.disabled = !canTurn("backoff") || c.backoff >= BACKOFFS[BACKOFFS.length - 1];
+      ins.jit.innerHTML = "";
+      const w = c.jitter ? "a random part of" : "exactly";
+      if (!c.backoff) ins.jit.append("No backoff: a failed try is retried at once.");
+      else ins.jit.append("Each retry waits ", canTurn("jitter") ? h("button", { class: "wt-link", onclick: () => setKnob("jitter", !sim.cfg.jitter), title: "Click to change" }, w) : h("b", {}, w),
+        ` ${[0, 1, 2].map((n) => ms(c.backoff * 2 ** n)).join(", then ")}.`);
+      ins.dl.innerHTML = `<dt>give up after</dt><dd>${ms(c.timeout)}</dd><dt>tries, last 5 s</dt><dd>${Math.round(st.tries)}/s</dd>
+        <dt>people, last 5 s</dt><dd>${Math.round(st.sent / Math.max(1, Math.min(5, sim.t)))}/s</dd><dt>waiting to retry</dt><dd>${sim.waiting}</dd>`;
     } else {
       ins.c.out.textContent = num(c.cache);
       ins.c.minus.disabled = !canTurn("cache") || c.cache <= CACHE_SIZES[0];
@@ -1019,7 +1082,7 @@
       if (!wide) scrubber(el, id);
     };
     box("load", scat().label, true);
-    box("tput", "served per second");
+    box("tput", X.clients ? "answered" : "served per second");
     box("lat", "wait: p50 and p99");
     box("err", "errors per second");
     box("util", X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
@@ -1063,7 +1126,7 @@
     const k = "load";
     if (!charts[k] || !charts[k].w) return;
     const [x, W, H] = chartCtx(k);
-    const sc = scat(), pad = { l: 36, r: 10, t: 8, b: 18 }, YMAX = sc.ymax, pctY = sc.y === "hit";
+    const sc = scat(), pad = { l: 36, r: 10, t: 8, b: 18 }, YMAX = sc.ymax, pctY = sc.y === "hit" || sc.y === "errRate";
     const ax = { min: sc.min, max: sc.max, log: sc.log };
     const px = (v) => pad.l + toF(ax, Math.max(sc.min, Math.min(sc.max, v))) * (W - pad.l - pad.r);
     const py = (s) => H - pad.b - (Math.min(s, YMAX) / YMAX) * (H - pad.t - pad.b);
@@ -1078,7 +1141,7 @@
     const ticks = sc.log ? [10, 100, 1000, 10000].filter((v) => v >= sc.min && v <= sc.max) : [0, 0.25, 0.5, 0.75, 1].map((f) => sc.min + f * (sc.max - sc.min));
     ticks.forEach((v, i) => { x.textAlign = i === 0 ? "left" : i === ticks.length - 1 ? "right" : "center"; x.fillText(num(v), px(v) + (i === 0 ? -2 : 0), H - 4); });
     // for a cache: the hit rate the database needs at today's load, dashed
-    if (pctY && sim.cfg.mode === "open") {
+    if (sc.y === "hit" && sim.cfg.mode === "open") {
       const cap = sim.cfg.workers / sim.cfg.service * sim.cfg.servers, need = 1 - cap / Math.max(1, sim.cfg.rate);
       if (need > 0) {
         x.strokeStyle = css("--wt-amber"); x.setLineDash([3, 4]); x.beginPath(); x.moveTo(pad.l, py(need)); x.lineTo(W - pad.r, py(need)); x.stroke(); x.setLineDash([]);
@@ -1101,14 +1164,14 @@
       if (live && d.t > sim.t) return;
       x.globalAlpha = 0.25 + 0.75 * (i / Math.max(1, dots.length - 1));
       const over = !pctY && d.y > YMAX;
-      x.fillStyle = over ? css("--wt-bad") : acc;
+      x.fillStyle = over || (sc.y === "errRate" && d.y > 0.01) ? css("--wt-bad") : acc;
       const xx = px(d.x), yy = py(d.y);
       if (over) { x.beginPath(); x.moveTo(xx - 3, yy + 5); x.lineTo(xx + 3, yy + 5); x.lineTo(xx, yy); x.fill(); }
       else { x.beginPath(); x.arc(xx, yy, 2.6, 0, Math.PI * 2); x.fill(); }
     });
     x.globalAlpha = 1;
     const seen = live ? dots.filter((d) => d.t <= sim.t) : dots, last = seen[seen.length - 1];
-    charts[k].val.textContent = last ? (pctY ? `${Math.round(last.y * 100)}% at ${num(last.x)} keys` : `${ms(last.y)} at ${num(last.x)}`) : "";
+    charts[k].val.textContent = last ? (sc.y === "errRate" ? `${Math.round(last.y * 100)}% failed at ${num(last.x)}` : pctY ? `${Math.round(last.y * 100)}% at ${num(last.x)} keys` : `${ms(last.y)} at ${num(last.x)}`) : "";
   }
   function series(k, lines, ymax, fmt, unitMax) {
     if (!charts[k] || !charts[k].w) return;
@@ -1124,12 +1187,12 @@
       x.strokeStyle = l.color; x.lineWidth = l.w || 1.6; x.setLineDash(l.dash || []);
       x.beginPath();
       let first = true;
-      for (const s of samples) { if (s.t < t0) continue; const X1 = px(s.t), Y1 = py(s[l.key]); first ? x.moveTo(X1, Y1) : x.lineTo(X1, Y1); first = false; }
+      for (const s of samples) { if (s.t < t0) continue; if (s[l.key] == null) { first = true; continue; } const X1 = px(s.t), Y1 = py(s[l.key]); first ? x.moveTo(X1, Y1) : x.lineTo(X1, Y1); first = false; }
       x.stroke();
       // a soft fill under the main line, so the shape reads at a glance
       if (!l.dash && l.fill !== false && samples.length > 1) {
         const vis = samples.filter((s) => s.t >= t0);
-        if (vis.length > 1) {
+        if (vis.length > 1 && vis.every((s) => s[l.key] != null)) {
           x.lineTo(px(vis[vis.length - 1].t), H - pad.b); x.lineTo(px(vis[0].t), H - pad.b); x.closePath();
           const a = x.globalAlpha; x.globalAlpha = a * 0.12; x.fillStyle = l.color; x.fill(); x.globalAlpha = a;
         }
@@ -1158,8 +1221,9 @@
     drawLoadChart();
     const acc = css("--wt-acc"), pink = css("--wt-pink"), bad = css("--wt-bad"), mute = css("--wt-mute");
     const open = sim.cfg.mode === "open";
-    series("tput", [...(open ? [{ key: "offered", color: mute, dash: [3, 3], w: 1 }] : []), { key: "tput", color: acc }], 10, (s) => `${Math.round(s.tput)}/s${open ? ` of ${Math.round(s.offered)}` : ""}`);
-    series("lat", [{ key: "p50", color: acc, fill: false }, { key: "p99", color: pink }], 0.3, (s) => `${ms(s.p50)} · ${ms(s.p99)}`, 12);
+    if (X.clients) series("tput", [{ key: "tries", color: bad, dash: [3, 3], w: 1.2 }, { key: "offered", color: mute, dash: [1, 3], w: 1 }, { key: "tput", color: acc }], 10, (s) => `${Math.round(s.tput)}/s · ${Math.round(s.tries)} tries`);
+    else series("tput", [...(open ? [{ key: "offered", color: mute, dash: [3, 3], w: 1 }] : []), { key: "tput", color: acc }], 10, (s) => `${Math.round(s.tput)}/s${open ? ` of ${Math.round(s.offered)}` : ""}`);
+    series("lat", [{ key: "p50", color: acc, fill: false }, { key: "p99", color: pink }], 0.3, (s) => (s.p99 == null ? "none answered" : `${ms(s.p50)} · ${ms(s.p99)}`), 12);
     series("err", [{ key: "err", color: bad }], 1, (s) => `${s.err.toFixed(s.err < 10 ? 1 : 0)}/s`);
     if (X.parts && X.parts.includes("cache")) series("util", [{ key: "hit", color: css("--wt-ok") }], 1, (s) => `${Math.round(s.hit * 100)}%`, 1);
     else series("util", [{ key: "util", color: acc }], 1, (s) => `${Math.round(s.util * 100)}%`, 1);
@@ -1208,17 +1272,20 @@
   const clock = (t) => `t ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
   function sample(t) {
     const st = sim.stats(Math.max(0, t - 5), t), span = Math.min(5, t) || 1;
-    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.p50, p99: st.p99, err: st.errors / span, util: st.util, hit: st.hit };
+    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate };
     samples.push(s);
     if (samples.length > 400) samples.shift();
     // a dot only once the load and the design have been steady for the whole 5 s window, so a change doesn't smear it
     const sc = scat(), xv = sc.x === knob() ? s.load : sim.cfg[sc.x];
-    if (t - Math.max(lastLoadChange, lastSysChange) >= 6 && st.ok > 3 && xv > 0) {
+    const g = sim.cfg.surge, calm = !g || t >= g.at + g.for + 10;
+    if (t - Math.max(lastLoadChange, lastSysChange) >= 6 && (st.ok > 3 || (sc.y === "errRate" && st.sent > 3)) && xv > 0 && calm) {
       dots.push({ t, x: xv, y: s[sc.y], load: s.load, p99: s.p99 });
       if (dots.length > 240) dots.shift();
       if (P.phase === "explore" && !P.revealed && P.guess != null) {
         const A = X.predict.answer;
-        const ok = X.predict.axis
+        const ok = X.predict.lower
+          ? xv <= A * 1.3 && st.errors === 0 && s.p99 < 1
+          : X.predict.axis
           ? xv >= A / 1.3 && s.load >= (X.predict.atLoad || 0) && s.p99 < 2 && st.errors === 0
           : s.load >= Math.min(P.guess, A) * 1.02 && s.load >= A && s.p99 > 1;
         if (ok) reveal();

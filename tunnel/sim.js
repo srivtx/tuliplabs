@@ -15,6 +15,12 @@
                queues up to `queueMax` requests (then turns them away: an error).
                With warm:true the cache starts full of the hottest keys, as one that has been running a while.
    A client gives up after `timeout` seconds (also an error), but its request still uses a worker if it got one.
+   With cancel:true (the default) a request whose client gave up leaves the queue; with cancel:false the server never
+   hears about it and serves it anyway, to nobody.
+   Clients can retry a failed request (`retries` more tries). The wait before try n is `backoff` × 2^(n-1) seconds, or
+   with jitter:true a random time between 0 and that. A user's request only counts once: as answered, with its latency
+   from the first try, or as an error when the last try fails.
+   surge: {at, for, rate} sends `rate` instead for `for` seconds starting at `at`, then the old rate again.
 
    new Sim(cfg, seed) · sim.set({...}) · sim.advance(toTime) · sim.view() for drawing · sim.stats(t0, t1) for a window ·
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
@@ -65,6 +71,7 @@
     mode: "open", rate: 40, users: 100, think: 5,
     servers: 1, workers: 4, service: 0.05, dist: "exp", slow: 1, lb: "rr", queueMax: 1000, timeout: 10,
     cache: 0, keys: 10000, zipf: 1, cacheTime: 0.002, warm: false,
+    cancel: true, retries: 0, backoff: 0, jitter: false, surge: null,
   };
 
   class Sim {
@@ -85,11 +92,15 @@
       this.rr = 0;              // round robin's next server
       this.lru = new Map();     // the cache: key -> true, oldest first
       this.feed = null;         // set to [] and the page gets ["in", key?], ["hit"], ["route", server] and ["out", ok, why, server]
+      this.tries = [];          // per simulated second: tries sent, first tries and retries both
+      this.waiting = 0;         // requests waiting out a backoff before their next try
       this.sizeServers();
       this.nc = this.live() * this.cfg.workers;
       // a warm cache already holds the hottest keys, hottest most recently used (a cache that has run for a while)
       if (this.cfg.warm) for (let k = Math.min(this.cfg.cache, this.cfg.keys); k >= 1; k--) this.lru.set(k, true);
       this.start();
+      const sg = this.cfg.surge;
+      if (sg) { this.ev.push({ t: sg.at, type: "surge", rate: sg.rate }); this.ev.push({ t: sg.at + sg.for, type: "surge", back: true }); }
     }
     exp(mean) { return -Math.log(1 - this.r()) * mean; }
     serviceTime(i) { const c = this.cfg, m = c.service * (i === 0 ? c.slow || 1 : 1); return c.dist === "fixed" ? m : this.exp(m); }
@@ -128,10 +139,13 @@
       while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < u) lo = m + 1; else hi = m; }
       return lo + 1;
     }
-    send() {
+    send(prev) {
       const q = { id: this.nextId++, sent: this.t, closed: this.cfg.mode === "closed" };
+      if (prev) { q.first = prev.first ?? prev.sent; q.tries = (prev.tries || 0) + 1; q.closed = prev.closed; if (prev.key !== undefined) q.key = prev.key; }
+      const sec = Math.floor(this.t);
+      this.tries[sec] = (this.tries[sec] || 0) + 1;
       if (this.cfg.cache > 0) {
-        q.key = this.pickKey();
+        if (q.key === undefined) q.key = this.pickKey();
         if (this.lru.has(q.key)) {
           this.lru.delete(q.key); this.lru.set(q.key, true);
           q.hit = true;
@@ -199,7 +213,17 @@
     finish(q, ok, why) {
       if (q.over) return;
       q.over = true;
-      this.done.push({ id: q.id, at: this.t, sent: q.sent, lat: this.t - q.sent, ok, why, hit: q.hit });
+      // a failed try is retried after its backoff, if it has tries left; the user only sees the last one
+      if (!ok && (q.tries || 0) < this.cfg.retries) {
+        let d = this.cfg.backoff * Math.pow(2, q.tries || 0);
+        if (this.cfg.jitter) d *= this.r();
+        this.waiting++;
+        this.ev.push({ t: this.t + d, type: "retry", q });
+        if (this.feed && !q.hit) this.feed.push(["out", false, why, q.srv || 0]);
+        return;
+      }
+      const sent = q.first ?? q.sent;
+      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit });
       if (this.feed && !q.hit) this.feed.push(["out", ok, why, q.srv || 0]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
@@ -223,6 +247,11 @@
         } else if (e.type === "wake") {
           this.thinking--;
           this.send();
+        } else if (e.type === "retry") {
+          this.waiting--;
+          this.send(e.q);
+        } else if (e.type === "surge") {
+          if (e.back) this.set({ rate: this.base }); else { this.base = this.cfg.rate; this.set({ rate: e.rate }); }
         } else if (e.type === "hit") {
           this.finish(e.q, true);
         } else if (e.type === "served") {
@@ -239,7 +268,8 @@
         } else if (e.type === "timeout") {
           const q = e.q;
           if (q.over) continue;
-          const s = this.srv[q.srv || 0], k = s ? s.queue.indexOf(q) : -1;
+          // with cancel off the server never hears that the client left: the request keeps its place and is served
+          const s = this.srv[q.srv || 0], k = s && this.cfg.cancel ? s.queue.indexOf(q) : -1;
           if (k >= 0) s.queue.splice(k, 1);
           this.finish(q, false, "timeout");
         }
@@ -250,7 +280,7 @@
     // for drawing: every server's queue and busy list, and the totals the one-server page used
     get queue() { return this.srv.length === 1 ? this.srv[0].queue : this.srv.flatMap((s) => s.queue); }
     get busy() { return this.srv.length === 1 ? this.srv[0].busy : this.srv.flatMap((s) => s.busy); }
-    view() { return { t: this.t, srv: this.srv, workers: this.cfg.workers, thinking: this.thinking, users: this.users, cached: this.lru.size }; }
+    view() { return { t: this.t, srv: this.srv, workers: this.cfg.workers, thinking: this.thinking, users: this.users, cached: this.lru.size, waiting: this.waiting }; }
     // numbers for requests that finished in (t0, t1]
     stats(t0, t1) {
       const lats = [], d = this.done;
@@ -267,9 +297,10 @@
         span, sent: n, ok, errors: bad, errRate: n ? bad / n : 0,
         tput: ok / span, mean: lats.length ? lats.reduce((s, x) => s + x, 0) / lats.length : 0,
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
-        hit: looked ? hits / looked : 0, misses: (looked - hits) / span,
+        hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
       };
     }
+    triesIn(t0, t1) { let n = 0; for (let i = Math.floor(t0); i < Math.ceil(t1); i++) n += this.tries[i] || 0; return n; }
     // busy workers ÷ workers that existed, over the window (whole seconds, as the page and the checks ask for)
     util(t0, t1) {
       this.acc(Math.min(t1, this.t));

@@ -8,7 +8,10 @@
               ({zipf: n} is the theoretical share of the hottest n keys; then/window replay a change mid-run)
    Optional: free (knobs you may change before the task; default workers), parts (ghosts you can drag onto the wire),
    names (what to call the server), scatter (the dot chart's axes, when it isn't load against p99), and
-   predict.axis (when the guess isn't about the crowd) with predict.tolRatio for a log axis.
+   predict.axis (when the guess isn't about the crowd) with predict.tolRatio for a log axis, and predict.lower when a
+   smaller value is the safe side; clients (show the clients' tag: retries and backoff), hint (the stage's first hint),
+   task.settle (when the checks start measuring a run from the start, for a run with a surge in it).
+   quotes may give a window: [a, b] alone, to measure part of a run (a surge's aftermath).
    The rest are planned, so the shelf can show what's coming. */
 (function (root) {
   "use strict";
@@ -156,9 +159,53 @@
         { cfg: { rate: 150, cache: 0 }, then: { at: 20, set: { cache: 250 } }, window: [110, 140], metric: "p99", min: 2 },
       ],
     },
-    { id: "wt05", title: "The database is the bottleneck", curve: "lag", law: "replication lag", teaser: "Read replicas take the reads. Writes still go to one place." },
+    {
+      id: "wt05", live: true, title: "Retry storms", curve: "storm", law: "metastable failure",
+      teaser: "Ten seconds of surge, then calm, and the server never comes back. Find what ends it.",
+      system: { mode: "open", rate: 60, workers: 4, service: 0.05, timeout: 1, queueMax: 1000, retries: 3, backoff: 0, cancel: false, surge: { at: 5, for: 10, rate: 140 } },
+      crowd: { knob: "rate", min: 0, max: 160, step: 1, unit: "requests/s", short: "req/s" },
+      clients: true, free: ["queueMax", "retries", "backoff", "jitter", "cancel"],
+      hint: "The surge hits at 0:05. Click the server or the clients to change them; ↻ restart runs the surge again.",
+      scatter: { x: "queueMax", log: true, min: 10, max: 1000, y: "errRate", ymax: 1, label: "failed after the surge, against the queue limit" },
+      brief: "The same server: <b>4 workers</b>, <b>50 ms</b> a request, <b>80 req/s</b> at most, and it gets <b>60</b>. Clients give up after <b>1 s</b> and <b>retry 3 times</b>. At <b>0:05</b> a surge of <b>140 req/s</b> hits for 10 seconds. Then traffic goes back to 60.",
+      predict: {
+        q: "How many requests can the server's queue hold, and still come back on its own once the surge is over?",
+        axis: { knob: "queueMax", min: 10, max: 1000, log: true, short: "requests" },
+        answer: 80, tolRatio: 1.5, theory: "queue", lower: true,
+        reveal: "<b>80</b>: what the server finishes in one timeout, 80 req/s × 1 s. In a longer queue, the request at the back waits more than 1 s, so its client has given up before it's served. That work is wasted, and the retry joins the back of the same queue.",
+      },
+      explore: "Watch the first half minute: the surge comes at 0:05 and goes at 0:15. Then click the server and change its queue limit, and ↻ restart to send the surge again. Once things settle, each second puts a dot: the share of requests that failed, against the queue limit.",
+      why: [
+        "With room for 1,000, the surge leaves hundreds waiting, each longer than 1 s. Every client gives up and retries, and the server, which never hears that a client left, serves the stale copy anyway. After the surge only 60 people a second arrive, but each tries <b>4 times</b>: about <b>240 tries a second</b> at a server that can do 80, and <b>none</b> are answered in time. The surge is over and the outage isn't. That's a <b>metastable failure</b>: the overload keeps itself going.",
+        "Retrying less doesn't end it: with <b>1 retry</b> it still answers nothing. Backoff with jitter spreads the tries out but doesn't reduce them, so it stays down too. Dropping requests whose client left helps a little: about <b>1 in 6</b> gets answered.",
+        "A short queue ends it. At <b>80</b> it comes back within seconds of the surge; at <b>120</b> it never does. A full queue says no at once, which costs almost nothing, and every request it accepts is answered in time. With no retries at all it recovers too, but only once the stale backlog drains, about 45 s after the surge.",
+      ],
+      task: {
+        title: "The Monday blip",
+        brief: "The same surge hits every Monday. Phones lose requests, so clients must keep <b>at least 2 retries</b>. Make the server come back on its own: p99 under <b>500 ms</b> with no errors, measured over 30 s. Click the server, or the clients, to change them.",
+        set: {}, knobs: ["queueMax", "retries", "backoff", "jitter", "cancel"], start: {}, reference: { queueMax: 60 }, settle: 30,
+        goal: [["p99", "<", 0.5, "p99 under 500 ms"], ["errors", "==", 0, "no errors"], ["retries", ">=", 2, "clients keep 2+ retries"]],
+        done: "A queue of 60 holds 0.75 s of work, less than the 1 s clients wait, so every request the server accepts is answered before its client gives up. During the surge the overflow is refused at once, and as soon as the surge ends the server is back. Real systems add retry budgets and circuit breakers for the same reason: a fast no is cheaper than a slow yes that nobody is waiting for.",
+      },
+      quotes: [
+        { cfg: {}, metric: "tput", max: 1 },
+        { cfg: {}, metric: "tries", value: 240, tol: 0.04 },
+        { cfg: { surge: null }, metric: "errors", max: 0 },
+        { cfg: { retries: 1 }, metric: "tput", max: 1 },
+        { cfg: { backoff: 0.5, jitter: true }, metric: "tput", max: 1 },
+        { cfg: { backoff: 2, jitter: true }, metric: "tput", max: 1 },
+        { cfg: { cancel: true }, metric: "tput", value: 10, tol: 0.3 },
+        { cfg: { queueMax: 80 }, window: [25, 300], metric: "errors", max: 0 },
+        { cfg: { queueMax: 120 }, metric: "tput", max: 1 },
+        { cfg: { retries: 0 }, window: [15, 55], metric: "errors", min: 1 },
+        { cfg: { retries: 0 }, window: [60, 300], metric: "errors", max: 0 },
+        { cfg: { queueMax: 60 }, window: [20, 300], metric: "errors", max: 0 },
+        // fixed in the middle of the storm: back within half a minute
+        { cfg: {}, then: { at: 40, set: { queueMax: 60 } }, window: [70, 100], metric: "errors", max: 0 },
+      ],
+    },
     { id: "wt06", title: "Queues absorb bursts", curve: "burst", law: "backpressure", teaser: "Put a queue between the web and the workers and watch a spike flatten." },
-    { id: "wt07", title: "Retry storms", curve: "storm", law: "metastable failure", teaser: "Retries turn a blip into an outage that won't end. Then fix it with backoff and jitter." },
+    { id: "wt07", title: "The database is the bottleneck", curve: "lag", law: "replication lag", teaser: "Read replicas take the reads. Writes still go to one place." },
     { id: "wt08", title: "Rate limits", curve: "bucket", law: "token bucket", teaser: "Say no early, so the requests you accept stay fast." },
     { id: "wt09", title: "Sharding and hot keys", curve: "hot", law: "skew", teaser: "Split the data across servers, then watch one celebrity melt a shard." },
     { id: "wt10", title: "Distance", curve: "far", law: "speed of light", teaser: "A round trip to the other side of the world costs time no server can win back." },

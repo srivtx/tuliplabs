@@ -121,6 +121,14 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .wt-ctag b{color:var(--wt-ink)}
 .wt-ctag:hover,.wt-ctag.on{border-color:var(--wt-acc)!important;color:var(--wt-acc)!important}
 
+/* the clients, under the crowd: click to change how they retry; red while they're storming */
+.wt-tags .wt-cltag{translate:-50% 8px;padding:4px 9px!important;border-radius:7px;font:11px var(--f-mono)!important;color:var(--wt-mute)!important;background:color-mix(in srgb,var(--wt-bg) 80%,transparent)!important;border:1px solid var(--wt-line2)!important}
+.wt-cltag b{color:var(--wt-ink);font-weight:600}
+.wt-cltag i{font-style:normal;color:var(--wt-bad)}
+.wt-tags .wt-cltag.storm{border-color:color-mix(in srgb,var(--wt-bad) 70%,transparent)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--wt-bad) 18%,transparent);animation:wthot 1s ease-in-out infinite}
+.wt-tags .wt-cltag:hover,.wt-tags .wt-cltag.on{border-color:var(--wt-acc)!important;color:var(--wt-acc)!important}
+.wt-crowd.surge small{color:var(--wt-bad);font-weight:600}
+
 /* system.yaml: the design as code, with this step's changes as a diff */
 .wt-code{position:absolute;left:14px;top:14px;z-index:4;width:276px;max-height:calc(100% - 64px);display:flex;flex-direction:column;border-radius:12px;background:color-mix(in srgb,var(--wt-side) 90%,transparent);border:1px solid var(--wt-line2);box-shadow:0 18px 40px -24px rgba(0,0,0,.6);backdrop-filter:blur(6px);overflow:hidden}
 .wt-code:not(.open){width:auto}

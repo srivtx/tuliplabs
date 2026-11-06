@@ -24,10 +24,10 @@ function meets(row, stats, cfg) {
   return op === "<" ? x < v : op === "<=" ? x <= v : op === "==" ? x === v : op === ">" ? x > v : x >= v;
 }
 const WINDOW = 30, SETTLE = 20; // the page measures the last 30 s once the system has been left alone that long
-function liveWindow(cfg, seed) {
+function liveWindow(cfg, seed, settle = SETTLE) {
   const s = new Sim(cfg, seed);
-  s.advance(SETTLE + WINDOW);
-  return s.stats(SETTLE, SETTLE + WINDOW);
+  s.advance(settle + WINDOW);
+  return s.stats(settle, settle + WINDOW);
 }
 function within(got, q) {
   let ok = true;
@@ -47,7 +47,7 @@ for (const x of experiments.filter((e) => e.live)) {
     checks++;
     if (ok !== want) bad.push(`${x.id} ${label} ${want ? "misses" : "already meets"} the goal at steady state (p99 ${ms(steady.p99)}, errors ${steady.errors})`);
     const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
-    const wins = seeds.filter((seed) => { const w = liveWindow(cfg, seed); return x.task.goal.every((g) => meets(g, w, cfg)); }).length;
+    const wins = seeds.filter((seed) => { const w = liveWindow(cfg, seed, x.task.settle); return x.task.goal.every((g) => meets(g, w, cfg)); }).length;
     checks++;
     if (want && wins < seeds.length) bad.push(`${x.id} reference meets the goal in only ${wins} of ${seeds.length} live windows`);
     if (!want && wins > 0) bad.push(`${x.id} start meets the goal in ${wins} of ${seeds.length} live windows`);
@@ -64,9 +64,10 @@ for (const x of experiments.filter((e) => e.live)) {
     }
     const cfg = { ...x.system, ...q.cfg };
     let got;
-    if (q.then) {
+    if (q.window) {
       const s = new Sim(cfg, 7);
-      s.advance(q.then.at); s.set(q.then.set); s.advance(q.window[1]);
+      if (q.then) { s.advance(q.then.at); s.set(q.then.set); }
+      s.advance(q.window[1]);
       got = s.stats(q.window[0], q.window[1])[q.metric];
     } else got = Sim.measure(cfg, { span: 600 })[q.metric];
     if (!within(got, q)) bad.push(`${x.id} quote ${JSON.stringify(q.cfg)}${q.then ? " then " + JSON.stringify(q.then.set) : ""} ${q.metric}: sim says ${got.toFixed(3)}, text says ${said(q)}`);
@@ -87,6 +88,18 @@ for (const x of experiments.filter((e) => e.live)) {
     if (Math.abs(expect - A) > 1) bad.push(`${x.id} predict answer ${A}, theory says ${expect.toFixed(1)}`);
     const under = Sim.measure({ ...s, [knob]: A * 0.85 }, { span: 600 }), over = Sim.measure({ ...s, [knob]: A * 1.15 }, { span: 600 });
     if (!(under.errors === 0 && under.p99 < 2 && over.p99 > 5)) bad.push(`${x.id} the sim doesn't bend at ${A}: p99 ${ms(under.p99)} just under, ${ms(over.p99)} just over`);
+  } else if (th === "queue") {
+    // a queue is safe while a full one drains within the client's timeout: capacity × timeout requests
+    const expect = cap * s.timeout;
+    if (Math.abs(expect - A) > 1) bad.push(`${x.id} predict answer ${A}, theory says ${expect.toFixed(1)}`);
+    // just under it recovers; at 1.5× it never does (in between, recovery is down to luck)
+    const lo = Math.round(A * 0.8), hi = Math.round(A * 1.5);
+    const small = Sim.measure({ ...s, queueMax: lo }, { span: 600 });
+    if (!(small.errors === 0 && small.p99 < 1)) bad.push(`${x.id} a queue of ${lo} doesn't recover (errors ${small.errors}, p99 ${ms(small.p99)})`);
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const b = Sim.measure({ ...s, queueMax: hi }, { seed, span: 600 });
+      if (!(b.tput < 1)) bad.push(`${x.id} a queue of ${hi} recovers with seed ${seed} (${b.tput.toFixed(0)}/s answered)`);
+    }
   } else if (th === "cache") {
     // at the rate the question names, the cache must catch everything above the database's capacity
     const rate = parseInt((x.predict.q.match(/(\d+) reads a second/) || [])[1], 10), need = 1 - cap / rate;
