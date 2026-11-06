@@ -237,9 +237,287 @@ def check(prelude, setup, code, tests, show=""):
     return result
 
 
+# ---------------------------------------------------------------- workbench --
+# A Workbench project is a small repository: several .py files that import each other, a disk the
+# program writes to, and a main module whose handle(line) answers the terminal. Files are served to
+# `import` by a finder, so `import store` inside shell.py loads the learner's store.py as a real module.
+import importlib.abc
+import importlib.util
+import os
+import re
+import tempfile
+
+_PROJECTS = {}        # pid -> {"finder", "mods", "main", "dir"}
+DISK_LIMIT = 4000     # characters of each disk file sent back to the page
+
+
+class _Files(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    def __init__(self, files):
+        self.files = files
+
+    def find_spec(self, name, path=None, target=None):
+        if name + ".py" in self.files:
+            return importlib.util.spec_from_loader(name, self, origin=name + ".py")
+        return None
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module):
+        fn = module.__spec__.origin
+        module.__file__ = fn
+        exec(compile(self.files[fn], fn, "exec"), module.__dict__)
+
+
+def _project_dir(pid, wipe=False):
+    base = os.environ.get("WB_DISK") or os.path.join(tempfile.gettempdir(), "tulip-wb")
+    d = os.path.join(base, re.sub(r"\W", "_", pid))
+    os.makedirs(d, exist_ok=True)
+    if wipe:
+        for f in os.listdir(d):
+            p = os.path.join(d, f)
+            if os.path.isfile(p):
+                os.remove(p)
+    return d
+
+
+def _disk(d):
+    out = []
+    for f in sorted(os.listdir(d)):
+        p = os.path.join(d, f)
+        if not os.path.isfile(p):
+            continue
+        with open(p, "rb") as fh:
+            raw = fh.read()
+        out.append({"name": f, "size": len(raw), "text": raw[:DISK_LIMIT].decode("utf-8", "replace")})
+    return out
+
+
+def _project_error(exc, files):
+    """The error, plus the deepest frame in the learner's files so the editor can underline it."""
+    head = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+    if isinstance(exc, NotImplementedError):
+        head = "NotImplementedError: this part isn't written yet"
+    where = None
+    if isinstance(exc, SyntaxError) and exc.filename in files:
+        head = f"SyntaxError: {exc.msg}"
+        where = [exc.filename, exc.lineno or 1]
+    frames = [f for f in traceback.extract_tb(exc.__traceback__) if f.filename in files]
+    lines = [f"  {f.filename}, line {f.lineno}: {(f.line or '').strip()}" for f in frames[-4:]]
+    if frames and not where:
+        where = [frames[-1].filename, frames[-1].lineno]
+    if where and not lines:
+        lines = [f"  {where[0]}, line {where[1]}"]
+    return head + ("\n" + "\n".join(lines) if lines else ""), where
+
+
+class _InDir:
+    """Run with the project's disk as the working directory, and stdout captured."""
+    def __init__(self, d):
+        self.d = d
+        self.out = _Capture()
+
+    def __enter__(self):
+        self.cwd = os.getcwd()
+        self.old = sys.stdout, sys.stderr
+        os.chdir(self.d)
+        sys.stdout = sys.stderr = self.out
+        return self
+
+    def __exit__(self, *a):
+        sys.stdout, sys.stderr = self.old
+        os.chdir(self.cwd)
+        return False
+
+
+def _unload(pid):
+    p = _PROJECTS.pop(pid, None)
+    if not p:
+        return
+    if p["finder"] in sys.meta_path:
+        sys.meta_path.remove(p["finder"])
+    for m in p["mods"]:
+        sys.modules.pop(m, None)
+
+
+def project_load(pid, files, main, wipe=False):
+    """Start (or restart) the program. The disk survives a restart unless wipe is set,
+    which is exactly what a crash looks like: memory is gone, files are not."""
+    _unload(pid)
+    d = _project_dir(pid, wipe)
+    finder = _Files(dict(files))
+    sys.meta_path.insert(0, finder)
+    import linecache
+    for fn, src in files.items():
+        # so tracebacks can quote the learner's line
+        linecache.cache[fn] = (len(src), None, src.splitlines(True), fn)
+    mods = [f[:-3] for f in files if f.endswith(".py")]
+    for m in mods:
+        sys.modules.pop(m, None)
+    _PROJECTS[pid] = {"finder": finder, "mods": mods, "main": None, "dir": d, "files": files}
+    error = where = None
+    with _InDir(d) as io_:
+        try:
+            _PROJECTS[pid]["main"] = importlib.import_module(main)
+        except BaseException as exc:  # noqa: BLE001
+            error, where = _project_error(exc, files)
+    return {"stdout": io_.out.getvalue(), "error": error, "where": where, "disk": _disk(d)}
+
+
+def project_call(pid, line):
+    """One line typed into the terminal, answered by the program's handle(line)."""
+    p = _PROJECTS.get(pid)
+    if not p or not p["main"]:
+        return {"stdout": "", "error": "The program isn't running. Press Run first.", "where": None, "disk": []}
+    error = where = None
+    with _InDir(p["dir"]) as io_:
+        try:
+            handle_fn = getattr(p["main"], "handle", None)
+            if handle_fn is None:
+                raise NameError(f"{p['main'].__name__}.py has no handle(line) function yet")
+            reply = handle_fn(line)
+            if reply is not None:
+                print(reply)
+        except BaseException as exc:  # noqa: BLE001
+            error, where = _project_error(exc, p["files"])
+    return {"stdout": io_.out.getvalue(), "error": error, "where": where, "disk": _disk(p["dir"])}
+
+
+def project_tear(pid, name, keep):
+    """Pull the plug in the middle of a write: the file keeps only part of its last record."""
+    p = _PROJECTS.get(pid)
+    d = p["dir"] if p else _project_dir(pid)
+    path = os.path.join(d, name)
+    if os.path.isfile(path):
+        with open(path, "rb") as fh:
+            raw = fh.read()
+        body = raw.rstrip(b"\n")
+        cut = body.rfind(b"\n") + 1
+        last = body[cut:]
+        with open(path, "wb") as fh:
+            fh.write(body[:cut] + last[:max(1, int(len(last) * keep))])
+    _unload(pid)
+    return {"disk": _disk(d)}
+
+
+def _test_helpers(pid, files, main):
+    """What a ticket's tests can call: run a line, restart the program, read or tear the disk."""
+    def run(line):
+        r = project_call(pid, line)
+        if r["error"]:
+            raise RuntimeError(r["error"])
+        return r["stdout"].rstrip("\n")
+
+    def restart():
+        r = project_load(pid, files, main)
+        if r["error"]:
+            raise RuntimeError(r["error"])
+
+    def disk(name):
+        path = os.path.join(_project_dir(pid), name)
+        if not os.path.isfile(path):
+            return None
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+
+    def tear(name, keep=0.5):
+        project_tear(pid, name, keep)
+        restart()
+
+    return {"run": run, "restart": restart, "disk": disk, "tear": tear}
+
+
+def project_check(pid, files, main, tickets):
+    """Run each ticket's tests, oldest first, each on a clean disk with a fresh start.
+    tickets: [[title, tests], ...]. Stops at the first failing check, so there's one thing to fix."""
+    tid = pid + ":check"
+    results = []
+    for title, tests in tickets:
+        loaded = project_load(tid, files, main, wipe=True)
+        try:
+            stmts = _statements(tests or "")
+        except SyntaxError as exc:
+            return {"passed": False, "tickets": results, "error": f"Broken tests in '{title}': {exc}"}
+        total = sum(1 for n, _ in stmts if isinstance(n, ast.Assert))
+        res = {"title": title, "total": total, "ok": 0}
+        results.append(res)
+        if loaded["error"]:
+            res.update(failed="(starting the program)", message=loaded["error"], where=loaded["where"])
+            break
+        ns = {"__name__": "__tests__", **_test_helpers(tid, files, main)}
+        ns[main] = _PROJECTS[tid]["main"]
+        with _InDir(_project_dir(tid)):
+            for m in _PROJECTS[tid]["mods"]:
+                # every file is visible to the tests, even one main doesn't import yet
+                try:
+                    ns[m] = importlib.import_module(m)
+                except BaseException:  # noqa: BLE001 - a test that uses it will say what broke
+                    pass
+        with _InDir(_project_dir(tid)):
+            for node, src in stmts:
+                try:
+                    exec(compile(ast.Module([node], []), "<tests>", "exec"), ns)
+                    if isinstance(node, ast.Assert):
+                        res["ok"] += 1
+                except AssertionError as exc:
+                    res.update(failed=src.strip(), message=str(exc) or "This check did not hold.")
+                    break
+                except BaseException as exc:  # noqa: BLE001
+                    msg, where = _project_error(exc, files)
+                    res.update(failed=src.strip(), message=msg, where=where)
+                    break
+        if "failed" in res:
+            break
+    _unload(tid)
+    passed = len(results) == len(tickets) and all("failed" not in r for r in results)
+    return {"passed": passed, "tickets": results, "error": None}
+
+
+def project_session(pid, files, main, transcript, prompt):
+    """Replay a terminal transcript ('prompt> cmd' lines, then the expected output) against the program.
+    Returns the first line that differs, or None. Used by build.py --verify."""
+    project_load(pid, files, main, wipe=True)
+    cmd, want = None, []
+
+    def flush():
+        if cmd is None:
+            return None
+        if cmd == "!restart":
+            project_load(pid, files, main)
+            got = ""
+        else:
+            r = project_call(pid, cmd)
+            if r["error"]:
+                return f"{prompt}{cmd} raised {r['error']}"
+            got = r["stdout"].rstrip("\n")
+        if got != "\n".join(want).rstrip("\n"):
+            return f"{prompt}{cmd}\n  expected: {chr(10).join(want)!r}\n  got:      {got!r}"
+        return None
+
+    for line in transcript.splitlines():
+        if line.startswith(prompt) or line == "!restart":
+            bad = flush()
+            if bad:
+                return bad
+            cmd, want = (line[len(prompt):] if line.startswith(prompt) else line), []
+        elif cmd is not None:
+            want.append(line)
+    bad = flush()
+    _unload(pid)
+    return bad
+
+
 def handle(req):
     """Single entry point used by the worker and the dev server."""
     op = req.get("op")
+    if op == "project_load":
+        return project_load(req["pid"], req["files"], req["main"], req.get("wipe", False))
+    if op == "project_call":
+        return project_call(req["pid"], req["line"])
+    if op == "project_tear":
+        return project_tear(req["pid"], req["name"], req.get("keep", 0.5))
+    if op == "project_check":
+        return project_check(req["pid"], req["files"], req["main"], req["tickets"])
     if op == "cell":
         return cell(req["ns"], req.get("prelude", ""), req["code"])
     if op == "check":

@@ -51,7 +51,7 @@ import harness
 }
 
 async function packagesFor(req) {
-  let text = [req.prelude, req.setup, req.code, req.tests, req.show].filter(Boolean).join("\n");
+  let text = [req.prelude, req.setup, req.code, req.tests, req.show, ...Object.values(req.files || {})].filter(Boolean).join("\n");
   // flipbook() draws frames with matplotlib even if the lesson never imports it.
   if (/\bflipbook\s*\(/.test(text)) text += "\nimport matplotlib";
   // Our helper modules import packages too; scan them when a lesson uses them.
