@@ -267,6 +267,16 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 .csheet button.go{background:var(--w-pink);border-color:var(--w-pink);color:#1a0d14;font-weight:600}
 .wfin{padding:22px 20px}
 .wfin h1{font:400 34px/1.05 "Instrument Serif",Georgia,serif;margin:4px 0 8px}
+.wfin-go{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:14px 0 6px;font:12.5px var(--f-body);color:var(--w-mute)}
+.wfin-go code{font:12px var(--f-mono);color:var(--w-teal)}
+.ide .wdl-big{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:8px;background:var(--w-pink);border:1px solid var(--w-pink);color:#1a0d14;font:600 13px var(--f-body);cursor:pointer}
+.wdl-big svg{width:15px;height:15px}
+.wdl-big:active{transform:translateY(1px)}
+/* the explorer's download arrow: quiet until the header is hovered */
+.ide .wh .wdl{display:inline-grid;place-items:center;width:20px;height:20px;margin-left:6px;vertical-align:-5px;border-radius:5px;color:var(--w-faint);opacity:.55;transition:opacity .15s,color .15s,background .15s}
+.wh .wdl svg{width:13px;height:13px}
+.wh:hover .wdl,.wh .wdl:focus-visible{opacity:1}
+.wh .wdl:hover{color:var(--w-ink);background:var(--w-raise)}
 
 /* ---- status bar ---- */
 .wstat{display:flex;align-items:center;gap:16px;height:24px;padding:0 12px;background:var(--w-side);border-top:1px solid var(--w-line);font:11px var(--f-mono);color:var(--w-mute);white-space:nowrap;overflow:hidden}

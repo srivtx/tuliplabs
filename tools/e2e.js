@@ -198,6 +198,21 @@ async function workbench(page, browser, errors) {
   const commits = await page.locator(".hist li").count();
   if (commits !== proj.tickets.length) bad.push(`history shows ${commits} commits, want ${proj.tickets.length}`);
   await page.screenshot({ path: `${shots}/workbench-done.png` });
+  // the download: a real zip whose run.py answers the same commands with plain Python, no browser
+  {
+    const fs = require("fs"), os = require("os"), path = require("path"), { execFileSync } = require("child_process");
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.locator(".wdl-big").click()]);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wbzip-")), zipPath = path.join(dir, dl.suggestedFilename());
+    await dl.saveAs(zipPath);
+    const name = proj.title.toLowerCase();
+    try {
+      execFileSync("python3", ["-c", "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; z.extractall(sys.argv[2])", zipPath, dir]);
+      const out = execFileSync("python3", ["run.py"], { cwd: path.join(dir, name), input: "SET a 1\nMULTI\nINCR n\nINCR n\nEXEC\nGET a\n" }).toString();
+      if (!/OK[\s\S]*1\) 1\n2\) 2[\s\S]*\b1\b/.test(out)) bad.push(`the downloaded ${name}.zip ran, but printed ${JSON.stringify(out)}`);
+      const again = execFileSync("python3", ["run.py"], { cwd: path.join(dir, name), input: "GET n\n" }).toString();
+      if (!again.includes("2")) bad.push(`the downloaded ${name} lost its data across a restart: ${JSON.stringify(again)}`);
+    } catch (e) { bad.push(`the downloaded ${name}.zip doesn't run: ${String(e.stderr || e).slice(0, 300)}`); }
+  }
   console.log(`workbench ${proj.title}: ${proj.tickets.length} tickets driven, ${bad.length} failed`);
   bad.forEach((b) => console.log("  FAIL " + b));
   errors.forEach((e) => console.log("  " + e));

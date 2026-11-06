@@ -1,6 +1,6 @@
 """Workbench projects: parse content/wb/pNN.md into content/wb.json, and prove every ticket works.
 
-A project is front matter (id, num, title, kind, tagline, main, prompt, files, minutes, map) then
+A project is front matter (id, num, title, kind, tagline, main, prompt, files, minutes, finish, map) then
 Markdown intro, then ```ticket blocks. A ticket's parts:
 
     ---brief / ---why            Markdown
@@ -65,6 +65,8 @@ def parse_project(path, md, inline):
         "id": meta["id"], "num": int(meta["num"]), "title": meta["title"], "kind": meta.get("kind", ""),
         "tagline": meta.get("tagline", ""), "main": meta["main"], "prompt": meta.get("prompt", "> "),
         "files": files, "minutes": int(meta.get("minutes", 60)), "map": [], "tickets": [],
+        # what the learner reads when every ticket is committed
+        "finish": md(meta["finish"]) if meta.get("finish") else "",
     }
     for row in meta.get("map", []):
         name, file, tid, what = [c.strip() for c in row.split("|")]

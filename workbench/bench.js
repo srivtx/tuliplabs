@@ -23,6 +23,7 @@
     run: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5v11l9-5.5z"/></svg>',
     test: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8.5l3.5 3.5 7.5-8"/></svg>',
     commit: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><path d="M1 8h4M11 8h4"/></svg>',
+    down: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M4.5 6.8 8 10.3l3.5-3.5M2.5 13.5h11"/></svg>',
     branch: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="3" r="1.6"/><circle cx="4" cy="13" r="1.6"/><circle cx="12" cy="5" r="1.6"/><path d="M4 4.6v6.8M12 6.6c0 3-8 2-8 4.8"/></svg>',
   };
   const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -321,7 +322,8 @@
     const later = P.files.filter((f) => !(f in ST.files));
     const firstTicket = (f) => P.tickets.findIndex((t) => f in t.start || f in t.solution);
     side.append(
-      h("div", { class: "wh" }, "Explorer", h("em", {}, `${have.length} file${have.length === 1 ? "" : "s"}`)),
+      h("div", { class: "wh" }, "Explorer", h("em", {}, `${have.length} file${have.length === 1 ? "" : "s"}`,
+        h("button", { class: "wdl", onclick: download, title: `Download ${P.title.toLowerCase()}.zip, to run with your own Python`, "aria-label": "Download the project as a zip", html: ICON.down }))),
       h("ul", { class: "tree" },
         h("li", {}, h("div", { class: "root" }, "▾ " + P.title.toLowerCase())),
         have.map((f) => h("li", {}, h("button", { class: "f" + (f === ST.active ? " on" : ""), onclick: () => { stash(); openFile(f); } },
@@ -337,6 +339,37 @@
         : h("li", {}, h("div", { class: "none" }, "no commits yet"))));
   }
   let justCommitted = false;
+
+  // download: the project as it stands, plus run.py (a terminal loop) and a README, in a zip (stored, no compression)
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(b) { let c = 0xffffffff; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  function zip(files) {
+    const enc = new TextEncoder(), parts = [], dir = [];
+    const u16 = (n) => [n & 255, (n >>> 8) & 255], u32 = (n) => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+    const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    let off = 0;
+    for (const [name, text] of files) {
+      const nb = enc.encode(name), data = enc.encode(text), crc = crc32(data);
+      const common = [...u16(20), ...u16(0x0800), ...u16(0), ...u16(time), ...u16(date), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nb.length), ...u16(0)];
+      const head = new Uint8Array([...u32(0x04034b50), ...common]);
+      parts.push(head, nb, data);
+      dir.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...common, ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), nb);
+      off += head.length + nb.length + data.length;
+    }
+    const size = dir.reduce((a, b) => a + b.length, 0);
+    return new Blob([...parts, ...dir, new Uint8Array([...u32(0x06054b50), 0, 0, 0, 0, ...u16(files.length), ...u16(files.length), ...u32(size), ...u32(off), 0, 0])], { type: "application/zip" });
+  }
+  function download() {
+    stash();
+    const name = P.title.toLowerCase(), done = P.tickets.slice(0, ST.cur).map((t, i) => `${i + 1}. ${t.title}`);
+    const files = fileOrder(Object.keys(ST.files)).map((f) => [`${name}/${f}`, (states.get(f) ? states.get(f).doc.toString() : ST.files[f])]);
+    files.push([`${name}/run.py`, `"""Run ${P.title} in your own terminal:  python3 run.py\nEach line you type goes to ${P.main}.handle(line), the same as the Workbench terminal."""\nimport ${P.main}\n\nwhile True:\n    try:\n        line = input(${JSON.stringify(P.prompt || "> ")})\n    except (EOFError, KeyboardInterrupt):\n        print()\n        break\n    reply = ${P.main}.handle(line)\n    if reply is not None:\n        print(reply)\n`]);
+    files.push([`${name}/README.md`, `# ${P.title}\n\n${P.kind[0].toUpperCase() + P.kind.slice(1)}, built ticket by ticket in the Workbench at Tulip Labs.\n\n    cd ${name}\n    python3 run.py\n\nIt writes its data files next to the code, so you can stop it, start it again, and your data is still there.\n\n## Tickets committed\n\n${done.length ? done.join("\n") : "None yet: this is the starting code."}\n`]);
+    const a = h("a", { href: URL.createObjectURL(zip(files)), download: `${name}.zip` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast(`Downloaded ${name}.zip. Unzip it and run python3 run.py.`);
+  }
   const bytes = (n) => (n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB");
 
   function renderTabs() {
@@ -427,8 +460,11 @@
     tick.append(h("div", { class: "wfin" },
       h("div", { class: "tk-no" }, "ALL TICKETS COMMITTED"),
       h("h1", {}, `${P.title} works.`),
-      h("div", { class: "prose", html: `<p>You wrote a database you can talk to, that keeps every write on disk and survives a power cut in the middle of one. Try it in the terminal: <code>SET</code> a few keys, pull the plug, and read them back.</p>` +
-        (next.length ? `<p>Next on Ledger's board: ${next.map((m) => `<b>${m.name}</b>`).join(", ")}. They're being written now.</p>` : "") }),
+      h("div", { class: "prose", html: (P.finish || `<p>Every part on the map is yours. Try it in the terminal.</p>`) +
+        (next.length ? `<p>Next on ${esc(P.title)}'s board: ${next.map((m) => `<b>${m.name}</b>`).join(", ")}. They're being written now.</p>` : "") }),
+      h("div", { class: "wfin-go" },
+        h("button", { class: "wdl-big", onclick: download, html: ICON.down + `<span>Download ${esc(P.title.toLowerCase())}.zip</span>` }),
+        h("span", {}, "Your code, plus ", h("code", {}, "run.py"), ". It runs with any Python 3, no browser needed.")),
       h("p", { class: "prose" }, h("a", { href: "./", style: "color:var(--w-pink)" }, "← All projects"))));
   }
 
