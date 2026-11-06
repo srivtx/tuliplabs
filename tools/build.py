@@ -14,6 +14,8 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT = os.path.join(ROOT, "content")
 TRACKS = {
@@ -409,6 +411,15 @@ def build(only=None):
     # course order, as the studio shows them; the fourth field is the course each level sits in
     lines = [l for l in src[src.index("courses:"):src.index("levels:")].splitlines() if "ids:" in l]
     summary["dz"] = [[i, titles[i], 1, ci] for ci, l in enumerate(lines) for i in re.findall(r'"(dz\d+)"', l)]
+    # Workbench projects (content/wb): one entry per ticket, so progress counts tickets committed
+    import workbench
+    projects = workbench.build(md, inline)
+    if projects:
+        with open(os.path.join(CONTENT, "wb.json"), "w", encoding="utf-8") as fh:
+            json.dump({"track": "wb", "book": "Workbench", "projects": projects}, fh, ensure_ascii=False, separators=(",", ":"))
+        print(f"built wb.json: {len(projects)} projects, {sum(len(p['tickets']) for p in projects)} tickets")
+        summary["wb"] = [[f"{p['id']}-{t['id']}", f"{p['title']}: {t['title']}", 1, i] for i, p in enumerate(projects) for t in p["tickets"]]
+        built["wb"] = projects
     with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))
     return built
@@ -495,13 +506,21 @@ def _has(module):
 
 
 def verify(built, only):
-    chapters = [c for cs in built.values() for c in cs if not only or c["id"] in only]
+    import workbench
+    projects = [p for p in built.get("wb", []) if not only or p["id"] in only]
+    chapters = [c for t, cs in built.items() if t != "wb" for c in cs if not only or c["id"] in only]
     ctx = mp.get_context("spawn")
     bad = 0
     with ctx.Pool(min(4, os.cpu_count() or 1)) as pool:
         for cid, count, problems in pool.imap(_verify_chapter, chapters):
             status = "ok" if not problems else f"{len(problems)} problem(s)"
             print(f"  {cid}: {count} checks, {status}")
+            for p in problems:
+                print("     - " + p.replace("\n", "\n       "))
+            bad += len(problems)
+        for pid, count, problems in pool.imap(workbench.verify_project, projects):
+            status = "ok" if not problems else f"{len(problems)} problem(s)"
+            print(f"  {pid}: {count} checks, {status}")
             for p in problems:
                 print("     - " + p.replace("\n", "\n       "))
             bad += len(problems)
