@@ -28,13 +28,14 @@
     }
     g.strokeStyle = api.color("line"); g.lineWidth = 1; g.globalAlpha = 0.45;
     g.beginPath();
-    for (const t of ticks(ya, yb)) { g.moveTo(x0, Y(t)); g.lineTo(x1, Y(t)); }
+    const ny = Math.max(2, Math.min(5, Math.floor((y1 - y0) / 30)));
+    for (const t of ticks(ya, yb, ny)) { g.moveTo(x0, Y(t)); g.lineTo(x1, Y(t)); }
     g.stroke(); g.globalAlpha = 1;
     g.strokeRect(x0, y0, x1 - x0, y1 - y0);
     g.fillStyle = api.color("muted"); g.textAlign = "center";
     for (const t of ticks(xa, xb, Math.max(3, Math.floor((x1 - x0) / 70)))) g.fillText(o.xfmt ? o.xfmt(t) : fmt(t), X(t), y1 + 13);
     g.textAlign = "right";
-    for (const t of ticks(ya, yb)) g.fillText(o.yfmt ? o.yfmt(t) : fmt(t), x0 - 4, Y(t) + 4);
+    for (const t of ticks(ya, yb, ny)) g.fillText(o.yfmt ? o.yfmt(t) : fmt(t), x0 - 4, Y(t) + 4);
     if (o.xlabel) { g.textAlign = "center"; g.fillText(o.xlabel, (x0 + x1) / 2, y1 + 26); }
     if (o.ylabel) { g.textAlign = "left"; g.fillText(o.ylabel, x0, y0 - 7); }
     const clip = () => { g.save(); g.beginPath(); g.rect(x0, y0, x1 - x0, y1 - y0); g.clip(); };
