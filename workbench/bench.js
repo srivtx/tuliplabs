@@ -615,7 +615,7 @@
       h("span", { class: "grow" }));
     if (panelTab === "term") {
       pt.append(h("button", { class: "act", onclick: restart, title: "Stop the program and start it again. Memory is wiped; the disk is kept." }, "↻ restart"));
-      if (disk.length) pt.append(h("button", { class: "act plug", onclick: plug, title: "Kill the program in the middle of its last write, like a power cut, then start it again" }, "⚡ pull the plug"));
+      if (disk.length) pt.append(h("button", { class: "act plug", onclick: plug, title: JS() ? "Cut the power halfway through the program's next write to disk, like a real power cut" : "Kill the program in the middle of its last write, like a power cut, then start it again" }, "⚡ pull the plug"));
       if (Runner.busy && !LOCAL) pt.append(h("button", { class: "act", onclick: () => { Runner.stop(); running = false; say("sys", "■ stopped"); } }, "■ stop"));
     }
     if (panelTab === "disk" && disk.length) pt.append(h("button", { class: "act", onclick: wipeDisk, title: "Delete every file the program wrote" }, "wipe disk"));
@@ -750,6 +750,16 @@
   }
   async function plug() {
     ghostDone("plug");
+    // Node projects: the power goes out halfway through the program's next write, wherever that is,
+    // so a careful save (write beside, then rename) really is safer than a careless one
+    if (JS()) {
+      if (!running) return toast("Run the program first: the power cut lands during its next write.");
+      const r = await Runner.run({ op: "project_arm", pid: P.id });
+      if (r.error) return toast(r.error);
+      termLog.push({ kind: "crash", text: "⚡ plug pulled: the power goes out halfway through the program's next write. Send a request that saves something." });
+      focusTerm = true;
+      return showPanel("term");
+    }
     const target = [...disk].sort((a, b) => b.size - a.size)[0];
     termLog.push({ kind: "crash", text: `⚡ power cut while writing ${target.name}: its last record is only half on disk` });
     running = false;

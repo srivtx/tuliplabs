@@ -550,8 +550,11 @@
       c.die = (err) => {
         if (c.dead) return;
         c.crash = err;
-        write(`\n${err && err.name ? err.name : "Error"}: ${err && err.message !== undefined ? err.message : err}\n`);
-        write("💥 the program crashed: an error nobody caught reached the top, so Node exited.\n");
+        if (err && err.__power) write(`⚡ power cut while writing ${err.file}: only ${err.wrote} of its ${err.of} bytes reached the disk\n`);
+        else {
+          write(`\n${err && err.name ? err.name : "Error"}: ${err && err.message !== undefined ? err.message : err}\n`);
+          write("💥 the program crashed: an error nobody caught reached the top, so Node exited.\n");
+        }
         const waiting = c.onCrash.splice(0);
         unload(pid);
         c.dead = true;
@@ -616,14 +619,32 @@
       };
       const notFound = (p, sys = "open") => nodeErr(Error, "ENOENT", `ENOENT: no such file or directory, ${sys} '${p}'`, { errno: -2, syscall: sys, path: String(p) });
       const opt = (o) => (typeof o === "string" ? o : o && o.encoding);
+      // A pulled plug (project_arm) lands in the middle of the program's next write: half the bytes reach the
+      // disk, then the program is gone. Whatever it does next never happens, which is what a power cut is.
+      const gone = () => Object.assign(new Error("power cut"), { __exit: true });
+      // keep: bytes already on disk that this write doesn't touch (an append's old content)
+      const put = (n, buf, keep = 0) => {
+        if (c.dead) throw gone();
+        if (c.armed) {
+          c.armed = false;
+          const half = keep + Math.floor((buf.length - keep) / 2);
+          disk.set(n, buf.subarray(0, half));
+          c.die(Object.assign(new Error("power cut"), { __exit: true, __power: true, file: n, wrote: half - keep, of: buf.length - keep }));
+          throw gone();
+        }
+        disk.set(n, buf);
+      };
       const fsSync = {
         readFileSync(p, o) { const n = fname(p); if (!disk.has(n)) throw notFound(p); const b = Buffer.from(disk.get(n)); return opt(o) ? b.toString(opt(o)) : b; },
-        writeFileSync(p, d, o) { disk.set(fname(p), toBuf(typeof d === "string" || d instanceof Uint8Array ? d : String(d), opt(o))); },
-        appendFileSync(p, d, o) { const n = fname(p), add = toBuf(typeof d === "string" || d instanceof Uint8Array ? d : String(d), opt(o)); disk.set(n, disk.has(n) ? Buffer.concat([disk.get(n), add]) : add); },
+        writeFileSync(p, d, o) { put(fname(p), toBuf(typeof d === "string" || d instanceof Uint8Array ? d : String(d), opt(o))); },
+        appendFileSync(p, d, o) {
+          const n = fname(p), add = toBuf(typeof d === "string" || d instanceof Uint8Array ? d : String(d), opt(o)), old = disk.get(n) || new Buffer(0);
+          put(n, Buffer.concat([old, add]), old.length);
+        },
         existsSync: (p) => { try { const n = fname(p); return n === "." || disk.has(n) || [...disk.keys()].some((k) => k.startsWith(n + "/")); } catch (e) { return false; } },
-        unlinkSync(p) { const n = fname(p); if (!disk.has(n)) throw notFound(p, "unlink"); disk.delete(n); },
+        unlinkSync(p) { if (c.dead) throw gone(); const n = fname(p); if (!disk.has(n)) throw notFound(p, "unlink"); disk.delete(n); },
         rmSync(p, o) { const n = fname(p); if (disk.has(n)) disk.delete(n); else if (o && o.recursive) { for (const k of [...disk.keys()]) if (k.startsWith(n + "/")) disk.delete(k); } else if (!(o && o.force)) throw notFound(p, "rm"); },
-        renameSync(a, b) { const n = fname(a); if (!disk.has(n)) throw notFound(a, "rename"); disk.set(fname(b), disk.get(n)); disk.delete(n); },
+        renameSync(a, b) { if (c.dead) throw gone(); const n = fname(a); if (!disk.has(n)) throw notFound(a, "rename"); disk.set(fname(b), disk.get(n)); disk.delete(n); },
         mkdirSync() {},
         readdirSync(p = ".") { const n = fname(p), pre = n === "." ? "" : n + "/"; return [...new Set([...disk.keys()].filter((k) => k.startsWith(pre)).map((k) => k.slice(pre.length).split("/")[0]))].sort(); },
         statSync(p) { const n = fname(p); if (disk.has(n)) return { size: disk.get(n).length, isFile: () => true, isDirectory: () => false, mtimeMs: Date.now(), mtime: new Date() }; if (fsSync.existsSync(p)) return { size: 0, isFile: () => false, isDirectory: () => true, mtimeMs: Date.now(), mtime: new Date() }; throw notFound(p, "stat"); },
@@ -672,7 +693,10 @@
           if (file.endsWith(".json")) {
             module.exports = JSON.parse(c.files[file]);
           } else {
-            const fn = compile(`(function (${ARGS.join(", ")}) {${c.files[file]}\n})`, PREFIX + file);
+            let fn;
+            // a file that doesn't parse: marked, so the error points at that file rather than a stack frame
+            try { fn = compile(`(function (${ARGS.join(", ")}) {${c.files[file]}\n})`, PREFIX + file); }
+            catch (e) { if (e && typeof e === "object") { e.__compile = true; e.__file = file; } throw e; }
             const req = makeRequire(file);
             fn.call(module.exports, module.exports, req, module, "/app/" + file, "/app", ...Object.values(globalsList));
           }
@@ -947,12 +971,12 @@
       // a request's error passes back through the client that sent it: the trace stops at the server's side
       const cut = fr.findIndex(([f]) => f === mainFile);
       if (cut > 0) fr = fr.slice(0, cut);
-      if (err && err.name === "SyntaxError") fr = [];
+      if (err && err.__compile) fr = [];
       let where = fr.length ? fr[0] : null;
-      if (!where && err && err.name === "SyntaxError" && err.__file) where = [err.__file, 0];
+      if (!where && err && err.__compile && err.__file) where = [err.__file, 0];
       // Node puts a SyntaxError's location at the top of the stack instead of in a frame
       // (only its first line: a browser's SyntaxError has no location, and its frames are the require chain)
-      if (err && err.name === "SyntaxError") { const m = /^wb\/([^\s:()]+):(\d+)/.exec(String(err.stack)); if (m && m[1] in files) where = [m[1], +m[2]]; }
+      if (err && err.__compile) { const m = /^wb\/([^\s:()]+):(\d+)/.exec(String(err.stack)); if (m && m[1] in files) where = [m[1], +m[2]]; }
       const lines = fr.slice(0, 4).reverse().map(([f, n]) => `  ${f}, line ${n}: ${((files[f] || "").split("\n")[n - 1] || "").trim()}`);
       if (where && !lines.length) lines.push(`  ${where[0]}${where[1] ? `, line ${where[1]}` : ""}`);
       const extra = err && err.cause && err.cause.message ? `\n  cause: ${err.cause.message}` : "";
@@ -1006,6 +1030,14 @@
       return { stdout: takeOut(c), error, where, disk: diskList(pid), exited: c.dead };
     }
 
+    // pull the plug: the program's next write to disk is cut off halfway, and the program dies
+    function project_arm({ pid }) {
+      const c = live.get(pid);
+      if (!c) return { error: "The program isn't running. Press Run first." };
+      c.armed = true;
+      return { armed: true, disk: diskList(pid) };
+    }
+
     function project_tear({ pid, name, keep }) {
       const d = diskOf(pid);
       if (d.has(name)) {
@@ -1019,7 +1051,7 @@
 
     // A ticket's tests are JavaScript: top-level `assert(cond, "message")` lines, with helpers to talk to the
     // program. Each ticket starts it fresh on a clean disk; the first failing check stops the run.
-    const TEST_ARGS = ["assert", "run", "restart", "disk", "tear", "fetch", "request", "require", "wait", "port", "source"];
+    const TEST_ARGS = ["assert", "run", "restart", "disk", "tear", "plug", "fetch", "request", "require", "wait", "port", "source"];
     async function project_check({ pid, files, main, tickets, port = 3000 }) {
       const tid = pid + ":check";
       const results = [];
@@ -1064,6 +1096,7 @@
           return r.stdout.replace(/\n$/, "");
         },
         restart: async () => { const r = await project_load({ pid: tid, files, main }); if (r.error) throw new Error(r.error); },
+        plug: () => { project_arm({ pid: tid }); },
         disk: (name) => { const d = diskOf(tid); return d.has(name) ? d.get(name).toString() : null; },
         tear: async (name, keep = 0.5) => { project_tear({ pid: tid, name, keep }); const r = await project_load({ pid: tid, files, main }); if (r.error) throw new Error(r.error); },
         // fetch from the program's own world, so tests see exactly what a client sees
@@ -1129,7 +1162,7 @@
       return bad;
     }
 
-    const OPS = { project_load, project_call, project_tear, project_check, project_session };
+    const OPS = { project_load, project_call, project_tear, project_arm, project_check, project_session };
     async function handle(req) {
       const op = OPS[req.op];
       if (!op) return { error: `unknown op ${req.op}` };
