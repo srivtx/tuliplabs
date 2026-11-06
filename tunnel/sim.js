@@ -150,7 +150,7 @@
     }
     // a batch of jobs lands: all at once, to their own queue or to the servers
     landBatch() {
-      const B = this.cfg.batch, b = { t: this.t, n: B.n, left: B.n, last: this.t };
+      const B = this.cfg.batch, b = { t: this.t, n: B.n, left: B.n, last: this.t, q: this.cfg.jobWorkers > 0 };
       this.batches.push(b);
       if (this.feed) this.feed.push(["batch", B.n, this.cfg.jobWorkers > 0]);
       for (let k = 0; k < B.n; k++) {

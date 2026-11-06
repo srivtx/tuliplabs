@@ -275,6 +275,96 @@ route:
         ["Node.js", "<code>res.on(\"close\")</code> fires when a client hangs up before you answer: wire it to an <code>AbortController</code> to stop the work."],
       ],
     },
+    wt06: {
+      files: [
+        {
+          name: "mailer.py", lang: "py", run: true,
+          src: (c) => {
+            const B = c.batch, jw = c.jobWorkers, work = B.n * B.service;
+            return `# The newsletter, off the website's line.
+import queue
+import threading
+import time
+
+${col([[`EMAILS = ${B.n}`, "a batch, all at once"], [`PER_EMAIL = ${B.service}`, "seconds of a worker"], [`EVERY = ${B.every}`, "a batch a minute"], [`JOB_WORKERS = ${jw}`, "your system.yaml"], ["FAST = 0.001", "1000x faster than life"]])}
+
+# Bounded: room for two batches. Past that, put()
+# waits, and the job that fills it slows down to
+# the workers' pace. That's backpressure.
+jobs = queue.Queue(maxsize=EMAILS * 2)
+sent = []
+
+
+def send(email):
+    time.sleep(PER_EMAIL * FAST)  # the SMTP call
+    sent.append(email)
+
+
+def worker():
+    while True:
+        email = jobs.get()
+        send(email)
+        jobs.task_done()
+
+
+for _ in range(JOB_WORKERS):
+    threading.Thread(target=worker, daemon=True).start()
+
+for email in range(EMAILS):  # the batch lands
+    jobs.put(email)
+jobs.join()  # until the last one is sent
+print(f"sent {len(sent)} of {EMAILS}")
+# → sent ${B.n} of ${B.n}
+
+work = EMAILS * PER_EMAIL
+print(f"a batch is {work:.0f} worker-seconds")
+# → a batch is ${work.toFixed(0)} worker-seconds
+drain = work / JOB_WORKERS
+print(f"sent in {drain:.1f} s by {JOB_WORKERS}")
+# → sent in ${(work / jw).toFixed(1)} s by ${jw}
+print(f"the average needs {work / EVERY:.1f} workers")
+# → the average needs ${(work / B.every).toFixed(1)} workers
+print("keeps up" if drain < EVERY else "falls behind")
+# → ${work / jw < B.every ? "keeps up" : "falls behind"}`;
+          },
+        },
+        {
+          name: "tasks.py", lang: "py",
+          src: (c) => `# The same design with Celery over Redis.
+from celery import Celery
+
+app = Celery("mail", broker="redis://localhost:6379/0")
+app.conf.task_acks_late = True  # redo a lost job
+app.conf.worker_prefetch_multiplier = 1
+app.conf.task_routes = {
+    "tasks.send_email": {"queue": "email"},
+}
+
+
+@app.task
+def send_email(address):
+    deliver(address)  # the slow part: ${Math.round(c.batch.service * 1000)} ms
+
+
+def newsletter():
+    for address in due():  # enqueue; never send here
+        send_email.delay(address)
+
+# ${c.jobWorkers} workers of their own, apart from the website:
+# celery -A tasks worker -Q email --concurrency=${c.jobWorkers}`,
+        },
+      ],
+      check: { line: 2, metric: "jobAge", tol: 2.5 },
+      try: [{ workers: 4, jobWorkers: 2, batch: { at: 5, every: 60, n: 900, service: 0.1 } }, { workers: 4, jobWorkers: 1 }],
+      watch: (c) => `Graph the <b>age of the oldest job</b>, not the length of the queue. ${n(c.batch.n)} emails waiting is fine for a newsletter; a password-reset email that's a minute old is not. Alert when the age passes what you promise (here, 50 s). Graph jobs in against jobs done: if in stays above done, the queue is hiding an overload. And give each promise its own queue, so a newsletter can never hold up a password reset.`,
+      stack: [
+        ["Python", "Celery or RQ over Redis, with <code>acks_late</code> so a crashed worker's job is redone, not lost. In one process, <code>ThreadPoolExecutor</code> suits network calls like SMTP: the GIL is let go while a thread waits."],
+        ["Go", "A buffered channel is a bounded queue: <code>jobs := make(chan Email, 3600)</code>, read by a few goroutines. A send on a full channel blocks, which is backpressure for free."],
+        ["Java", "<code>Executors.newFixedThreadPool(4)</code> hides an <i>unbounded</i> queue. Build a <code>ThreadPoolExecutor</code> over an <code>ArrayBlockingQueue</code> with <code>CallerRunsPolicy</code>, so a full queue pushes back on whoever fills it."],
+        ["Node.js", "One thread serves every request, so slow work in a handler is the shared line from the tunnel. Put it in a queue like BullMQ, run by a separate worker process with <code>concurrency: 4</code>."],
+        ["Kubernetes", "Run the workers as their own deployment, and scale it on the oldest job's age or the queue's depth (KEDA does this), not on CPU."],
+      ],
+    },
   };
 
   root.WT = root.WT || {};

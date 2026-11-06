@@ -303,6 +303,18 @@ async function tunnel(page, browser, errors) {
       await page.locator(".wt-ctag").click();
       for (let i = 0; i < 12 && (await st()).cfg.cache < ref.cache; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
     }
+    if (ref.jobWorkers !== undefined) {
+      // drag the email queue from the parts tray onto the stage, then give its mailer more workers
+      const g = page.locator(".wt-parts .ghost.queue"), stage = page.locator(".wt-stage");
+      const a = await g.boundingBox(), b = await stage.boundingBox();
+      await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width * 0.6, b.y + b.height * 0.6, { steps: 8 });
+      await page.mouse.up();
+      if (!((await st()).cfg.jobWorkers > 0)) bad.push(`${x.id}: dragging the email queue onto the stage didn't add it`);
+      await page.locator(".wt-ctag", { hasText: "mailer" }).click();
+      for (let i = 0; i < 12 && (await st()).cfg.jobWorkers < ref.jobWorkers; i++) await page.locator('.wt-insp .step[aria-label="workers: more"]').click();
+    }
     const got = (await st()).cfg;
     for (const k in ref) if (got[k] !== ref[k]) bad.push(`${x.id}: couldn't set ${k} to ${ref[k]} through the page (it's ${got[k]})`);
     if (!(await page.locator(".wt-code .y-l.add").count())) bad.push(`${x.id}: system.yaml shows no change after the fix`);

@@ -61,6 +61,8 @@
   // the run's real head and `sim` is the moment you're looking at.
   let tape = null, live = null;
   let X, idx, sim, P, speed = 1, paused = false, samples = [], dots = [], lastLoadChange = 0, lastSysChange = 0, flyers = [], sparks = [], before = null;
+  // a batch experiment's chart: each batch's jobs still waiting, by seconds since it landed, keyed by when it landed
+  let teeth = new Map();
   const SPEEDS = [[0.1, "slow-mo"], [1, "×1"], [10, "×10"]];
   const WINDOW = 30, MAX_SERVERS = 6;
   const CACHE_SIZES = [10, 25, 50, 100, 250, 500, 1000, 1500, 2000, 3000, 5000, 10000];
@@ -100,14 +102,14 @@
     tape = { cfg, seed: 1 + idx, changes: [] };
     live = null;
     before = startCfg();
-    samples = []; dots = []; flyers = []; sparks = []; lastLoadChange = 0; lastSysChange = 0; lastSample = 0;
+    samples = []; dots = []; flyers = []; sparks = []; lastLoadChange = 0; lastSysChange = 0; lastSample = 0; teeth = new Map();
     heatOf = []; boomOf = [];
     snapView = true;
   }
   // restart the run with the knobs as they are now: a way out when a backlog won't drain
   function restart() {
     const keep = {};
-    for (const k of ["rate", "users", "workers", "servers", "lb", "cache", "queueMax", "cancel", "retries", "backoff", "jitter"]) keep[k] = sim.cfg[k];
+    for (const k of ["rate", "users", "workers", "servers", "lb", "cache", "queueMax", "cancel", "retries", "backoff", "jitter", "jobWorkers"]) keep[k] = sim.cfg[k];
     // a surge lifts the rate for a while: restart from the rate underneath it
     if (surging()) keep.rate = sim.base;
     const b = before;
@@ -303,7 +305,7 @@
     const ticks = a.log ? [1, 2, 3].map((e) => Math.pow(10, e)).concat([a.max]).filter((v, i, L) => L.indexOf(v) === i && v >= a.min && v <= a.max) : [0, 0.25, 0.5, 0.75, 1].map((f) => fromF(a, f));
     const track = h("div", { class: "line" + (locked ? " locked" : "") }, h("span", { class: "rail" }), pin, lab,
       ...ticks.map((v) => h("span", { class: "tick", style: `left:${toF(a, v) * 100}%` }, num(v))));
-    if (locked) track.append(h("span", { class: "ans", style: `left:${toF(a, X.predict.answer) * 100}%`, title: `about ${X.predict.answer}` }));
+    if (locked && (P.revealed || inTask())) track.append(h("span", { class: "ans", style: `left:${toF(a, X.predict.answer) * 100}%`, title: `about ${X.predict.answer}` }));
     const set = (v) => {
       g = snap(a, v);
       const f = toF(a, g);
@@ -349,10 +351,11 @@
       verdict = r <= t ? "Spot on." : r <= t * t ? "Close." : g < A ? "It needs more than you thought." : "Less does it than you thought.";
     } else {
       const d = Math.abs(g - A);
-      verdict = d <= X.predict.tol ? "Spot on." : d <= X.predict.tol * 2 ? "Close." : (g < A ? "It held more than you thought." : "It broke sooner than you thought.");
+      const [lo, hi] = X.predict.words || ["It held more than you thought.", "It broke sooner than you thought."];
+      verdict = d <= X.predict.tol ? "Spot on." : d <= X.predict.tol * 2 ? "Close." : (g < A ? lo : hi);
     }
     wrap.append(
-      h("div", { class: "cmp" }, h("span", {}, "you said ", h("b", {}, fmtAxis(g))), h("span", {}, X.predict.axis ? "it needs " : "it bends at ", h("b", {}, `≈ ${fmtAxis(A)}`)), h("strong", {}, verdict)),
+      h("div", { class: "cmp" }, h("span", {}, "you said ", h("b", {}, fmtAxis(g))), h("span", {}, X.predict.said ? X.predict.said + " " : X.predict.axis ? "it needs " : "it bends at ", h("b", {}, `≈ ${fmtAxis(A)}`)), h("strong", {}, verdict)),
       h("p", { html: X.predict.reveal }),
       ...X.why.map((p) => h("p", { html: p })));
     if (P.phase === "explore") wrap.append(h("button", { class: "wt-go", onclick: startTask }, `${X.task.title} →`));
@@ -366,7 +369,7 @@
     renderBrief(); renderParts(); renderCode();
     els.hint.textContent = taskHint();
   }
-  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : X.clients ? `Click the ${name("server")} or the clients to change them.` : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
+  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("jobWorkers") ? `Drag the email queue on, or click the ${name("server")} or the mailer to change their workers.` : X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : X.clients ? `Click the ${name("server")} or the clients to change them.` : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
 
   function taskBody() {
     const wrap = h("div", { class: "wt-sb" });
@@ -439,8 +442,8 @@
   // the task's goal, checked every simulated second over the last 30 s once the design hasn't changed for that long
   function checkGoal(quiet) {
     if (!inTask() || !els.goal || !sim) return;
-    const t = sim.t, since = t - lastSysChange, full = since >= WINDOW;
-    const st = sim.stats(Math.max(lastSysChange, t - WINDOW), t);
+    const W = X.task.window || WINDOW, t = sim.t, since = t - lastSysChange, full = since >= W;
+    const st = sim.stats(Math.max(lastSysChange, t - W), t);
     const rows = X.task.goal.map((g) => {
       const [k, op, v] = g, x = k in st ? st[k] : sim.cfg[k];
       const ok = op === "<" ? x < v : op === "<=" ? x <= v : op === "==" ? x === v : op === ">" ? x > v : x >= v;
@@ -449,12 +452,12 @@
     for (const r of rows) {
       const li = els.goal.querySelector(`[data-k="${r.k}"]`);
       li.classList.toggle("ok", r.ok);
-      li.querySelector("b").textContent = r.k === "p99" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : r.k === "errors" && st.span ? `${num(r.x)} (${Math.round(st.errRate * 100)}%)` : num(r.x);
+      li.querySelector("b").textContent = r.k === "p99" || r.k === "jobAge" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : r.k === "errors" && st.span ? `${num(r.x)} (${Math.round(st.errRate * 100)}%)` : num(r.x);
     }
     const all = rows.every((r) => r.ok);
-    els.meter.querySelector(".fill").style.width = `${Math.min(1, since / WINDOW) * 100}%`;
+    els.meter.querySelector(".fill").style.width = `${Math.min(1, since / W) * 100}%`;
     els.meter.classList.toggle("ok", all && full);
-    els.meter.querySelector("em").textContent = P.phase === "done" ? "met" : full ? (all ? "met for 30 s" : "measuring the last 30 s") : `steady for ${Math.floor(since)} of 30 s${speed < 10 ? " · ×10 to fast-forward" : ""}`;
+    els.meter.querySelector("em").textContent = P.phase === "done" ? "met" : full ? (all ? `met for ${W} s` : `measuring the last ${W} s`) : `steady for ${Math.floor(since)} of ${W} s${speed < 10 ? " · ×10 to fast-forward" : ""}`;
     if (full && all && P.phase === "task" && !quiet) win();
   }
   function win() {
@@ -507,6 +510,18 @@
     if (X.clients) {
       kv("retries", String(c.retries));
       kv("backoff", c.backoff ? `${c.backoff}s` : "none", c.backoff ? (c.jitter ? "doubling, jittered" : "doubling") : "retry at once");
+    }
+    if (c.batch) {
+      L.push([0, "newsletter"]);
+      kv("every", `${c.batch.every}s`);
+      kv("emails", num(c.batch.n), "all at once");
+      kv("per_email", `${Math.round(c.batch.service * 1000)}ms`);
+      kv("sent_by", c.jobWorkers > 0 ? "email_queue" : name("server"), c.jobWorkers > 0 ? "" : "with the pages");
+      if (c.jobWorkers > 0) {
+        L.push([0, "email_queue"]);
+        kv("workers", String(c.jobWorkers));
+        kv("drains_a_batch_in", ms(c.batch.n * c.batch.service / c.jobWorkers));
+      }
     }
     if (c.surge) { L.push([0, "surge"]); kv("at", clock(c.surge.at).slice(2)); kv("for", `${c.surge.for}s`); kv("arrivals", `${num(c.surge.rate)}/s`); }
     return L.map(([ind, k, v, note]) => (ind ? `  ${k}: ${v}${note ? `  # ${note}` : ""}` : `${k}:`));
@@ -597,6 +612,16 @@
         L.queues.push({ x: x + 3.4, y: y + 0.3, cols: 2, levels: 10 });
       }
     }
+    // background jobs: the job that makes them sits in front, by the crowd; their queue and the mailer, when there's
+    // one, stand in a row in front of the website
+    if (c.batch) {
+      const S = L.servers[L.servers.length - 1], sx = L.servers[0].x, yb = Math.max(5.2, S.y + S.d + 0.9);
+      L.cron = { x: 7.9, y: yb + 2.2, w: 1.25, d: 1.25, h: 0.95 };
+      if (c.jobWorkers > 0) {
+        L.jq = { x: sx - 2.9, y: yb - 0.15, cols: 4, levels: 6 };
+        L.mailer = { x: sx, y: yb, w: 3, d: 1.7, h: 1.1 };
+      }
+    }
     return L;
   }
   // fit the scene's bounding box in the stage, leaving room for system.yaml on the left when it's open
@@ -613,6 +638,9 @@
     if (L.lb) box(L.lb, 1);
     L.servers.forEach((s) => box(s, 1.6));
     L.queues.forEach((q) => box({ x: q.x, y: q.y, w: q.cols * 0.5, d: q.cols * 0.5, h: Math.min(q.levels * 0.3, 2) }));
+    if (L.cron) box(L.cron, 1);
+    if (L.jq) box({ x: L.jq.x, y: L.jq.y, w: 2, d: 2, h: 1.5 });
+    if (L.mailer) box(L.mailer, 1);
     // room on the right for a column of server labels; on the left for system.yaml, minus what the crowd's empty
     // top-left corner can share with it
     const left = codeOpen && !SHOT ? Math.max(12, Math.min(els.code.offsetWidth * 0.75 + 20, cw - 520)) : 12, right = L.servers.length > 1 ? 110 : 70;
@@ -667,8 +695,8 @@
   }
   function themeOf(dark) {
     return dark
-      ? { bg: "#0b1418", grid: "rgba(95,224,240,.07)", ground: "#10232a", wire: "#1c3a44", text: "#a9d6de", mute: "#5f8a93", q: "#ffc94a", hot: "#ff5a4f", ok: "#5fe0a0", bad: "#ff5a6e", req: "#ffe08a", pad: "#0e2a31", smoke: "120,140,148", cache: "#c7a2ff", lb: "#86b4ff", ghost: "rgb(95,224,240)", spark: "#ffb347", lit: "#5fe0a0" }
-      : { bg: "#f2f6f5", grid: "rgba(16,90,104,.08)", ground: "#e3ecea", wire: "#c9dbd8", text: "#1d4a52", mute: "#6d8f95", q: "#e0a412", hot: "#e8453c", ok: "#1fa36a", bad: "#e23d55", req: "#e8a10f", pad: "#cfe2e0", smoke: "90,100,104", cache: "#9a6ce0", lb: "#4f7fd8", ghost: "rgb(15,139,160)", spark: "#f08a1c", lit: "#1fa36a" };
+      ? { bg: "#0b1418", grid: "rgba(95,224,240,.07)", ground: "#10232a", wire: "#1c3a44", text: "#a9d6de", mute: "#5f8a93", q: "#ffc94a", hot: "#ff5a4f", ok: "#5fe0a0", bad: "#ff5a6e", req: "#ffe08a", pad: "#0e2a31", smoke: "120,140,148", cache: "#c7a2ff", lb: "#86b4ff", ghost: "rgb(95,224,240)", spark: "#ffb347", lit: "#5fe0a0", job: "#ff8a5c", mailer: "#3e6f8c" }
+      : { bg: "#f2f6f5", grid: "rgba(16,90,104,.08)", ground: "#e3ecea", wire: "#c9dbd8", text: "#1d4a52", mute: "#6d8f95", q: "#e0a412", hot: "#e8453c", ok: "#1fa36a", bad: "#e23d55", req: "#e8a10f", pad: "#cfe2e0", smoke: "90,100,104", cache: "#9a6ce0", lb: "#4f7fd8", ghost: "rgb(15,139,160)", spark: "#f08a1c", lit: "#1fa36a", job: "#e2643a", mailer: "#7fa8c4" };
   }
   const PEOPLE = ["#ff6fb5", "#ffc94a", "#86b4ff", "#5fd4b0", "#c7a2ff", "#ff9d7a", "#f0643c", "#9fe870"];
   // how hot a server is, 0..1: teal, then blue, magenta and red, so no step on the way is a muddy brown
@@ -717,6 +745,11 @@
     if (LY.cache) strip(LY.cache.x + LY.cache.w, wy + 0.3, LY.lb ? LY.lb.x : firstQ.x, wy + 0.3, 0.3, T.wire);
     if (LY.lb) LY.queues.forEach((q, i) => strip(LY.lb.x + LY.lb.w, wy + 0.3, q.x, LY.servers[i].y + LY.servers[i].d / 2, i === lastRoute ? 0.16 : 0.11, i === lastRoute && routeGlow > 0 ? mix(T.wire.startsWith("#") ? T.wire : "#1c3a44", T.req, routeGlow * 0.6) : T.wire));
     if (!LY.lb) strip(firstQ.x, wy + 0.3, S0.x, wy + 0.3, 0.3, T.wire);
+    if (LY.cron) {
+      const C = LY.cron, cy = C.y + C.d / 2;
+      if (LY.jq) { const my = LY.mailer.y + LY.mailer.d / 2; strip(C.x + C.w, cy, LY.jq.x, my, 0.22, T.wire); strip(LY.jq.x + 2, my, LY.mailer.x, my, 0.22, T.wire); }
+      else strip(C.x + C.w / 2, C.y, C.x + C.w / 2, wy + 0.3, 0.22, T.wire);
+    }
     // the crowd: people stand on a grid; in a closed loop the ones waiting for an answer glow
     poly([iso(-0.2, -0.2, 0), iso(7.7, -0.2, 0), iso(7.7, 6.9, 0), iso(-0.2, 6.9, 0)], T.ground);
     const shown = crowdShown(), waitingFrac = sim.cfg.mode === "closed" && sim.users ? (sim.users - sim.thinking) / sim.users : 0;
@@ -753,6 +786,7 @@
     // queues and servers, back to front
     const order = LY.servers.map((s, i) => i).sort((a, b) => LY.servers[a].y - LY.servers[b].y);
     for (const i of order) drawServer(i, T, dt, t);
+    if (LY.cron) drawJobs(T, t);
     // a ghost being dragged shows the slot it would fill
     if (ghostDrag && ghostDrag.slot) ghostBox(ghostDrag.slot, T.ghost);
     drawFlyers(T, dt);
@@ -767,7 +801,7 @@
     const per = Q.cols * Q.cols, shownQ = Math.min(qn, per * Q.levels), qcol = qn > W * 6 ? T.hot : T.q;
     for (let k = 0; k < shownQ; k++) {
       const lvl = (k / per) | 0, m = k % per, a = m % Q.cols, b = (m / Q.cols) | 0;
-      cube(Q.x + a * 0.5, Q.y + b * 0.5, lvl * 0.3, 0.44, 0.44, 0.26, qcol);
+      cube(Q.x + a * 0.5, Q.y + b * 0.5, lvl * 0.3, 0.44, 0.44, 0.26, srv.queue[k].job ? T.job : qcol);
     }
     // overload, 0..1, eased: how far past "busy" this server is. It drives the heat, the shake, smoke and beacon
     const u = srv.busy.length / Math.max(1, W), over = Math.min(1, qn / (W * 8));
@@ -787,7 +821,7 @@
       const q = srv.busy[k];
       if (q) {
         const left = q.end > q.began ? Math.max(0, Math.min(1, (q.end - sim.t) / (q.end - q.began))) : 0, s = Math.min(pw, pd) * 0.5;
-        cube(px + pw * 0.36 - s / 2, py + pd * 0.36 - s / 2, B.h, s, s, 0.2 + 0.5 * left, T.req);
+        cube(px + pw * 0.36 - s / 2, py + pd * 0.36 - s / 2, B.h, s, s, 0.2 + 0.5 * left, q.job ? T.job : T.req);
       }
     }
     // drowning: a beacon, and smoke rising off the top
@@ -800,6 +834,36 @@
       sparks.push({ kind: "smoke", x: x + Math.random() * B.w, y: B.y + Math.random() * B.d, z: B.h + 0.2, vx: 0.15, vy: -0.1, vz: 0.7 + Math.random() * 0.4, age: 0, life: 2 + Math.random(), s: 0.14 + Math.random() * 0.12 });
     }
     hits.push({ kind: "server", i, r: rectOf(B) });
+  }
+  // the newsletter job, a clock on top that fills until the next batch; its queue of emails, and the mailer
+  function drawJobs(T, t) {
+    const C = LY.cron, B = sim.cfg.batch, bs = sim.batches, last = bs.length ? bs[bs.length - 1].t : B.at - B.every;
+    const since = sim.t - last, frac = Math.max(0, Math.min(1, since / B.every)), flash = bs.length && since < 1.2;
+    cube(C.x, C.y, 0, C.w, C.d, C.h, T.job);
+    for (let k = 0; k < 16; k++) {
+      const a = k % 4, b = (k / 4) | 0, x = C.x + 0.1 + a * 0.29, y = C.y + 0.1 + b * 0.29;
+      poly([iso(x, y, C.h), iso(x + 0.22, y, C.h), iso(x + 0.22, y + 0.22, C.h), iso(x, y + 0.22, C.h)], flash || k < Math.round(frac * 16) ? T.req : T.pad);
+    }
+    hits.push({ kind: "cron", r: rectOf(C) });
+    if (!LY.jq) return;
+    const Q = LY.jq, n = sim.jobQ.length, per = Q.cols * Q.cols, shown = Math.min(n, per * Q.levels);
+    for (let k = 0; k < shown; k++) {
+      const lvl = (k / per) | 0, m = k % per, a = m % Q.cols, b = (m / Q.cols) | 0;
+      cube(Q.x + a * 0.5, Q.y + b * 0.5, lvl * 0.2, 0.44, 0.44, 0.16, T.job);
+    }
+    const M = LY.mailer, W = sim.cfg.jobWorkers;
+    cube(M.x, M.y, 0, M.w, M.d, M.h, T.mailer);
+    const gc = Math.ceil(Math.sqrt(W * M.w / M.d)), gr = Math.ceil(W / gc), pw = M.w / gc, pd = M.d / gr;
+    for (let k = 0; k < W; k++) {
+      const c = k % gc, r = (k / gc) | 0, px = M.x + c * pw + pw * 0.14, py = M.y + r * pd + pd * 0.14;
+      poly([iso(px, py, M.h), iso(px + pw * 0.72, py, M.h), iso(px + pw * 0.72, py + pd * 0.72, M.h), iso(px, py + pd * 0.72, M.h)], T.pad);
+      const q = sim.jobBusy[k];
+      if (q) {
+        const left = q.end > q.began ? Math.max(0, Math.min(1, (q.end - sim.t) / (q.end - q.began))) : 0, s = Math.min(pw, pd) * 0.5;
+        cube(px + pw * 0.36 - s / 2, py + pd * 0.36 - s / 2, M.h, s, s, 0.12 + 0.3 * left, T.job);
+      }
+    }
+    hits.push({ kind: "mailer", r: rectOf(M) });
   }
   // a request's trip, as a path of floor points: crowd → (cache) → (balancer) → its queue
   function pathIn(srvI) {
@@ -827,6 +891,17 @@
         const C = LY.cache; if (!C) continue;
         const go = p < 0.5, k = go ? p * 2 : (1 - p) * 2, x = 7.9 + (C.x - 7.9) * k, y = LY.wy + 0.3 + (go ? -0.1 : -0.5) + f.lane * 0.2;
         cube(x, y, 0.05 + (go ? 0 : Math.sin(k * Math.PI) * 0.5), 0.22, 0.22, 0.2, go ? T.req : T.ok);
+      } else if (f.kind === "job") {
+        // a batch on its way: to its own queue, or up onto the website's wire
+        if (f.age < 0 || !LY.cron) continue;
+        const C = LY.cron, cy = C.y + C.d / 2, path = LY.jq ? [[C.x + C.w, cy], [LY.jq.x - 0.1, LY.mailer.y + LY.mailer.d / 2]] : [[C.x + C.w / 2, C.y], [C.x + C.w / 2, LY.wy + 0.3], [LY.queues[0].x - 0.1, LY.wy + 0.3]];
+        const [x, y] = along(path, p);
+        cube(x - 0.11, y - 0.2 + f.lane * 0.4, 0.05, 0.3, 0.3, 0.16, T.job);
+      } else if (f.kind === "sent") {
+        // an email leaving for the world, off the back of whoever sent it
+        const M = f.srv < 0 && LY.mailer ? LY.mailer : LY.servers[Math.max(0, Math.min(f.srv, LY.servers.length - 1))];
+        const x0 = M.x + M.w, y0 = M.y + M.d * (0.2 + f.lane * 0.6);
+        cube(x0 + p * 2.2, y0 - p * 0.6, M.h * 0.6 + Math.sin(p * Math.PI) * 0.8, 0.26, 0.26, 0.12, T.job, 1 - p * 0.8);
       } else if (f.kind === "ok") {
         const S = LY.servers[Math.min(f.srv, LY.servers.length - 1)], sx = S.x, sy = S.y + S.d / 2;
         const x = sx + (7.9 - sx) * p, y = sy + (LY.wy - 0.2 - sy) * p - f.lane * 0.2;
@@ -903,7 +978,8 @@
       const qt = tag("q" + i, "wt-queue");
       const [qx, qy] = iso(Q.x + Q.cols * 0.25, Q.y + Q.cols * 0.25, Math.min(Q.levels, Math.ceil(qn / (Q.cols * Q.cols))) * 0.3 + 0.55);
       qt.style.transform = `translate(${qx}px, ${qy}px)`;
-      setHTML(qt, qn ? (many ? `<b>${qn}</b>` : `queue <b>${qn}</b>`) : "");
+      const jn = sim.cfg.batch ? srv.queue.reduce((a, q) => a + (q.job ? 1 : 0), 0) : 0;
+      setHTML(qt, qn ? (many ? `<b>${qn}</b>` : `queue <b>${num(qn)}</b>${jn ? ` · ${num(jn)} emails` : ""}`) : "");
     });
     if (LY.lb) {
       const el = tag("lb", "wt-lbtag", () => { if (canTurn("lb")) cycleLb(); else toggleInspect({ kind: "lb" }); });
@@ -921,6 +997,26 @@
       const st = samples[samples.length - 1], storm = st && st.tries > st.offered * 1.3;
       el.classList.toggle("storm", !!storm);
       setHTML(el, `clients · retry <b>×${sim.cfg.retries}</b>${sim.cfg.backoff ? ` · backoff ${sim.cfg.backoff}s` : ""}${storm ? ` · <i>${Math.round(st.tries)} tries/s</i>` : ""}`);
+    }
+    if (LY.cron) {
+      const C = LY.cron, B = sim.cfg.batch, bs = sim.batches, last = bs.length ? bs[bs.length - 1].t : B.at - B.every, next = last + B.every - sim.t;
+      const el = tag("cron", "wt-ctag wt-jtag", () => toggleInspect({ kind: "cron" }));
+      const [x, y] = iso(C.x + C.w * 0.5, C.y + C.d, 0);
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.classList.toggle("on", !!selected && selected.kind === "cron");
+      el.classList.toggle("now", bs.length > 0 && sim.t - last < 2);
+      setHTML(el, bs.length && sim.t - last < 2 ? `newsletter · <b>${num(B.n)} emails</b> landing` : `newsletter · <b>${num(B.n)}</b> in ${Math.ceil(next)} s`);
+      if (LY.jq) {
+        const Q = LY.jq, n = sim.jobQ.length, qt = tag("jq", "wt-queue wt-jq");
+        const [qx, qy] = iso(Q.x + 1, Q.y + 1, Math.min(Q.levels, Math.ceil(n / 16)) * 0.2 + 1);
+        qt.style.transform = `translate(${qx}px, ${qy}px)`;
+        setHTML(qt, n ? `<b>${num(n)}</b> emails` : "");
+        const M = LY.mailer, mt = tag("mailer", "wt-ctag", () => toggleInspect({ kind: "mailer" }));
+        const [mx, my] = iso(M.x + M.w * 0.5, M.y + M.d, 0);
+        mt.style.transform = `translate(${mx}px, ${my}px)`;
+        mt.classList.toggle("on", !!selected && selected.kind === "mailer");
+        setHTML(mt, `mailer <b>${sim.jobBusy.length}/${sim.cfg.jobWorkers}</b> busy`);
+      }
     }
     if (LY.cache) {
       const el = tag("cache", "wt-ctag", () => toggleInspect({ kind: "cache" }));
@@ -1033,6 +1129,7 @@
     lastSample = Math.floor(T);
     lastLoadChange = lastSysChange = 0;
     for (const c of tape.changes) for (const k in c.patch) { if (k === knob()) lastLoadChange = c.t; else lastSysChange = c.t; }
+    for (const [k, Tt] of teeth) { if (k > T) teeth.delete(k); else { Tt.pts = Tt.pts.filter((p) => k + p[0] <= T); Tt.done = false; } }
     toast(`Carrying on from ${clock(T).slice(2)}. What happened after it is gone.`);
   }
 
@@ -1041,6 +1138,7 @@
   // the parts tray: ghosts you drag onto the wire (or click) to add a server or a cache
   const PARTS = {
     server: { label: () => name("server"), can: () => canTurn("servers") && sim.cfg.servers < MAX_SERVERS, add: () => setKnob("servers", sim.cfg.servers + 1), slot: () => { const L = layout({ servers: sim.cfg.servers + 1 }); return { slot: L.servers[L.servers.length - 1], L }; }, note: () => `${sim.cfg.servers} of ${MAX_SERVERS}` },
+    queue: { label: () => "email queue", can: () => canTurn("jobWorkers") && !(sim.cfg.jobWorkers > 0), add: () => setKnob("jobWorkers", 2), slot: () => { const L = layout({ jobWorkers: 2 }); return { slot: L.mailer, L }; }, note: () => (sim.cfg.jobWorkers > 0 ? "in place" : "2 workers") },
     cache: { label: () => "cache", can: () => canTurn("cache") && !(sim.cfg.cache > 0), add: () => setKnob("cache", 100), slot: () => { const L = layout({ cache: 100 }); return { slot: L.cache, L }; }, note: () => (sim.cfg.cache > 0 ? "in place" : "100 keys") },
   };
   function renderParts() {
@@ -1108,6 +1206,8 @@
     if (selected.kind === "cache" && !(c.cache > 0)) return closeInspect();
     if (selected.kind === "lb" && sim.srv.length < 2) return closeInspect();
     if (selected.kind === "clients" && !X.clients) return closeInspect();
+    if (selected.kind === "mailer" && !(c.jobWorkers > 0)) return closeInspect();
+    if (selected.kind === "cron" && !c.batch) return closeInspect();
     if (rebuild || !ins || ins.kind !== selected.kind || ins.i !== selected.i) {
       els.inspect.innerHTML = "";
       ins = { kind: selected.kind, i: selected.i };
@@ -1135,6 +1235,14 @@
         const at = () => Math.max(0, BACKOFFS.indexOf(sim.cfg.backoff));
         ins.b = stepper("backoff", () => setKnob("backoff", BACKOFFS[Math.max(0, at() - 1)]), () => setKnob("backoff", BACKOFFS[Math.min(BACKOFFS.length - 1, at() + 1)]));
         els.inspect.append(ins.r.row, ins.b.row, ins.jit = h("p", { class: "pol" }), ins.dl = h("dl", {}));
+      } else if (selected.kind === "mailer") {
+        els.inspect.append(h("p", { class: "ih" }, "Mailer"));
+        ins.jw = stepper("workers", () => setKnob("jobWorkers", Math.max(1, sim.cfg.jobWorkers - 1)), () => setKnob("jobWorkers", Math.min(12, sim.cfg.jobWorkers + 1)));
+        els.inspect.append(ins.jw.row, ins.dl = h("dl", {}));
+        ins.rm = h("button", { class: "wt-link rm", onclick: () => setKnob("jobWorkers", 0) }, `send from the ${name("server")} again`);
+        els.inspect.append(ins.rm);
+      } else if (selected.kind === "cron") {
+        els.inspect.append(h("p", { class: "ih" }, "Newsletter"), ins.dl = h("dl", {}));
       } else {
         els.inspect.append(h("p", { class: "ih" }, "Cache"));
         const at = () => CACHE_SIZES.findIndex((v) => v >= sim.cfg.cache);
@@ -1185,6 +1293,19 @@
         ` ${[0, 1, 2].map((n) => ms(c.backoff * 2 ** n)).join(", then ")}.`);
       ins.dl.innerHTML = `<dt>give up after</dt><dd>${ms(c.timeout)}</dd><dt>tries, last 5 s</dt><dd>${Math.round(st.tries)}/s</dd>
         <dt>people, last 5 s</dt><dd>${Math.round(st.sent / Math.max(1, Math.min(5, sim.t)))}/s</dd><dt>waiting to retry</dt><dd>${sim.waiting}</dd>`;
+    } else if (selected.kind === "mailer") {
+      const B = c.batch, js = sim.jobStats(sim.t, sim.t);
+      ins.jw.out.textContent = c.jobWorkers;
+      ins.jw.minus.disabled = !canTurn("jobWorkers") || c.jobWorkers <= 1;
+      ins.jw.plus.disabled = !canTurn("jobWorkers") || c.jobWorkers >= 12;
+      ins.rm.hidden = !canTurn("jobWorkers");
+      ins.dl.innerHTML = `<dt>each email</dt><dd>≈ ${ms(B.service)}</dd><dt>sends</dt><dd>${Math.round(c.jobWorkers / B.service)}/s</dd>
+        <dt>a batch of ${num(B.n)}</dt><dd>${ms(B.n * B.service / c.jobWorkers)}</dd><dt>busy</dt><dd>${sim.jobBusy.length} of ${c.jobWorkers}</dd>
+        <dt>waiting</dt><dd>${num(sim.jobQ.length)}</dd><dt>oldest waiting</dt><dd>${js.backlog ? ms(js.jobAge) : "none"}</dd>`;
+    } else if (selected.kind === "cron") {
+      const B = c.batch, bs = sim.batches, last = bs.length ? bs[bs.length - 1].t : B.at - B.every, js = sim.jobStats(sim.t, sim.t);
+      ins.dl.innerHTML = `<dt>every</dt><dd>${B.every} s</dd><dt>emails</dt><dd>${num(B.n)}, all at once</dd><dt>work in a batch</dt><dd>${num(B.n * B.service)} worker-s</dd>
+        <dt>next one in</dt><dd>${Math.ceil(last + B.every - sim.t)} s</dd><dt>sent by</dt><dd>${c.jobWorkers > 0 ? "the mailer" : `the ${name("server")}`}</dd><dt>not sent yet</dt><dd>${num(js.backlog)}</dd>`;
     } else {
       ins.c.out.textContent = num(c.cache);
       ins.c.minus.disabled = !canTurn("cache") || c.cache <= CACHE_SIZES[0];
@@ -1214,7 +1335,7 @@
     box("tput", X.clients ? "answered" : "served per second");
     box("lat", "wait: p50 and p99");
     box("err", "errors per second");
-    box("util", X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
+    box("util", X.system.batch ? "emails waiting" : X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
   }
   // drag along a timeline to go back in time; the window holds still while you drag
   function scrubber(el, id) {
@@ -1254,6 +1375,7 @@
   function drawLoadChart() {
     const k = "load";
     if (!charts[k] || !charts[k].w) return;
+    if (scat().kind === "teeth") return drawTeeth();
     const [x, W, H] = chartCtx(k);
     const sc = scat(), pad = { l: 36, r: 10, t: 8, b: 18 }, YMAX = sc.ymax, pctY = sc.y === "hit" || sc.y === "errRate";
     const ax = { min: sc.min, max: sc.max, log: sc.log };
@@ -1301,6 +1423,47 @@
     x.globalAlpha = 1;
     const seen = live ? dots.filter((d) => d.t <= sim.t) : dots, last = seen[seen.length - 1];
     charts[k].val.textContent = last ? (sc.y === "errRate" ? `${Math.round(last.y * 100)}% failed at ${num(last.x)}` : pctY ? `${Math.round(last.y * 100)}% at ${num(last.x)} keys` : `${ms(last.y)} at ${num(last.x)}`) : "";
+  }
+  // a batch experiment: one line per batch, its jobs still waiting against the seconds since it landed. Where a line
+  // meets the floor is how long that batch took; the dashed line is when the next one lands. Red ones went to the
+  // website's own line, teal ones to their own queue.
+  function drawTeeth() {
+    const [x, W, H] = chartCtx("load");
+    const sc = scat(), pad = { l: 40, r: 10, t: 8, b: 18 }, B = sim.cfg.batch;
+    const all = [...teeth.entries()], top = Math.max(B.n, ...all.map(([, T]) => T.n));
+    const px = (v) => pad.l + (Math.max(sc.min, Math.min(sc.max, v)) - sc.min) / (sc.max - sc.min) * (W - pad.l - pad.r);
+    const py = (v) => H - pad.b - (v / top) * (H - pad.t - pad.b);
+    const ink = css("--wt-mute"), line = css("--wt-line"), acc = css("--wt-acc"), pink = css("--wt-pink"), bad = css("--wt-bad");
+    x.font = "10px " + css("--f-mono"); x.fillStyle = ink; x.strokeStyle = line; x.lineWidth = 1;
+    for (const f of [0, 0.5, 1]) { x.beginPath(); x.moveTo(pad.l, py(f * top)); x.lineTo(W - pad.r, py(f * top)); x.stroke(); x.textAlign = "right"; x.fillText(num(f * top), pad.l - 5, py(f * top) + 3); }
+    for (let v = sc.min; v <= sc.max; v += 20) { x.textAlign = v === sc.min ? "left" : v + 20 > sc.max ? "right" : "center"; x.fillText(`${v} s`, px(v), H - 4); }
+    // the next batch
+    if (B.every <= sc.max) {
+      x.strokeStyle = ink; x.setLineDash([2, 4]); x.beginPath(); x.moveTo(px(B.every), pad.t); x.lineTo(px(B.every), H - pad.b); x.stroke(); x.setLineDash([]);
+      x.textAlign = "left"; x.fillText("next batch", px(B.every) + 4, H - pad.b - 6);
+    }
+    if (P.guess != null) {
+      x.strokeStyle = pink; x.setLineDash([4, 4]); x.beginPath(); x.moveTo(px(P.guess), pad.t); x.lineTo(px(P.guess), H - pad.b); x.stroke(); x.setLineDash([]);
+      x.fillStyle = pink; x.textAlign = "left"; x.fillText("your guess", px(P.guess) + 4, pad.t + 9);
+    }
+    if (P.revealed && P.phase === "explore") {
+      const A = X.predict.answer;
+      x.strokeStyle = acc; x.beginPath(); x.moveTo(px(A), pad.t); x.lineTo(px(A), H - pad.b); x.stroke();
+      const jw = (X.predict.setup || {}).jobWorkers;
+      x.fillStyle = acc; x.textAlign = "left"; x.fillText(`${jw} workers: ${A} s`, px(A) + 4, pad.t + 26);
+    }
+    // the batches, oldest faintest; points after a rewound moment aren't drawn
+    const shown = all.slice(-6);
+    shown.forEach(([t0, T], i) => {
+      x.globalAlpha = 0.3 + 0.7 * ((i + 1) / shown.length);
+      x.strokeStyle = T.q ? acc : bad; x.lineWidth = i === shown.length - 1 ? 2 : 1.4;
+      x.beginPath();
+      T.pts.filter((p) => t0 + p[0] <= sim.t + 1e-6).forEach(([dt, n], j) => (j ? x.lineTo(px(dt), py(n)) : x.moveTo(px(dt), py(n))));
+      x.stroke();
+    });
+    x.globalAlpha = 1; x.lineWidth = 1;
+    const lastDone = [...all].reverse().find(([, T]) => T.done), cur = all.length ? all[all.length - 1][1] : null;
+    charts.load.val.textContent = cur && !cur.done ? `${num(cur.pts[cur.pts.length - 1][1])} waiting, ${Math.round(cur.pts[cur.pts.length - 1][0])} s in` : lastDone ? `last batch took ${Math.round(lastDone[1].pts[lastDone[1].pts.length - 1][0])} s` : "";
   }
   function series(k, lines, ymax, fmt, unitMax) {
     if (!charts[k] || !charts[k].w) return;
@@ -1354,7 +1517,8 @@
     else series("tput", [...(open ? [{ key: "offered", color: mute, dash: [3, 3], w: 1 }] : []), { key: "tput", color: acc }], 10, (s) => `${Math.round(s.tput)}/s${open ? ` of ${Math.round(s.offered)}` : ""}`);
     series("lat", [{ key: "p50", color: acc, fill: false }, { key: "p99", color: pink }], 0.3, (s) => (s.p99 == null ? "none answered" : `${ms(s.p50)} · ${ms(s.p99)}`), 12);
     series("err", [{ key: "err", color: bad }], 1, (s) => `${s.err.toFixed(s.err < 10 ? 1 : 0)}/s`);
-    if (X.parts && X.parts.includes("cache")) series("util", [{ key: "hit", color: css("--wt-ok") }], 1, (s) => `${Math.round(s.hit * 100)}%`, 1);
+    if (X.system.batch) series("util", [{ key: "backlog", color: theme().job }], 10, (s) => num(s.backlog));
+    else if (X.parts && X.parts.includes("cache")) series("util", [{ key: "hit", color: css("--wt-ok") }], 1, (s) => `${Math.round(s.hit * 100)}%`, 1);
     else series("util", [{ key: "util", color: acc }], 1, (s) => `${Math.round(s.util * 100)}%`, 1);
   }
 
@@ -1390,7 +1554,10 @@
       } else if (kind === "out") {
         trips.push({ kind: a ? "ok" : "bad", srv: srvI || 0 });
         if (!a) burst(srvI || 0);
-      }
+      } else if (kind === "batch") {
+        // a dozen envelopes stand for the whole batch, close behind each other
+        for (let k = 0; k < 12; k++) flyers.push({ kind: "job", age: -k * 0.06, life: speed < 1 ? 1.6 : 0.7, lane: Math.random() });
+      } else if (kind === "sent" && Math.random() < 0.25 && flyers.length < 140) flyers.push({ kind: "sent", srv: a, age: 0, life: 0.9, lane: Math.random() });
     }
     const budget = speed > 1 ? 4 : 8, step = Math.max(1, Math.ceil(trips.length / budget));
     for (let i = 0; i < trips.length && flyers.length < 140; i += step) {
@@ -1401,11 +1568,24 @@
   const clock = (t) => `t ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
   function sample(t) {
     const st = sim.stats(Math.max(0, t - 5), t), span = Math.min(5, t) || 1;
-    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate };
+    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate, backlog: st.backlog };
     samples.push(s);
     if (samples.length > 400) samples.shift();
+    const sc = scat();
+    if (sc.kind === "teeth") {
+      for (const b of sim.batches) {
+        let T = teeth.get(b.t);
+        if (!T) { teeth.set(b.t, T = { q: b.q, n: b.n, pts: [[0, b.n]], done: false }); if (teeth.size > 12) teeth.delete(teeth.keys().next().value); }
+        if (T.done) continue;
+        if (b.left === 0) { T.pts.push([b.last - b.t, 0]); T.done = true; } else if (t > b.t) T.pts.push([t - b.t, b.left]);
+      }
+      // the answer opens once a batch has gone through the queue, start to finish
+      if (P.phase === "explore" && !P.revealed && P.guess != null && sim.batches.some((b) => b.q && !b.left)) reveal();
+      checkGoal();
+      return;
+    }
     // a dot only once the load and the design have been steady for the whole 5 s window, so a change doesn't smear it
-    const sc = scat(), xv = sc.x === knob() ? s.load : sim.cfg[sc.x];
+    const xv = sc.x === knob() ? s.load : sim.cfg[sc.x];
     const g = sim.cfg.surge, calm = !g || t >= g.at + g.for + 10;
     if (t - Math.max(lastLoadChange, lastSysChange) >= 6 && (st.ok > 3 || (sc.y === "errRate" && st.sent > 3)) && xv > 0 && calm) {
       dots.push({ t, x: xv, y: s[sc.y], load: s.load, p99: s.p99 });
@@ -1442,5 +1622,5 @@
   main.wtSeek = (T) => seek(T);
   main.wtFrame = () => els.canvas.toDataURL("image/png");
   main.wtRun = (secs) => { const end = sim.t + secs; while (sim.t < end) { sim.advance(Math.min(end, sim.t + 1)); sim.feed.length = 0; if (sim.t - lastSample >= 1) { lastSample += 1; sample(lastSample); } } drawCharts(); };
-  main.wtState = () => { const st = sim.stats(0, sim.t); return { phase: P.phase, guess: P.guess, t: sim.t, head: headT(), rewound: !!live, cfg: sim.cfg, done: !!S.done[X.id], samples: samples.length, sent: st.sent, p99: st.p99 }; };
+  main.wtState = () => { const st = sim.stats(0, sim.t); return { phase: P.phase, guess: P.guess, t: sim.t, head: headT(), rewound: !!live, cfg: sim.cfg, done: !!S.done[X.id], samples: samples.length, sent: st.sent, p99: st.p99, backlog: st.backlog, batches: sim.batches.length }; };
 })();
