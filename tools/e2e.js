@@ -225,11 +225,38 @@ async function tunnel(page, browser, errors) {
     if ((await st()).phase !== "task") bad.push(`${x.id}: the task didn't start`);
     await page.evaluate(() => document.querySelector("#wt").wtRun(60));
     if ((await st()).done) bad.push(`${x.id}: the starting server already meets the goal`);
-    await page.locator(".wt-server").click();
-    for (let i = (await st()).cfg.workers; i < x.ref.workers; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
-    for (let i = 0; i < 12 && !(await st()).done; i++) await page.evaluate(() => document.querySelector("#wt").wtRun(10));
+    // the reference answer, through the page's own gestures
+    const ref = x.ref;
+    if (ref.workers !== undefined) {
+      await page.locator(".wt-server").first().click();
+      for (let i = (await st()).cfg.workers; i < ref.workers; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
+    }
+    if (ref.servers !== undefined) {
+      // the first extra server is dragged from the parts tray onto the stage; any more are clicked on
+      const g = page.locator(".wt-parts .ghost.server"), stage = page.locator(".wt-stage");
+      for (let i = (await st()).cfg.servers; i < ref.servers; i++) {
+        if (i === (await st()).cfg.servers && !x.dragged) {
+          const a = await g.boundingBox(), b = await stage.boundingBox();
+          await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+          await page.mouse.down();
+          await page.mouse.move(b.x + b.width * 0.6, b.y + b.height * 0.5, { steps: 8 });
+          await page.mouse.up();
+          x.dragged = true;
+          if ((await st()).cfg.servers !== i + 1) bad.push(`${x.id}: dragging a server onto the wire didn't add one`);
+        } else await g.click();
+      }
+    }
+    if (ref.lb !== undefined) for (let i = 0; i < 3 && (await st()).cfg.lb !== ref.lb; i++) await page.locator(".wt-lbtag").click();
+    if (ref.cache !== undefined) {
+      await page.locator(".wt-ctag").click();
+      for (let i = 0; i < 12 && (await st()).cfg.cache < ref.cache; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
+    }
+    const got = (await st()).cfg;
+    for (const k in ref) if (got[k] !== ref[k]) bad.push(`${x.id}: couldn't set ${k} to ${ref[k]} through the page (it's ${got[k]})`);
+    if (!(await page.locator(".wt-code .y-l.add").count())) bad.push(`${x.id}: system.yaml shows no change after the fix`);
+    for (let i = 0; i < 24 && !(await st()).done; i++) await page.evaluate(() => document.querySelector("#wt").wtRun(10));
     const s = await st();
-    if (!s.done) bad.push(`${x.id}: ${x.ref.workers} workers didn't meet the goal (workers now ${s.cfg.workers})`);
+    if (!s.done) bad.push(`${x.id}: the reference ${JSON.stringify(ref)} didn't meet the goal`);
     if (!(await page.locator(".won").count())) bad.push(`${x.id}: no done note`);
     await page.screenshot({ path: `${shots}/tunnel-${x.id}.png` });
     n++;
