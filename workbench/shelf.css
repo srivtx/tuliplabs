@@ -1,0 +1,53 @@
+/* The labs' shelves: the course shelf's layout (learn/engine.css) with pictures of the real thing. Each card's soil is
+   a deep colour field (--b) with its bright twin (--a) for type and light. */
+.la-plots{grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:16px}
+.la-plot{border-color:color-mix(in srgb,var(--a) 14%,var(--line))}
+.la-plot:hover{border-color:var(--a)}
+.la-plot .soil.la-soil{height:172px;background:radial-gradient(120% 90% at 70% 100%,color-mix(in srgb,var(--a) 22%,var(--b)),var(--b) 70%);border-bottom:0;overflow:hidden;isolation:isolate}
+.la-plot .ghost{z-index:0;right:6px;bottom:-22px;font-size:112px;color:color-mix(in srgb,var(--a) 20%,transparent)}
+.la-plot:hover .ghost{color:color-mix(in srgb,var(--a) 34%,transparent)}
+.la-tag{position:absolute;top:9px;left:10px;z-index:3;font:600 10px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--a);background:color-mix(in srgb,var(--b) 82%,transparent);padding:2px 7px;border-radius:4px;backdrop-filter:blur(3px)}
+.la-soon-tag{position:absolute;top:9px;right:10px;z-index:3;font:600 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--a);border:1px solid color-mix(in srgb,var(--a) 50%,transparent);padding:1px 6px;border-radius:4px}
+.la-plot .next-tag{z-index:3}
+.la-plot .pbar i{background:var(--a)}
+.la-plot.soon{cursor:default}
+.la-plot.soon:hover{transform:none;border-color:color-mix(in srgb,var(--a) 14%,var(--line))}
+
+/* Wind Tunnel: a frame from the lab, cropped like a photo: the system large, the crowd running off the left edge */
+.la-shot{position:absolute;z-index:1;right:-4%;bottom:-6%;height:112%;width:auto;max-width:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.35));transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.la-plot:hover .la-shot{transform:translate(-3%,-3%) scale(1.04)}
+/* planned: the question it will answer, in serif */
+.la-ask{position:absolute;z-index:1;left:16px;right:58px;top:38px;margin:0;font:400 30px/1.02 var(--f-serif);color:var(--a);letter-spacing:-.005em}
+
+/* Workbench: a tiny terminal showing the finished program at work, bleeding off the card's corner */
+.la-term{position:absolute;z-index:1;left:16px;top:30px;right:-18px;bottom:-14px;border-radius:9px 0 0 0;background:color-mix(in srgb,#000 55%,var(--b));
+  border:1px solid color-mix(in srgb,var(--a) 30%,transparent);box-shadow:0 14px 30px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);overflow:hidden;transition:transform .4s cubic-bezier(.2,.7,.2,1)}
+.la-plot:hover .la-term{transform:translate(-4px,-6px)}
+.la-bar{display:flex;align-items:center;gap:7px;height:22px;padding:0 10px;font:500 9.5px var(--f-mono);color:color-mix(in srgb,var(--a) 70%,#fff);border-bottom:1px solid color-mix(in srgb,var(--a) 18%,transparent);background:color-mix(in srgb,var(--a) 8%,transparent)}
+.la-bar span{width:6px;height:6px;border-radius:1px;background:var(--a);box-shadow:0 0 8px var(--a)}
+.la-body{padding:8px 10px;font:500 10.5px/1.6 var(--f-mono);white-space:pre;color:#e6e2ee}
+.la-ln.p i{font-style:normal;color:var(--a)}
+.la-ln.o{color:#bdb8c9}
+.la-ln.e{color:#fff;font-weight:600;text-shadow:0 0 12px color-mix(in srgb,var(--a) 70%,transparent)}
+.la-ln.c{color:#ffd84a}
+.la-pond{width:62%;margin:2px 0 6px}
+.la-pond svg{display:block;width:100%;height:auto}
+.la-plot.soon .la-term{filter:saturate(.85)}
+
+/* posters: a product shot */
+.la-hero{padding-right:44%}
+.la-hero .p-corner.br{z-index:3;background:rgba(10,10,12,.66);padding:3px 8px;border-radius:5px;backdrop-filter:blur(4px)}
+.la-hero h1 i{font-style:italic;color:var(--a)}
+.la-hero::before{content:"";position:absolute;right:-10%;bottom:-30%;width:70%;height:110%;z-index:0;background:radial-gradient(closest-side,color-mix(in srgb,var(--a) 30%,transparent),transparent);pointer-events:none}
+.la-art{position:absolute;z-index:1;right:0;top:0;bottom:0;width:46%;pointer-events:none;perspective:1400px}
+.la-ide{position:absolute;left:10%;top:15%;width:150%;max-width:none;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+  transform:rotateY(-18deg) rotateX(6deg) rotateZ(1deg);transform-origin:0 50%;box-shadow:-30px 40px 80px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.4)}
+.la-storm{position:absolute;right:2%;bottom:12%;width:100%;max-width:none;filter:drop-shadow(0 20px 30px rgba(0,0,0,.5))}
+
+.side a.la-soon{color:var(--muted);cursor:default}
+.side a.la-soon:hover{background:none}
+.side a.la-soon small{font:500 10px var(--f-mono);color:var(--muted);opacity:.7}
+.side .branch a .g{flex:none}
+.note code{font:12.5px var(--f-mono)}
+@media (max-width:1100px){.la-hero{padding-right:36px}.la-art{position:relative;width:auto;height:300px;margin:26px -36px -64px 0}.la-ide{left:4%;top:6%;width:120%}.la-storm{width:auto;height:100%;right:4%;bottom:0}}
+@media (max-width:860px){.la-art{height:230px;margin-right:-20px}.la-plots{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}.la-ask{font-size:23px}}

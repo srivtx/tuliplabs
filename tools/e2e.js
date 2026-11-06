@@ -14,6 +14,8 @@ const shots = process.env.SHOTS || ".";
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/fonts.g|Failed to load resource/.test(m.text())) errors.push("console: " + m.text()); });
   if (track === "design") return studio(page, browser, errors);
+  if (track === "workbench") return workbench(page, browser, errors);
+  if (track === "tunnel") return tunnel(page, browser, errors);
   await page.goto(`${BASE}/${track}/?runner=local#${chap}`);
   await page.waitForSelector(".stephead");
   const data = await page.evaluate(async (t) => (await (await fetch(`/content/${t}.json`)).json()), ({ code: "tc", modsim: "ms", build: "bx", stats: "ps", dsa: "ds", ods: "od" })[track]);
@@ -113,6 +115,285 @@ async function studio(page, browser, errors) {
     if (!answerWon) bad.push(`${i} ${title}: the answer doesn't match (${s1})`);
   }
   console.log(`design: ${n} levels checked, ${bad.length} failed`);
+  bad.forEach((b) => console.log("  FAIL " + b));
+  errors.forEach((e) => console.log("  " + e));
+  await browser.close();
+  process.exit(bad.length || errors.length ? 1 : 0);
+}
+// Workbench: every ticket of a project, through the real buttons. The starting code must fail Test,
+// the reference solution must pass it and commit, and each session transcript must replay in the terminal.
+//   node tools/e2e.js workbench [project number]
+async function workbench(page, browser, errors) {
+  const num = process.argv[3] || "1";
+  await page.goto(`${BASE}/workbench/bench.html?runner=local#${num}`);
+  await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("vnl-code-v1") || "{}"); s.wb = {}; localStorage.setItem("vnl-code-v1", JSON.stringify(s)); });
+  await page.reload();
+  await page.waitForSelector(".wact .run");
+  const data = await page.evaluate(async () => (await (await fetch("/content/wb.json")).json()));
+  const proj = data.projects.find((p) => String(p.num) === num);
+  const bad = [];
+  const lines = () => page.locator(".term .ln").count();
+  // a command's reply: the out/err lines after its own echoed command line
+  const term = async (line, tab) => {
+    const before = await page.locator(".term .ln.cmd").count();
+    if (tab) { await page.locator(".term .inp input").focus(); await page.keyboard.press("Tab"); }
+    else await page.locator(".term .inp input").fill(line);
+    if (tab && (await page.locator(".term .inp input").inputValue()) !== line) bad.push(`Tab didn't type the ghost "${line}"`);
+    await page.locator(".term .inp input").press("Enter");
+    await page.waitForFunction((n) => document.querySelectorAll(".term .ln.cmd").length > n && document.querySelector(".term .inp:not(.off)"), before);
+    return page.evaluate(() => {
+      const ls = [...document.querySelectorAll(".term .ln")];
+      const at = ls.map((e) => e.classList.contains("cmd")).lastIndexOf(true);
+      return ls.slice(at + 1).filter((e) => e.matches(".out,.err")).map((e) => e.textContent);
+    });
+  };
+  const starts = () => page.evaluate(() => [...document.querySelectorAll(".term .ln.sys")].filter((e) => /▶|↻/.test(e.textContent)).length);
+  const runProg = async () => {
+    const k = await starts();
+    await page.locator(".wact .run").click();
+    await page.waitForFunction((k) => [...document.querySelectorAll(".term .ln.sys")].filter((e) => /▶|↻/.test(e.textContent)).length > k && document.querySelector(".term .inp:not(.off)"), k);
+  };
+  const test = async () => {
+    await page.locator(".wact .test").click();
+    await page.waitForSelector(".lamps", { timeout: 20000 });
+    return page.locator(".wact .commit").isEnabled();
+  };
+  for (const [i, t] of proj.tickets.entries()) {
+    await page.waitForFunction((k) => (document.querySelector(".tk-no") || {}).textContent?.includes("#" + k), i + 1);
+    if (await test()) bad.push(`${t.id}: the starting code passes Test`);
+    for (const [f, src] of Object.entries(t.solution)) await page.evaluate(([f, src]) => document.querySelector("#ide").wbSet(f, src), [f, src]);
+    if (!(await test())) bad.push(`${t.id}: the solution doesn't pass Test: ` + (await page.locator(".fail").first().innerText().catch(() => "")).slice(0, 300));
+    // the session transcript, typed into the terminal, from an empty disk like the build's replay
+    await page.evaluate((pid) => fetch("/__run", { method: "POST", body: JSON.stringify({ op: "project_load", pid, files: {}, main: "nothing", wipe: true }) }), proj.id);
+    await page.locator(".ptabs button", { hasText: "Terminal" }).click();
+    await runProg();
+    let want = null, cmd = null, tabbed = 0;
+    const check = async () => {
+      if (cmd === null) return;
+      // the terminal's ghost always shows the session's next step
+      const gh = await page.locator(".term .ghost-cmd span").first().textContent({ timeout: 2000 }).catch(() => null);
+      if (cmd === "!restart" ? !/restart/.test(gh || "") : gh !== cmd) bad.push(`${t.id}: the terminal's ghost says ${JSON.stringify(gh)} where the next step is ${JSON.stringify(cmd)}`);
+      if (cmd === "!restart") {
+        const n = await lines();
+        await page.locator(".ptabs .act", { hasText: "restart" }).click();
+        await page.waitForFunction((k) => document.querySelectorAll(".term .ln").length > k, n);
+        return;
+      }
+      const got = (await term(cmd, i === 0 && !tabbed++)).join("\n");
+      if (got !== want.join("\n")) bad.push(`${t.id}: terminal "${cmd}" printed ${JSON.stringify(got)}, expected ${JSON.stringify(want.join("\n"))}`);
+    };
+    for (const line of t.session.split("\n")) {
+      if (line.startsWith(proj.prompt) || line === "!restart") { await check(); cmd = line.startsWith(proj.prompt) ? line.slice(proj.prompt.length) : line; want = []; }
+      else if (cmd !== null) want.push(line);
+    }
+    await check();
+    await page.screenshot({ path: `${shots}/workbench-${t.id}.png` });
+    await page.locator(".wact .commit").click();
+    await page.locator(".csheet input").press("Enter");
+  }
+  // the finale: write, pull the plug, and read the data back
+  await page.waitForSelector(".wfin");
+  await runProg();
+  await term("SET survivor yes");
+  await term("SET doomed maybe");
+  await page.locator(".ptabs .act.plug").click();
+  await page.waitForFunction(() => /power back on/.test(document.querySelector(".term").textContent));
+  const a = (await term("GET survivor")).join(), b = (await term("GET doomed")).join();
+  if (a !== "yes" || b !== "(nil)") bad.push(`pull the plug: survivor=${a}, doomed=${b} (want yes, (nil))`);
+  const commits = await page.locator(".hist li").count();
+  if (commits !== proj.tickets.length) bad.push(`history shows ${commits} commits, want ${proj.tickets.length}`);
+  await page.screenshot({ path: `${shots}/workbench-done.png` });
+  // the layout: drag the explorer's seam, fold the panel by its grip (Run opens it again), fold the explorer with Mod-B,
+  // and find it all as you left it after a reload
+  {
+    const size = () => page.evaluate(() => [document.querySelector(".wside").getBoundingClientRect().width, document.querySelector(".pbody").getBoundingClientRect().height, document.querySelector(".wtick").getBoundingClientRect().width]);
+    const [e0] = await size();
+    const sl = await page.locator(".wseam.l").boundingBox();
+    await page.mouse.move(sl.x + 1, sl.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(sl.x + 61, sl.y + 200, { steps: 6 });
+    await page.mouse.up();
+    const [e1] = await size();
+    if (Math.abs(e1 - e0 - 60) > 4) bad.push(`layout: dragging the explorer's seam 60 px changed it by ${Math.round(e1 - e0)}`);
+    const gb = await page.locator(".grip").boundingBox();
+    await page.mouse.dblclick(gb.x + gb.width / 2, gb.y + gb.height / 2);
+    if ((await size())[1] > 1) bad.push("layout: double-clicking the grip didn't fold the panel");
+    await page.locator(".wact .run").click();
+    await page.waitForFunction(() => document.querySelector(".pbody").getBoundingClientRect().height > 50);
+    await page.locator(".wtick").click({ position: { x: 20, y: 20 } });
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+b" : "Control+b");
+    if ((await size())[0] > 1) bad.push("layout: Mod-B didn't fold the explorer");
+    await page.reload();
+    await page.waitForSelector(".wact .run");
+    const [e2, , t2] = await size();
+    if (e2 > 1 || t2 < 200) bad.push(`layout: after a reload the explorer is ${Math.round(e2)} px and the ticket ${Math.round(t2)} px`);
+    const tab = await page.locator(".wseam.l").boundingBox();
+    await page.mouse.click(tab.x + 8, tab.y + tab.height / 2);
+    if (Math.abs((await size())[0] - e1) > 4) bad.push("layout: the explorer's tab didn't bring it back at its width");
+  }
+  // the download: a real zip whose run.py answers the same commands with plain Python, no browser
+  {
+    const fs = require("fs"), os = require("os"), path = require("path"), { execFileSync } = require("child_process");
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.locator(".wdl-big").click()]);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wbzip-")), zipPath = path.join(dir, dl.suggestedFilename());
+    await dl.saveAs(zipPath);
+    const name = proj.title.toLowerCase();
+    try {
+      execFileSync("python3", ["-c", "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; z.extractall(sys.argv[2])", zipPath, dir]);
+      const out = execFileSync("python3", ["run.py"], { cwd: path.join(dir, name), input: "SET a 1\nMULTI\nINCR n\nINCR n\nEXEC\nGET a\n" }).toString();
+      if (!/OK[\s\S]*1\) 1\n2\) 2[\s\S]*\b1\b/.test(out)) bad.push(`the downloaded ${name}.zip ran, but printed ${JSON.stringify(out)}`);
+      const again = execFileSync("python3", ["run.py"], { cwd: path.join(dir, name), input: "GET n\n" }).toString();
+      if (!again.includes("2")) bad.push(`the downloaded ${name} lost its data across a restart: ${JSON.stringify(again)}`);
+    } catch (e) { bad.push(`the downloaded ${name}.zip doesn't run: ${String(e.stderr || e).slice(0, 300)}`); }
+  }
+  console.log(`workbench ${proj.title}: ${proj.tickets.length} tickets driven, ${bad.length} failed`);
+  bad.forEach((b) => console.log("  FAIL " + b));
+  errors.forEach((e) => console.log("  " + e));
+  await browser.close();
+  process.exit(bad.length || errors.length ? 1 : 0);
+}
+// Wind Tunnel: every live experiment through the page. Lock a guess, open the answer, start the task; the starting
+// server must not meet the goal in 60 simulated seconds, and the reference answer must meet it within 120.
+//   node tools/e2e.js tunnel
+async function tunnel(page, browser, errors) {
+  await page.goto(`${BASE}/tunnel/lab.html#1`);
+  await page.evaluate(() => { const s = JSON.parse(localStorage.getItem("vnl-code-v1") || "{}"); s.wt = {}; for (const k in s.done || {}) if (k.startsWith("wt")) delete s.done[k]; localStorage.setItem("vnl-code-v1", JSON.stringify(s)); });
+  const X = await page.evaluate(() => window.WT.experiments.map((x, i) => ({ n: i + 1, id: x.id, live: !!x.live, title: x.title, ref: x.task && x.task.reference })));
+  const bad = [];
+  let n = 0;
+  for (const x of X.filter((x) => x.live)) {
+    await page.goto(`${BASE}/tunnel/lab.html#${x.n}`);
+    await page.reload();
+    await page.waitForSelector(".wt-step.now .pin");
+    await page.locator(".wt-step.now .pin").press("ArrowRight");
+    await page.locator(".wt-go", { hasText: "Lock in" }).click();
+    await page.locator(".wt-link", { hasText: "Show me now" }).click();
+    await page.locator(".wt-go", { hasText: "→" }).click();
+    const st = () => page.evaluate(() => document.querySelector("#wt").wtState());
+    if ((await st()).phase !== "task") bad.push(`${x.id}: the task didn't start`);
+    await page.evaluate(() => document.querySelector("#wt").wtRun(60));
+    if ((await st()).done) bad.push(`${x.id}: the starting server already meets the goal`);
+    // the reference answer, through the page's own gestures
+    const ref = x.ref;
+    if (ref.workers !== undefined) {
+      await page.locator(".wt-server").first().click();
+      for (let i = (await st()).cfg.workers; i < ref.workers; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
+    }
+    if (ref.servers !== undefined) {
+      // the first extra server is dragged from the parts tray onto the stage; any more are clicked on
+      const g = page.locator(".wt-parts .ghost.server"), stage = page.locator(".wt-stage");
+      for (let i = (await st()).cfg.servers; i < ref.servers; i++) {
+        if (i === (await st()).cfg.servers && !x.dragged) {
+          const a = await g.boundingBox(), b = await stage.boundingBox();
+          await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+          await page.mouse.down();
+          await page.mouse.move(b.x + b.width * 0.6, b.y + b.height * 0.5, { steps: 8 });
+          await page.mouse.up();
+          x.dragged = true;
+          if ((await st()).cfg.servers !== i + 1) bad.push(`${x.id}: dragging a server onto the wire didn't add one`);
+        } else await g.click();
+      }
+    }
+    if (ref.queueMax !== undefined) {
+      await page.locator(".wt-server").first().click();
+      for (let i = 0; i < 12 && (await st()).cfg.queueMax > ref.queueMax; i++) await page.locator('.wt-insp .step[aria-label="queue limit: fewer"]').click();
+    }
+    if (ref.lb !== undefined) for (let i = 0; i < 3 && (await st()).cfg.lb !== ref.lb; i++) await page.locator(".wt-lbtag").click();
+    if (ref.cache !== undefined) {
+      await page.locator(".wt-ctag").click();
+      for (let i = 0; i < 12 && (await st()).cfg.cache < ref.cache; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
+    }
+    const got = (await st()).cfg;
+    for (const k in ref) if (got[k] !== ref[k]) bad.push(`${x.id}: couldn't set ${k} to ${ref[k]} through the page (it's ${got[k]})`);
+    if (!(await page.locator(".wt-code .y-l.add").count())) bad.push(`${x.id}: system.yaml shows no change after the fix`);
+    for (let i = 0; i < 24 && !(await st()).done; i++) await page.evaluate(() => document.querySelector("#wt").wtRun(10));
+    const s = await st();
+    if (!s.done) bad.push(`${x.id}: the reference ${JSON.stringify(ref)} didn't meet the goal`);
+    if (!(await page.locator(".won").count())) bad.push(`${x.id}: no done note`);
+    // take it home: the fix as code with the numbers just chosen, and a second file a tab away
+    const home = page.locator(".wt-home");
+    if (!(await home.count())) bad.push(`${x.id}: no Take it home step`);
+    else {
+      const code = await home.locator(".wt-file pre").textContent();
+      for (const k in ref) if (typeof ref[k] === "number" && !code.includes(String(ref[k]))) bad.push(`${x.id}: the take-home code doesn't show ${k} = ${ref[k]}`);
+      await home.locator(".wt-file figcaption button").nth(1).click();
+      if ((await home.locator(".wt-file pre").textContent()) === code) bad.push(`${x.id}: the second take-home file didn't open`);
+      if ((await home.locator(".wt-stack dt").count()) < 3) bad.push(`${x.id}: the stack notes are missing`);
+      if (!(await page.locator(".wt-inc.fixed").count())) bad.push(`${x.id}: the problem card didn't turn to fixed`);
+    }
+    await page.screenshot({ path: `${shots}/tunnel-${x.id}.png` });
+    n++;
+  }
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("vnl-code-v1") || "{}").done || {});
+  for (const x of X.filter((x) => x.live)) if (!kept[x.id]) bad.push(`${x.id}: not saved as done`);
+  // rewind: drag back along a timeline, see that moment exactly as it was, then carry on from it
+  {
+    const x = X.filter((x) => x.live)[2];
+    await page.goto(`${BASE}/tunnel/lab.html#${x.n}`);
+    await page.reload();
+    await page.locator(".wt-link", { hasText: "Run the task again" }).click();
+    const st = () => page.evaluate(() => document.querySelector("#wt").wtState());
+    await page.evaluate(() => document.querySelector("#wt").wtRun(20));
+    const at20 = await st();
+    await page.evaluate(() => { document.querySelector("#wt").wtSet({ servers: 4 }); document.querySelector("#wt").wtRun(25); });
+    const head = (await st()).head;
+    const ch = await page.locator(".ch", { hasText: "served per second" }).locator("canvas").boundingBox();
+    const fx = (t) => ch.x + 4 + ((t - (head - 60)) / 60) * (ch.width - 8);
+    await page.mouse.move(fx(head - 1), ch.y + ch.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(fx(15), ch.y + ch.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+    let s = await st();
+    if (!s.rewound || Math.abs(s.t - 15) > 1.5) bad.push(`rewind: dragging the timeline to 0:15 left t=${s.t.toFixed(1)}, rewound=${s.rewound}`);
+    if (s.cfg.servers !== at20.cfg.servers) bad.push(`rewind: at 0:15 the design should have ${at20.cfg.servers} servers, shows ${s.cfg.servers}`);
+    await page.evaluate(() => document.querySelector("#wt").wtSeek(20));
+    s = await st();
+    if (s.sent !== at20.sent || s.p99 !== at20.p99) bad.push(`rewind: 0:20 rebuilt as ${s.sent} sent, p99 ${s.p99}; it was ${at20.sent}, ${at20.p99}`);
+    if (!(await page.locator(".wt-clock.rew").count())) bad.push("rewind: the clock doesn't show you're rewound");
+    await page.locator(".wt-word", { hasText: "play from here" }).click();
+    s = await st();
+    if (s.rewound || Math.abs(s.head - 20) > 0.2 || s.samples > 20) bad.push(`rewind: play didn't carry on from 0:20 (head ${s.head.toFixed(1)}, ${s.samples} samples)`);
+    await page.screenshot({ path: `${shots}/tunnel-rewind.png` });
+  }
+  // the layout: drag the seam to widen the experiment, double-click the charts' seam to fold them, F folds both,
+  // a click on a folded side's tab brings it back, and the stage's canvas follows every change
+  {
+    const W = () => page.evaluate(() => [document.querySelector(".wt-brief").getBoundingClientRect().width, document.querySelector(".wt-charts").getBoundingClientRect().height, document.querySelector(".wt-cv").getBoundingClientRect().width]);
+    const v = await page.locator(".wt-split.v").boundingBox();
+    const [bw0, , cw0] = await W();
+    await page.mouse.move(v.x + 1, v.y + 300);
+    await page.mouse.down();
+    await page.mouse.move(v.x + 121, v.y + 300, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    const [bw1, , cw1] = await W();
+    if (Math.abs(bw1 - bw0 - 120) > 4) bad.push(`layout: dragging the seam 120 px widened the experiment by ${Math.round(bw1 - bw0)}`);
+    if (Math.abs(cw0 - cw1 - 120) > 4) bad.push(`layout: the stage didn't give up the 120 px (${Math.round(cw0 - cw1)})`);
+    // the seams are hairlines with a wider grab area, so drive them with the mouse where they are
+    const hs = await page.locator(".wt-split.h").boundingBox();
+    await page.mouse.dblclick(hs.x + hs.width / 2, hs.y);
+    await page.waitForTimeout(150);
+    if ((await W())[1] > 2) bad.push("layout: double-clicking the charts' seam didn't fold them");
+    const tab = await page.locator(".wt-split.h").boundingBox();
+    await page.mouse.click(tab.x + tab.width - 40, tab.y - 10);
+    await page.waitForTimeout(150);
+    if ((await W())[1] < 100) bad.push("layout: the folded charts' tab didn't bring them back");
+    await page.locator(".wt-cv").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("f");
+    await page.waitForFunction(() => document.querySelector(".wt-cv").getBoundingClientRect().width > 1200, null, { timeout: 3000 }).catch(() => {});
+    const [bwF, chF, cwF] = await W();
+    if (bwF > 2 || chF > 2) bad.push(`layout: F didn't fold both sides (${Math.round(bwF)}, ${Math.round(chF)})`);
+    if (cwF < 1200) bad.push(`layout: with both folded the stage is only ${Math.round(cwF)} px wide`);
+    await page.reload();
+    await page.waitForSelector(".wt-split", { state: "attached" });
+    if (!(await page.locator(".wt.brief-off.charts-off").count())) bad.push("layout: the folds weren't remembered");
+    await page.keyboard.press("f");
+    await page.waitForTimeout(150);
+    if ((await W())[0] < 200) bad.push("layout: F didn't bring the experiment back");
+    await page.screenshot({ path: `${shots}/tunnel-layout.png` });
+  }
+  console.log(`tunnel: ${n} experiments driven, ${bad.length} failed`);
   bad.forEach((b) => console.log("  FAIL " + b));
   errors.forEach((e) => console.log("  " + e));
   await browser.close();

@@ -66,7 +66,7 @@
 .sw-menu a.home{grid-column:1/-1}
 
 /* one colour per section, used by the switcher, the home page and the footer */
-.k-home{--kc:#ff5fa8}.k-worlds{--kc:#ff5fa8}.k-tc{--kc:#2fb38f}.k-ms{--kc:#3d8fe0}.k-bx{--kc:#e6a21a}.k-ps{--kc:#9a6be0}.k-ds{--kc:#3caa4c}.k-od{--kc:#ee6a4c}.k-dz{--kc:#1fa8c9}
+.k-home{--kc:#ff5fa8}.k-worlds{--kc:#ff5fa8}.k-tc{--kc:#2fb38f}.k-ms{--kc:#3d8fe0}.k-bx{--kc:#e6a21a}.k-ps{--kc:#9a6be0}.k-ds{--kc:#3caa4c}.k-od{--kc:#ee6a4c}.k-dz{--kc:#1fa8c9}.k-wb{--kc:#f0643c}.k-wt{--kc:#1f9fb4}
 
 @media (max-width:640px){
   .top .brand b{font-size:16px}
@@ -95,7 +95,7 @@
 .gf-title{margin:0;font:400 clamp(44px,5.4vw,70px)/.92 "Instrument Serif",Georgia,serif;color:var(--f-ink)}
 .gf-title i{color:var(--f-accent)}
 .gf-sub{margin:12px 0 26px;max-width:260px;line-height:1.5;font-size:13.5px}
-.gf-beds{position:relative;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;align-items:end}
+.gf-beds{position:relative;display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px;align-items:end}
 .gf-bed{display:flex;flex-direction:column;align-items:center;text-align:center;text-decoration:none;color:var(--f-ink);padding:0 2px;border-radius:8px;transition:transform .2s}
 .gf-pot{position:relative;width:100%;max-width:110px;height:130px;display:block}
 .gf-pot canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -134,7 +134,7 @@
 .gf-top:hover{background:#c0e889}
 @media (max-width:900px){
   .gf-in{grid-template-columns:1fr}
-  .gf-beds{grid-template-columns:repeat(4,minmax(0,1fr));row-gap:2px}
+  .gf-beds{grid-template-columns:repeat(5,minmax(0,1fr));row-gap:2px}
   .gf-pot{height:100px}
 }
 @media (max-width:560px){.gf-keep{display:none}}
