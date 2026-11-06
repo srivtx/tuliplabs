@@ -59,8 +59,20 @@ def md(text):
             out.append(f'<div class="tw"><table><thead>{h}</thead><tbody>{b}</tbody></table></div>')
             table = []
 
+    code = None  # lines of a ~~~ block (~~~, so it can sit inside a ``` block of the source)
     for raw in text.splitlines():
         line = raw.rstrip()
+        if line.startswith("~~~"):
+            if code is None:
+                flush()
+                code = []
+            else:
+                out.append('<pre class="pic code">' + html.escape("\n".join(code), quote=False) + "</pre>")
+                code = None
+            continue
+        if code is not None:
+            code.append(raw)
+            continue
         if not line.strip():
             flush()
             continue
@@ -422,7 +434,8 @@ def build(only=None):
         built["wb"] = projects
     # Wind Tunnel keeps its experiments in tunnel/experiments.js; each live one is one thing to finish (done id wt01, …)
     with open(os.path.join(ROOT, "tunnel", "experiments.js"), encoding="utf-8") as fh:
-        live = re.findall(r'id: "(wt\d+)", live: true, title: "([^"]+)"', fh.read())
+        # the fields between live and title vary (an experiment's incident comes first), so match within its line
+        live = re.findall(r'id: "(wt\d+)", live: true,[^\n]*? title: "([^"]+)"', fh.read())
     summary["wt"] = [[i, t, 1] for i, t in live]
     with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))

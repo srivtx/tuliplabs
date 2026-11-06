@@ -17,6 +17,7 @@ const MOMENTS = {
   wt03: { set: { rate: 100 }, run: 25 },       // round robin drowning the slow server
   wt04: { set: { cache: 250, rate: 160 }, run: 40 }, // the cache taking the hits
   wt05: { set: {}, run: 40 },                  // the storm, after the surge has gone
+  wt06: { set: {}, run: 14 },                  // the newsletter towering in the website's own line
 };
 
 async function trimmed(page, dataUrl, maxW) {

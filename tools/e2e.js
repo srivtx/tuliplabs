@@ -158,6 +158,13 @@ async function workbench(page, browser, errors) {
     await page.waitForSelector(".lamps", { timeout: 20000 });
     return page.locator(".wact .commit").isEnabled();
   };
+  // a Node project's disk lives in its worker: wipe it the way a learner would, from the Disk panel
+  const wipeJs = async () => {
+    if (proj.lang !== "js") return;
+    await page.locator(".ptabs button", { hasText: "Disk" }).click();
+    const wipe = page.locator(".ptabs .act", { hasText: "wipe disk" });
+    if (await wipe.count()) { await wipe.click(); await page.waitForSelector(".disk-v .hintline"); }
+  };
   for (const [i, t] of proj.tickets.entries()) {
     await page.waitForFunction((k) => (document.querySelector(".tk-no") || {}).textContent?.includes("#" + k), i + 1);
     if (await test()) bad.push(`${t.id}: the starting code passes Test`);
@@ -165,6 +172,7 @@ async function workbench(page, browser, errors) {
     if (!(await test())) bad.push(`${t.id}: the solution doesn't pass Test: ` + (await page.locator(".fail").first().innerText().catch(() => "")).slice(0, 300));
     // the session transcript, typed into the terminal, from an empty disk like the build's replay
     await page.evaluate((pid) => fetch("/__run", { method: "POST", body: JSON.stringify({ op: "project_load", pid, files: {}, main: "nothing", wipe: true }) }), proj.id);
+    await wipeJs();
     await page.locator(".ptabs button", { hasText: "Terminal" }).click();
     await runProg();
     let want = null, cmd = null, tabbed = 0;
@@ -191,15 +199,30 @@ async function workbench(page, browser, errors) {
     await page.locator(".wact .commit").click();
     await page.locator(".csheet input").press("Enter");
   }
-  // the finale: write, pull the plug, and read the data back
+  // the finale: Ledger survives a power cut; a Node backend answers a whole conversation
   await page.waitForSelector(".wfin");
+  await wipeJs();
+  await page.locator(".ptabs button", { hasText: "Terminal" }).click();
   await runProg();
-  await term("SET survivor yes");
-  await term("SET doomed maybe");
-  await page.locator(".ptabs .act.plug").click();
-  await page.waitForFunction(() => /power back on/.test(document.querySelector(".term").textContent));
-  const a = (await term("GET survivor")).join(), b = (await term("GET doomed")).join();
-  if (a !== "yes" || b !== "(nil)") bad.push(`pull the plug: survivor=${a}, doomed=${b} (want yes, (nil))`);
+  // a Node backend's last session, as [command, expected lines] pairs
+  const steps = [];
+  for (const line of proj.tickets[proj.tickets.length - 1].session.split("\n")) {
+    if (line.startsWith(proj.prompt)) steps.push([line.slice(proj.prompt.length), []]);
+    else if (steps.length) steps[steps.length - 1][1].push(line);
+  }
+  if (proj.lang === "js") {
+    for (const [cmd, want] of steps) {
+      const got = (await term(cmd)).join("\n");
+      if (got !== want.join("\n")) bad.push(`finale: "${cmd}" printed ${JSON.stringify(got)}, expected ${JSON.stringify(want.join("\n"))}`);
+    }
+  } else {
+    await term("SET survivor yes");
+    await term("SET doomed maybe");
+    await page.locator(".ptabs .act.plug").click();
+    await page.waitForFunction(() => /power back on/.test(document.querySelector(".term").textContent));
+    const a = (await term("GET survivor")).join(), b = (await term("GET doomed")).join();
+    if (a !== "yes" || b !== "(nil)") bad.push(`pull the plug: survivor=${a}, doomed=${b} (want yes, (nil))`);
+  }
   const commits = await page.locator(".hist li").count();
   if (commits !== proj.tickets.length) bad.push(`history shows ${commits} commits, want ${proj.tickets.length}`);
   await page.screenshot({ path: `${shots}/workbench-done.png` });
@@ -240,11 +263,28 @@ async function workbench(page, browser, errors) {
     const name = proj.title.toLowerCase();
     try {
       execFileSync("python3", ["-c", "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; z.extractall(sys.argv[2])", zipPath, dir]);
+      if (proj.lang === "js") {
+        // real Node, real sockets: the same requests the terminal sends
+        // npm install when it uses Express (NODE_PATH stands in for it here), then the last session's requests
+        const pkg = JSON.parse(fs.readFileSync(path.join(dir, name, "package.json"), "utf8"));
+        const usesExpress = Object.values(proj.tickets[proj.tickets.length - 1].after).some((src) => /require\(["']express["']\)/.test(src));
+        if (usesExpress !== !!(pkg.dependencies && pkg.dependencies.express)) bad.push(`the downloaded package.json ${usesExpress ? "doesn't list" : "lists"} express`);
+        const out = execFileSync("node", ["run.js"], { cwd: path.join(dir, name), input: steps.map(([c]) => c).join("\n") + "\n", timeout: 20000 }).toString();
+        let at = 0;
+        for (const [cmd, want] of steps) {
+          for (const w of want.filter((l) => /^\d{3} /.test(l) || /^[{[]/.test(l))) {
+            const k = out.indexOf(w, at);
+            if (k < 0) { bad.push(`the downloaded ${name}.zip on real Node: "${cmd}" didn't print ${JSON.stringify(w)}; it printed ${JSON.stringify(out.slice(at, at + 300))}`); break; }
+            at = k + w.length;
+          }
+        }
+        throw { done: true };
+      }
       const out = execFileSync("python3", ["run.py"], { cwd: path.join(dir, name), input: "SET a 1\nMULTI\nINCR n\nINCR n\nEXEC\nGET a\n" }).toString();
       if (!/OK[\s\S]*1\) 1\n2\) 2[\s\S]*\b1\b/.test(out)) bad.push(`the downloaded ${name}.zip ran, but printed ${JSON.stringify(out)}`);
       const again = execFileSync("python3", ["run.py"], { cwd: path.join(dir, name), input: "GET n\n" }).toString();
       if (!again.includes("2")) bad.push(`the downloaded ${name} lost its data across a restart: ${JSON.stringify(again)}`);
-    } catch (e) { bad.push(`the downloaded ${name}.zip doesn't run: ${String(e.stderr || e).slice(0, 300)}`); }
+    } catch (e) { if (!e.done) bad.push(`the downloaded ${name}.zip doesn't run: ${String(e.stderr || e).slice(0, 300)}`); }
   }
   console.log(`workbench ${proj.title}: ${proj.tickets.length} tickets driven, ${bad.length} failed`);
   bad.forEach((b) => console.log("  FAIL " + b));
@@ -302,6 +342,18 @@ async function tunnel(page, browser, errors) {
     if (ref.cache !== undefined) {
       await page.locator(".wt-ctag").click();
       for (let i = 0; i < 12 && (await st()).cfg.cache < ref.cache; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
+    }
+    if (ref.jobWorkers !== undefined) {
+      // drag the email queue from the parts tray onto the stage, then give its mailer more workers
+      const g = page.locator(".wt-parts .ghost.queue"), stage = page.locator(".wt-stage");
+      const a = await g.boundingBox(), b = await stage.boundingBox();
+      await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width * 0.6, b.y + b.height * 0.6, { steps: 8 });
+      await page.mouse.up();
+      if (!((await st()).cfg.jobWorkers > 0)) bad.push(`${x.id}: dragging the email queue onto the stage didn't add it`);
+      await page.locator(".wt-ctag", { hasText: "mailer" }).click();
+      for (let i = 0; i < 12 && (await st()).cfg.jobWorkers < ref.jobWorkers; i++) await page.locator('.wt-insp .step[aria-label="workers: more"]').click();
     }
     const got = (await st()).cfg;
     for (const k in ref) if (got[k] !== ref[k]) bad.push(`${x.id}: couldn't set ${k} to ${ref[k]} through the page (it's ${got[k]})`);

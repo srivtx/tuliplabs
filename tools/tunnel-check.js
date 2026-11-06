@@ -31,10 +31,10 @@ function meets(row, stats, cfg) {
   return op === "<" ? x < v : op === "<=" ? x <= v : op === "==" ? x === v : op === ">" ? x > v : x >= v;
 }
 const WINDOW = 30, SETTLE = 20; // the page measures the last 30 s once the system has been left alone that long
-function liveWindow(cfg, seed, settle = SETTLE) {
+function liveWindow(cfg, seed, settle = SETTLE, win = WINDOW) {
   const s = new Sim(cfg, seed);
-  s.advance(settle + WINDOW);
-  return s.stats(settle, settle + WINDOW);
+  s.advance(settle + win);
+  return s.stats(settle, settle + win);
 }
 function within(got, q) {
   let ok = true;
@@ -54,7 +54,7 @@ for (const x of experiments.filter((e) => e.live)) {
     checks++;
     if (ok !== want) bad.push(`${x.id} ${label} ${want ? "misses" : "already meets"} the goal at steady state (p99 ${ms(steady.p99)}, errors ${steady.errors})`);
     const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
-    const wins = seeds.filter((seed) => { const w = liveWindow(cfg, seed, x.task.settle); return x.task.goal.every((g) => meets(g, w, cfg)); }).length;
+    const wins = seeds.filter((seed) => { const w = liveWindow(cfg, seed, x.task.settle, x.task.window); return x.task.goal.every((g) => meets(g, w, cfg)); }).length;
     checks++;
     if (want && wins < seeds.length) bad.push(`${x.id} reference meets the goal in only ${wins} of ${seeds.length} live windows`);
     if (!want && wins > 0) bad.push(`${x.id} start meets the goal in ${wins} of ${seeds.length} live windows`);
@@ -115,6 +115,16 @@ for (const x of experiments.filter((e) => e.live)) {
     const small = Sim.measure({ ...s, rate, cache: lo, warm: true }, { span: 600 }), big = Sim.measure({ ...s, rate, cache: hi, warm: true }, { span: 600 });
     if (!(small.hit < need && small.p99 > 2)) bad.push(`${x.id} a cache of ${lo} already keeps up (hit ${small.hit.toFixed(3)}, need ${need.toFixed(3)})`);
     if (!(big.hit > need && big.errors === 0 && big.p99 < 1)) bad.push(`${x.id} a cache of ${hi} doesn't keep up (hit ${big.hit.toFixed(3)}, p99 ${ms(big.p99)})`);
+  } else if (th === "drain") {
+    // a batch drains in its work ÷ the job workers: every seed's first batch, within the tolerance
+    const B = s.batch, jw = x.predict.setup.jobWorkers, expect = B.n * B.service / jw;
+    if (Math.abs(expect - A) > 1) bad.push(`${x.id} predict answer ${A}, theory says ${expect.toFixed(1)}`);
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const r = new Sim({ ...s, jobWorkers: jw }, seed);
+      r.advance(B.at + expect * 2);
+      const b = r.batches[0], took = b.left ? Infinity : b.last - b.t;
+      if (Math.abs(took - A) > x.predict.tol) bad.push(`${x.id} with seed ${seed} the first batch drains in ${took.toFixed(1)} s, not about ${A}`);
+    }
   }
 }
 

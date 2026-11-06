@@ -10,7 +10,11 @@
    names (what to call the server), scatter (the dot chart's axes, when it isn't load against p99), and
    predict.axis (when the guess isn't about the crowd) with predict.tolRatio for a log axis, and predict.lower when a
    smaller value is the safe side; clients (show the clients' tag: retries and backoff), hint (the stage's first hint),
-   task.settle (when the checks start measuring a run from the start, for a run with a surge in it).
+   task.settle (when the checks start measuring a run from the start, for a run with a surge in it), task.window (seconds
+   the goal is measured over, when 30 can miss a whole cycle, as with a batch every minute).
+   A batch of background jobs (system.batch, jobWorkers) puts a newsletter on the stage; its predict has theory "drain"
+   (the batch's work ÷ setup.jobWorkers), its chart is scatter.kind "teeth" (each batch's jobs still waiting, against
+   the seconds since it landed), and predict.said and predict.words word the comparison.
    quotes may give a window: [a, b] alone, to measure part of a run (a surge's aftermath).
    incident  the problem as you'd meet it at work, shown first, before any lesson (see docs/wind-tunnel-guide.md).
    The rest are planned, so the shelf can show what's coming: teaser (the incident), ask, fix and home (what you'll take
@@ -209,10 +213,47 @@
     // Planned, written problem-first (see docs/wind-tunnel-guide.md): the incident you'll face, the question it asks,
     // the fix you'll find, and what you'll take home.
     {
-      id: "wt06", title: "Queues absorb bursts", curve: "burst", law: "backpressure", ask: "What if it all arrives at once?",
-      teaser: "At midnight a batch job sends 5,000 emails in one second, and the website times out for everyone until it's done.",
-      fix: "Put a queue and a few workers between the web and the slow work. Size the workers with Little's law, and bound the queue so a backlog turns into a fast no instead of growing forever.",
-      home: "A worker queue in Python, a task queue's prefetch and acknowledgements, and an alarm on the age of the oldest job.",
+      id: "wt06", live: true, incident: "Every minute, the newsletter job hands the website the emails that are due: about <b>900 at once</b>. For twenty seconds of every minute, pages time out.", title: "Queues absorb bursts", curve: "burst", law: "size for the average",
+      ask: "What if it all arrives at once?",
+      teaser: "900 emails land on the website at once, every minute. Give the slow work a line of its own.",
+      system: { mode: "open", rate: 40, workers: 4, service: 0.05, timeout: 10, queueMax: 5000, batch: { at: 5, every: 60, n: 900, service: 0.1 }, jobWorkers: 0 },
+      crowd: { knob: "rate", min: 0, max: 120, step: 1, unit: "pages/s", short: "pages/s" },
+      names: { server: "website" }, free: ["workers", "jobWorkers"], parts: ["queue"],
+      hint: "The newsletter lands at 0:05 and every minute after. Drag the email queue on from the right; click a part to look inside.",
+      scatter: { kind: "teeth", min: 0, max: 100, label: "emails still waiting, batch by batch" },
+      brief: "The <b>website</b> has <b>4 workers</b>, <b>50 ms</b> a page, and gets <b>40 pages a second</b>: half busy. Every minute, at :05, a batch of <b>900 emails</b> lands on the same workers, and each email takes <b>100 ms</b> to send.",
+      predict: {
+        q: "Give the emails a queue and 2 workers of their own. How long after a batch lands does its last email go out?",
+        axis: { min: 0, max: 100, step: 5, short: "s" }, answer: 45, tol: 6, theory: "drain", setup: { jobWorkers: 2 },
+        said: "the last goes at", words: ["It takes longer than you thought.", "It's quicker than you thought."],
+        reveal: "A batch is 900 emails × 0.1 s = <b>90 worker-seconds</b> of work. Two workers do two seconds of it every second, so the last email goes out <b>45 s</b> after the batch lands: the work ÷ the workers.",
+      },
+      explore: "Watch a minute go by: at 0:05 the newsletter lands in the website's own line, and pages stop. Then drag the <b>email queue</b> from the parts onto the stage. From the next batch on, emails wait in a line of their own. The chart draws each batch: how many of its emails are still waiting, against the seconds since it landed.",
+      why: [
+        "Without the queue, emails and pages share one line, first come, first served. A batch is 90 worker-seconds of work, so every page that arrives in the next 20 s or so waits behind it, and most people give up at 10 s. The website answers almost nothing for <b>20 seconds</b> of every minute, and <b>21%</b> of page requests fail. Even <b>8</b> workers don't fix it: 90 ÷ 8 is 11 s, still longer than people wait.",
+        "With the queue, pages are back to a p99 of <b>0.24 s</b>, and the website never notices a batch land. The emails go out more slowly, in <b>45 s</b> instead of about <b>23</b>, because they no longer take every worker the website had. That's the trade: work that can wait, waits.",
+        "Size the workers for the <b>average</b>, not the peak. The peak is 900 emails in one second; the average is 900 a minute, a worker and a half. Two keep up. <b>One</b> doesn't: 90 s of work lands every 60 s, so the line grows every minute, and after five minutes the oldest email has waited <b>over two minutes</b>. The website still looks perfect. A queue hides an overload, so watch the age of its oldest job.",
+      ],
+      task: {
+        title: "The list doubled",
+        brief: "Marketing doubled the list: <b>1,800 emails</b> every minute. Keep pages under <b>400 ms</b> with no errors, and send every email within <b>50 s</b> of its batch. You have <b>8 workers</b> in all, website and mailer together. The goal is measured over a whole minute.",
+        set: { batch: { at: 5, every: 60, n: 1800, service: 0.1 } }, knobs: ["workers", "jobWorkers"], start: { workers: 4, jobWorkers: 0 }, reference: { workers: 4, jobWorkers: 4 }, window: 60,
+        goal: [["p99", "<", 0.4, "pages under 400 ms"], ["errors", "==", 0, "no errors"], ["jobAge", "<", 50, "every email within 50 s"], ["allWorkers", "<=", 8, "8 workers in all"]],
+        done: "A batch is now 180 worker-seconds: 3 workers on average. But 3 would take a whole minute to send each one, so a batch would finish just as the next one lands. Four send each batch in 45 s, and the website keeps its own 4 and never notices the newsletter.",
+      },
+      quotes: [
+        { cfg: {}, metric: "errRate", value: 0.21, tol: 0.15 },
+        { cfg: {}, window: [66, 86], metric: "tput", max: 4 },
+        { cfg: { workers: 8 }, metric: "errRate", min: 0.005 },
+        { cfg: { jobWorkers: 2 }, metric: "p99", value: 0.24, tol: 0.15 },
+        { cfg: { jobWorkers: 2 }, metric: "errors", max: 0 },
+        { cfg: { jobWorkers: 2 }, metric: "jobAge", value: 45, tol: 0.06 },
+        { cfg: {}, window: [65, 120], metric: "jobAge", value: 23, tol: 0.1 },
+        { cfg: { jobWorkers: 1 }, window: [300, 364], metric: "jobAge", min: 120 },
+        { cfg: { jobWorkers: 1 }, metric: "p99", max: 0.4 },
+        { cfg: { jobWorkers: 3, batch: { at: 5, every: 60, n: 1800, service: 0.1 } }, metric: "jobAge", min: 55 },
+        { cfg: { jobWorkers: 4, batch: { at: 5, every: 60, n: 1800, service: 0.1 } }, metric: "jobAge", value: 45, tol: 0.06 },
+      ],
     },
     {
       id: "wt07", title: "The database is the bottleneck", curve: "lag", law: "replication lag", ask: "Where do the writes go?",
