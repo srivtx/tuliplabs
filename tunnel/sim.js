@@ -53,6 +53,7 @@
       this.users = 0;           // closed loop: people who exist; some think, some wait
       this.thinking = 0;
       this.epoch = 0;           // bumps when the open-loop rate changes, so stale arrival events are ignored
+      this.feed = null;         // set to [] and the page gets ["in"] and ["out", ok, why] per request, to animate
       this.start();
     }
     exp(mean) { return -Math.log(1 - this.r()) * mean; }
@@ -77,6 +78,7 @@
     }
     send() {
       const q = { id: this.nextId++, sent: this.t, closed: this.cfg.mode === "closed" };
+      if (this.feed) this.feed.push(["in"]);
       if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
       if (this.busy.length < this.cfg.workers) this.serve(q);
       else if (this.queue.length >= this.cfg.queueMax) this.finish(q, false, "full");
@@ -95,6 +97,7 @@
       if (q.over) return;
       q.over = true;
       this.done.push({ id: q.id, at: this.t, sent: q.sent, lat: this.t - q.sent, ok, why });
+      if (this.feed) this.feed.push(["out", ok, why]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
     }
