@@ -270,7 +270,7 @@
       step(2, 3, X.task.title, taskBody, at > 2 ? "done" : ""));
     if (HOME[X.id]) b.append(step(3, 4, "Take it home", homeBody));
     main.classList.toggle("home-on", P.phase === "done" && !!HOME[X.id]);
-    els.handle.querySelector("span").textContent = P.phase === "predict" ? "1 · Predict" : P.phase === "explore" ? "2 · Push it" : `3 · ${X.task.title}`;
+    els.handle.querySelector("span").textContent = P.phase === "predict" ? "1 · Predict" : P.phase === "explore" ? "2 · Push it" : P.phase === "done" && HOME[X.id] ? "4 · Take it home" : `3 · ${X.task.title}`;
     // a new step scrolls into view; re-rendering the same step leaves the reader where they were
     if (shownPhase !== P.phase + (P.revealed ? "+" : "")) {
       const first = shownPhase === null;
