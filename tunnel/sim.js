@@ -1,14 +1,24 @@
-/* Wind Tunnel's simulator: one server under load, as a seeded discrete-event simulation. No DOM, so the page and
+/* Wind Tunnel's simulator: a small system under load, as a seeded discrete-event simulation. No DOM, so the page and
    tools/tunnel-check.js run exactly the same code and get exactly the same numbers for the same seed.
 
    Load is either open (requests arrive at `rate` per second, a Poisson stream, whoever sends them) or closed
    (`users` people, each thinks for `think` seconds on average, sends one request, waits for the answer, thinks again).
-   The server has `workers` that each serve one request at a time; a request's service time averages `service`
-   seconds (exponential, or fixed with dist:"fixed"). Requests that find every worker busy wait in a queue of at most
-   `queueMax` (then they're turned away: an error). A client gives up after `timeout` seconds (also an error).
 
-   new Sim(cfg, seed) · sim.set({rate|users|workers|...}) · sim.advance(toTime) · sim.view() for drawing ·
-   sim.stats(t0, t1) for a window · Sim.measure(cfg, {seed, warm, span}) for a steady-state number. */
+   The system, front to back:
+     cache     optional (`cache` > 0 keys, LRU). Each request reads one of `keys` keys, chosen by Zipf's law with
+               exponent `zipf`, so a few keys are hot. A hit is answered in `cacheTime`; a miss goes on to the servers,
+               and the answer is put in the cache on its way back (evicting the least recently used key).
+     balancer  when there's more than one server: `lb` is "rr" (round robin), "least" (fewest requests in flight)
+               or "random".
+     servers   `servers` machines, each with `workers` that serve one request at a time; service averages `service`
+               seconds (exponential, or fixed with dist:"fixed"). Server 1 can be `slow` times slower. Each server
+               queues up to `queueMax` requests (then turns them away: an error).
+               With warm:true the cache starts full of the hottest keys, as one that has been running a while.
+   A client gives up after `timeout` seconds (also an error), but its request still uses a worker if it got one.
+
+   new Sim(cfg, seed) · sim.set({...}) · sim.advance(toTime) · sim.view() for drawing · sim.stats(t0, t1) for a window ·
+   Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
+   in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
 (function (root) {
   "use strict";
   // mulberry32: small, fast, and the same in every JS engine
@@ -36,7 +46,25 @@
   }
   const less = (x, y) => x.t < y.t || (x.t === y.t && x.k < y.k);
 
-  const DEFAULTS = { mode: "open", rate: 40, users: 100, think: 5, workers: 4, service: 0.05, dist: "exp", queueMax: 1000, timeout: 10 };
+  // Zipf's law over n keys: key k (1-based) is read in proportion to 1 / k^s. The cumulative table is shared.
+  const ZIPF = new Map();
+  function zipfTable(n, s) {
+    const id = n + ":" + s;
+    if (!ZIPF.has(id)) {
+      const c = new Float64Array(n);
+      let sum = 0;
+      for (let k = 1; k <= n; k++) { sum += 1 / Math.pow(k, s); c[k - 1] = sum; }
+      for (let k = 0; k < n; k++) c[k] /= sum;
+      ZIPF.set(id, c);
+    }
+    return ZIPF.get(id);
+  }
+
+  const DEFAULTS = {
+    mode: "open", rate: 40, users: 100, think: 5,
+    servers: 1, workers: 4, service: 0.05, dist: "exp", slow: 1, lb: "rr", queueMax: 1000, timeout: 10,
+    cache: 0, keys: 10000, zipf: 1, cacheTime: 0.002, warm: false,
+  };
 
   class Sim {
     constructor(cfg, seed = 1) {
@@ -44,20 +72,26 @@
       this.r = rng(seed);
       this.t = 0;
       this.ev = new Heap();
-      this.queue = [];          // waiting requests, oldest first
-      this.busy = [];           // requests in service, one per busy worker
-      this.done = [];           // finished requests: {id, at, sent, lat, ok, why}
-      this.busyTime = 0;        // worker-seconds spent serving, for utilisation
-      this.busyLog = [];        // [t, busy workers] whenever it changes, for windowed utilisation
+      this.srv = [];            // servers: {queue, busy, gone}; gone ones take no new work and leave when empty
+      this.done = [];           // finished requests: {id, at, sent, lat, ok, why, hit}
+      this.area = [];           // per simulated second: worker-seconds spent busy, and worker-seconds that existed
+      this.capA = [];
+      this.at = 0; this.nb = 0; this.nc = 0; // since `at`, nb workers were busy out of nc
       this.nextId = 1;
       this.users = 0;           // closed loop: people who exist; some think, some wait
       this.thinking = 0;
       this.epoch = 0;           // bumps when the open-loop rate changes, so stale arrival events are ignored
-      this.feed = null;         // set to [] and the page gets ["in"] and ["out", ok, why] per request, to animate
+      this.rr = 0;              // round robin's next server
+      this.lru = new Map();     // the cache: key -> true, oldest first
+      this.feed = null;         // set to [] and the page gets ["in", key?], ["hit"], ["route", server] and ["out", ok, why, server]
+      this.sizeServers();
+      this.nc = this.live() * this.cfg.workers;
+      // a warm cache already holds the hottest keys, hottest most recently used (a cache that has run for a while)
+      if (this.cfg.warm) for (let k = Math.min(this.cfg.cache, this.cfg.keys); k >= 1; k--) this.lru.set(k, true);
       this.start();
     }
     exp(mean) { return -Math.log(1 - this.r()) * mean; }
-    serviceTime() { const c = this.cfg; return c.dist === "fixed" ? c.service : this.exp(c.service); }
+    serviceTime(i) { const c = this.cfg, m = c.service * (i === 0 ? c.slow || 1 : 1); return c.dist === "fixed" ? m : this.exp(m); }
     start() {
       if (this.cfg.mode === "open") this.scheduleArrival();
       else this.addUsers(this.cfg.users);
@@ -68,36 +102,104 @@
     addUsers(n) {
       for (let i = 0; i < n; i++) { this.users++; this.thinking++; this.ev.push({ t: this.t + this.exp(this.cfg.think), type: "wake", user: true }); }
     }
+    // servers that exist: more are added now; fewer means the last ones stop taking work and leave once empty
+    sizeServers() {
+      const n = Math.max(1, this.cfg.servers | 0);
+      this.srv.forEach((s, i) => { s.gone = i >= n; });
+      while (this.srv.length < n) this.srv.push({ queue: [], busy: [], gone: false });
+      this.prune();
+    }
+    prune() { while (this.srv.length > 1 && this.srv[this.srv.length - 1].gone && !this.srv[this.srv.length - 1].busy.length && !this.srv[this.srv.length - 1].queue.length) this.srv.pop(); }
     // change knobs while it runs: more users join now, fewer users leave as they finish; a new rate starts a new stream
     set(patch) {
       const old = this.cfg;
       this.cfg = { ...old, ...patch };
       if (this.cfg.mode === "open" && patch.rate !== undefined && patch.rate !== old.rate) { this.epoch++; this.scheduleArrival(); }
       if (this.cfg.mode === "closed" && patch.users !== undefined && this.cfg.users > this.users) this.addUsers(this.cfg.users - this.users);
-      if (patch.workers !== undefined) this.fill();
+      if (patch.servers !== undefined) { this.sizeServers(); this.logBusy(); }
+      if (patch.workers !== undefined) { this.srv.forEach((s, i) => this.fill(i)); this.logBusy(); }
+      if (patch.cache !== undefined) this.evict();
+    }
+    evict() { const n = Math.max(0, this.cfg.cache | 0); while (this.lru.size > n) this.lru.delete(this.lru.keys().next().value); }
+    pickKey() {
+      const c = zipfTable(this.cfg.keys, this.cfg.zipf), u = this.r();
+      let lo = 0, hi = c.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < u) lo = m + 1; else hi = m; }
+      return lo + 1;
     }
     send() {
       const q = { id: this.nextId++, sent: this.t, closed: this.cfg.mode === "closed" };
+      if (this.cfg.cache > 0) {
+        q.key = this.pickKey();
+        if (this.lru.has(q.key)) {
+          this.lru.delete(q.key); this.lru.set(q.key, true);
+          q.hit = true;
+          if (this.feed) this.feed.push(["in"], ["hit"]);
+          this.ev.push({ t: this.t + this.cfg.cacheTime, type: "hit", q });
+          return;
+        }
+        q.hit = false;
+      }
       if (this.feed) this.feed.push(["in"]);
       if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
-      if (this.busy.length < this.cfg.workers) this.serve(q);
-      else if (this.queue.length >= this.cfg.queueMax) this.finish(q, false, "full");
-      else this.queue.push(q);
+      const i = this.route();
+      q.srv = i;
+      if (this.feed && this.live() > 1) this.feed.push(["route", i]);
+      const s = this.srv[i];
+      if (s.busy.length < this.cfg.workers) this.serve(q);
+      else if (s.queue.length >= this.cfg.queueMax) this.finish(q, false, "full");
+      else s.queue.push(q);
+    }
+    live() { let n = 0; for (const s of this.srv) if (!s.gone) n++; return n; }
+    // the load balancer: which server gets the next request
+    route() {
+      const S = this.srv, n = S.length;
+      if (n === 1) return 0;
+      const ok = (i) => !S[i].gone;
+      if (this.cfg.lb === "random") {
+        const L = []; for (let i = 0; i < n; i++) if (ok(i)) L.push(i);
+        return L[Math.min(L.length - 1, Math.floor(this.r() * L.length))];
+      }
+      if (this.cfg.lb === "least") {
+        // fewest in flight (serving + waiting); ties go round the ring so nobody is favoured
+        let best = -1, bn = Infinity;
+        for (let j = 0; j < n; j++) {
+          const i = (this.rr + j) % n;
+          if (!ok(i)) continue;
+          const f = S[i].busy.length + S[i].queue.length;
+          if (f < bn) { bn = f; best = i; }
+        }
+        this.rr = (best + 1) % n;
+        return best;
+      }
+      for (let j = 0; j < n; j++) { const i = (this.rr + j) % n; if (ok(i)) { this.rr = (i + 1) % n; return i; } }
+      return 0;
     }
     serve(q) {
+      const i = q.srv || 0, s = this.srv[i];
       q.began = this.t;
-      q.end = this.t + this.serviceTime();
-      this.busy.push(q);
+      q.end = this.t + this.serviceTime(i);
+      s.busy.push(q);
       this.logBusy();
       this.ev.push({ t: q.end, type: "served", q });
     }
-    fill() { while (this.busy.length < this.cfg.workers && this.queue.length) this.serve(this.queue.shift()); }
-    logBusy() { this.busyLog.push([this.t, this.busy.length]); if (this.busyLog.length > 200000) this.busyLog.splice(0, 100000); }
+    fill(i) { const s = this.srv[i]; if (!s) return; while (s.busy.length < this.cfg.workers && s.queue.length) this.serve(s.queue.shift()); }
+    busyNow() { let n = 0; for (const s of this.srv) n += s.busy.length; return n; }
+    // utilisation is kept as busy and existing worker-seconds per simulated second, so any window adds up exactly
+    logBusy() { this.acc(this.t); this.nb = this.busyNow(); this.nc = this.live() * this.cfg.workers; }
+    acc(to) {
+      while (this.at < to) {
+        const s = Math.floor(this.at), end = Math.min(to, s + 1), d = end - this.at;
+        this.area[s] = (this.area[s] || 0) + this.nb * d;
+        this.capA[s] = (this.capA[s] || 0) + this.nc * d;
+        this.at = end;
+      }
+    }
     finish(q, ok, why) {
       if (q.over) return;
       q.over = true;
-      this.done.push({ id: q.id, at: this.t, sent: q.sent, lat: this.t - q.sent, ok, why });
-      if (this.feed) this.feed.push(["out", ok, why]);
+      this.done.push({ id: q.id, at: this.t, sent: q.sent, lat: this.t - q.sent, ok, why, hit: q.hit });
+      if (this.feed && !q.hit) this.feed.push(["out", ok, why, q.srv || 0]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
     }
@@ -112,7 +214,6 @@
         const e = this.ev.peek();
         if (!e || e.t > until) break;
         this.ev.pop();
-        this.busyTime += this.busy.length * (e.t - this.t);
         this.t = e.t;
         if (e.type === "arrive") {
           if (e.epoch !== this.epoch || this.cfg.mode !== "open") continue;
@@ -121,49 +222,59 @@
         } else if (e.type === "wake") {
           this.thinking--;
           this.send();
-        } else if (e.type === "served") {
-          const i = this.busy.indexOf(e.q);
-          if (i >= 0) this.busy.splice(i, 1);
-          this.logBusy();
-          // a request that already timed out still used the worker; its answer just arrives to nobody
+        } else if (e.type === "hit") {
           this.finish(e.q, true);
-          // if workers were removed, the extra ones stop taking work
-          this.fill();
+        } else if (e.type === "served") {
+          const q = e.q, i = q.srv || 0, s = this.srv[i];
+          const k = s.busy.indexOf(q);
+          if (k >= 0) s.busy.splice(k, 1);
+          this.logBusy();
+          // the answer fills the cache on its way back, even if the client already gave up
+          if (q.key !== undefined && this.cfg.cache > 0) { this.lru.delete(q.key); this.lru.set(q.key, true); this.evict(); }
+          // a request that already timed out still used the worker; its answer just arrives to nobody
+          this.finish(q, true);
+          this.fill(i);
+          this.prune();
         } else if (e.type === "timeout") {
           const q = e.q;
           if (q.over) continue;
-          const i = this.queue.indexOf(q);
-          if (i >= 0) this.queue.splice(i, 1);
+          const s = this.srv[q.srv || 0], k = s ? s.queue.indexOf(q) : -1;
+          if (k >= 0) s.queue.splice(k, 1);
           this.finish(q, false, "timeout");
         }
       }
-      this.busyTime += this.busy.length * (until - this.t);
       this.t = until;
+      this.acc(until);
     }
-    view() { return { t: this.t, queue: this.queue, busy: this.busy, workers: this.cfg.workers, thinking: this.thinking, users: this.users }; }
+    // for drawing: every server's queue and busy list, and the totals the one-server page used
+    get queue() { return this.srv.length === 1 ? this.srv[0].queue : this.srv.flatMap((s) => s.queue); }
+    get busy() { return this.srv.length === 1 ? this.srv[0].busy : this.srv.flatMap((s) => s.busy); }
+    view() { return { t: this.t, srv: this.srv, workers: this.cfg.workers, thinking: this.thinking, users: this.users, cached: this.lru.size }; }
     // numbers for requests that finished in (t0, t1]
     stats(t0, t1) {
       const lats = [], d = this.done;
-      let ok = 0, bad = 0, lo = 0, hi = d.length;
+      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length;
       while (lo < hi) { const m = (lo + hi) >> 1; if (d[m].at <= t0) lo = m + 1; else hi = m; }
-      for (let i = lo; i < d.length && d[i].at <= t1; i++) { if (d[i].ok) { ok++; lats.push(d[i].lat); } else bad++; }
+      for (let i = lo; i < d.length && d[i].at <= t1; i++) {
+        const r = d[i];
+        if (r.ok) { ok++; lats.push(r.lat); } else bad++;
+        if (r.hit !== undefined) { looked++; if (r.hit) hits++; }
+      }
       lats.sort((a, b) => a - b);
       const span = t1 - t0, n = ok + bad;
       return {
         span, sent: n, ok, errors: bad, errRate: n ? bad / n : 0,
         tput: ok / span, mean: lats.length ? lats.reduce((s, x) => s + x, 0) / lats.length : 0,
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
+        hit: looked ? hits / looked : 0, misses: (looked - hits) / span,
       };
     }
+    // busy workers ÷ workers that existed, over the window (whole seconds, as the page and the checks ask for)
     util(t0, t1) {
-      const L = this.busyLog;
-      if (!L.length || t1 <= t0) return 0;
-      let lo = 0, hi = L.length;
-      while (lo < hi) { const m = (lo + hi) >> 1; if (L[m][0] <= t0) lo = m + 1; else hi = m; }
-      let cur = lo ? L[lo - 1][1] : 0, at = t0, area = 0;
-      for (let i = lo; i < L.length && L[i][0] <= t1; i++) { area += cur * (L[i][0] - at); at = L[i][0]; cur = L[i][1]; }
-      area += cur * (t1 - at);
-      return area / ((t1 - t0) * this.cfg.workers);
+      this.acc(Math.min(t1, this.t));
+      let a = 0, c = 0;
+      for (let i = Math.floor(t0); i < Math.ceil(t1); i++) { a += this.area[i] || 0; c += this.capA[i] || 0; }
+      return c ? a / c : 0;
     }
     static measure(cfg, o = {}) {
       const s = new Sim(cfg, o.seed || 7), warm = o.warm ?? 30, span = o.span ?? 300;
@@ -188,7 +299,9 @@
     const pWait = top / (sum + top);
     return { pWait, wait: pWait / (c * mu - lambda), rho };
   }
+  // the share of reads the hottest n of N keys get under Zipf(s): the best any cache of n keys could do
+  function zipfShare(n, N, s = 1) { const c = zipfTable(N, s); return n <= 0 ? 0 : c[Math.min(N, n) - 1]; }
 
-  root.WTSim = { Sim, erlangC, rng, DEFAULTS };
+  root.WTSim = { Sim, erlangC, zipfShare, rng, DEFAULTS };
 })(typeof window !== "undefined" ? window : globalThis);
 if (typeof module !== "undefined") module.exports = globalThis.WTSim || window.WTSim;
