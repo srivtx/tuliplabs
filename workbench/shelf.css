@@ -1,0 +1,88 @@
+/* The labs' shelves (Workbench projects, Wind Tunnel experiments): a short head, how the lab works, where to pick up,
+   then a grid of cards. Each card's picture is printed (a tiny editor in Tulip Night, or a curve on a dark grid),
+   so it looks the same in light and dark. The page's accent is the lab's own colour (--kc). */
+.shelf{max-width:1180px;margin:0 auto;padding:56px 16px 90px;--acc:var(--kc,#f0643c)}
+.shelf .eyebrow{margin:0;font:500 13px var(--f-display);letter-spacing:.06em;color:var(--acc)}
+.shelf h1{margin:6px 0 0;font:400 clamp(44px,7vw,84px)/.95 var(--f-serif);letter-spacing:-.01em}
+.shelf h1 i{color:var(--acc)}
+.shelf .lede{max-width:580px;margin:14px 0 0;color:var(--muted);text-wrap:pretty}
+
+/* how a ticket works: four numbered steps joined by a rule */
+.loop{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;max-width:760px;margin:30px 0 0;padding:0;counter-reset:s}
+.loop li{position:relative;display:flex;flex-direction:column;gap:2px;padding:0 16px 0 0}
+.loop li::before{content:"";position:absolute;left:26px;right:6px;top:11px;height:1px;background:var(--line)}
+.loop li:last-child::before{display:none}
+.lp-n{position:relative;display:grid;place-items:center;width:22px;height:22px;margin-bottom:8px;border-radius:6px;background:var(--acc);color:#1d0c06;font:600 11px var(--f-mono)}
+.loop b{font:600 14px var(--f-body)}
+.loop small{font-size:12.5px;line-height:1.4;color:var(--muted);text-wrap:pretty}
+
+/* where to pick up */
+.shelf .resume{display:inline-flex;align-items:center;gap:6px 14px;flex-wrap:wrap;margin-top:30px;padding:11px 16px 11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);text-decoration:none;transition:border-color .2s}
+.shelf .resume:hover{border-color:var(--acc)}
+.shelf .resume:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+.r-k{padding:3px 8px;border-radius:5px;background:var(--acc);color:#1d0c06;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.r-t{font:400 22px/1 var(--f-serif)}
+.r-c{font:12px var(--f-mono);color:var(--muted)}
+.r-a{font-style:normal;color:var(--acc);font-family:var(--f-mono);transition:translate .25s cubic-bezier(.2,.8,.3,1)}
+.resume:hover .r-a{translate:4px 0}
+
+.sh-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px 20px;flex-wrap:wrap;margin:56px 0 22px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.sh-head h2{margin:0;font:400 30px/1 var(--f-serif)}
+.sh-n{margin:0;font:12px var(--f-mono);color:var(--muted)}
+.sh-n span{margin:0 6px;opacity:.6}
+.sh-n b{color:var(--ink);font-weight:600}
+.sl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:44px 22px}
+
+/* a card */
+.sc{display:flex;flex-direction:column;min-width:0;color:inherit;text-decoration:none}
+.sc:focus-visible{outline:2px solid var(--acc);outline-offset:6px;border-radius:10px}
+.ed-art,.cv-art{position:relative;display:block;aspect-ratio:16/10;overflow:hidden;border-radius:10px;
+  box-shadow:0 1px 2px rgba(0,0,0,.06),0 16px 28px -22px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.06);
+  transition:transform .35s cubic-bezier(.2,.8,.3,1),box-shadow .35s cubic-bezier(.2,.8,.3,1)}
+a.sc:hover .ed-art,a.sc:hover .cv-art{transform:translateY(-4px);box-shadow:0 2px 4px rgba(0,0,0,.06),0 26px 40px -24px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.06)}
+.sc-meta{margin-top:16px;font:600 10.5px/16px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.sc-meta em{font-style:normal;color:var(--acc)}
+.sc-t{margin-top:6px;font:400 27px/1.02 var(--f-serif);letter-spacing:-.01em;text-wrap:balance}
+a.sc .sc-t::after{content:"→";display:inline-block;margin-left:8px;font:400 15px var(--f-mono);color:var(--acc);vertical-align:.22em;transition:translate .35s cubic-bezier(.2,.8,.3,1)}
+a.sc:hover .sc-t::after{translate:4px 0}
+.sc-d{margin-top:6px;font-size:14px;line-height:1.4;color:var(--muted);text-wrap:pretty}
+.sc.later .ed-art,.sc.later .cv-art{filter:saturate(.35);opacity:.72}
+.sc.later .sc-t{color:var(--muted)}
+
+/* the tiny editor: Tulip Night, a file tab and a few numbered lines */
+.ed-art{background:#151118;font:clamp(8.5px,.82vw,10.5px)/1.62 var(--f-mono);color:#ede6f1}
+.ed-tab{position:absolute;left:0;top:0;padding:5px 12px 4px;background:#1a151e;border-right:1px solid #2b2432;border-top:2px solid #ff6fb5;color:#ede6f1;font-size:.95em}
+.ed-art::before{content:"";position:absolute;left:0;right:0;top:0;height:calc(2.1em + 2px);background:#100d13;border-bottom:1px solid #2b2432}
+.ed-tab{z-index:1}
+.ed-code{position:absolute;left:0;right:0;top:calc(2.1em + 9px);bottom:0}
+.ed-ln{display:flex;gap:12px;white-space:pre}
+.ed-ln b{width:2.2em;text-align:right;font-weight:400;color:#4d4555;flex:none}
+.ed-ln code{font:inherit;color:inherit;background:none;padding:0;border:0;border-radius:0;overflow:hidden;text-overflow:clip}
+.ed-ln i{font-style:normal}
+.ed-ln .k{color:#ff6fb5}.ed-ln .d{color:#ffc94a}.ed-ln .s{color:#5fd4b0}.ed-ln .n{color:#c7a2ff}.ed-ln .c{color:#6f667a}
+
+/* ticket pips */
+.pips{display:flex;align-items:center;gap:4px;margin-top:12px;min-height:16px}
+.pips i{width:14px;height:6px;border-radius:2px;background:var(--line)}
+.pips i.on{background:var(--acc)}
+.pips em{margin-left:6px;font:11px var(--f-mono);font-style:normal;color:var(--muted)}
+.pips.soon em{margin:0}
+
+/* a Wind Tunnel card: the experiment's curve on a dark grid, and the law's name */
+.cv-art{background:radial-gradient(120% 90% at 20% 0%,#123a44 0%,#0b1c22 60%,#081418 100%)}
+.cv{position:absolute;inset:8% 6% 16% 6%;width:88%;height:76%}
+.cv .g line{stroke:#1f9fb4;stroke-opacity:.16;stroke-width:1;vector-effect:non-scaling-stroke}
+.cv .ax{fill:none;stroke:#6fbfcc;stroke-opacity:.45;stroke-width:1;vector-effect:non-scaling-stroke}
+.cv .ln{fill:none;stroke:#5fe0f0;stroke-width:2.2;stroke-linejoin:round;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 4px #5fe0f088)}
+.cv.ghost .ln{stroke:#6fbfcc;stroke-opacity:.6;stroke-dasharray:4 4;filter:none}
+.cv-law{position:absolute;left:8%;bottom:7%;font:600 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:#8fd3dd}
+
+@media (max-width:1000px){.sl{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){
+  .shelf{padding-top:36px}
+  .loop{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 0}
+  .loop li:nth-child(2)::before{display:none}
+  .sl{grid-template-columns:minmax(0,1fr);gap:36px}
+  .ed-art{font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){.ed-art,.cv-art,.r-a,a.sc .sc-t::after{transition:none}}

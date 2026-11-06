@@ -411,14 +411,14 @@ def build(only=None):
     # course order, as the studio shows them; the fourth field is the course each level sits in
     lines = [l for l in src[src.index("courses:"):src.index("levels:")].splitlines() if "ids:" in l]
     summary["dz"] = [[i, titles[i], 1, ci] for ci, l in enumerate(lines) for i in re.findall(r'"(dz\d+)"', l)]
-    # Workbench projects (content/wb): one entry per ticket, so progress counts tickets committed
+    # Workbench projects (content/wb): one entry per project, sized by its tickets, so progress counts tickets committed (done ids are wb01-t1, …)
     import workbench
     projects = workbench.build(md, inline)
     if projects:
         with open(os.path.join(CONTENT, "wb.json"), "w", encoding="utf-8") as fh:
             json.dump({"track": "wb", "book": "Workbench", "projects": projects}, fh, ensure_ascii=False, separators=(",", ":"))
         print(f"built wb.json: {len(projects)} projects, {sum(len(p['tickets']) for p in projects)} tickets")
-        summary["wb"] = [[f"{p['id']}-{t['id']}", f"{p['title']}: {t['title']}", 1, i] for i, p in enumerate(projects) for t in p["tickets"]]
+        summary["wb"] = [[p["id"], p["title"], len(p["tickets"])] for p in projects]
         built["wb"] = projects
     with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))
