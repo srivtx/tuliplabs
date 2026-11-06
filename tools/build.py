@@ -422,7 +422,8 @@ def build(only=None):
         built["wb"] = projects
     # Wind Tunnel keeps its experiments in tunnel/experiments.js; each live one is one thing to finish (done id wt01, …)
     with open(os.path.join(ROOT, "tunnel", "experiments.js"), encoding="utf-8") as fh:
-        live = re.findall(r'id: "(wt\d+)", live: true, title: "([^"]+)"', fh.read())
+        # the fields between live and title vary (an experiment's incident comes first), so match within its line
+        live = re.findall(r'id: "(wt\d+)", live: true,[^\n]*? title: "([^"]+)"', fh.read())
     summary["wt"] = [[i, t, 1] for i, t in live]
     with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))
