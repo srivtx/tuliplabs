@@ -90,7 +90,7 @@
     { num: 101, title: "Greenhouse", kind: "your first Express API: routes, JSON, params, queries, CRUD, middleware, errors", hue: "green", bar: "greenhouse · :3000",
       term: [["p", "api> ", "GET /api/plants?water=weekly"], ["o", '[{"id":1,"name":"Tulip","water":"weekly"}]'], ["p", "api> ", 'POST /api/plants {"name": "Rose"}'], ["e", '400 {"error":"water must be daily, weekly or monthly"}']] },
     { num: 102, title: "Taskflow", kind: "a todo app that keeps its data: a JSON file on disk, filters, pagination, and a page of its own", hue: "amber", bar: "taskflow · :3000",
-      term: [["p", "api> ", "GET /api/tasks?done=false&page=2"], ["o", '{"tasks":[…],"page":2,"pages":3}'], ["c", "⚡ restart"], ["e", "GET /api/tasks/7  200  still there"]] },
+      term: [["p", "api> ", 'POST /api/tasks {"title": "Water ferns"}'], ["c", "⚡ power cut while writing tasks.json.tmp"], ["p", "api> ", "GET /api/tasks?done=false&limit=5"], ["e", "200 OK · x-total-count: 12 · every saved task still there"]] },
     { num: 103, title: "Shortlink", kind: "a URL shortener: short codes, redirects, click stats, custom aliases, expiry", hue: "cyan", bar: "shortlink · :3000",
       term: [["p", "api> ", 'POST /api/links {"url":"https://…"}'], ["o", "201 Created · /k3x9"], ["p", "api> ", "GET /k3x9"], ["e", "302 Found · location: https://…"]] },
     { num: 104, title: "Inkwell", kind: "a blog with accounts: sign-up, hashed passwords, sessions and cookies, only authors edit", hue: "violet", bar: "inkwell · :3000",

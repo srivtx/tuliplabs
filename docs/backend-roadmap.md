@@ -15,14 +15,17 @@ and every earlier ticket's, and its terminal session replays exactly.
 - `tools/wb-express-parity.js` replays every session on the real Express 5 from npm and compares line by line.
   Learn-Express projects must be 100% identical; Trellis differs only where real Express adds its own headers.
 - A downloaded project runs with `npm install` and `node run.js`.
+- **⚡ pull the plug** in a Node project cuts the power halfway through the program's *next* write to disk, so a
+  careful save (write a `.tmp`, then rename) really survives where a careless one leaves half a file. Tests can do
+  the same with `plug()`; `tear(name)` damages a finished file instead.
 
 ## Learn Express by building (101…)
 
 | # | Project | What it adds | Status |
 |---|---|---|---|
 | 1 | Greenhouse | routes, JSON, params, queries, CRUD, middleware, JSON errors | live |
-| 2 | Taskflow | data in a JSON file on disk (atomic writes), filters, pagination, `express.static` page | next |
-| 3 | Shortlink | short codes, redirects, click stats, custom aliases, expiry | planned |
+| 2 | Taskflow | data in a JSON file on disk, atomic saves that survive a power cut, filters, paging in headers, sorting, an escaped HTML page | live |
+| 3 | Shortlink | short codes, redirects, click stats, custom aliases, expiry | next |
 | 4 | Inkwell | sign-up, PBKDF2 password hashing, sessions in cookies, ownership checks | planned |
 | 5 | Keyring | JWTs signed with HMAC, refresh tokens, roles and scopes | planned |
 | 6 | Bookshelf | cursor pagination, sorting, ETags and 304s, API versions | planned |
