@@ -122,7 +122,7 @@
     const live = !!x.live, ok = done[x.id];
     const tag = live ? "a" : "div";
     return `<${tag} class="sc wt${live ? "" : " later"}"${live ? ` href="lab.html#${i + 1}"` : ""}>
-      <span class="cv-art">${curve(x.curve, live)}<span class="cv-law">${esc(x.law || "")}</span></span>
+      <span class="tw-art">${curve(x.curve, live)}<span class="cv-law">${esc(x.law || "")}</span></span>
       <span class="sc-meta">Experiment ${i + 1}${live ? (ok ? " · <em>done</em>" : "") : " · soon"}</span>
       <span class="sc-t">${esc(x.title)}</span>
       <span class="sc-d">${esc(x.teaser)}</span>

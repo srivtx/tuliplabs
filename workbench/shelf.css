@@ -36,17 +36,17 @@
 /* a card */
 .sc{display:flex;flex-direction:column;min-width:0;color:inherit;text-decoration:none}
 .sc:focus-visible{outline:2px solid var(--acc);outline-offset:6px;border-radius:10px}
-.ed-art,.cv-art{position:relative;display:block;aspect-ratio:16/10;overflow:hidden;border-radius:10px;
+.ed-art,.tw-art{position:relative;display:block;aspect-ratio:16/10;overflow:hidden;border-radius:10px;
   box-shadow:0 1px 2px rgba(0,0,0,.06),0 16px 28px -22px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.06);
   transition:transform .35s cubic-bezier(.2,.8,.3,1),box-shadow .35s cubic-bezier(.2,.8,.3,1)}
-a.sc:hover .ed-art,a.sc:hover .cv-art{transform:translateY(-4px);box-shadow:0 2px 4px rgba(0,0,0,.06),0 26px 40px -24px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.06)}
+a.sc:hover .ed-art,a.sc:hover .tw-art{transform:translateY(-4px);box-shadow:0 2px 4px rgba(0,0,0,.06),0 26px 40px -24px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.06)}
 .sc-meta{margin-top:16px;font:600 10.5px/16px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 .sc-meta em{font-style:normal;color:var(--acc)}
 .sc-t{margin-top:6px;font:400 27px/1.02 var(--f-serif);letter-spacing:-.01em;text-wrap:balance}
 a.sc .sc-t::after{content:"→";display:inline-block;margin-left:8px;font:400 15px var(--f-mono);color:var(--acc);vertical-align:.22em;transition:translate .35s cubic-bezier(.2,.8,.3,1)}
 a.sc:hover .sc-t::after{translate:4px 0}
 .sc-d{margin-top:6px;font-size:14px;line-height:1.4;color:var(--muted);text-wrap:pretty}
-.sc.later .ed-art,.sc.later .cv-art{filter:saturate(.35);opacity:.72}
+.sc.later .ed-art,.sc.later .tw-art{filter:saturate(.35);opacity:.72}
 .sc.later .sc-t{color:var(--muted)}
 
 /* the tiny editor: Tulip Night, a file tab and a few numbered lines */
@@ -69,7 +69,7 @@ a.sc:hover .sc-t::after{translate:4px 0}
 .pips.soon em{margin:0}
 
 /* a Wind Tunnel card: the experiment's curve on a dark grid, and the law's name */
-.cv-art{background:radial-gradient(120% 90% at 20% 0%,#123a44 0%,#0b1c22 60%,#081418 100%)}
+.tw-art{background:radial-gradient(120% 90% at 20% 0%,#123a44 0%,#0b1c22 60%,#081418 100%)}
 .cv{position:absolute;inset:8% 6% 16% 6%;width:88%;height:76%}
 .cv .g line{stroke:#1f9fb4;stroke-opacity:.16;stroke-width:1;vector-effect:non-scaling-stroke}
 .cv .ax{fill:none;stroke:#6fbfcc;stroke-opacity:.45;stroke-width:1;vector-effect:non-scaling-stroke}
@@ -85,4 +85,5 @@ a.sc:hover .sc-t::after{translate:4px 0}
   .sl{grid-template-columns:minmax(0,1fr);gap:36px}
   .ed-art{font-size:11px}
 }
-@media (prefers-reduced-motion:reduce){.ed-art,.cv-art,.r-a,a.sc .sc-t::after{transition:none}}
+@media (prefers-reduced-motion:reduce){.ed-art,.tw-art,.r-a,a.sc .sc-t::after{transition:none}}
+:root[data-theme="light"] .sc.later .ed-art,:root[data-theme="light"] .sc.later .tw-art{opacity:1;filter:saturate(.45) brightness(.9)}
