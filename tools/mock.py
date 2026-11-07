@@ -119,7 +119,18 @@ def build(stats=False):
                     i = ops[0][1]
                     if len(a) > 24:
                         continue
-                    add({"kind": "line", "id": b["id"], "prompt": b["prompt"], "code": b["starter"].rstrip("\n"), "line": i, "fix": s[ops[0][3]]}, ch)
+                    # the exercise's prompt describes the bug, so the question shows what the code should do instead: its first checks
+                    checks = [l for l in b["tests"].split("\n") if l.startswith("assert ") and len(l) <= 110][:3]
+                    # the shown checks must catch the bug: the buggy code fails them and the fixed code passes them
+                    while checks and harness.check(ch["prelude"], b["setup"], b["starter"], "\n".join(checks))["passed"]:
+                        more = [l for l in b["tests"].split("\n") if l.startswith("assert ") and len(l) <= 110 and l not in checks]
+                        if not more or len(checks) >= 5:
+                            checks = []
+                            break
+                        checks.append(more[0])
+                    if not checks or not harness.check(ch["prelude"], b["setup"], b["solution"], "\n".join(checks))["passed"]:
+                        continue
+                    add({"kind": "line", "id": b["id"], "title": b.get("title", ""), "prompt": b["prompt"], "checks": checks, "code": b["starter"].rstrip("\n"), "line": i, "fix": s[ops[0][3]]}, ch)
                 elif t == "exercise" and b.get("kind") == "write" and ch["num"] in PATTERN_CHAPTERS:
                     prompt = statement_only(b["prompt"])
                     text = strip_tags(prompt).lower()
