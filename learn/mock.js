@@ -3,13 +3,14 @@
    which pattern fits, put the lines in order, and fresh "trace it" questions from learn/mock-gen.js.
    Nothing is marked until the end (or after each question, if you ask for that). Then a results page
    with your weakest chapters first, every answer explained, and the misses added to spaced review.
+   Misses also come back in later mocks (the next one, then 2 and 4 mocks on) until they're right 3 times.
 
    The question bank is content/ds-mock.json (tools/mock.py); generated questions are checked against
    real Python by tools/mock-check.js. The engine calls MOCK.page(api) for #mock. */
 (function () {
   "use strict";
   const BANK_URL = "../content/ds-mock.json";
-  const MIX = [["mc", 0.3], ["trace", 0.25], ["pattern", 0.13], ["out", 0.12], ["line", 0.1], ["order", 0.1]];
+  const MIX = [["mc", 0.27], ["trace", 0.3], ["pattern", 0.12], ["out", 0.11], ["line", 0.1], ["order", 0.1]];
   const KIND_NAME = { mc: "Multiple choice", trace: "Trace it", pattern: "Which pattern fits?", out: "What does it print?", line: "Find the bug", order: "Put it in order" };
   const COUNTS = [10, 20, 40];
   const PACES = [["90 s a question", 90], ["untimed", 0], ["45 s a question", 45]];
@@ -27,6 +28,7 @@
     BANK = await r.json();
     BANK.byId = Object.fromEntries(BANK.questions.map((q) => [q.id, q]));
     BANK.ch = Object.fromEntries(BANK.chapters.map((c) => [c.num, c]));
+    GEN_CH = Object.fromEntries(window.MOCKGEN.names.map((g) => [g, window.MOCKGEN.make(g, 1).ch]));
     return BANK;
   }
 
@@ -77,7 +79,8 @@
         h("span", { class: "mk-nowrap" }, word(MARKS.find((p) => p[1] === st.marks)[0], () => { st.marks = cycle(MARKS.map((p) => p[1]), st.marks); save(); }, "When you see the answers: click to change"), "."));
       const total = st.pace ? Math.round((st.count * st.pace) / 60) : 0;
       const have = available(scope);
-      mix.innerHTML = (have < st.count ? `<b>These chapters hold ${have} questions, so the mock will be ${have} long.</b> ` : "") + `${scope.nums.length} chapter${scope.nums.length === 1 ? "" : "s"} · ${st.pace ? `${total} minutes on the clock` : "no clock"} · ${st.marks === "end" ? "nothing is marked until you finish, like a real test" : "each answer is marked as you go"}. Click any underlined word to change it.`;
+      const due = Math.min(dueBack(new Set(scope.nums)).length, Math.round(st.count * 0.3));
+      mix.innerHTML = (have < st.count ? `<b>These chapters hold ${have} questions, so the mock will be ${have} long.</b> ` : "") + `${scope.nums.length} chapter${scope.nums.length === 1 ? "" : "s"} · ${st.pace ? `${total} minutes on the clock` : "no clock"} · ${st.marks === "end" ? "nothing is marked until you finish, like a real test" : "each answer is marked as you go"}.${due ? ` ${due} question${due === 1 ? " you missed before is" : "s you missed before are"} due back.` : ""} Click any underlined word to change it.`;
     };
     draw();
     const resume = S().mockNow && S().mockNow.qs ? h("div", { class: "mk-resume" },
@@ -87,7 +90,7 @@
     const hist = (S().mockHist || []).slice(-6).reverse();
     m.append(h("div", { class: "col mk" },
       h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Mock test · " + A.cfg.short), h("h1", {}, "Test yourself like it's the real thing"),
-        h("p", { class: "tag" }, "Questions from every corner of the chapters you pick: multiple choice, what a program prints, the line with the bug, which technique a problem needs, scrambled code to put in order, and fresh trace questions made up on the spot, so no two mocks are the same.")),
+        h("p", { class: "tag" }, "Questions from every corner of the chapters you pick: multiple choice, what a program prints, the line with the bug, which technique a problem needs, scrambled code to put in order, and fresh trace questions made up on the spot for every one of the 60 chapters, so no two mocks are the same. Anything you miss comes back in later mocks until it sticks.")),
       resume,
       h("div", { class: "mk-setup" }, sentence, mix,
         h("div", { class: "btns" }, h("button", { class: "key primary", onclick: () => begin(st) }, "Start the mock →"))),
@@ -106,18 +109,49 @@
   // how many questions a scope can give: its bank questions plus six fresh ones per generator that covers it
   function available(scope) {
     const nums = new Set(scope.nums);
-    const gens = window.MOCKGEN.names.filter((g) => nums.has(window.MOCKGEN.make(g, 1).ch)).length;
+    const gens = window.MOCKGEN.names.filter((g) => nums.has(GEN_CH[g])).length;
     return BANK.questions.filter((q) => nums.has(q.ch)).length + 6 * gens;
   }
 
   // ------------------------------------------------------------- pick --
+  // ------------------------------------------------- what comes back --
+  // A missed question comes back in the next mock. Right then, it returns 2 mocks later, then 4; right a third
+  // time and it's retired. Misses on a generator bring back the same kind of trace with fresh numbers.
+  const BACK_AFTER = [1, 2, 4];
+  const againKey = (q) => (q.kind === "trace" ? "g:" + q.gen : "q:" + q.id);
+  const mockNo = () => (S().mockHist || []).length;
+  function dueBack(inScope) {
+    const all = S().mockAgain || {};
+    return Object.entries(all).filter(([, e]) => e.due <= mockNo() && inScope.has(e.ch) && (e.gen ? GEN_CH[e.gen] != null : BANK.byId[e.id]))
+      .sort((a, b) => a[1].due - b[1].due || a[1].box - b[1].box).map(([k, e]) => e);
+  }
+  function rememberResults(qs) {
+    const all = (S().mockAgain = S().mockAgain || {}), now = mockNo();
+    let missed = 0, retired = 0, kept = 0;
+    for (const q of qs) {
+      const key = againKey(q), e = all[key];
+      if (!q.ok) { all[key] = { kind: q.kind, ch: q.ch, ...(q.kind === "trace" ? { gen: q.gen } : { id: q.id }), box: 0, due: now + BACK_AFTER[0] }; missed++; }
+      else if (e && e.due <= now) {
+        e.box++;
+        if (e.box >= BACK_AFTER.length) { delete all[key]; retired++; } else { e.due = now + BACK_AFTER[e.box]; kept++; }
+      }
+    }
+    return { missed, retired, kept, waiting: Object.keys(all).length };
+  }
+
+  let GEN_CH = null;
   function pick(st) {
     const scope = scopes().find((s) => s.key === st.scope) || scopes()[0];
     const inScope = new Set(scope.nums);
+    // first, what's due back from earlier mocks: up to 3 in 10
+    const back = dueBack(inScope).slice(0, Math.round(st.count * 0.3)).map((e) => (e.gen
+      ? { kind: "trace", gen: e.gen, seed: (Math.random() * 1e9) | 0, ch: e.ch, again: true }
+      : { kind: e.kind, id: e.id, ch: e.ch, again: true }));
+    const taken = new Set(back.map(againKey));
     const pools = { mc: [], pattern: [], out: [], line: [], order: [], trace: [] };
-    for (const q of BANK.questions) if (inScope.has(q.ch) && pools[q.kind]) pools[q.kind].push({ kind: q.kind, id: q.id, ch: q.ch });
-    const gens = window.MOCKGEN.names.filter((g) => inScope.has(window.MOCKGEN.make(g, 1).ch));
-    for (const g of gens) for (let k = 0; k < 6; k++) pools.trace.push({ kind: "trace", gen: g, seed: (Math.random() * 1e9) | 0, ch: window.MOCKGEN.make(g, 1).ch });
+    for (const q of BANK.questions) if (inScope.has(q.ch) && pools[q.kind] && !taken.has("q:" + q.id)) pools[q.kind].push({ kind: q.kind, id: q.id, ch: q.ch });
+    const gens = window.MOCKGEN.names.filter((g) => inScope.has(GEN_CH[g]) && !taken.has("g:" + g));
+    for (const g of gens) for (let k = 0; k < 6; k++) pools.trace.push({ kind: "trace", gen: g, seed: (Math.random() * 1e9) | 0, ch: GEN_CH[g] });
     // spread each pool over chapters: shuffle, then take round-robin by chapter
     const spread = (list) => {
       const by = {};
@@ -128,8 +162,9 @@
     };
     for (const k in pools) pools[k] = spread(pools[k]);
     const want = {};
-    let left = st.count;
-    for (const [k, w] of MIX) { want[k] = Math.min(pools[k].length, Math.round(st.count * w)); left -= want[k]; }
+    const fresh = st.count - back.length;
+    let left = fresh;
+    for (const [k, w] of MIX) { want[k] = Math.min(pools[k].length, Math.round(fresh * w)); left -= want[k]; }
     // whatever a small scope can't fill comes from the biggest pools
     while (left > 0) {
       const k = MIX.map((x) => x[0]).sort((a, b) => (pools[b].length - want[b]) - (pools[a].length - want[a]))[0];
@@ -137,7 +172,7 @@
       want[k]++; left--;
     }
     while (left < 0) { const k = MIX.map((x) => x[0]).sort((a, b) => want[b] - want[a])[0]; want[k]--; left++; }
-    let qs = [];
+    let qs = back.slice();
     for (const k in want) qs.push(...pools[k].slice(0, want[k]));
     qs = A.shuffle(qs);
     // fix each question's option order now, so it's the same if you come back to it
@@ -229,7 +264,8 @@
       h("div", { class: "mk-bar" }, h("b", {}, `Question ${i + 1} of ${run.qs.length}`), h("span", { class: "grow" }), clockEl),
       mapEl,
       h("article", { class: "mk-card" + (locked ? (q.ok ? " ok" : " bad") : "") },
-        h("div", { class: "mk-kind" }, KIND_NAME[q.kind], q.kind !== "pattern" && full.title ? h("span", { class: "mk-muted" }, " · " + full.title) : null),
+        h("div", { class: "mk-kind" }, KIND_NAME[q.kind], q.kind !== "pattern" && full.title ? h("span", { class: "mk-muted" }, " · " + full.title) : null,
+          q.again ? h("span", { class: "mk-again", title: "You missed this one in an earlier mock" + (q.kind === "trace" ? ", so it comes back with fresh numbers" : "") }, "back again") : null),
         body, feedback),
       h("div", { class: "btns mk-nav" },
         h("button", { class: "btn", disabled: i === 0, onclick: () => go(i - 1) }, "← Back"),
@@ -338,6 +374,7 @@
     // the record: per-chapter stats for "my weakest chapters", the history, the review deck and some XP
     const st = (S().mockStats = S().mockStats || {});
     for (const q of run.qs) { const s = (st[q.ch] = st[q.ch] || { n: 0, right: 0 }); s.n++; if (q.ok) s.right++; }
+    run.back = rememberResults(run.qs);
     (S().mockHist = S().mockHist || []).push({ at: Date.now(), n: run.qs.length, right, secs: Math.round(run.used), scope: run.scope });
     S().mockHist = S().mockHist.slice(-30);
     for (const q of run.qs) if (q.id && A.findBlock(q.id)) { if (q.ok) A.enroll(q.id, true); else A.schedule(q.id, false); }
@@ -375,6 +412,18 @@
     return box;
   }
 
+  // what this mock changed in the questions that come back
+  function backNote(done) {
+    const { h } = A, b = done.back;
+    if (!b) return null;
+    const again = done.qs.filter((q) => q.again), againRight = again.filter((q) => q.ok).length;
+    const parts = [];
+    if (again.length) parts.push(`${again.length === 1 ? `The question back from an earlier mock was ${againRight ? "right" : "missed again"}` : `${againRight} of the ${again.length} questions back from earlier mocks were right`} this time${b.retired ? `, and ${b.retired} ${b.retired === 1 ? "is" : "are"} now learned for good` : ""}.`);
+    if (b.missed) parts.push(`The ${b.missed} you missed will come back in your next mock${done.qs.some((q) => !q.ok && q.kind === "trace") ? " (trace questions with fresh numbers)" : ""}, then 2 and 4 mocks later, until you've got each one right three times.`);
+    else parts.push("Nothing missed, so nothing new to bring back.");
+    return h("div", { class: "mk-backnote" }, h("b", {}, "What comes back. "), parts.join(" "), b.missed ? " Misses from the chapters are in your spaced review deck too." : "");
+  }
+
   function drawResults(done, timeUp) {
     const { h } = A;
     const m = A.main();
@@ -392,7 +441,7 @@
     done.qs.forEach((q, k) => {
       const full = resolve(q);
       const d = h("details", { class: "mk-item " + (q.ok ? "ok" : "bad") },
-        h("summary", {}, h("span", { class: "mk-n" }, k + 1), h("span", { class: "mk-k" }, KIND_NAME[q.kind]), h("span", { class: "mk-t" }, full.title || BANK.ch[q.ch].name), h("span", { class: "mk-mark" }, q.ok ? "✓" : "✗")));
+        h("summary", {}, h("span", { class: "mk-n" }, k + 1), h("span", { class: "mk-k" }, KIND_NAME[q.kind]), h("span", { class: "mk-t" }, (full.title || BANK.ch[q.ch].name) + (q.again ? " · back again" : "")), h("span", { class: "mk-mark" }, q.ok ? "✓" : "✗")));
       d.addEventListener("toggle", () => { if (d.open && d.children.length === 1) { const b = h("div", { class: "mk-body" }); renderQuestion(b, q, full, true); d.append(b, explain(q, full)); } }, { once: false });
       list.append(d);
     });
@@ -402,6 +451,7 @@
         h("div", { class: "mk-big" }, h("b", {}, right), h("span", {}, ` / ${n}`)),
         h("div", {}, h("p", { class: "mk-pct" }, `${pct}% in ${fmtTime(done.used)}${done.pace ? ` of ${fmtTime(done.pace * n)}` : ""}`), h("p", {}, verdict))),
       h("div", { class: "mk-strip" }, done.qs.map((q, k) => h("i", { class: q.ok ? "ok" : "bad", title: `Question ${k + 1}: ${q.ok ? "right" : "missed"}` }))),
+      backNote(done),
       h("h3", { class: "mk-h" }, "By chapter, weakest first"),
       h("div", { class: "mk-chs" }, rows.map(([num, s]) => {
         const ch = BANK.ch[num];
@@ -411,7 +461,7 @@
       h("h3", { class: "mk-h" }, "By kind of question"),
       h("p", { class: "mk-kindline" }, Object.entries(kinds).map(([k, s]) => `${KIND_NAME[k]} ${s.right}/${s.n}`).join(" · ")),
       h("h3", { class: "mk-h" }, "Every question"),
-      h("p", { class: "mk-muted" }, "Open one to see your answer and why. Missed questions from the chapters are now in your spaced review deck."),
+      h("p", { class: "mk-muted" }, "Open one to see your answer and why."),
       list,
       h("div", { class: "btns" }, h("button", { class: "key primary", onclick: () => begin(setupState()) }, "Another mock like this →"), h("button", { class: "key", onclick: () => { view = null; pageSetup(); } }, "Change the settings"))));
     document.title = `${right} / ${n} · Mock test`;
