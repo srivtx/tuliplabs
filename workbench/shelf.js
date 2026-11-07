@@ -40,7 +40,6 @@
   function plot({ href, num, title, sub, hue, media, soon, pct, next, tag, bloomed }) {
     return h(href ? "a" : "div", { class: "plot la-plot" + (soon ? " soon" : "") + (bloomed ? " bloomed" : "") + (next ? " next" : ""), href, style: field(hue) },
       h("div", { class: "soil la-soil" }, media,
-        h("span", { class: "ghost", "aria-hidden": "true" }, String(num).padStart(2, "0")),
         tag ? h("span", { class: "la-tag" }, tag) : null,
         next ? h("span", { class: "next-tag" }, next) : soon ? h("span", { class: "la-soon-tag" }, "soon") : null),
       h("span", { class: "num" }, String(num).padStart(2, "0")), h("b", {}, title), h("small", {}, sub),

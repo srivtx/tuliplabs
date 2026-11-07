@@ -126,6 +126,17 @@
   }
 
   const SCENES = {
+    // Ledger: a card cabinet with its top drawer out, and the log it writes, one slab per change, newest glowing
+    1(S, a, b) {
+      S.plinth(10, 6, a, b);
+      for (let i = 0; i < 7; i++) S.box(4.4 + i * 0.75, 3.6, 0, 0.6, 1.4, 0.18, i === 6 ? a : PAPER, { cls: i === 6 ? "wa-glow" : "" });
+      const wood = mix("#6b4a34", b, 0.15);
+      S.box(0.8, 0.8, 0, 3, 2.6, 3.9, wood, { top: shade(wood, 1.15) });
+      [0.3, 1.5].forEach((z) => { S.patch("left", 1.1, 3.4, 3.4 - z, 2.4, 1, shade(wood, 1.25)); S.patch("left", 2.05, 3.4, 3.05 - z, 0.5, 0.12, GOLD); });
+      S.box(1.1, 3.4, 0.3, 2.4, 1.6, 1, shade(wood, 1.25));
+      for (let i = 0; i < 5; i++) S.box(1.35 + i * 0.42, 3.55, 1.3, 0.08, 1.3, 0.55 + (i % 2) * 0.12, i === 2 ? a : PAPER);
+      S.patch("left", 2.05, 5, 0.75, 0.5, 0.12, GOLD);
+    },
     // Greenhouse: a glass house of potted plants, and one of them answering to its own address
     101(S, a, b) {
       S.plinth(10, 7, a, b);
@@ -327,7 +338,12 @@
       S.end();
     },
   };
-  const TITLES = { 101: "Greenhouse", 102: "Taskflow", 103: "Shortlink", 104: "Inkwell", 105: "Keyring", 106: "Bookshelf", 107: "Market", 108: "Chatroom", 150: "Trellis", 151: "Tollbooth", 152: "Courier", 153: "Relay" };
+  // each project's colour pair: the bright one for light and type, the deep one for its field
+  const PAIR = { orange: ["#ff7a4d", "#43170b"], green: ["#5fcf72", "#0e3317"], amber: ["#f0b03a", "#3d2a08"], cyan: ["#3cc7e6", "#07303a"],
+    violet: ["#9d7bff", "#1d1442"], pink: ["#ff6fb5", "#3a0f26"], blue: ["#62acf5", "#0d2846"], red: ["#ff6a5f", "#3d1013"],
+    teal: ["#3fd1a8", "#0b342a"], yellow: ["#ffd84a", "#363005"], lilac: ["#c09cf5", "#291944"] };
+  const HUES = { 1: "orange", 101: "green", 102: "amber", 103: "cyan", 104: "violet", 105: "pink", 106: "blue", 107: "orange", 108: "red", 150: "teal", 151: "yellow", 152: "lilac", 153: "violet" };
+  const TITLES = { 1: "Ledger",  101: "Greenhouse", 102: "Taskflow", 103: "Shortlink", 104: "Inkwell", 105: "Keyring", 106: "Bookshelf", 107: "Market", 108: "Chatroom", 150: "Trellis", 151: "Tollbooth", 152: "Courier", 153: "Relay" };
 
   // the motion, shared by every page that shows a scene: glows breathe, floats bob; still for reduced motion
   if (!document.getElementById("wa-style")) {
@@ -342,6 +358,7 @@
 
   window.WBArt = {
     has: (num) => !!SCENES[num],
+    pair: (num) => PAIR[HUES[num] || "orange"],
     svg(num, { a, b }) {
       const f = SCENES[num];
       if (!f) return "";
