@@ -373,6 +373,75 @@
     if (Math.abs(dx) > 60 && Math.abs(dx) > 1.5 * Math.abs(dy)) pane(dx < 0 ? 1 : 0);
   });
 
+  // -------------------------------------------------------------- cover --
+  // What you're building, before the editor: the program as a voxel model, what it will do by the end, the road of
+  // tickets, and what you'll be able to type at it. It opens the first time you open a project; "ticket N of M" in
+  // the bar brings it back, and Esc or the button puts it away.
+  const SERIES = { express: "Learn Express by building", deep: "Under the hood", programs: "Programs" };
+  const hours = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`);
+  // what it can do when it's done: one exchange from each ticket's session (a command and up to two lines of its
+  // reply; the last one that worked, for an HTTP project the last 2xx), so the screen walks through every part
+  function demo() {
+    const out = [];
+    for (const t of P.tickets) {
+      const ls = (t.session || "").split("\n").filter((l) => l && !l.startsWith("!")), ex = [];
+      ls.forEach((l) => (l.startsWith(P.prompt) ? ex.push([l]) : ex.length && ex[ex.length - 1].push(l)));
+      const good = ex.filter((e) => e.length > 1 && !/^[45]\d\d\b|error/i.test(e[1]));
+      const pick = (good.length ? good : ex).pop();
+      if (!pick) continue;
+      if (out.length + Math.min(3, pick.length) > 24) break;
+      out.push(...pick.slice(0, 3));
+    }
+    return out;
+  }
+  function cover(show) {
+    $(".wcover", root)?.remove();
+    if (!show) return;
+    const [a, b] = window.WBArt ? WBArt.pair(P.num) : ["#ff7a4d", "#43170b"];
+    const t = cur(), no = PROJECTS.filter((p) => p.series === P.series).indexOf(P) + 1;
+    const close = () => { ST.met = true; save(); cover(false); if (view && !phone()) view.focus(); };
+    const goTo = (i) => { close(); location.hash = `#${P.num}/${P.tickets[i].id}`; };
+    const partOf = (tk) => P.map.find((m) => m.ticket === tk.id);
+    const lines = demo();
+    const el = h("div", { class: "wcover", role: "dialog", "aria-modal": "true", "aria-label": `${P.title}: what you're building`, style: `--a:${a};--b:${b}` },
+      h("div", { class: "cv-in" },
+        h("header", { class: "cv-hero" },
+          h("div", { class: "cv-txt" },
+            h("div", { class: "cv-eye" }, `${SERIES[P.series] || "Workbench"} · ${no}`),
+            h("h1", {}, P.title),
+            h("p", { class: "cv-kind" }, P.kind),
+            P.tagline ? h("p", { class: "cv-tag" }, P.tagline) : null,
+            h("p", { class: "cv-meta" }, [`about ${hours(P.minutes)}`, `${P.tickets.length} tickets`, P.series === "express" ? "Node 22 and Express 5" : JS() ? "Node 22" : "Python 3", P.files.join(", ")].join("  ·  ")),
+            h("button", { class: "cv-go", onclick: close }, t ? (ST.cur ? `Carry on with ticket ${ST.cur + 1}: ${t.title}` : `Start ticket 1: ${t.title}`) : "Open the finished project", h("span", { "aria-hidden": "true" }, " →"))),
+          h("div", { class: "cv-art", "aria-hidden": "true", html: window.WBArt ? WBArt.svg(P.num, { a, b }) : "" })),
+        h("section", { class: "cv-two" },
+          h("div", {}, h("h2", {}, "What it is"), h("div", { class: "prose", html: P.intro })),
+          h("div", {}, h("h2", {}, "By the end it can"),
+            h("ul", { class: "cv-can" }, P.map.map((m) => {
+              const k = P.tickets.findIndex((tk) => tk.id === m.ticket), have = k >= 0 && k < ST.cur;
+              return h("li", { class: have ? "have" : "" }, h("i", { "aria-hidden": "true" }, have ? "✓" : ""), h("span", {}, h("b", {}, m.name), " ", h("span", { html: m.what })));
+            })))),
+        h("section", {}, h("h2", {}, "The road", h("small", {}, `${ST.cur} of ${P.tickets.length} committed`)),
+          h("ol", { class: "cv-road" }, P.tickets.map((tk, i) => {
+            const state = i < ST.cur ? "done" : i === ST.cur ? "cur" : "later", part = partOf(tk);
+            return h("li", { class: state },
+              h("button", { onclick: () => goTo(i), disabled: state === "later", title: state === "later" ? `Opens when you commit #${ST.cur + 1}` : `Open ticket #${i + 1}` },
+                h("span", { class: "cv-n" }, state === "done" ? "✓" : i + 1),
+                h("b", {}, tk.title),
+                part ? h("span", { class: "cv-what", html: part.what }) : null,
+                h("code", {}, tk.touches.join(", "))));
+          }))),
+        lines.length ? h("section", {}, h("h2", {}, "What you'll type at it"),
+          h("pre", { class: "cv-term" }, lines.map((l) => l.startsWith(P.prompt.trim())
+            ? h("span", { class: "p" }, h("i", {}, P.prompt), l.slice(P.prompt.length)) : h("span", {}, l)))) : null,
+        h("p", { class: "cv-loop" }, "Every ticket goes the same way: read it on the right, write the code, ",
+          h("b", {}, `Run ${MOD}↵`), " and type at your program, ", h("b", {}, `Test ⇧${MOD}↵`), " until every check passes, then ", h("b", {}, `Commit ${MOD}S`), ". The next ticket opens. ",
+          h("button", { class: "cv-link", onclick: close }, "Open the editor →"))));
+    el.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } });
+    root.append(el);
+    $(".cv-go", el).focus({ preventScroll: true });
+  }
+
   // ------------------------------------------------------------- render --
   function renderBar() {
     const t = cur();
@@ -383,7 +452,7 @@
       h("span", { class: "wbranch", html: ICON.branch + " main" }),
       h("span", { class: "wtrack", "aria-label": "Tickets" }, P.tickets.map((tk, i) =>
         h("a", { href: `#${P.num}/${tk.id}`, class: (i < ST.cur ? "done" : "") + (i === ST.cur ? " cur" : ""), title: `#${i + 1} ${tk.title}${i > ST.cur ? " (locked)" : ""}` }))),
-      h("span", { class: "wtk" }, t ? `ticket ${ST.cur + 1} of ${P.tickets.length}` : `all ${P.tickets.length} tickets committed`),
+      h("button", { class: "wtk", onclick: () => cover(true), title: "What you're building: the project, and the road of tickets" }, t ? `ticket ${ST.cur + 1} of ${P.tickets.length}` : `all ${P.tickets.length} tickets committed`),
       h("span", { class: "wgrow" }),
       h("span", { class: "wact" },
         h("button", { class: "run", onclick: doRun, title: `Start the program (${MOD}↵)`, html: ICON.run + `<span>Run</span><kbd>${MOD}↵</kbd>` }),
@@ -516,7 +585,7 @@
     const past = i < ST.cur;
     const newFiles = Object.keys(t.starter);
     const box = h("div", { class: "tk" },
-      h("div", { class: "tk-no" }, `TICKET #${i + 1}`, h("span", {}, past ? "committed ✓" : `${P.tickets.length - i - 1} after this`)),
+      h("div", { class: "tk-no" }, `TICKET #${i + 1}`, h("button", { class: "tk-road", onclick: () => cover(true), title: "The whole project: what you're building, and the road of tickets" }, past ? "committed ✓" : `${P.tickets.length - i - 1} after this`)),
       h("h1", {}, t.title),
       h("div", { class: "tk-files" }, (t.touches.length ? t.touches : Object.keys(t.solution)).map((f) =>
         h("button", { class: newFiles.includes(f) ? "new" : "", onclick: () => { stash(); openFile(f); } }, f))),
@@ -964,6 +1033,7 @@
       ST = stateFor(P);
       // files a ticket introduces must exist once you reach it (also fixes state saved by an older version)
       for (const t of P.tickets.slice(0, ST.cur + 1)) for (const [f, src] of Object.entries(t.starter)) if (!(f in ST.files)) ST.files[f] = src;
+      cover(false);
       states.clear(); termLog = []; disk = []; running = false; tested = null; lastPass = null; diffWhat = null;
       document.title = `${P.title} · Workbench · Tulip Labs`;
       if (view) { view.destroy(); view = null; }
@@ -973,6 +1043,7 @@
     ticketIx = want < 0 || want > ST.cur ? ST.cur : want;
     renderAll();
     if (!view) openFile(ST.active in ST.files ? ST.active : Object.keys(ST.files)[0]);
+    if (!ST.met && !$(".wcover", root)) cover(true);
   }
   // for tools/e2e.js: replace a file's text the way typing would (through the editor, so undo and saving work)
   root.wbSet = (file, text) => {

@@ -342,3 +342,58 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 }
 @media (max-width:900px){body.k-wb .top .hdr-right{display:none}}
 @media (prefers-reduced-motion:reduce){.ide *{animation:none!important;transition:none!important}}
+
+/* ---- the cover: what you're building, before the editor (the project's diorama, what it will do, the road) ---- */
+.ide{position:relative}
+.wtk:hover{color:var(--w-ink);text-decoration:underline dotted;text-underline-offset:3px}
+.wcover{position:absolute;inset:0;z-index:60;overflow:auto;background:var(--w-bg);animation:cv-in .3s ease-out}
+@keyframes cv-in{from{transform:translateY(10px)}}
+.cv-in{max-width:1080px;margin:0 auto;padding:26px 32px 64px}
+.cv-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;align-items:center;border-radius:14px;padding:34px 30px 34px 40px;color:#fff;overflow:hidden;
+  background:radial-gradient(110% 120% at 85% 100%,color-mix(in srgb,var(--a) 28%,var(--b)),var(--b) 68%);box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.cv-eye{font:600 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--a)}
+.cv-hero h1{font:400 64px/1 var(--f-serif);margin:10px 0 14px;letter-spacing:-.01em;color:#fff}
+.cv-kind{font:500 16px/1.45 var(--f-body);margin:0 0 8px;color:#fff}
+.cv-tag{font:italic 400 19px/1.35 var(--f-serif);color:color-mix(in srgb,var(--a) 50%,#fff);margin:0 0 16px}
+.cv-meta{font:11.5px/1.6 var(--f-mono);color:rgba(255,255,255,.66);margin:0 0 22px}
+.ide .cv-go{background:var(--a);color:#14100f;font:600 14px var(--f-body);padding:11px 18px;border-radius:8px;box-shadow:0 8px 24px color-mix(in srgb,var(--a) 30%,transparent);transition:transform .15s}
+.ide .cv-go:hover{transform:translateY(-1px)}
+.cv-art{display:flex;justify-content:center}
+.cv-art svg{width:100%;height:auto;max-height:330px;filter:drop-shadow(0 18px 24px rgba(0,0,0,.4))}
+.wcover h2{font:400 27px var(--f-serif);margin:40px 0 14px;display:flex;align-items:baseline;gap:12px;color:var(--w-ink)}
+.wcover h2 small{font:12px var(--f-mono);color:var(--w-mute)}
+.cv-two{display:grid;grid-template-columns:1.15fr 1fr;gap:44px}
+.cv-can{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.cv-can li{display:flex;gap:11px;font:13.5px/1.5 var(--f-body);color:var(--w-mute)}
+.cv-can li b{color:var(--w-ink);font-weight:600}
+.cv-can i{flex:none;width:18px;height:18px;margin-top:1px;border-radius:5px;border:1.5px solid var(--w-line2);display:grid;place-items:center;font:700 11px/1 var(--f-body);font-style:normal}
+.cv-can li.have i{background:var(--w-teal);border-color:var(--w-teal);color:#0b1a14}
+.cv-can code,.cv-what code{font:11.5px var(--f-mono);background:var(--w-raise);border:1px solid var(--w-line);padding:0 4px;border-radius:4px;color:var(--w-ink)}
+.cv-road{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ide .cv-road button{width:100%;height:100%;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:14px 14px 12px;border:1px solid var(--w-line);border-radius:10px;background:var(--w-panel);transition:border-color .15s,transform .15s}
+.ide .cv-road button:not(:disabled):hover{border-color:var(--a);transform:translateY(-2px)}
+.ide .cv-road li.cur button{border-color:var(--a);box-shadow:0 0 0 1px var(--a),0 10px 30px color-mix(in srgb,var(--a) 16%,transparent)}
+.ide .cv-road li.later button{opacity:.6;cursor:default}
+.cv-n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--f-mono);background:var(--w-raise);border:1px solid var(--w-line2);color:var(--w-mute)}
+.cv-road li.done .cv-n{background:var(--w-teal);color:#0b1a14;border-color:var(--w-teal)}
+.cv-road li.cur .cv-n{background:var(--a);color:#14100f;border-color:var(--a)}
+.cv-road b{font:600 14px/1.3 var(--f-body);color:var(--w-ink)}
+.cv-what{font:12.5px/1.45 var(--f-body);color:var(--w-mute)}
+.ide .cv-road button > code{margin-top:auto;padding:4px 0 0;font:11px var(--f-mono);color:var(--w-faint);background:none;border:0}
+.cv-term{background:#0d0b10;color:#cfc9d8;border:1px solid var(--w-line);border-radius:10px;padding:14px 18px;font:12.5px/1.7 var(--f-mono);margin:0;display:flex;flex-direction:column;overflow:hidden}
+.cv-term span{white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.cv-term .p{color:#fff}
+.cv-term .p i{font-style:normal;color:var(--a)}
+.cv-loop{margin:30px 0 0;color:var(--w-mute);font:13.5px/1.7 var(--f-body)}
+.cv-loop b{color:var(--w-ink);font:600 12px var(--f-mono)}
+.ide .cv-link{color:var(--w-pink);font-weight:600}
+@media (max-width:900px){
+  .cv-in{padding:14px 14px 48px}
+  .cv-hero{grid-template-columns:1fr;padding:24px 20px}
+  .cv-art{order:-1}.cv-art svg{max-height:200px}
+  .cv-hero h1{font-size:46px}
+  .cv-two{grid-template-columns:1fr;gap:4px}
+  .cv-road{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+.ide .tk-road{font:400 11px var(--f-mono);color:var(--w-mute);letter-spacing:0}
+.ide .tk-road:hover{color:var(--w-ink);text-decoration:underline dotted;text-underline-offset:3px}
