@@ -132,6 +132,17 @@ async function workbench(page, browser, errors) {
   const data = await page.evaluate(async () => (await (await fetch("/content/wb.json")).json()));
   const proj = data.projects.find((p) => String(p.num) === num);
   const bad = [];
+  // a project opens on its cover: the road has every ticket, Esc puts it away, "ticket N of M" brings it back
+  {
+    const road = await page.locator(".wcover .cv-road li").count();
+    if (road !== proj.tickets.length) bad.push(`cover: the road shows ${road} stops, not ${proj.tickets.length}`);
+    await page.keyboard.press("Escape");
+    if (await page.locator(".wcover").count()) bad.push("cover: Esc didn't close it");
+    await page.click(".wbar .wtk");
+    if (!(await page.locator(".wcover .cv-go").count())) bad.push("cover: the ticket counter didn't bring it back");
+    await page.click(".wcover .cv-go");
+    if (await page.locator(".wcover").count()) bad.push("cover: its button didn't open the editor");
+  }
   const lines = () => page.locator(".term .ln").count();
   // a command's reply: the out/err lines after its own echoed command line
   const term = async (line, tab) => {

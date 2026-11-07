@@ -353,7 +353,8 @@
       res.get = (n) => res.getHeader(n);
       res.append = (n, v) => { const old = res.getHeader(n); res.setHeader(n, old === undefined ? v : [].concat(old, v)); return res; };
       res.type = (t) => res.set("Content-Type", typeOf(t));
-      res.location = (u) => res.set("Location", u);
+      // encodeurl's rule: encode what can't be in a URL, keep %XX escapes that are already there
+      res.location = (u) => res.set("Location", String(u).replace(/(?:[^\x21\x23-\x3B\x3D\x3F-\x5F\x61-\x7A\x7C\x7E]|%(?:[^0-9A-Fa-f]|[0-9A-Fa-f][^0-9A-Fa-f]|$))+/g, encodeURI));
       res.json = (data) => { if (!res.getHeader("Content-Type")) res.setHeader("Content-Type", TYPES.json); return res.send(JSON.stringify(data)); };
       res.send = (body) => {
         if (body === null || body === undefined) body = "";
@@ -375,10 +376,16 @@
         return res;
       };
       res.sendStatus = (code) => res.status(code).type("text").send(http.STATUS_CODES[code] || String(code));
+      // as Express 5 does it: the Location encoded, the body chosen by Accept (a client that takes anything gets the
+      // text one), Vary: Accept, and no ETag (it ends the response itself instead of going through send)
       res.redirect = (a, b) => {
         const [code, url] = typeof a === "number" ? [a, b] : [302, a];
         res.status(code).location(url);
-        return res.type("text").send(`${http.STATUS_CODES[code]}. Redirecting to ${url}`);
+        const to = res.getHeader("Location"), accept = req.get("Accept") || "*/*";
+        const html = /text\/html/.test(accept) && !/text\/plain|text\/\*|\*\/\*/.test(accept.split("text/html")[0]);
+        const body = html ? `<p>${http.STATUS_CODES[code]}. Redirecting to ${to.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c])}</p>` : `${http.STATUS_CODES[code]}. Redirecting to ${to}`;
+        res.set("Vary", "Accept").set("Content-Type", html ? "text/html" : "text/plain").set("Content-Length", String(Buffer.byteLength(body)));
+        return res.end(req.method === "HEAD" ? undefined : body);
       };
       res.cookie = (name, value, o = {}) => {
         let c = `${name}=${encodeURIComponent(typeof value === "object" ? "j:" + JSON.stringify(value) : value)}`;

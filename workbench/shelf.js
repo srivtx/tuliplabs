@@ -40,7 +40,6 @@
   function plot({ href, num, title, sub, hue, media, soon, pct, next, tag, bloomed }) {
     return h(href ? "a" : "div", { class: "plot la-plot" + (soon ? " soon" : "") + (bloomed ? " bloomed" : "") + (next ? " next" : ""), href, style: field(hue) },
       h("div", { class: "soil la-soil" }, media,
-        h("span", { class: "ghost", "aria-hidden": "true" }, String(num).padStart(2, "0")),
         tag ? h("span", { class: "la-tag" }, tag) : null,
         next ? h("span", { class: "next-tag" }, next) : soon ? h("span", { class: "la-soon-tag" }, "soon") : null),
       h("span", { class: "num" }, String(num).padStart(2, "0")), h("b", {}, title), h("small", {}, sub),
@@ -130,6 +129,13 @@
     return h("div", { class: "la-term", "aria-hidden": "true", html: `<div class="la-bar"><span></span>${esc(p.bar)}</div><div class="la-body">${lines}</div>` });
   }
 
+  // a backend project's card is its voxel diorama (workbench/art.js); a program's is its terminal
+  function scene(p) {
+    if (!window.WBArt || !WBArt.has(p.num)) return term(p);
+    const [a, b] = HUE[p.hue];
+    return h("div", { class: "la-scene", "aria-hidden": "true", html: WBArt.svg(p.num, { a, b }) });
+  }
+
   async function workbench() {
     let data = { projects: [] };
     try { data = await (await fetch("../content/wb.json")).json(); } catch (e) { /* offline: everything shows as coming */ }
@@ -183,7 +189,7 @@
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, DEEP.map((p, i) => card(p, i + 1)))));
     function card(p, shown) {
       const L = live[p.num], g = L ? got(L) : 0, n = L ? L.tickets.length : 0;
-      return plot({ href: L ? `bench.html#${p.num}` : null, num: shown, title: p.title, sub: L ? L.kind : p.kind, hue: p.hue, media: term(p),
+      return plot({ href: L ? `bench.html#${p.num}` : null, num: shown, title: p.title, sub: L ? L.kind : p.kind, hue: p.hue, media: scene(p),
         soon: !L, pct: n ? (100 * g) / n : 0, bloomed: L && g === n, next: L && L === cur ? (g ? "carry on" : "start here") : null,
         tag: L ? `${n} tickets · ${L.lang === "js" ? "Node" : "Python"}` : null });
     }
