@@ -60,8 +60,16 @@ function realRun(code, tests) {
         const page = await box.handle({ op: "cell", ns: ch.id, code: b.code });
         const real = realRun(b.code);
         count++;
-        if (real.stderr.trim()) problem(`${b.id}: real Node wrote to stderr:\n${real.stderr.trim()}`);
-        if (page.stdout !== real.stdout) problem(`${b.id}: the page prints\n${page.stdout}\nbut real Node prints\n${real.stdout}`);
+        // Express logs a handler's error (to stderr in real Node, inline on the page, as in a terminal):
+        // the same errors are fine; their stack frames differ by path, so only first lines count. Real Node's
+        // stderr is a pipe here, written asynchronously on macOS, so a log just before process.exit can be lost:
+        // real Node's logged errors must be a leading part of the page's
+        const errLines = (s) => s.split("\n").filter((l) => /^\w*Error: /.test(l));
+        const pageOut = page.stdout.split("\n").filter((l) => !/^\w*Error: /.test(l) && !/^    at /.test(l)).join("\n");
+        const realErrs = errLines(real.stderr), pageErrs = errLines(page.stdout);
+        const onlyLogged = realErrs.length && realErrs.every((l, i) => pageErrs[i] === l) && real.stderr.split("\n").every((l) => !l.trim() || /^\w*Error: /.test(l) || /^\s+at /.test(l));
+        if (real.stderr.trim() && !onlyLogged) problem(`${b.id}: real Node wrote to stderr:\n${real.stderr.trim()}`);
+        if ((onlyLogged ? pageOut : page.stdout) !== real.stdout) problem(`${b.id}: the page prints\n${page.stdout}\nbut real Node prints\n${real.stdout}`);
       } else if (b.type === "exercise" || b.type === "parsons") {
         const runs = b.type === "exercise" ? [["solution", b.solution, true], ["starter", b.starter, false]] : [["answer", b.lines.join("\n"), true]];
         for (const [name, code, should] of runs) {
