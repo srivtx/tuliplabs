@@ -277,6 +277,8 @@ def parse_chapter(path, track):
         "tagline": meta.get("tagline", ""), "world": meta.get("world", ""),
         "minutes": int(meta.get("minutes", 40)), "book": meta.get("book", ""),
         "part": meta.get("part", ""),
+        # lang: node runs the chapter's code in Node in a box (learn/wb-node.js) instead of Python
+        **({"lang": meta["lang"]} if meta.get("lang") else {}),
         "goals": [inline(g) for g in meta.get("goals", [])],
         "prelude": "", "sections": [], "puzzles": [],
     }
@@ -444,6 +446,8 @@ def build(only=None):
 
 # ------------------------------------------------------------------ verify --
 def _verify_chapter(ch):
+    if ch.get("lang") == "node":
+        return _verify_node_chapter(ch)
     os.environ["MPLBACKEND"] = "Agg"
     sys.path.insert(0, os.path.join(ROOT, "learn"))
     os.chdir(os.path.join(ROOT, "learn"))
@@ -515,6 +519,19 @@ def _verify_chapter(ch):
     if skipped:
         print(f"  {ch['id']}: SKIPPED (sympy not installed here; runs in the browser): {', '.join(skipped)}")
     return ch["id"], count, problems
+
+
+def _verify_node_chapter(ch):
+    """A chapter that runs in Node: the same proofs as a Python chapter, made by tools/bx-node-check.js with
+    the runtime the page uses."""
+    import subprocess
+    out = subprocess.run(["node", os.path.join(ROOT, "tools", "bx-node-check.js"), "--json", ch["id"]],
+                         capture_output=True, text=True, timeout=600)
+    try:
+        r = json.loads(out.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return ch["id"], 0, [f"bx-node-check.js failed: {out.stderr.strip()[-800:] or out.stdout.strip()[-800:]}"]
+    return ch["id"], r["count"], r["problems"]
 
 
 def _has(module):

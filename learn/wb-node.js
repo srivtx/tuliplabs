@@ -993,10 +993,14 @@
           } else {
             let fn;
             // a file that doesn't parse: marked, so the error points at that file rather than a stack frame
-            try { fn = compile(`(function (${ARGS.join(", ")}) {${c.files[file]}\n})`, PREFIX + file); }
+            // a Build X page's file may use await at the top level, as an ES module can; its promise is module.done
+            const body = c.topAwait === file ? `return (async () => {${c.files[file]}\n})();` : c.files[file];
+            try { fn = compile(`(function (${ARGS.join(", ")}) {${body}\n})`, PREFIX + file); }
             catch (e) { if (e && typeof e === "object") { e.__compile = true; e.__file = file; } throw e; }
             const req = makeRequire(file);
-            fn.call(module.exports, module.exports, req, module, "/app/" + file, "/app", ...Object.values(globalsList));
+            module.done = fn.call(module.exports, module.exports, req, module, "/app/" + file, "/app", ...Object.values(globalsList));
+            // whoever waits on it reports its error; until then, it isn't an unhandled rejection
+            if (c.topAwait === file) module.done.catch(() => {});
           }
         } catch (e) {
           c.modules.delete(file);
@@ -1286,11 +1290,12 @@
     const takeOut = (c) => { const s = c.out.join(""); c.out.length = 0; return s; };
 
     // ------------------------------------------------------------- ops --
-    async function project_load({ pid, files, main, wipe }) {
+    async function project_load({ pid, files, main, wipe, topAwait }) {
       unload(pid);
       if (wipe) diskOf(pid).clear();
       const c = newContext(pid, files);
       c.mainFile = main + ".js";
+      c.topAwait = topAwait ? c.mainFile : null;
       live.set(pid, c);
       active = pid;
       let error = null, where = null;
@@ -1460,7 +1465,66 @@
       return bad;
     }
 
-    const OPS = { project_load, project_call, project_tear, project_arm, project_check, project_session };
+    // ----------------------------------------------- Build X pages --
+    // A Build X page's example or exercise is one file, main.js, run top to bottom with await allowed at the
+    // top level. Its servers live until the file and its checks are done, then the program is thrown away.
+    const CELL_LIMIT = 5000;
+    async function startFile(pid, code) {
+      const files = { "main.js": code };
+      const r = await project_load({ pid, files, main: "main", wipe: true, topAwait: true });
+      const c = live.get(pid);
+      if (r.error || !c) return { stdout: r.stdout, error: r.error, c: null };
+      const m = c.modules.get("main.js");
+      let error = null;
+      let timer;
+      try {
+        await Promise.race([m && m.done, new Promise((_, rej) => { timer = setTimeout(() => rej(Object.assign(new Error(`main.js was still running after ${CELL_LIMIT / 1000} s: is it awaiting a request that never gets an answer?`), { name: "Timeout" })), CELL_LIMIT); })]);
+      } catch (e) {
+        ({ error } = describe(e, files, "main.js"));
+      } finally { clearTimeout(timer); }
+      await settle();
+      if (!error && c.crash) ({ error } = describe(c.crash, files, "main.js"));
+      return { stdout: r.stdout + takeOut(c), error, c };
+    }
+
+    async function cell({ ns, code }) {
+      const pid = "bx:" + (ns || "page");
+      const r = await startFile(pid, code);
+      unload(pid);
+      return { stdout: r.stdout, error: r.error, figures: [] };
+    }
+
+    // An exercise's checks are JavaScript, like a Workbench ticket's: assert(cond, "message") lines, with
+    // request("POST /orders", body) to talk to the file's server and mod for whatever it exports.
+    const CHECK_ARGS = [...TEST_ARGS, "mod"];
+    async function check({ code, tests, port = 3000 }) {
+      const pid = "bx:check";
+      const src = String(tests || "").split("\n");
+      const total = src.filter((l) => /^assert\b/.test(l)).length;
+      const r = await startFile(pid, code);
+      if (r.error) { unload(pid); return { passed: false, ok: 0, total, stdout: r.stdout, error: r.error, figures: [] }; }
+      const res = { total, ok: 0 };
+      let fn;
+      try { fn = compile(`(async function (${CHECK_ARGS.join(", ")}) {${tests || ""}\n})`, PREFIX + "tests.js"); }
+      catch (e) { unload(pid); return { passed: false, ok: 0, total, stdout: r.stdout, error: `The checks themselves don't parse: ${e.message}`, figures: [] }; }
+      const helpers = testHelpers(pid, { "main.js": code }, "main", port, res);
+      helpers.mod = r.c.modules.get("main.js").exports;
+      try {
+        let timer;
+        await Promise.race([fn(...CHECK_ARGS.map((k) => helpers[k])), new Promise((_, rej) => { timer = setTimeout(() => rej(new Error("the checks took longer than 8 s: is a request never answered?")), 8000); })]).finally(() => clearTimeout(timer));
+      } catch (e) {
+        const at = (frames(e).find(([f]) => f === "tests.js") || [null, 0])[1];
+        res.failed = (src[at - 1] || "").trim() || "(a check)";
+        if (e && e.__assert) res.message = e.message;
+        else { const c = live.get(pid); res.message = describe((c && c.crash) || e, { "main.js": code }, "main.js").error; }
+      }
+      const c = live.get(pid);
+      const stdout = r.stdout + (c ? takeOut(c) : "");
+      unload(pid);
+      return { passed: !res.failed, ok: res.ok, total, failed: res.failed || null, message: res.message || null, stdout, error: null, figures: [] };
+    }
+
+    const OPS = { project_load, project_call, project_tear, project_arm, project_check, project_session, cell, check };
     async function handle(req) {
       const op = OPS[req.op];
       if (!op) return { error: `unknown op ${req.op}` };
