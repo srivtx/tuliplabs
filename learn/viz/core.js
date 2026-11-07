@@ -358,7 +358,9 @@
         });
         api.row().append(wrap);
         row = null;
-        return { el: wrap, get: () => cur };
+        // set(value) moves the toggle without calling fn, for a control that changes it on the learner's behalf
+        const set = (v) => { cur = v; btns.forEach((x, i) => x.classList.toggle("on", (typeof options[i] === "object" ? options[i].value : options[i]) === v)); };
+        return { el: wrap, get: () => cur, set };
       },
       text(label, value, fn, o = {}) {
         const inp = h("input", { type: "text", value, spellcheck: "false", autocomplete: "off", placeholder: o.placeholder || "" });

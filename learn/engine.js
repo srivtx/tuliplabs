@@ -105,40 +105,44 @@
   // ------------------------------------------------------------- runner --
   const params = new URLSearchParams(location.search);
   const LOCAL = params.get("runner") === "local";
-  const Runner = {
-    worker: null, seq: 0, pending: new Map(), state: "idle", listeners: new Set(), warmed: new Set(),
+  // One runner per language: Python (Pyodide, or the local devserver with ?runner=local) for most chapters,
+  // and Node in a box (learn/js-worker.js) for chapters whose front matter says lang: node.
+  function makeRunner(kind) {
+    const NODE = kind === "node", NAME = NODE ? "Node" : "Python", local = LOCAL && !NODE;
+    return {
+    kind, name: NAME, worker: null, seq: 0, pending: new Map(), state: "idle", listeners: new Set(), warmed: new Set(),
     start(prelude) {
-      if (LOCAL) return;
+      if (local) return;
       if (!this.worker) {
-        this.worker = new Worker("../learn/py-worker.js");
+        this.worker = new Worker(NODE ? "../learn/js-worker.js" : "../learn/py-worker.js");
         this.warmed.clear();
         this.status = null;
         this.worker.onmessage = (e) => {
           const d = e.data;
           if (d.status) {
             this.status = d.text;
-            if (d.text === "failed") setChip("", "Python couldn't download. Press Run to try again.");
-            else setChip(d.text === "ready" ? "ready" : "busy", d.text === "ready" ? "Python ready" : d.text);
+            if (d.text === "failed") setChip("", `${NAME} couldn't download. Press Run to try again.`);
+            else setChip(d.text === "ready" ? "ready" : "busy", d.text === "ready" ? `${NAME} ready` : d.text);
             for (const fn of this.listeners) fn(d.text);
             return;
           }
           const p = this.pending.get(d.id);
           if (d.started) { if (p && p.onStart) p.onStart(); return; }
           if (p) { this.pending.delete(d.id); p.resolve(d.res); }
-          if (!this.pending.size) setChip("ready", "Python ready");
+          if (!this.pending.size) setChip("ready", `${NAME} ready`);
         };
         // If the worker itself dies (its script failed to load, say), answer every waiting Run
         // instead of leaving its button spinning, and start a fresh worker on the next Run.
         this.worker.onerror = (e) => {
           e.preventDefault && e.preventDefault();
-          setChip("", "Python couldn't start. Press Run to try again.");
+          setChip("", `${NAME} couldn't start. Press Run to try again.`);
           this.worker && this.worker.terminate();
           this.worker = null;
           this.status = null;
-          for (const p of this.pending.values()) p.resolve({ error: "Python couldn't start (the connection dropped?). Press Run again to retry.", stdout: "", figures: [] });
+          for (const p of this.pending.values()) p.resolve({ error: `${NAME} couldn't start (the connection dropped?). Press Run again to retry.`, stdout: "", figures: [] });
           this.pending.clear();
         };
-        setChip("busy", "Starting Python…");
+        setChip("busy", `Starting ${NAME}…`);
       }
       // Download the packages this chapter needs now, so the first Run doesn't wait for them.
       if (prelude && !this.warmed.has(prelude)) {
@@ -147,7 +151,7 @@
       }
     },
     async run(req, onStart) {
-      if (LOCAL) {
+      if (local) {
         setChip("busy", "Running…");
         try {
           const r = await fetch("/__run", { method: "POST", body: JSON.stringify(req) });
@@ -165,14 +169,22 @@
       if (!this.worker) return;
       this.worker.terminate();
       this.worker = null;
-      for (const p of this.pending.values()) p.resolve({ error: "You stopped the run. Python was restarted, so run the earlier examples on this page again before this one.", stdout: "", figures: [] });
+      for (const p of this.pending.values()) p.resolve({ error: `You stopped the run. ${NAME} was restarted, so run the earlier examples on this page again before this one.`, stdout: "", figures: [] });
       this.pending.clear();
       ranCells.clear();
       const warmed = [...this.warmed];
       this.start();
       for (const pre of warmed) this.start(pre);
     },
+    };
+  }
+  const RUNNERS = { py: makeRunner("py"), node: makeRunner("node") };
+  const Runner = {
+    of: (lang) => RUNNERS[lang === "node" ? "node" : "py"],
+    start(prelude, lang) { this.of(lang).start(prelude); },
+    run(req, onStart) { return this.of(req.lang).run(req, onStart); },
   };
+
   // The header wraps on narrower screens; sticky things below it follow its real height.
   const topBar = document.querySelector("header.top");
   if (topBar) new ResizeObserver(() => document.documentElement.style.setProperty("--top-h", topBar.offsetHeight + "px")).observe(topBar);
@@ -189,19 +201,22 @@
   async function runWith(btn, req) {
     const label = btn.textContent;
     const handler = btn.onclick;
+    const R = Runner.of(req.lang);
+    // Node needs no download; Python does, the first time, unless the local devserver runs it
+    const fetching = R.kind === "py" && !LOCAL && R.status !== "ready";
     btn.disabled = true;
-    btn.textContent = !LOCAL && Runner.status && Runner.status !== "ready" ? Runner.status : "Running…";
+    btn.textContent = fetching && R.status ? R.status : "Running…";
     btn.classList.add("loading");
     // The first run on a page may wait for Python itself: say so, so a slow start doesn't look broken.
     let note = null;
-    if (!LOCAL && Runner.status !== "ready") {
+    if (fetching) {
       note = h("div", { class: "load-note" }, "First run: downloading Python into your browser. This happens once per visit and can take up to a minute.");
       btn.parentNode && btn.parentNode.after(note);
     }
     // While Python is still downloading, show its progress on the button. Stop is offered only once
     // the code itself has been running for a while: stopping a download just starts it over.
     const onStatus = (text) => { if (btn.disabled) btn.textContent = text === "ready" ? "Running…" : text; };
-    Runner.listeners.add(onStatus);
+    R.listeners.add(onStatus);
     let stopT = null;
     const onStart = () => {
       if (btn.disabled) btn.textContent = "Running…";
@@ -209,7 +224,7 @@
         btn.disabled = false;
         btn.textContent = "■ Stop";
         btn.classList.remove("loading");
-        btn.onclick = (e) => { e.stopImmediatePropagation(); Runner.stop(); };
+        btn.onclick = (e) => { e.stopImmediatePropagation(); R.stop(); };
       }, 2500);
     };
     // The output box under this cell dims and shows three hopping blocks while it runs, then the
@@ -217,10 +232,10 @@
     let box = null;
     for (let p = btn.parentNode; p && p !== document.body && !box; p = p.parentNode) box = p.querySelector(".out");
     if (box) { box.classList.remove("fresh"); box.classList.add("pending"); }
-    try { return await Runner.run(req, onStart); }
+    try { return await R.run(req, onStart); }
     finally {
       if (box) { box.classList.remove("pending"); void box.offsetWidth; box.classList.add("fresh"); }
-      Runner.listeners.delete(onStatus);
+      R.listeners.delete(onStatus);
       clearTimeout(stopT);
       btn.classList.remove("loading");
       if (note) note.remove();
@@ -234,10 +249,15 @@
   const KW = new Set("False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield".split(" "));
   const BI = new Set("print len range int float str list dict set tuple sum min max abs sorted enumerate zip map filter isinstance type round any all super self".split(" "));
   const TOK = /(#[^\n]*)|("""[\s\S]*?(?:"""|$)|'''[\s\S]*?(?:'''|$)|[rbfuRBFU]{0,2}"(?:\\.|[^"\\\n])*"?|[rbfuRBFU]{0,2}'(?:\\.|[^'\\\n])*'?)|(_{3,})|(\b\d+\.?\d*(?:[eE][+-]?\d+)?j?\b)|([A-Za-z_]\w*)/g;
-  function highlight(code) {
+  // JavaScript, for chapters that run in Node: comments, strings (template strings too), numbers, names
+  const JS_KW = new Set("async await break case catch class const continue default delete do else export extends false finally for function if import in instanceof let new null of return static super switch this throw true try typeof undefined var void while yield".split(" "));
+  const JS_BI = new Set("console require module exports process JSON Math Object Array String Number Boolean Promise Map Set Date Error fetch setTimeout clearTimeout Buffer".split(" "));
+  const JS_TOK = /(\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|("(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?|`(?:\\.|[^`\\])*`?)|(_{3,})|(\b\d+\.?\d*(?:[eE][+-]?\d+)?n?\b)|([A-Za-z_$][\w$]*)/g;
+  function highlight(code, lang) {
+    const js = lang === "node", T = js ? JS_TOK : TOK, K = js ? JS_KW : KW, B = js ? JS_BI : BI;
     let out = "", last = 0, m, prevWord = "";
-    TOK.lastIndex = 0;
-    while ((m = TOK.exec(code))) {
+    T.lastIndex = 0;
+    while ((m = T.exec(code))) {
       out += esc(code.slice(last, m.index));
       const t = esc(m[0]);
       if (m[1]) out += `<span class="tk-c">${t}</span>`;
@@ -246,13 +266,13 @@
       else if (m[4]) out += `<span class="tk-n">${t}</span>`;
       else {
         const w = m[5];
-        if (KW.has(w)) out += `<span class="tk-k">${t}</span>`;
-        else if (prevWord === "def" || prevWord === "class" || code[TOK.lastIndex] === "(") out += `<span class="tk-f">${t}</span>`;
-        else if (BI.has(w)) out += `<span class="tk-b">${t}</span>`;
+        if (K.has(w)) out += `<span class="tk-k">${t}</span>`;
+        else if (prevWord === "def" || prevWord === "class" || prevWord === "function" || code[T.lastIndex] === "(") out += `<span class="tk-f">${t}</span>`;
+        else if (B.has(w)) out += `<span class="tk-b">${t}</span>`;
         else out += t;
         prevWord = w;
       }
-      last = TOK.lastIndex;
+      last = T.lastIndex;
     }
     return out + esc(code.slice(last)) + "\n";
   }
@@ -260,13 +280,14 @@
   function Editor(code, opts = {}) {
     const pre = h("pre", { "aria-hidden": "true" });
     const gut = h("div", { class: "gut", "aria-hidden": "true" });
-    const ta = h("textarea", { spellcheck: "false", autocapitalize: "off", autocomplete: "off", "aria-label": opts.label || "Python code", wrap: "off" });
+    const ta = h("textarea", { spellcheck: "false", autocapitalize: "off", autocomplete: "off", "aria-label": opts.label || (opts.lang === "node" ? "JavaScript code" : "Python code"), wrap: "off" });
     if (opts.readonly) ta.readOnly = true;
     const el = h("div", { class: "ed" + (opts.readonly ? " ro" : "") }, gut, pre, ta);
     let escaped = false;
+    const IND = opts.lang === "node" ? "  " : "    ";
     ta.value = code;
     function paint() {
-      pre.innerHTML = highlight(ta.value);
+      pre.innerHTML = highlight(ta.value, opts.lang);
       const n = ta.value.split("\n").length;
       gut.textContent = Array.from({ length: n }, (_, i) => i + 1).join("\n");
     }
@@ -287,12 +308,12 @@
       if (e.key === "Tab" && !escaped) {
         e.preventDefault();
         const ls = v.lastIndexOf("\n", s - 1) + 1;
-        if (s === en && !e.shiftKey) { insert("    "); return; }
+        if (s === en && !e.shiftKey) { insert(IND); return; }
         // indent or dedent every selected line
         const le = v.indexOf("\n", en - (en > s && v[en - 1] === "\n" ? 1 : 0));
         const end = le === -1 ? v.length : le;
         const block = v.slice(ls, end);
-        const changed = e.shiftKey ? block.replace(/^ {1,4}/gm, "") : block.replace(/^/gm, "    ");
+        const changed = e.shiftKey ? block.replace(IND.length === 2 ? /^ {1,2}/gm : /^ {1,4}/gm, "") : block.replace(/^/gm, IND);
         ta.setSelectionRange(ls, end);
         insert(changed);
         ta.setSelectionRange(ls, ls + changed.length);
@@ -304,16 +325,16 @@
         const ls = v.lastIndexOf("\n", s - 1) + 1;
         const line = v.slice(ls, s);
         let ind = (line.match(/^ */) || [""])[0];
-        if (/:\s*(#.*)?$/.test(line)) ind += "    ";
+        if (opts.lang === "node" ? /[{([]\s*$/.test(line) : /:\s*(#.*)?$/.test(line)) ind += IND;
         insert("\n" + ind);
         return;
       }
       if (e.key === "Backspace" && s === en && s > 0) {
         const ls = v.lastIndexOf("\n", s - 1) + 1;
         const before = v.slice(ls, s);
-        if (before.length && /^ +$/.test(before) && before.length % 4 === 0) {
+        if (before.length && /^ +$/.test(before) && before.length % IND.length === 0) {
           e.preventDefault();
-          ta.setSelectionRange(s - 4, s);
+          ta.setSelectionRange(s - IND.length, s);
           insert("");
         }
       }
@@ -418,7 +439,7 @@
       btn.disabled = true;
       btn.textContent = "Running earlier examples…";
       for (const p of prev) {
-        await Runner.run({ op: "cell", ns: ctx.ch.id, prelude: ctx.ch.prelude, code: S.code[p.id] ?? p.code });
+        await Runner.run({ op: "cell", ns: ctx.ch.id, prelude: ctx.ch.prelude, lang: ctx.ch.lang, code: S.code[p.id] ?? p.code });
         ranCells.add(p.id);
       }
       btn.remove();
@@ -430,13 +451,13 @@
   function renderRun(b, ctx) {
     const sh = shell(b, "run", "Example", b.title || "Run it, then change something");
     const out = Output();
-    const ed = Editor(S.code[b.id] ?? b.code, {
+    const ed = Editor(S.code[b.id] ?? b.code, { lang: ctx.ch.lang,
       onRun: () => go(),
       onChange: (v) => { if (v === b.code) delete S.code[b.id]; else S.code[b.id] = v; save(); },
     });
     const runBtn = h("button", { class: "btn primary" }, "▶ Run");
     async function go() {
-      const res = await runWith(runBtn, { op: "cell", ns: ctx.ch.id, prelude: ctx.ch.prelude, code: ed.get() });
+      const res = await runWith(runBtn, { op: "cell", ns: ctx.ch.id, prelude: ctx.ch.prelude, lang: ctx.ch.lang, code: ed.get() });
       out.show(res, nameErrorHelp(res, ctx, b, go));
       if (!res.error) { ranCells.add(b.id); if (markDone(b.id)) sh.done(); }
     }
@@ -449,7 +470,7 @@
 
   function renderPredict(b, ctx) {
     const sh = shell(b, "predict", "Predict", b.title || "What will this print? Commit to a guess first.");
-    const ed = Editor(b.code, { readonly: true });
+    const ed = Editor(b.code, { readonly: true, lang: ctx.ch.lang });
     const guess = h("textarea", { class: "guess", placeholder: "Type exactly what you think it prints…", "aria-label": "Your prediction" });
     const lock = h("button", { class: "btn primary", disabled: true }, "Lock in & run");
     const skip = h("button", { class: "btn" }, "No idea, just run it");
@@ -457,7 +478,7 @@
     guess.addEventListener("input", () => { lock.disabled = !guess.value.trim(); });
     async function go(guessed) {
       guess.readOnly = true;
-      const r = await runWith(lock, { op: "cell", ns: ctx.ch.id + ":predict", prelude: ctx.ch.prelude, code: b.code });
+      const r = await runWith(lock, { op: "cell", ns: ctx.ch.id + ":predict", prelude: ctx.ch.prelude, lang: ctx.ch.lang, code: b.code });
       const actual = r.error ? (r.stdout || "") + r.error : r.stdout;
       const match = guessed && norm(actual) === norm(guess.value);
       res.textContent = "";
@@ -516,14 +537,14 @@
       const exact = ans.length === b.lines.length && ans.every((it, i) => it.t === b.lines[i]);
       let ok = exact;
       if (!ok && b.tests && ans.length === b.lines.length && ans.every((it) => it.i >= 0)) {
-        const r = await runWith(check, { op: "check", prelude: ctx.ch.prelude, setup: b.setup, code: ans.map((x) => x.t).join("\n"), tests: b.tests });
+        const r = await runWith(check, { op: "check", prelude: ctx.ch.prelude, lang: ctx.ch.lang, setup: b.setup, code: ans.map((x) => x.t).join("\n"), tests: b.tests });
         ok = r.passed;
       }
       msg.textContent = "";
       if (ok) {
         draw(ans.map(() => true));
         msg.append(h("div", { class: "result pass" }, "Correct. ", h("span", {}, "Now say out loud why each line has to come where it does.")));
-        const r = await Runner.run({ op: "check", prelude: ctx.ch.prelude, setup: b.setup, code: ans.map((x) => x.t).join("\n"), tests: b.tests || "" });
+        const r = await Runner.run({ op: "check", prelude: ctx.ch.prelude, lang: ctx.ch.lang, setup: b.setup, code: ans.map((x) => x.t).join("\n"), tests: b.tests || "" });
         out.show(r);
         if (markDone(b.id)) sh.done();
         ctx.review ? ctx.onResult(true) : enroll(b.id, true);
@@ -552,7 +573,7 @@
     const kind = b.kind || "write";
     const sh = shell(b, kind, KIND_LABEL[kind] || "Exercise", b.title);
     const startCode = ctx.review ? b.starter : (S.code[b.id] ?? b.starter);
-    const ed = Editor(startCode, {
+    const ed = Editor(startCode, { lang: ctx.ch.lang,
       onRun: () => go(),
       onChange: (v) => { if (ctx.review) return; if (v === b.starter) delete S.code[b.id]; else S.code[b.id] = v; save(); },
     });
@@ -565,7 +586,7 @@
     const hintBtn = b.hints.length ? h("button", { class: "btn" }, `Hint (${b.hints.length})`) : null;
     const solBtn = h("button", { class: "btn", disabled: true, title: "Unlocks after two tries" }, "Show solution");
     async function go() {
-      const r = await runWith(runBtn, { op: "check", prelude: ctx.ch.prelude, setup: b.setup, code: ed.get(), tests: b.tests, show: b.show || "" });
+      const r = await runWith(runBtn, { op: "check", prelude: ctx.ch.prelude, lang: ctx.ch.lang, setup: b.setup, code: ed.get(), tests: b.tests, show: b.show || "" });
       out.show({ stdout: r.stdout, error: r.error, figures: r.figures, anims: r.anims });
       res.textContent = "";
       const meter = h("span", { class: "meter" }, Array.from({ length: r.total || 0 }, (_, i) => h("i", { class: i < r.ok ? "on" : "" })));
@@ -611,7 +632,7 @@
     solBtn.onclick = () => {
       S.sol[ctx.review ? b.id + ":r" : b.id] = 1; save();
       solBox.textContent = "";
-      const sol = Editor(b.solution, { readonly: true, label: "Reference solution" });
+      const sol = Editor(b.solution, { readonly: true, lang: ctx.ch.lang, label: "Reference solution" });
       solBox.append(h("div", { class: "sol" }, h("b", {}, "One working solution. Read it, close it, then type yours from memory."), sol.el,
         h("div", { class: "btns" }, h("button", { class: "btn", onclick: () => { solBox.textContent = ""; } }, "Hide it"))));
     };
@@ -1368,7 +1389,7 @@
   let warmT = 0;
   function warmSoon(ch) {
     clearTimeout(warmT);
-    const go = () => { if (location.hash.slice(1).split("/")[0] === String(ch.num)) Runner.start(ch.prelude); };
+    const go = () => { if (location.hash.slice(1).split("/")[0] === String(ch.num)) Runner.start(ch.prelude, ch.lang); };
     warmT = setTimeout(() => (window.requestIdleCallback ? requestIdleCallback(go, { timeout: 2000 }) : go()), 600);
   }
 
