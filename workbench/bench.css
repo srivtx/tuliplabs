@@ -346,7 +346,8 @@ body.k-wb main.ide{padding:0;margin:0;width:100%;max-width:none}
 /* ---- the cover: what you're building, before the editor (the project's diorama, what it will do, the road) ---- */
 .ide{position:relative}
 .wtk:hover{color:var(--w-ink);text-decoration:underline dotted;text-underline-offset:3px}
-.wcover{position:absolute;inset:0;z-index:60;overflow:auto;background:var(--w-bg);animation:cv-in .3s ease-out}
+.wcover{position:absolute;inset:0;z-index:60;overflow:auto;background:var(--w-bg)}
+.wcover .cv-in{animation:cv-in .3s ease-out}
 @keyframes cv-in{from{transform:translateY(10px)}}
 .cv-in{max-width:1080px;margin:0 auto;padding:26px 32px 64px}
 .cv-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;align-items:center;border-radius:14px;padding:34px 30px 34px 40px;color:#fff;overflow:hidden;
