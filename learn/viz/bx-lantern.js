@@ -87,7 +87,7 @@ VIZ.register("bx-lantern", async (api) => {
   const BOT = [-1.9, 2.4, 0], DESK = [2.6, 2.4, 0];
   const FLY = 0.35, TYPE = 1.1, AGENT = 8, AGENTS = 2;
 
-  let memory = false, limit = 0, t, nextArrive, deck, slots, queue, agents, flights, seq, ended, tally, waits, lastReply, judged, reached = api.wasDone, lastHud = -1;
+  let memory = false, limit = 0, stuck = null, t, nextArrive, deck, slots, queue, agents, flights, seq, ended, tally, waits, lastReply, judged, reached = api.wasDone, lastHud = -1;
 
   function reset() {
     for (const f of flights || []) W.remove(f.key);
@@ -98,7 +98,7 @@ VIZ.register("bx-lantern", async (api) => {
     deck = CUSTOMERS.map((c, i) => ({ ...c, name: NAMES[i] })).map((c) => [rand(), c]).sort((a, b) => a[0] - b[0]).map((x, i) => ({ ...x[1], n: i }));
     slots = SLOTS.map(() => null);
     agents = Array.from({ length: AGENTS }, () => ({ busy: null, until: 0 }));
-    tally = { solved: 0, people: 0, gave: 0, wrong: 0 };
+    tally = { solved: 0, people: 0, gave: 0, wrong: 0 }; stuck = null;
     waits = [];
     draw(); hud();
   }
@@ -151,7 +151,7 @@ VIZ.register("bx-lantern", async (api) => {
   function finish(c, how) {
     c.done = how; c.at = null;
     if (how === "people") { tally.people++; slots[c.slot] = null; c.queued = t; queue.push(c); W.remove("c" + c.n); }
-    else { tally[how]++; c.leave = t + 1.6; ended++; }
+    else { tally[how]++; c.leave = t + 1.6; ended++; if (how === "gave" && !stuck) stuck = c; }
     draw(); hud();
   }
 
@@ -190,9 +190,9 @@ VIZ.register("bx-lantern", async (api) => {
     } else if (!memory) {
       api.explain("Lantern forgot the question it asked", line + "<p>It asked \"which order?\", got \"it's 1042\", and read that on its own: no keywords, so it didn't understand. Turn <b>memory on</b>.</p>");
     } else if (tally.gave) {
-      api.explain(`${tally.gave} customer${tally.gave === 1 ? "" : "s"} gave up`, line + "<p>With no handoff, a customer Lantern can't understand is stuck with \"say that another way\" until they leave. Click the red one to read the chat. Lantern needs a way out to a person.</p>");
+      api.explain(`${tally.gave} customer${tally.gave === 1 ? "" : "s"} gave up`, line + "<p>With no handoff, a customer Lantern can't understand is stuck with \"say that another way\" until they leave. Here's " + stuck.name + "'s chat:</p>" + stuck.log.map(([who, s]) => `<p><b>${who === "bot" ? "Lantern" : stuck.name}:</b> ${esc(s)}</p>`).join("") + "<p>Lantern needs a way out to a person.</p>");
     } else {
-      api.explain("The desk is doing the bot's job", line + "<p>Handing off at the first miss sends people who would have been fine after one rephrase. Click a few chats: \"any news on my stuff\" has no keywords, but \"where is my parcel\" does. Try <b>after 2 misses</b>.</p>");
+      api.explain("The desk is doing the bot's job", line + "<p>Handing off at the first miss sends people who would have been fine after one rephrase. \"any news on my stuff\" has no keywords, but the same customer's next try, \"where is my parcel\", does. Try <b>after 2 misses</b>.</p>");
     }
   }
 
