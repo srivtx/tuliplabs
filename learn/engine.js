@@ -1019,6 +1019,7 @@
     side.append(h("h2", {}, h("i", { class: "sq" }), CFG.short || "Chapters"));
     side.append(h("a", { class: "top-link", href: "#", "aria-current": current === "home" ? "page" : null }, h("span", { class: "n" }, "✿"), "Your garden"));
     side.append(h("a", { class: "top-link", href: "#review", "aria-current": current === "review" ? "page" : null }, h("span", { class: "n" }, "↻"), "Spaced review"));
+    if (window.MOCK) side.append(h("a", { class: "top-link", href: "#mock", "aria-current": current === "mock" ? "page" : null }, h("span", { class: "n" }, "◷"), "Mock test"));
     if (DATA.chapters.some((c) => c.puzzles && c.puzzles.length)) side.append(h("a", { class: "top-link", href: "#puzzles", "aria-current": current === "puzzles" ? "page" : null }, h("span", { class: "n" }, "◆"), "Puzzles"));
     // Parts are branches; chapters hang off them like └── lines in a file tree.
     let part = null, branch = null;
@@ -1059,7 +1060,8 @@
         h("p", { class: "lede", html: CFG.heroLede }),
         h("div", { class: "p-cta" },
           h("a", { class: "key primary", href: "#" + nextCh.num }, (chProgress(nextCh).d ? "Carry on · " : "Start · ") + nextCh.num + ". " + nextCh.title + " →"),
-          h("a", { class: "key", href: "#review" }, "Spaced review"))),
+          h("a", { class: "key", href: "#review" }, "Spaced review"),
+          window.MOCK ? h("a", { class: "key", href: "#mock" }, "Take a mock test") : null)),
       h("div", { class: "p-art" }, h("i", { class: "p-glow" }), flower("track", "p-ghost", { "data-stage": 4 }), flower("track", "p-fl")),
       h("div", { class: "p-corner bl" }, `${N} chapters` + (parts.length > 1 ? ` · ${parts.length} parts` : "") + " · Python in your browser"),
       h("div", { class: "p-corner br" }, `fig. 1 — your flower, ${STAGE_NAMES[st]}`));
@@ -1442,11 +1444,17 @@
     next();
   }
 
+  // what the mock test (learn/mock.js) may use: the page, the store, the runner and the review deck
+  function mockApi() {
+    return { h, $, main, sidebar, S, save, schedule, enroll, award, toast, shuffle, highlight, findBlock, chProgress, Runner, cfg: CFG, data: () => DATA };
+  }
+
   function route() {
     document.body.classList.remove("menu");
     const hash = decodeURIComponent(location.hash.slice(1));
     if (!hash) return pageHome();
     if (hash === "review") return pageReview();
+    if (hash === "mock" && window.MOCK) return window.MOCK.page(mockApi());
     if (hash === "puzzles") return pagePuzzleWall();
     const [num, sec] = hash.split("/");
     const ch = DATA.chapters.find((c) => String(c.num) === num);
