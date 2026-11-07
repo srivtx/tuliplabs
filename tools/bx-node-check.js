@@ -39,13 +39,13 @@ async function verify(ch) {
       }
       count++;
     } else if (b.type === "exercise") {
-      const good = await box.handle({ op: "check", code: b.solution, tests: b.tests });
+      const good = await box.handle({ op: "check", code: b.solution, setup: b.setup, tests: b.tests });
       if (!good.passed) problems.push(`${b.id}: SOLUTION fails: ${good.error || good.failed} -> ${good.message}`);
-      const bad = await box.handle({ op: "check", code: b.starter, tests: b.tests });
+      const bad = await box.handle({ op: "check", code: b.starter, setup: b.setup, tests: b.tests });
       if (bad.passed) problems.push(`${b.id}: starter already passes the tests`);
       count += 2;
     } else if (b.type === "parsons") {
-      const r = await box.handle({ op: "check", code: b.lines.join("\n"), tests: b.tests || "" });
+      const r = await box.handle({ op: "check", code: b.lines.join("\n"), setup: b.setup, tests: b.tests || "" });
       if (!r.passed) problems.push(`${b.id}: parsons answer fails: ${r.error || r.failed} ${r.message || ""}`);
       if (b.lines.length < 3) problems.push(`${b.id}: parsons needs at least 3 lines`);
       count++;
