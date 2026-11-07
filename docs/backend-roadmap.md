@@ -25,8 +25,8 @@ and every earlier ticket's, and its terminal session replays exactly.
 |---|---|---|---|
 | 1 | Greenhouse | routes, JSON, params, queries, CRUD, middleware, JSON errors | live |
 | 2 | Taskflow | data in a JSON file on disk, atomic saves that survive a power cut, filters, paging in headers, sorting, an escaped HTML page | live |
-| 3 | Shortlink | short codes, redirects, click stats, custom aliases, expiry | next |
-| 4 | Inkwell | sign-up, PBKDF2 password hashing, sessions in cookies, ownership checks | planned |
+| 3 | Shortlink | base-62 codes from a counter, 302 redirects, clicks by referrer, aliases that never clash with codes, one link per URL, expiry with 410, the counter saved with the links, tombstones | live |
+| 4 | Inkwell | sign-up, PBKDF2 password hashing, sessions in cookies, ownership checks | next |
 | 5 | Keyring | JWTs signed with HMAC, refresh tokens, roles and scopes | planned |
 | 6 | Bookshelf | cursor pagination, sorting, ETags and 304s, API versions | planned |
 | 7 | Market | a cart in a session, stock that can't go negative, idempotent checkout | planned |
