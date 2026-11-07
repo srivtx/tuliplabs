@@ -529,6 +529,296 @@
     return express;
   }
 
+  // ------------------------------------------------------------- zod --
+  // The second package that comes with the sandbox: the part of Zod 4 a backend uses to check what clients
+  // send. Issues, messages and error shapes are Zod 4's own, field for field (tools/zod-parity.js checks
+  // them against the real package), so what you learn here is what you'll see at work.
+  function makeZod() {
+    const EMAIL = /^(?:[A-Za-z0-9_'+\-]+\.)*[A-Za-z0-9_'+\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$/;
+    const UUID = /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/;
+    const DATETIME = /^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$/;
+    const SIZE = { string: "characters", array: "items" };
+    const kindOf = (v) => {
+      if (v === undefined) return "undefined";
+      if (v === null) return "null";
+      if (Array.isArray(v)) return "array";
+      if (typeof v === "number") return Number.isNaN(v) ? "NaN" : Number.isFinite(v) ? "number" : "Infinity";
+      if (v instanceof Date) return "date";
+      return typeof v;
+    };
+    const msgOf = (p) => (typeof p === "string" ? p : p && (p.message || (typeof p.error === "string" ? p.error : null))) || null;
+    const quote = (v) => (typeof v === "string" ? JSON.stringify(v) : String(v));
+    const typeIssue = (expected, v) => {
+      const got = kindOf(v);
+      const i = { expected, code: "invalid_type" };
+      if (got === "NaN" || got === "Infinity") i.received = got;
+      i.message = `Invalid input: expected ${expected}, received ${got}`;
+      return i;
+    };
+    const sizeIssue = (origin, small, bound, inclusive, exact, custom) => {
+      const i = { origin, code: small ? "too_small" : "too_big", [small ? "minimum" : "maximum"]: bound, inclusive };
+      if (exact) i.exact = true;
+      const rel = exact ? "exactly " : small ? (inclusive ? ">=" : ">") : (inclusive ? "<=" : "<");
+      const head = `${small ? "Too small" : "Too big"}: expected ${origin} to`;
+      i.message = custom || (SIZE[origin] ? `${head} have ${rel}${bound} ${SIZE[origin]}` : `${head} be ${rel}${bound}`);
+      return i;
+    };
+    // an issue as Zod writes it: its own fields first, then path, then message
+    const put = (issue, path) => { const { message, path: rel, ...rest } = issue; return { ...rest, path: [...path, ...(rel || [])], message }; };
+
+    class ZodError extends Error {
+      constructor(issues) {
+        super(JSON.stringify(issues, null, 2));
+        this.name = "ZodError";
+        this.issues = issues;
+      }
+      flatten(map = (i) => i.message) { return flattenError(this, map); }
+    }
+    function flattenError(err, map = (i) => i.message) {
+      const formErrors = [], fieldErrors = {};
+      for (const i of err.issues) {
+        if (i.path.length) (fieldErrors[i.path[0]] = fieldErrors[i.path[0]] || []).push(map(i));
+        else formErrors.push(map(i));
+      }
+      return { formErrors, fieldErrors };
+    }
+    function treeifyError(err) {
+      const root = { errors: [] };
+      for (const i of err.issues) {
+        let node = root;
+        for (const k of i.path) {
+          const key = typeof k === "number" ? "items" : "properties";
+          node[key] = node[key] || (key === "items" ? [] : {});
+          node = node[key][k] = node[key][k] || { errors: [] };
+        }
+        node.errors.push(i.message);
+      }
+      return root;
+    }
+    const pathText = (path) => path.map((k, n) => (typeof k === "number" ? `[${k}]` : n ? "." + k : k)).join("");
+    const prettifyError = (err) => err.issues.map((i) => `✖ ${i.message}` + (i.path.length ? `\n  → at ${pathText(i.path)}` : "")).join("\n");
+
+    // A schema is a type test (_base) and then a list of checks. A wrong type, or an issue marked abort,
+    // stops the checks after it; refinements and transforms run only on a value with no issues so far.
+    class ZodType {
+      constructor(def) { this.def = def; this._checks = []; }
+      _with(check) { const s = Object.create(Object.getPrototypeOf(this)); Object.assign(s, this); s._checks = [...this._checks, check]; return s; }
+      _run(v, path) {
+        const issues = [];
+        const r = this._base(v, path, issues);
+        if (r.abort) return { value: r.value, issues };
+        let value = r.value;
+        for (const c of this._checks) {
+          if ((c.refine || c.transform) && issues.length) continue;
+          if (c.transform) { value = c.transform(value); continue; }
+          const got = c.check(value);
+          if (!got) continue;
+          if ("value" in got) { value = got.value; continue; }
+          issues.push(put(got.issue, path));
+          if (got.abort) break;
+        }
+        return { value, issues };
+      }
+      safeParse(v) {
+        const { value, issues } = this._run(v, []);
+        return issues.length ? { success: false, error: new ZodError(issues) } : { success: true, data: value };
+      }
+      parse(v) { const r = this.safeParse(v); if (!r.success) throw r.error; return r.data; }
+      async parseAsync(v) { return this.parse(v); }
+      async safeParseAsync(v) { return this.safeParse(v); }
+      optional() { return new ZodOptional({ inner: this }); }
+      nullable() { return new ZodNullable({ inner: this }); }
+      nullish() { return this.nullable().optional(); }
+      default(d) { return new ZodDefault({ inner: this, d }); }
+      refine(fn, opts) {
+        const message = msgOf(opts) || "Invalid input", p = (opts && opts.path) || [];
+        return this._with({ refine: true, check: (v) => (fn(v) ? null : { issue: { code: "custom", path: p, message } }) });
+      }
+      transform(fn) { return this._with({ transform: fn }); }
+      array() { return new ZodArray({ el: this }); }
+      or(other) { return new ZodUnion({ options: [this, other] }); }
+      describe() { return this; }
+    }
+    const typed = (expected, ok, coerce) => function (v, path, issues) {
+      if (this.def.coerce) v = coerce(v);
+      if (ok(v)) return { value: v };
+      issues.push(put(typeIssue(expected, v), path));
+      return { abort: true, value: v };
+    };
+    const sized = (origin) => ({
+      _len(small, n, exact, m) { return this._with({ check: (v) => (exact ? v.length !== n : small ? v.length < n : v.length > n) ? { issue: sizeIssue(origin, exact ? v.length < n : small, n, true, exact, msgOf(m)) } : null }); },
+      min(n, m) { return this._len(true, n, false, m); },
+      max(n, m) { return this._len(false, n, false, m); },
+      length(n, m) { return this._len(true, n, true, m); },
+      nonempty(m) { return this.min(1, m); },
+    });
+
+    class ZodString extends ZodType {
+      _fmt(format, test, message, m, pattern, origin = true) {
+        return this._with({ check: (v) => test(v) ? null : { issue: { ...(origin ? { origin: "string" } : {}), code: "invalid_format", format, ...(pattern ? { pattern: String(pattern) } : {}), message: msgOf(m) || message } } });
+      }
+      email(m) { return this._fmt("email", (v) => EMAIL.test(v), "Invalid email address", m, EMAIL); }
+      uuid(m) { return this._fmt("uuid", (v) => UUID.test(v), "Invalid UUID", m, UUID); }
+      datetime(m) { return this._fmt("datetime", (v) => DATETIME.test(v), "Invalid ISO datetime", m, DATETIME); }
+      url(m) { return this._fmt("url", (v) => { try { new URL(v); return true; } catch (e) { return false; } }, "Invalid URL", m, null, false); }
+      regex(re, m) { return this._fmt("regex", (v) => { re.lastIndex = 0; return re.test(v); }, `Invalid string: must match pattern ${re}`, m, re); }
+      startsWith(s, m) { return this._fmt("starts_with", (v) => v.startsWith(s), `Invalid string: must start with "${s}"`, m); }
+      endsWith(s, m) { return this._fmt("ends_with", (v) => v.endsWith(s), `Invalid string: must end with "${s}"`, m); }
+      includes(s, m) { return this._fmt("includes", (v) => v.includes(s), `Invalid string: must include "${s}"`, m); }
+      trim() { return this._with({ check: (v) => ({ value: v.trim() }) }); }
+      toLowerCase() { return this._with({ check: (v) => ({ value: v.toLowerCase() }) }); }
+      toUpperCase() { return this._with({ check: (v) => ({ value: v.toUpperCase() }) }); }
+    }
+    Object.assign(ZodString.prototype, sized("string"));
+    ZodString.prototype._base = typed("string", (v) => typeof v === "string", (v) => String(v));
+
+    class ZodNumber extends ZodType {
+      _cmp(small, n, inclusive, m) {
+        return this._with({ check: (v) => (small ? (inclusive ? v < n : v <= n) : (inclusive ? v > n : v >= n)) ? { issue: sizeIssue("number", small, n, inclusive, false, msgOf(m)) } : null });
+      }
+      min(n, m) { return this._cmp(true, n, true, m); }
+      gte(n, m) { return this.min(n, m); }
+      gt(n, m) { return this._cmp(true, n, false, m); }
+      max(n, m) { return this._cmp(false, n, true, m); }
+      lte(n, m) { return this.max(n, m); }
+      lt(n, m) { return this._cmp(false, n, false, m); }
+      positive(m) { return this.gt(0, m); }
+      nonnegative(m) { return this.min(0, m); }
+      negative(m) { return this.lt(0, m); }
+      int(m) {
+        return this._with({ check: (v) => {
+          if (!Number.isInteger(v)) return { abort: true, issue: { expected: "int", format: "safeint", code: "invalid_type", message: msgOf(m) || "Invalid input: expected int, received number" } };
+          if (Math.abs(v) <= Number.MAX_SAFE_INTEGER) return null;
+          const big = v > 0, b = big ? Number.MAX_SAFE_INTEGER : -Number.MAX_SAFE_INTEGER;
+          return { abort: true, issue: { code: big ? "too_big" : "too_small", [big ? "maximum" : "minimum"]: b, note: "Integers must be within the safe integer range.", origin: "int", inclusive: true, message: msgOf(m) || `${big ? "Too big" : "Too small"}: expected int to be ${big ? "<=" : ">="}${b}` } };
+        } });
+      }
+    }
+    ZodNumber.prototype._base = typed("number", (v) => typeof v === "number" && Number.isFinite(v), (v) => Number(v));
+    class ZodBoolean extends ZodType {}
+    ZodBoolean.prototype._base = typed("boolean", (v) => typeof v === "boolean", (v) => Boolean(v));
+    class ZodAny extends ZodType { _base(v) { return { value: v }; } }
+    class ZodLiteral extends ZodType {
+      _base(v, path, issues) {
+        if (v === this.def.value) return { value: v };
+        issues.push(put({ code: "invalid_value", values: [this.def.value], message: `Invalid input: expected ${quote(this.def.value)}` }, path));
+        return { abort: true, value: v };
+      }
+    }
+    class ZodEnum extends ZodType {
+      get options() { return [...this.def.values]; }
+      get enum() { return Object.fromEntries(this.def.values.map((v) => [v, v])); }
+      _base(v, path, issues) {
+        if (this.def.values.includes(v)) return { value: v };
+        issues.push(put({ code: "invalid_value", values: [...this.def.values], message: `Invalid option: expected one of ${this.def.values.map(quote).join("|")}` }, path));
+        return { abort: true, value: v };
+      }
+    }
+    // wrappers answer some values themselves, and hand the rest to the schema inside
+    const inner = (self, v, path, issues) => { const r = self.def.inner._run(v, path); issues.push(...r.issues); return { value: r.value, abort: r.issues.length > 0 }; };
+    class ZodOptional extends ZodType { unwrap() { return this.def.inner; } _base(v, path, issues) { return v === undefined ? { value: v } : inner(this, v, path, issues); } }
+    class ZodNullable extends ZodType { unwrap() { return this.def.inner; } _base(v, path, issues) { return v === null ? { value: v } : inner(this, v, path, issues); } }
+    class ZodDefault extends ZodType {
+      _base(v, path, issues) {
+        if (v === undefined) return { value: typeof this.def.d === "function" ? this.def.d() : this.def.d, abort: true };
+        return inner(this, v, path, issues);
+      }
+    }
+    class ZodArray extends ZodType {
+      get element() { return this.def.el; }
+      _base(v, path, issues) {
+        if (!Array.isArray(v)) { issues.push(put(typeIssue("array", v), path)); return { abort: true, value: v }; }
+        return { value: v.map((x, n) => { const r = this.def.el._run(x, [...path, n]); issues.push(...r.issues); return r.value; }) };
+      }
+    }
+    Object.assign(ZodArray.prototype, sized("array"));
+    const isObj = (v) => typeof v === "object" && v !== null && !Array.isArray(v) && !(v instanceof Date);
+    class ZodObject extends ZodType {
+      get shape() { return this.def.shape; }
+      _base(v, path, issues) {
+        if (!isObj(v)) { issues.push(put(typeIssue("object", v), path)); return { abort: true, value: v }; }
+        const out = {}, shape = this.def.shape;
+        for (const k of Object.keys(shape)) {
+          const r = shape[k]._run(v[k], [...path, k]);
+          issues.push(...r.issues);
+          if (r.value !== undefined || k in v) out[k] = r.value;
+        }
+        const extra = Object.keys(v).filter((k) => !(k in shape));
+        if (extra.length && this.def.mode === "strict") issues.push(put({ code: "unrecognized_keys", keys: extra, message: `Unrecognized key${extra.length > 1 ? "s" : ""}: ${extra.map((k) => `"${k}"`).join(", ")}` }, path));
+        if (this.def.mode === "passthrough") for (const k of extra) out[k] = v[k];
+        return { value: out };
+      }
+      _new(shape, mode = this.def.mode) { return new ZodObject({ shape, mode }); }
+      strict() { return this._new(this.def.shape, "strict"); }
+      passthrough() { return this._new(this.def.shape, "passthrough"); }
+      loose() { return this.passthrough(); }
+      strip() { return this._new(this.def.shape, "strip"); }
+      extend(more) { return this._new({ ...this.def.shape, ...more }); }
+      merge(other) { return this.extend(other.def.shape); }
+      pick(keys) { return this._new(Object.fromEntries(Object.entries(this.def.shape).filter(([k]) => keys[k]))); }
+      omit(keys) { return this._new(Object.fromEntries(Object.entries(this.def.shape).filter(([k]) => !keys[k]))); }
+      partial() { return this._new(Object.fromEntries(Object.entries(this.def.shape).map(([k, s]) => [k, s instanceof ZodOptional ? s : s.optional()]))); }
+      keyof() { return new ZodEnum({ values: Object.keys(this.def.shape) }); }
+    }
+    class ZodRecord extends ZodType {
+      _base(v, path, issues) {
+        if (!isObj(v)) { issues.push(put(typeIssue("record", v), path)); return { abort: true, value: v }; }
+        const out = {};
+        for (const k of Object.keys(v)) {
+          const kr = this.def.key._run(k, [...path, k]), r = this.def.val._run(v[k], [...path, k]);
+          issues.push(...kr.issues, ...r.issues);
+          out[k] = r.value;
+        }
+        return { value: out };
+      }
+    }
+    class ZodUnion extends ZodType {
+      get options() { return this.def.options; }
+      _base(v, path, issues) {
+        const errors = [];
+        for (const o of this.def.options) {
+          const r = o._run(v, []);
+          if (!r.issues.length) return { value: r.value };
+          errors.push(r.issues);
+        }
+        issues.push(put({ code: "invalid_union", errors, message: "Invalid input" }, path));
+        return { abort: true, value: v };
+      }
+    }
+
+    const z = {
+      string: () => new ZodString({}),
+      number: () => new ZodNumber({}),
+      boolean: () => new ZodBoolean({}),
+      any: () => new ZodAny({}),
+      unknown: () => new ZodAny({}),
+      literal: (value) => new ZodLiteral({ value }),
+      enum: (values) => new ZodEnum({ values: Array.isArray(values) ? values : Object.values(values) }),
+      object: (shape) => new ZodObject({ shape, mode: "strip" }),
+      strictObject: (shape) => new ZodObject({ shape, mode: "strict" }),
+      looseObject: (shape) => new ZodObject({ shape, mode: "passthrough" }),
+      array: (el) => new ZodArray({ el }),
+      record: (key, val) => new ZodRecord({ key, val }),
+      union: (options) => new ZodUnion({ options }),
+      optional: (s) => s.optional(),
+      nullable: (s) => s.nullable(),
+      email: (m) => new ZodString({}).email(m),
+      url: (m) => new ZodString({}).url(m),
+      uuid: (m) => new ZodString({}).uuid(m),
+      int: () => new ZodNumber({}).int(),
+      coerce: {
+        string: () => new ZodString({ coerce: true }),
+        number: () => new ZodNumber({ coerce: true }),
+        boolean: () => new ZodBoolean({ coerce: true }),
+      },
+      ZodError, ZodType, ZodObject, ZodString, ZodNumber, ZodArray,
+      flattenError, treeifyError, prettifyError,
+    };
+    z.z = z;
+    return z;
+  }
+  const ZOD = makeZod();
+
   // ----------------------------------------------------------- the box --
   function create(host) {
     const compile = host.compile;              // (source, filename) -> the value of the source
@@ -676,8 +966,9 @@
         timers: T, "timers/promises": { setTimeout: (ms, v) => new Promise((r) => T.setTimeout(() => r(v), ms)) },
         process: process_, string_decoder: { StringDecoder: class { constructor(e) { this.e = e || "utf8"; } write(b) { return Buffer.from(b).toString(this.e); } end() { return ""; } } },
         stream: { EventEmitter, Readable: EventEmitter, Writable: EventEmitter },
-        // the one package that comes with the sandbox: Express 5's API, built on the http above
+        // the two packages that come with the sandbox: Express 5's API, built on the http above, and Zod 4
         express: makeExpress({ http, fs: fsSync, path, log: console_ }),
+        zod: ZOD,
       };
       const globalsList = { console: console_, process: process_, Buffer, fetch: http._fetch, ...T };
 
@@ -685,7 +976,7 @@
         const bare = spec.replace(/^node:/, "");
         if (!/^\.{0,2}\//.test(spec)) {
           if (bare in builtins) return { builtin: bare };
-          throw nodeErr(Error, "MODULE_NOT_FOUND", `Cannot find module '${spec}'\nRequire stack:\n- /app/${from}\n(There's no npm here: express is the one package that comes with the sandbox, and every other module is one you write.)`);
+          throw nodeErr(Error, "MODULE_NOT_FOUND", `Cannot find module '${spec}'\nRequire stack:\n- /app/${from}\n(There's no npm here: express and zod are the packages that come with the sandbox, and every other module is one you write.)`);
         }
         let p = spec.startsWith("/") ? fname(spec) : normalize(path.dirname(from) + "/" + spec).replace(/^\.\//, "");
         for (const cand of [p, p + ".js", p + ".json", p + "/index.js"]) if (cand in c.files) return { file: cand };
@@ -1183,7 +1474,7 @@
     return { handle, unhandled, ops: OPS, Buffer, sha256, inspect, format };
   }
 
-  const api = { create, Buffer, STATUS };
+  const api = { create, Buffer, STATUS, zod: ZOD };
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.WBNode = api;
 })(typeof self !== "undefined" ? self : this);
