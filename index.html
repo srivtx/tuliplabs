@@ -158,10 +158,11 @@ a{color:var(--pink-soft)}
 .card:hover{transform:translateY(-3px) rotate(-.4deg);border-color:var(--kc);box-shadow:0 18px 40px -22px color-mix(in srgb,var(--kc) 70%,transparent)}
 .card .hit{position:absolute;inset:0;z-index:1;border-radius:12px}
 .card .hit:focus-visible{outline:2px solid var(--pink);outline-offset:2px}
-.card.k-worlds,.card.k-dz,.card.k-ds,.card.soon{grid-column:span 2}
+/* the labs fill the last row together, wide like the row above them */
+.card.k-worlds,.card.k-dz,.card.k-ds,.card.soon,.card.k-wb,.card.k-wt{grid-column:span 2}
 /* each card mats its poster like a print on paper; the tag is plain words with a square */
 .poster{position:relative;height:170px;border-radius:7px;overflow:hidden;background:var(--kc);color:#fff6fb}
-.card.k-worlds .poster,.card.k-dz .poster,.card.k-ds .poster,.card.soon .poster{height:210px}
+.card.k-worlds .poster,.card.k-dz .poster,.card.k-ds .poster,.card.soon .poster,.card.k-wb .poster,.card.k-wt .poster{height:210px}
 /* the design studio's door is a printed poster of its own: a mosaic in five inks, and a pink proof of it laid on top a little off.
    Point at the card and the proof slides into register while the match counts up to 100%. */
 @property --dzm{syntax:"<integer>";inherits:true;initial-value:71}
@@ -206,7 +207,7 @@ a{color:var(--pink-soft)}
 .card:hover .arw,a:hover>.arw{width:34px}
 .arw.down{transform:rotate(90deg) translateX(-2px);width:14px}a:hover>.arw.down{width:20px}
 @media (max-width:1000px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-dz,.card.k-ds,.card.soon{grid-column:auto}}
+@media (max-width:620px){.cards{grid-template-columns:1fr}.card.k-worlds,.card.k-dz,.card.k-ds,.card.soon,.card.k-wb,.card.k-wt{grid-column:auto}}
 
 /* ---------------- keycap section ---------------- */
 .keys{background:var(--sun);color:#1b1a12}
