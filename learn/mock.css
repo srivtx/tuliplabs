@@ -32,6 +32,7 @@
 .mk-card.ok{border-color:var(--ok)}.mk-card.bad{border-color:var(--bad)}
 .mk-kind{font:700 12px var(--f-display);letter-spacing:.04em;color:var(--c2);margin-bottom:8px}
 .mk-kind .mk-muted{font:500 12px var(--f-body);letter-spacing:0}
+.mk-again{margin-left:8px;font:600 11px var(--f-body);letter-spacing:0;color:var(--pink);border-bottom:1px dashed var(--pink);cursor:help}
 .mk-body .prompt{font-size:15px}.mk-body .prompt p{margin:0 0 8px}
 .mk-ask{font-weight:600;margin:10px 0 8px}
 .mk .opt{display:flex;gap:10px;align-items:baseline;width:100%}
@@ -69,6 +70,7 @@
 .mk-big{font:700 64px/1 var(--f-display);white-space:nowrap}.mk-big span{font-size:28px;color:var(--muted)}
 .mk-pct{font:600 15px var(--f-mono);margin:0 0 4px}
 .mk-score p{margin:0}
+.mk-backnote{margin:14px 0 0;padding:10px 14px;border-left:3px solid var(--pink);background:color-mix(in srgb,var(--pink) 7%,var(--card));border-radius:0 8px 8px 0;font-size:14.5px}
 .mk-strip{display:flex;flex-wrap:wrap;gap:3px;margin:12px 0 0}
 .mk-strip i{width:14px;height:14px;border-radius:3px}.mk-strip i.ok{background:var(--ok)}.mk-strip i.bad{background:var(--bad);opacity:.8}
 .mk-chs{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
