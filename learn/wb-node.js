@@ -400,13 +400,29 @@
       };
       res.clearCookie = (name, o = {}) => res.cookie(name, "", { ...o, maxAge: undefined, expires: new Date(1) });
     }
+    // What Express does when no route answered, or an error reached the end: finalhandler's small HTML page,
+    // with the error's stack in it (Node's default environment is development), and the same headers
     function finish(err, req, res) {
       if (res.headersSent) { if (!res.writableEnded) res.end(); return; }
-      res.removeHeader("Content-Type");
-      if (!err) return res.status(404).type("text").send(`Cannot ${req.method} ${req.originalUrl.split("?")[0]}`);
-      const status = err.status >= 400 && err.status < 600 ? err.status : err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
-      if (status >= 500) log.error(err && err.stack ? `${err.name}: ${err.message}` : err);
-      res.status(status).type("text").send(status < 500 ? err.message : http.STATUS_CODES[status]);
+      let status = 404, message;
+      if (!err) message = `Cannot ${req.method} ${req.originalUrl.split("?")[0].replace(/[^\x21\x23-\x3B\x3D\x3F-\x5F\x61-\x7A\x7C\x7E%]+/g, encodeURI)}`;
+      else {
+        status = err.status >= 400 && err.status < 600 ? err.status : err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : 500;
+        if (err && err.headers) for (const [k, v] of Object.entries(err.headers)) res.setHeader(k, v);
+        const stack = err && err.stack ? String(err.stack).split("\n").filter((l) => !/^\s+at /.test(l) || /\bwb\//.test(l)).map((l) => l.replace(/\bwb\//g, "")).join("\n") : null;
+        message = stack || (err && typeof err.toString === "function" ? err.toString() : "") || http.STATUS_CODES[status];
+        log.error(stack || String(err));
+      }
+      const body = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Error</title>\n</head>\n<body>\n<pre>'
+        + message.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]).replaceAll("\n", "<br>").replaceAll("  ", " &nbsp;")
+        + "</pre>\n</body>\n</html>\n";
+      res.statusCode = status;
+      for (const h of ["Content-Encoding", "Content-Language", "Content-Range"]) res.removeHeader(h);
+      res.setHeader("Content-Security-Policy", "default-src 'none'");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Content-Length", String(Buffer.byteLength(body)));
+      res.end(req.method === "HEAD" ? undefined : body);
     }
     function Router(opts = {}) {
       const stack = [];
@@ -1497,8 +1513,10 @@
     // An exercise's checks are JavaScript, like a Workbench ticket's: assert(cond, "message") lines, with
     // request("POST /orders", body) to talk to the file's server and mod for whatever it exports.
     const CHECK_ARGS = [...TEST_ARGS, "mod"];
-    async function check({ code, tests, port = 3000 }) {
+    async function check({ code, tests, setup, port = 3000 }) {
       const pid = "bx:check";
+      // a Parsons block's setup (the app around the lines being ordered) goes first, in the same file
+      if (setup) code = setup + "\n" + code;
       const src = String(tests || "").split("\n");
       const total = src.filter((l) => /^assert\b/.test(l)).length;
       const r = await startFile(pid, code);

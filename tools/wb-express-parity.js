@@ -3,8 +3,9 @@
 //   1. in Node in a box (learn/wb-node.js), as the page runs it;
 //   2. in a real Node process, with real sockets and the real Express 5 from npm.
 // Trellis writes its own express.js; there the real Express replaces it, which is the claim its finish makes.
-// The real Express answers its default 404 and 500 with an HTML page; that page is reduced to the text in its
-// <pre> before comparing, since the sandbox answers in plain text on purpose.
+// Both answer Express's default 404 and 500 with the same HTML page, and the projects' client.js shows the
+// first line of its message. Should a session print a whole page, it's reduced to that line on both sides,
+// since a 500 page holds a stack trace whose file paths differ between the two.
 //   EXPRESS=/path/to/node_modules/express node tools/wb-express-parity.js [ex01 ux01 ...]
 const fs = require("fs");
 const os = require("os");
@@ -67,7 +68,7 @@ function inNode(proj, t, lines) {
       // ticket 1 of Trellis is bare http, before there's any Express to swap in
       if (!("express.js" in t.after) && !/require\(["']express["']\)/.test(Object.values(t.after).join("\n"))) continue;
       const lines = commands(t, proj.prompt);
-      const a = await inBox(proj, t, lines), b = inNode(proj, t, lines).map(plain);
+      const a = (await inBox(proj, t, lines)).map(plain), b = inNode(proj, t, lines).map(plain);
       lines.forEach((l, i) => {
         all++;
         const k = (per[proj.id] = per[proj.id] || [0, 0]);
