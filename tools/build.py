@@ -441,10 +441,11 @@ def build(only=None):
     summary["wt"] = [[i, t, 1] for i, t in live]
     with open(os.path.join(CONTENT, "summary.json"), "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, separators=(",", ":"))
-    # the DSA mock test's question bank, made from ds.json (tools/mock.py; checked by tools/mock-check.js)
-    if "ds" in built:
-        import mock
-        mock.build()
+    # each track's mock test question bank, made from its json (tools/mock.py; checked by tools/mock-check.js)
+    import mock
+    again = [t for t in mock.TRACKS if t in built]
+    if again:
+        mock.build(tracks=again)
     return built
 
 
