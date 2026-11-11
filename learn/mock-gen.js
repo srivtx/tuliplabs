@@ -933,6 +933,30 @@
     ["n^3", "for i in range(n):\n    for j in range(i):\n        for k in range(j):\n            count += 1"],
     ["n", "i = n\nwhile i > 0:\n    for j in range(i):\n        count += 1\n    i //= 2"],
     ["n log n", "for i in range(1, n + 1):\n    for j in range(0, n, i):\n        count += 1"],
+    // shapes interviews ask about, each with its own why
+    ["log n", "lo, hi = 0, n\nwhile lo < hi:\n    mid = (lo + hi) // 2\n    if mid * mid < n:\n        lo = mid + 1\n    else:\n        hi = mid\n    count += 1",
+      "Each step halves the range from lo to hi, so it's over after about log n steps. It's a binary search."],
+    ["n", "i, j = 0, n - 1\nwhile i < j:\n    if (i * 7 + j) % 3:\n        i += 1\n    else:\n        j -= 1\n    count += 1",
+      "Every step moves i up or j down, and they meet after at most n steps. Two pointers are linear, whichever one moves."],
+    ["n log n", "for i in range(1, n + 1):\n    j = i\n    while j > 0:\n        j //= 2\n        count += 1",
+      "The inner loop halves i until it reaches 0, about log i steps. Added up over every i, that's about n log n."],
+    ["n^2", "for i in range(n):\n    for j in range(i, n, M):\n        count += 1",
+      "The inner loop skips ahead in fixed steps, so it still runs a fixed fraction of n − i times. Summed over every i that's a constant times n², and constants don't change the growth."],
+    ["n", "for i in range(n):\n    if i % C == 0:\n        for j in range(C):\n            count += 1",
+      "The inner loop only runs once every few rounds, and then only for a few steps: about n in all. A loop inside a loop isn't automatically n²."],
+    ["n^2", "i = 0\nwhile i < n:\n    j = n\n    while j > i:\n        j -= 1\n        count += 1\n    i += 1",
+      "For each i the inner loop walks down from n to i: n − i steps. That adds up to n(n + 1)/2."],
+  ];
+  // recursion: f(n) returns the steps it and all its calls take, so the checker measures it the same way
+  const REC = [
+    ["n log n", "def f(n):\n    if n <= 1:\n        return 1\n    return f(n // 2) + f(n // 2) + n", "Two calls on halves, plus n work at each call: log n levels with n work on each level. It's merge sort's shape."],
+    ["log n", "def f(n):\n    if n <= 1:\n        return 1\n    return f(n // 2) + 1", "One call on half the input, plus a constant: the input halves about log n times before it reaches 1. Binary search's shape."],
+    ["n", "def f(n):\n    if n <= 1:\n        return 1\n    return f(n // 2) + f(n // 2) + 1", "Two calls on halves but only constant work each: the call tree has about 2n nodes. Walking a whole tree is linear."],
+    ["n", "def f(n):\n    if n <= 1:\n        return 1\n    return f(n // 2) + n", "n + n/2 + n/4 + … stays under 2n: the first call does most of the work."],
+    ["n^2", "def f(n):\n    if n == 0:\n        return 1\n    return f(n - 1) + n", "Shrinking by one with linear work at each step: n + (n − 1) + … + 1 is about n²/2. Selection sort's shape."],
+    ["n", "def f(n):\n    if n == 0:\n        return 1\n    return f(n - 1) + 1", "One call per step down to 0, each doing constant work: n calls."],
+    ["n^2", "def f(n):\n    if n <= 1:\n        return 1\n    return f(n // 2) + f(n // 2) + f(n // 2) + f(n // 2) + 1", "Four calls on halves: the calls multiply by 4 per level for log n levels, and 4 to the log n is n²."],
+    ["2^n", "def f(n):\n    if n == 0:\n        return 1\n    return f(n - 1) + f(n - 1) + 1", "Two calls on n − 1 each: the calls double with every level, 2ⁿ⁺¹ − 1 of them."],
   ];
   const BIGO_WHY = {
     "n^2": "The inner loop runs 0, 1, 2, … n − 1 times: n(n − 1)/2 in all. Halving the work still leaves n².",
@@ -962,11 +986,11 @@ print("O(" + growth() + ")")`;
     // ch 1: how the work grows
     bigO(r) {
       const t = r.int(0, BIGO.length + 1);
-      let answer, body;
+      let answer, body, why;
       if (t >= BIGO.length) { answer = "2^n"; body = `def f(n):\n    if n == 0:\n        return 1\n    return 1 + f(n - 1) + f(n - 1)`; }
       else {
-        [answer, body] = BIGO[t];
-        body = body.replace("M", String(r.int(2, 3))).replace("C", String(r.int(3, 9)));
+        [answer, body, why] = BIGO[t];
+        body = body.split("M").join(String(r.int(2, 3))).split("C").join(String(r.int(3, 9)));
         body = "def f(n):\n    count = 0\n" + body.split("\n").map((l) => "    " + l).join("\n") + "\n    return count";
       }
       const opts = r.shuffle([answer, ...r.shuffle(near(GROW, answer, 4)).slice(0, 3)]).map((x) => ({ t: "O(" + x + ")", ok: x === answer }));
@@ -974,7 +998,18 @@ print("O(" + growth() + ")")`;
         ch: 1, title: "How does the work grow?", match: "choice", opts,
         prompt: "<p><code>f(n)</code> counts its own steps. As n grows, how does that count grow?</p>",
         code: body, run: body + BIGO_CLASSIFY, answer: "O(" + answer + ")",
-        why: `<p>${BIGO_WHY[answer]}</p>`,
+        why: `<p>${why || BIGO_WHY[answer]}</p>`,
+      };
+    },
+    // ch 5: what a recursion costs in all
+    recCost(r) {
+      const [answer, body, why] = r.pick(REC);
+      const opts = r.shuffle([answer, ...r.shuffle(near(GROW, answer, 4)).slice(0, 3)]).map((x) => ({ t: "O(" + x + ")", ok: x === answer }));
+      return {
+        ch: 5, title: "What does the recursion cost?", match: "choice", opts,
+        prompt: "<p><code>f(n)</code> returns how many steps it and all the calls it makes take. As n grows, how does that grow?</p>",
+        code: body, run: body + BIGO_CLASSIFY, answer: "O(" + answer + ")",
+        why: `<p>${why}</p>`,
       };
     },
     // ch 2: compacting in place with a write pointer
