@@ -5,7 +5,8 @@
    A question looks like:
      { gen, ch, title, prompt (HTML), code (Python), answer (what Python prints), match: "tokens" | "choice",
        opts (for "choice"), why (HTML) }
-   "tokens" answers are marked on their numbers and words, so "[1, 2]" and "1 2" both count. */
+   "tokens" answers are marked on their numbers and words, so "[1, 2]" and "1 2" both count; "text" answers,
+   whose symbols matter, must match exactly apart from spacing. */
 (function (root) {
   "use strict";
 
@@ -919,6 +920,445 @@
     },
   });
 
+  // ---- a second round: another angle on the chapters the interviews lean on most ----
+  const GROW = ["log n", "√n", "n", "n log n", "n^2", "n^3", "2^n"];
+  // each one counts its own work; the checker runs it at growing n and measures the growth for real
+  const BIGO = [
+    ["n^2", "for i in range(n):\n    for j in range(i):\n        count += 1"],
+    ["log n", "i = 1\nwhile i < n:\n    i *= M\n    count += 1"],
+    ["n log n", "for i in range(n):\n    j = 1\n    while j < n:\n        j *= 2\n        count += 1"],
+    ["n", "for i in range(n):\n    count += 1\nfor j in range(n):\n    count += 1"],
+    ["n", "for i in range(n):\n    for j in range(C):\n        count += 1"],
+    ["√n", "i = 1\nwhile i * i <= n:\n    count += 1\n    i += 1"],
+    ["n^3", "for i in range(n):\n    for j in range(i):\n        for k in range(j):\n            count += 1"],
+    ["n", "i = n\nwhile i > 0:\n    for j in range(i):\n        count += 1\n    i //= 2"],
+    ["n log n", "for i in range(1, n + 1):\n    for j in range(0, n, i):\n        count += 1"],
+  ];
+  const BIGO_WHY = {
+    "n^2": "The inner loop runs 0, 1, 2, … n − 1 times: n(n − 1)/2 in all. Halving the work still leaves n².",
+    "log n": "The counter multiplies each time, so it reaches n after about log n steps, whatever the base.",
+    "n log n": "n rounds, and each one does about log n work.",
+    "n": "Add the work up rather than multiplying it: loops one after another add, a constant inner loop is a constant, and n + n/2 + n/4 + … is under 2n.",
+    "√n": "It stops once i² passes n, so after about √n steps.",
+    "n^3": "Three loops nested inside each other, each up to n: about n³/6 steps, still n³.",
+    "2^n": "Every call makes two more until n hits 0, so the calls double with each level: 2ⁿ⁺¹ − 1 of them.",
+  };
+  const BIGO_CLASSIFY = `
+import math
+def growth():
+    a, b, c = f(10), f(11), f(12)
+    if c > 1000 and 1.8 < c / b < 2.2 and 1.8 < b / a < 2.2:
+        return "2^n"
+    k = math.log2(f(128) / f(64))
+    for limit, name in ((0.4, "log n"), (0.75, "√n"), (1.1, "n"), (1.6, "n log n"), (2.5, "n^2")):
+        if k < limit:
+            return name
+    return "n^3"
+print("O(" + growth() + ")")`;
+  const ROOMS = ["Ana", "Bo", "Cy", "Di", "Ed", "Flo", "Gus", "Hal"];
+  const near = (all, answer, k) => { const at = all.indexOf(answer); return all.filter((x) => x !== answer).sort((x, y) => Math.abs(all.indexOf(x) - at) - Math.abs(all.indexOf(y) - at)).slice(0, k); };
+
+  Object.assign(GENS, {
+    // ch 1: how the work grows
+    bigO(r) {
+      const t = r.int(0, BIGO.length + 1);
+      let answer, body;
+      if (t >= BIGO.length) { answer = "2^n"; body = `def f(n):\n    if n == 0:\n        return 1\n    return 1 + f(n - 1) + f(n - 1)`; }
+      else {
+        [answer, body] = BIGO[t];
+        body = body.replace("M", String(r.int(2, 3))).replace("C", String(r.int(3, 9)));
+        body = "def f(n):\n    count = 0\n" + body.split("\n").map((l) => "    " + l).join("\n") + "\n    return count";
+      }
+      const opts = r.shuffle([answer, ...r.shuffle(near(GROW, answer, 4)).slice(0, 3)]).map((x) => ({ t: "O(" + x + ")", ok: x === answer }));
+      return {
+        ch: 1, title: "How does the work grow?", match: "choice", opts,
+        prompt: "<p><code>f(n)</code> counts its own steps. As n grows, how does that count grow?</p>",
+        code: body, run: body + BIGO_CLASSIFY, answer: "O(" + answer + ")",
+        why: `<p>${BIGO_WHY[answer]}</p>`,
+      };
+    },
+    // ch 2: compacting in place with a write pointer
+    moveZeros(r) {
+      const a = Array.from({ length: 9 }, () => (r.next() < 0.4 ? 0 : r.int(1, 9)));
+      const keep = a.filter((x) => x !== 0);
+      return {
+        ch: 2, title: "Zeros to the back", prompt: "<p>What does it print?</p>",
+        code: `a = ${pyList(a)}\nw = 0\nfor x in a:\n    if x != 0:\n        a[w] = x\n        w += 1\nfor i in range(w, len(a)):\n    a[i] = 0\nprint(a, w)`,
+        answer: `${pyList(keep.concat(Array(a.length - keep.length).fill(0)))} ${keep.length}`,
+        why: `<p><code>w</code> is where the next non-zero goes. It never overtakes the reading position, so nothing is overwritten before it's read. The non-zeros keep their order, and ${keep.length} of them fit before the zeros.</p>`,
+      };
+    },
+    // ch 3: grouping by a key
+    anagrams(r) {
+      const bases = [];
+      const nb = r.int(2, 4);
+      while (bases.length < nb) { const w = r.shuffle("aeinrst".split("")).slice(0, 3).sort().join(""); if (!bases.includes(w)) bases.push(w); }
+      const words = Array.from({ length: r.int(5, 8) }, () => r.shuffle(r.pick(bases).split("")).join(""));
+      const g = {};
+      for (const w of words) { const k = w.split("").sort().join(""); g[k] = (g[k] || 0) + 1; }
+      return {
+        ch: 3, title: "Group the anagrams", prompt: "<p>What does it print?</p>",
+        code: `words = ${pyList(words)}\ngroups = {}\nfor w in words:\n    key = "".join(sorted(w))\n    groups.setdefault(key, []).append(w)\nprint(len(groups), max(len(g) for g in groups.values()))`,
+        answer: `${Object.keys(g).length} ${Math.max(...Object.values(g))}`,
+        why: `<p>Anagrams share their sorted letters, so the sorted word is the key: ${Object.entries(g).map(([k, n]) => `<code>${k}</code> × ${n}`).join(", ")}. A repeated word counts again.</p>`,
+      };
+    },
+    // ch 4: many range updates with a difference array
+    diffArray(r) {
+      const n = 8, ups = Array.from({ length: 3 }, () => { const l = r.int(0, 6); return [l, r.int(l, 7), r.int(1, 5)]; });
+      const a = Array(n).fill(0);
+      for (const [l, rr, v] of ups) for (let i = l; i <= rr; i++) a[i] += v;
+      return {
+        ch: 4, title: "Many updates, one pass", prompt: "<p>Each <code>(l, r, v)</code> adds v to every position from l to r. What does it print?</p>",
+        code: `n = ${n}\nd = [0] * (n + 1)\nfor l, r, v in ${tupList(ups)}:\n    d[l] += v\n    d[r + 1] -= v\na, run = [], 0\nfor i in range(n):\n    run += d[i]\n    a.append(run)\nprint(a)`,
+        answer: pyList(a),
+        why: "<p>Each update touches only its two ends: +v where it starts and −v just after it stops. The running total turns those marks back into the real values, so any number of updates costs one pass.</p>",
+      };
+    },
+    // ch 5: the order recursive calls print in
+    recOrder(r) {
+      let n, A, B, out;
+      for (let tries = 0; ; tries++) {
+        n = r.int(3, 6); A = r.int(1, 3); B = r.int(1, 3); out = [];
+        const f = (k) => { if (k <= 0) return; f(k - A); out.push(k); f(k - B); };
+        f(n);
+        if (out.length <= 14 || tries > 40) break;
+      }
+      return {
+        ch: 5, title: "In what order?", prompt: "<p>What does it print?</p>",
+        code: `def f(n):\n    if n <= 0:\n        return\n    f(n - ${A})\n    print(n, end=" ")\n    f(n - ${B})\nf(${n})`,
+        answer: out.join(" "),
+        why: `<p>Each call prints only after its whole first call, <code>f(n - ${A})</code>, has finished, and before its second one starts. Draw the call tree: the output reads it left, node, right.</p>`,
+      };
+    },
+    // ch 6: sorting by a key, and stability
+    sortKey(r) {
+      const people = r.shuffle(ROOMS).slice(0, 6).map((n) => [n, r.int(1, 4)]);
+      const v = r.int(0, 2);
+      const idx = people.map((_, i) => i);
+      let key, order;
+      if (v === 0) { key = "key=lambda p: p[1]"; order = idx.sort((i, j) => people[i][1] - people[j][1]); }
+      else if (v === 1) { key = "key=lambda p: (-p[1], p[0])"; order = idx.sort((i, j) => people[j][1] - people[i][1] || (people[i][0] < people[j][0] ? -1 : 1)); }
+      else { key = "key=lambda p: p[1], reverse=True"; order = idx.sort((i, j) => people[j][1] - people[i][1]); }
+      return {
+        ch: 6, title: "Sorted by what?", prompt: "<p>What does it print?</p>",
+        code: `people = ${pyV(people)}\nfor name, score in sorted(people, ${key}):\n    print(name, end=" ")`,
+        answer: order.map((i) => people[i][0]).join(" "),
+        why: v === 1 ? "<p>The key is a tuple: highest score first (the minus sign), then names A to Z for a tie.</p>"
+          : `<p>Python's sort is <b>stable</b>: people with the same score stay in the order they started in${v === 2 ? ", even with <code>reverse=True</code>" : ""}. Only the score moves anyone.</p>`,
+      };
+    },
+    // ch 7: removing duplicates in place
+    dedupe(r) {
+      const a = ints(r, 10, 1, 6).sort((x, y) => x - y);
+      const u = [...new Set(a)];
+      return {
+        ch: 7, title: "Squash the repeats", prompt: "<p>What does it print?</p>",
+        code: `a = ${pyList(a)}\nk = 1\nfor i in range(1, len(a)):\n    if a[i] != a[k - 1]:\n        a[k] = a[i]\n        k += 1\nprint(k, a[:k])`,
+        answer: `${u.length} ${pyList(u)}`,
+        why: "<p>A slow pointer <code>k</code> marks the end of the kept part; the fast one reads ahead and only copies a value that differs from the last one kept. Sorted input puts the repeats side by side, which is what makes one pass enough.</p>",
+      };
+    },
+    // ch 8: the shortest window with a big enough sum
+    minWindow(r) {
+      const a = ints(r, 10, 1, 9), T = r.int(10, 32);
+      let best = a.length + 1, left = 0, total = 0;
+      a.forEach((x, right) => { total += x; while (total >= T) { best = Math.min(best, right - left + 1); total -= a[left]; left++; } });
+      return {
+        ch: 8, title: "The shortest stretch", prompt: "<p>What does it print?</p>",
+        code: `a = ${pyList(a)}\nT = ${T}\nbest = len(a) + 1\nleft = total = 0\nfor right, x in enumerate(a):\n    total += x\n    while total >= T:\n        best = min(best, right - left + 1)\n        total -= a[left]\n        left += 1\nprint(best if best <= len(a) else 0)`,
+        answer: String(best <= a.length ? best : 0),
+        why: `<p>The shortest stretch summing to at least ${T}${best <= a.length ? ` has ${best} numbers` : ": there isn't one, so 0"}. The right edge grows the window; while it's big enough, the left edge shrinks it. All numbers are positive, so shrinking always lowers the sum: that's what makes it work.</p>`,
+      };
+    },
+    // ch 9: bisect_left and bisect_right
+    bisects(r) {
+      const a = ints(r, 9, 1, 8).sort((x, y) => x - y), x = r.next() < 0.7 ? r.pick(a) : r.int(0, 9);
+      const L = a.filter((y) => y < x).length, R = a.filter((y) => y <= x).length;
+      return {
+        ch: 9, title: "Left or right?", prompt: "<p>What does it print?</p>",
+        code: `from bisect import bisect_left, bisect_right\na = ${pyList(a)}\nprint(bisect_left(a, ${x}), bisect_right(a, ${x}))`,
+        answer: `${L} ${R}`,
+        why: `<p><code>bisect_left</code> is the first place ${x} could go (the count of items smaller than ${x}); <code>bisect_right</code> is the place just after any copies of it (the count of items ≤ ${x}). Their difference, ${R - L}, is how many times ${x} appears.</p>`,
+      };
+    },
+    // ch 10: binary search on the answer: the integer square root
+    isqrt(r) {
+      const n = r.int(20, 999);
+      let lo = 0, hi = n, steps = 0;
+      while (lo < hi) { const mid = Math.floor((lo + hi + 1) / 2); steps++; if (mid * mid <= n) lo = mid; else hi = mid - 1; }
+      return {
+        ch: 10, title: "Search the answer", prompt: "<p>What does it print?</p>",
+        code: `n = ${n}\nlo, hi = 0, n\nsteps = 0\nwhile lo < hi:\n    mid = (lo + hi + 1) // 2\n    steps += 1\n    if mid * mid <= n:\n        lo = mid\n    else:\n        hi = mid - 1\nprint(lo, steps)`,
+        answer: `${lo} ${steps}`,
+        why: `<p>"Is mid² ≤ ${n}?" is yes up to some point and no after it, so binary search finds the last yes: ${lo}, since ${lo}² = ${lo * lo} and ${lo + 1}² = ${(lo + 1) ** 2}. The <code>+ 1</code> in mid stops it looping forever when lo and hi are neighbours.</p>`,
+      };
+    },
+    // ch 11: matching brackets with a stack
+    brackets(r) {
+      const open = "([{", close = ")]}";
+      let s = "";
+      const st = [];
+      while (s.length < 8) { if (st.length && (r.next() < 0.5 || s.length + st.length >= 8)) s += close[open.indexOf(st.pop())]; else { const c = r.pick(open.split("")); st.push(c); s += c; } }
+      if (r.next() < 0.75) { const i = r.int(0, s.length - 1); s = s.slice(0, i) + r.pick("()[]{}".split("").filter((c) => c !== s[i])) + s.slice(i + 1); }
+      const pairs = { ")": "(", "]": "[", "}": "{" }, stack = [];
+      let ans = null;
+      for (let i = 0; i < s.length; i++) { const c = s[i]; if (open.includes(c)) stack.push(c); else if (!stack.length || stack.pop() !== pairs[c]) { ans = `bad at ${i}`; break; } }
+      if (ans == null) ans = stack.length ? `open ${stack.length}` : "ok";
+      return {
+        ch: 11, title: "Do the brackets match?", prompt: "<p>What does it print?</p>",
+        code: `s = "${s}"\npairs = {")": "(", "]": "[", "}": "{"}\nstack = []\nfor i, c in enumerate(s):\n    if c in "([{":\n        stack.append(c)\n    elif not stack or stack.pop() != pairs[c]:\n        print("bad at", i)\n        break\nelse:\n    print("ok" if not stack else f"open {len(stack)}")`,
+        answer: ans,
+        why: "<p>Every closer must match the most recent opener that's still open: the top of the stack. A wrong one, or one with nothing open, fails on the spot; openers left over at the end were never closed. (The <code>else</code> on a <code>for</code> runs only if the loop didn't <code>break</code>.)</p>",
+      };
+    },
+    // ch 12: a queue as a sliding time window
+    recent(r) {
+      const ts = distinctSorted(r, 8, 1, 40), W = r.int(5, 12);
+      const out = ts.map((t) => ts.filter((u) => u <= t && u >= t - W).length);
+      return {
+        ch: 12, title: "Hits in the last few seconds", prompt: "<p>What does it print?</p>",
+        code: `from collections import deque\nq = deque()\nfor t in ${pyList(ts)}:\n    q.append(t)\n    while q[0] < t - ${W}:\n        q.popleft()\n    print(len(q), end=" ")`,
+        answer: out.join(" "),
+        why: `<p>The queue holds the times from the last ${W} seconds. New times join at the back; times that are too old leave from the front. Each time enters and leaves once, so it's O(1) a hit on average.</p>`,
+      };
+    },
+    // ch 13: reversing a linked list k at a time
+    kGroup(r) {
+      const n = r.int(7, 9), k = r.int(2, 4), out = [];
+      for (let s = 1; s <= n; s += k) { const chunk = []; for (let v = s; v < s + k && v <= n; v++) chunk.push(v); out.push(...(chunk.length === k ? chunk.reverse() : chunk)); }
+      return {
+        ch: 13, title: "Reverse k at a time", prompt: "<p>What does it print?</p>",
+        code: `class Node:\n    def __init__(self, val, nxt=None):\n        self.val, self.next = val, nxt\nhead = None\nfor v in reversed(range(1, ${n + 1})):\n    head = Node(v, head)\ndef reverse_k(head, k):\n    node, count = head, 0\n    while node and count < k:\n        node, count = node.next, count + 1\n    if count < k:\n        return head\n    prev, cur = reverse_k(node, k), head\n    for _ in range(k):\n        cur.next, prev, cur = prev, cur, cur.next\n    return prev\nhead = reverse_k(head, ${k})\nwhile head:\n    print(head.val, end=" ")\n    head = head.next`,
+        answer: out.join(" "),
+        why: `<p>Every full group of ${k} is flipped by pointing each node back at the one before it, and the group's old first node is joined to the already-reversed rest. A short last group (fewer than ${k}) is left as it is.</p>`,
+      };
+    },
+    // ch 14: how many rooms
+    rooms(r) {
+      const len = r.int(4, 10), ms = Array.from({ length: r.int(4, 7) }, () => { const s = r.int(0, 20); return [s, s + r.int(1, len)]; }).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const ends = [];
+      for (const [s, e] of ms) { ends.sort((a, b) => a - b); if (ends.length && ends[0] <= s) ends[0] = e; else ends.push(e); }
+      return {
+        ch: 14, title: "How many rooms?", prompt: "<p>Each meeting is <code>(start, end)</code>. What does it print?</p>",
+        code: `import heapq\nmeetings = ${tupList(ms)}\nends = []\nfor s, e in meetings:\n    if ends and ends[0] <= s:\n        heapq.heapreplace(ends, e)\n    else:\n        heapq.heappush(ends, e)\nprint(len(ends))`,
+        answer: String(ends.length),
+        why: "<p>In order of start time, each meeting reuses the room that frees up first, if it's free by then, or opens a new one. The heap of end times answers \"which room frees up first?\" in O(log n). The answer is the most meetings ever happening at once.</p>",
+      };
+    },
+    // ch 15: the k-th largest so far
+    kthLargest(r) {
+      const xs = ints(r, 8, 1, 30), K = r.int(2, 3), keep = [], out = [];
+      for (const x of xs) { keep.push(x); keep.sort((a, b) => a - b); if (keep.length > K) keep.shift(); if (keep.length === K) out.push(keep[0]); }
+      return {
+        ch: 15, title: "The k-th largest, live", prompt: "<p>What does it print?</p>",
+        code: `import heapq\nh = []\nfor x in ${pyList(xs)}:\n    heapq.heappush(h, x)\n    if len(h) > ${K}:\n        heapq.heappop(h)\n    if len(h) == ${K}:\n        print(h[0], end=" ")`,
+        answer: out.join(" "),
+        why: `<p>A min-heap that only ever keeps the ${K} biggest numbers seen so far: its smallest, <code>h[0]</code>, is the ${K === 2 ? "2nd" : "3rd"} largest. Each new number costs O(log ${K}).</p>`,
+      };
+    },
+    // ch 16: the fewest jumps, greedily
+    jumps(r) {
+      const a = ints(r, 8, 1, 3);
+      let j = 0, end = 0, far = 0;
+      for (let i = 0; i < a.length - 1; i++) { far = Math.max(far, i + a[i]); if (i === end) { j++; end = far; } }
+      return {
+        ch: 16, title: "The fewest jumps", prompt: "<p>From index i you may jump up to <code>a[i]</code> places forward. What does it print?</p>",
+        code: `a = ${pyList(a)}\njumps = end = far = 0\nfor i in range(len(a) - 1):\n    far = max(far, i + a[i])\n    if i == end:\n        jumps += 1\n        end = far\nprint(jumps)`,
+        answer: String(j),
+        why: "<p>Think in rounds, like BFS: everything reachable with j jumps is a stretch ending at <code>end</code>. While walking that stretch, track the farthest the next jump could reach; at its end, take the jump. Greedy is safe because reaching farther never hurts.</p>",
+      };
+    },
+    // ch 17: a tree's height and its leaves
+    treeShape(r) {
+      const n = r.int(7, 9), e = treeEdges(r, n), ch = Array.from({ length: n }, () => []);
+      for (const [u, v] of e) ch[u].push(v);
+      const depth = (u) => 1 + Math.max(0, ...ch[u].map(depth));
+      return {
+        ch: 17, title: "Tall and leafy", prompt: "<p>What does it print?</p>",
+        code: `children = {${ch.map((c, i) => `${i}: ${pyList(c)}`).join(", ")}}\ndef depth(u):\n    return 1 + max((depth(v) for v in children[u]), default=0)\nleaves = sum(1 for u in children if not children[u])\nprint(depth(0), leaves)`,
+        answer: `${depth(0)} ${ch.filter((c) => !c.length).length}`,
+        why: "<p>The height of a node is 1 more than its tallest child's (a leaf counts 1). The leaves are the nodes with no children.</p>",
+      };
+    },
+    // ch 18: the path a BST search takes
+    bstPath(r) {
+      const vals = r.shuffle(distinctSorted(r, 8, 1, 60)), x = r.next() < 0.6 ? r.pick(vals) : r.int(1, 60);
+      const root = { v: vals[0] };
+      for (const v of vals.slice(1)) { let n = root; for (;;) { const side = v < n.v ? "l" : "r"; if (!n[side]) { n[side] = { v }; break; } n = n[side]; } }
+      const path = []; let n = root;
+      while (n && n.v !== x) { path.push(n.v); n = x < n.v ? n.l : n.r; }
+      return {
+        ch: 18, title: "Where the search goes", prompt: `<p>The values go into an empty BST in this order. What does it print when it searches for ${x}?</p>`,
+        code: `class Node:\n    def __init__(self, v):\n        self.v, self.left, self.right = v, None, None\ndef insert(root, v):\n    if root is None:\n        return Node(v)\n    if v < root.v:\n        root.left = insert(root.left, v)\n    else:\n        root.right = insert(root.right, v)\n    return root\nroot = None\nfor v in ${pyList(vals)}:\n    root = insert(root, v)\nx = ${x}\nnode = root\nwhile node and node.v != x:\n    print(node.v, end=" ")\n    node = node.left if x < node.v else node.right\nprint("found" if node else "missing")`,
+        answer: path.concat(n ? "found" : "missing").join(" "),
+        why: "<p>The first value inserted is the root. A search goes left when x is smaller and right when it's bigger, so it only visits one node per level: the path is as long as the tree is tall.</p>",
+      };
+    },
+    // ch 19: shortest steps through a grid
+    gridBFS(r) {
+      const R = 5, C = 6, g = Array.from({ length: R }, (_, i) => Array.from({ length: C }, (_, j) => ((i === 0 && j === 0) || r.next() > 0.32 ? "." : "#")));
+      const dist = { "0,0": 0 }, q = [[0, 0]];
+      while (q.length) { const [a, b] = q.shift(); for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = a + da, y = b + db; if (x >= 0 && x < R && y >= 0 && y < C && g[x][y] === "." && dist[x + "," + y] == null) { dist[x + "," + y] = dist[a + "," + b] + 1; q.push([x, y]); } } }
+      // the target: usually a square it can reach (the farther the likelier), sometimes an open one it can't
+      const open = []; for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) if (g[i][j] === "." && (i || j)) open.push([i, j]);
+      const reach = open.filter(([i, j]) => dist[i + "," + j] != null && dist[i + "," + j] >= 3), cut = open.filter(([i, j]) => dist[i + "," + j] == null);
+      const [ti, tj] = (cut.length && r.next() < 0.15) || !reach.length ? r.pick(cut.length ? cut : open) : r.pick(reach);
+      const ans = dist[ti + "," + tj];
+      return {
+        ch: 19, title: "Through the maze", prompt: `<p>Steps go up, down, left or right, never through <code>#</code>. How many steps from the top-left corner to row ${ti}, column ${tj} (counting from 0)?</p>`,
+        code: `from collections import deque\ngrid = [\n${g.map((row) => `    "${row.join("")}",`).join("\n")}\n]\nR, C = len(grid), len(grid[0])\ndist = {(0, 0): 0}\nq = deque([(0, 0)])\nwhile q:\n    r, c = q.popleft()\n    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):\n        nr, nc = r + dr, c + dc\n        if 0 <= nr < R and 0 <= nc < C and grid[nr][nc] == "." and (nr, nc) not in dist:\n            dist[(nr, nc)] = dist[(r, c)] + 1\n            q.append((nr, nc))\nprint(dist.get((${ti}, ${tj}), -1))`,
+        answer: String(ans == null ? -1 : ans),
+        why: `<p>BFS reaches every square in order of distance, so the first time it reaches (${ti}, ${tj}) is the shortest way: ${ans == null ? "here it never does, as walls cut it off, so −1" : ans + " steps"}. With no walls in the way it would be ${ti + tj}.</p>`,
+      };
+    },
+    // ch 20: counting islands
+    islands(r) {
+      const g = Array.from({ length: 5 }, () => Array.from({ length: 6 }, () => (r.next() < 0.45 ? "1" : "0")));
+      const seen = g.map((row) => row.slice());
+      let count = 0;
+      for (let i = 0; i < 5; i++) for (let j = 0; j < 6; j++) if (seen[i][j] === "1") { count++; const st = [[i, j]]; seen[i][j] = "0"; while (st.length) { const [a, b] = st.pop(); for (const [x, y] of [[a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]]) if (x >= 0 && x < 5 && y >= 0 && y < 6 && seen[x][y] === "1") { seen[x][y] = "0"; st.push([x, y]); } } }
+      return {
+        ch: 20, title: "Count the islands", prompt: "<p>Land is <code>1</code>; squares touching up, down, left or right are one island. What does it print?</p>",
+        code: `grid = [list(row) for row in [\n${g.map((row) => `    "${row.join("")}",`).join("\n")}\n]]\ncount = 0\nfor r in range(5):\n    for c in range(6):\n        if grid[r][c] == "1":\n            count += 1\n            stack = [(r, c)]\n            grid[r][c] = "0"\n            while stack:\n                i, j = stack.pop()\n                for ni, nj in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):\n                    if 0 <= ni < 5 and 0 <= nj < 6 and grid[ni][nj] == "1":\n                        grid[ni][nj] = "0"\n                        stack.append((ni, nj))\nprint(count)`,
+        answer: String(count),
+        why: "<p>Each time the scan meets land it hasn't sunk yet, that's a new island; the DFS then sinks all of it so it isn't counted again. Diagonal neighbours don't join islands.</p>",
+      };
+    },
+    // ch 21: is there a cycle?
+    cycle(r) {
+      const n = 6, order = r.shuffle([0, 1, 2, 3, 4, 5]), g = Array.from({ length: n }, () => []);
+      for (let k = 0; k < 7; k++) { const i = r.int(0, n - 2), j = r.int(i + 1, n - 1); if (!g[order[i]].includes(order[j])) g[order[i]].push(order[j]); }
+      if (r.next() < 0.5) {
+        const from = r.pick(order.filter((u) => g[u].length)), reach = [], seen = new Set(), go = (u) => { for (const v of g[u]) if (!seen.has(v)) { seen.add(v); reach.push(v); go(v); } };
+        go(from);
+        const back = r.pick(reach);
+        if (!g[back].includes(from)) g[back].push(from);
+      }
+      const st = Array(n).fill(0);
+      const has = (u) => { st[u] = 1; for (const v of g[u]) if (st[v] === 1 || (st[v] === 0 && has(v))) return true; st[u] = 2; return false; };
+      let cyc = false;
+      for (let u = 0; u < n && !cyc; u++) if (st[u] === 0 && has(u)) cyc = true;
+      return {
+        ch: 21, title: "Can it be scheduled?", prompt: "<p><code>g[u]</code> lists the tasks that must wait for u. What does it print?</p>",
+        code: `g = {${g.map((c, i) => `${i}: ${pyList(c)}`).join(", ")}}\nstate = {u: 0 for u in g}  # 0 new, 1 on the path, 2 done\ndef has_cycle(u):\n    state[u] = 1\n    for v in g[u]:\n        if state[v] == 1 or (state[v] == 0 and has_cycle(v)):\n            return True\n    state[u] = 2\n    return False\nprint(any(state[u] == 0 and has_cycle(u) for u in g))`,
+        answer: cyc ? "True" : "False",
+        why: `<p>${cyc ? "True: there's a cycle, so no order can satisfy every rule." : "False: no cycle, so a topological order exists."} An edge back to a node that's still on the current DFS path (state 1) closes a loop; an edge to a finished node (state 2) is harmless.</p>`,
+      };
+    },
+    // ch 22: the edge that closes a loop
+    redundant(r) {
+      const n = r.int(5, 7), e = treeEdges(r, n).map(([u, v]) => [u + 1, v + 1]);
+      let a, b; do { a = r.int(1, n); b = r.int(1, n); } while (a === b || e.some(([u, v]) => (u === a && v === b) || (u === b && v === a)));
+      const edges = r.shuffle(e); edges.splice(r.int(1, edges.length), 0, [a, b]);
+      const p = Array.from({ length: n + 1 }, (_, i) => i), find = (x) => { while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; } return x; };
+      let ans;
+      for (const [u, v] of edges) { const ru = find(u), rv = find(v); if (ru === rv) { ans = `${u} ${v}`; break; } p[ru] = rv; }
+      return {
+        ch: 22, title: "The edge too many", prompt: "<p>What does it print?</p>",
+        code: `edges = ${tupList(edges)}\nparent = list(range(${n + 1}))\ndef find(x):\n    while parent[x] != x:\n        parent[x] = parent[parent[x]]\n        x = parent[x]\n    return x\nfor a, b in edges:\n    ra, rb = find(a), find(b)\n    if ra == rb:\n        print(a, b)\n        break\n    parent[ra] = rb`,
+        answer: ans,
+        why: `<p>${n} nodes and ${n} edges: one edge must close a loop. Union-find spots it as the first edge whose two ends already share a root. It isn't always the edge that was added last: it's whichever loop-closer comes first in the list.</p>`,
+      };
+    },
+    // ch 24: all pairs with Floyd-Warshall
+    floyd(r) {
+      const n = 4, w = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : Infinity))), edges = [];
+      while (edges.length < 6) { const u = r.int(0, 3), v = r.int(0, 3); if (u !== v && !edges.some((x) => x[0] === u && x[1] === v)) { const c = r.int(1, 9); edges.push([u, v, c]); w[u][v] = c; } }
+      for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (w[i][k] + w[k][j] < w[i][j]) w[i][j] = w[i][k] + w[k][j];
+      return {
+        ch: 24, title: "Every pair at once", prompt: "<p>Edges are one-way <code>(from, to, cost)</code>. What does it print?</p>",
+        code: `INF = float("inf")\nd = [[0 if i == j else INF for j in range(4)] for i in range(4)]\nfor u, v, c in ${tupList(edges)}:\n    d[u][v] = c\nfor k in range(4):\n    for i in range(4):\n        for j in range(4):\n            if d[i][k] + d[k][j] < d[i][j]:\n                d[i][j] = d[i][k] + d[k][j]\nprint(d[0], d[3])`,
+        answer: `${pyV(w[0])} ${pyV(w[3])}`,
+        why: "<p>After round k, <code>d[i][j]</code> is the cheapest path that only stops at nodes 0…k on the way. Three loops, k outermost: O(n³) for every pair. <code>inf</code> means there's no path.</p>",
+      };
+    },
+    // ch 27: backtracking over combinations
+    combSum(r) {
+      let a, T, out;
+      for (let tries = 0; ; tries++) {
+        a = distinctSorted(r, 5, 1, 9); T = r.int(8, 15); out = [];
+        const go = (i, left, path) => { if (left === 0) { out.push(path); return; } for (let j = i; j < a.length; j++) { if (a[j] > left) break; go(j + 1, left - a[j], path.concat(a[j])); } };
+        go(0, T, []);
+        if ((out.length >= 1 && out.length <= 4) || tries > 60) break;
+      }
+      if (!out.length) { T = a[0] + a[1]; out = []; const go = (i, left, path) => { if (left === 0) { out.push(path); return; } for (let j = i; j < a.length; j++) { if (a[j] > left) break; go(j + 1, left - a[j], path.concat(a[j])); } }; go(0, T, []); }
+      return {
+        ch: 27, title: "Every way to make it", prompt: "<p>What does it print?</p>",
+        code: `a = ${pyList(a)}\ndef go(i, left, path):\n    if left == 0:\n        print(path)\n        return\n    for j in range(i, len(a)):\n        if a[j] > left:\n            break\n        go(j + 1, left - a[j], path + [a[j]])\ngo(0, ${T}, [])`,
+        answer: out.length ? out.map(pyList).join("\n") : "",
+        why: `<p>Each number is used at most once (<code>j + 1</code>), and choices only move right, so no set comes out twice. Because <code>a</code> is sorted, the <code>break</code> prunes every branch where the next number is already too big. The sets come out in the order the search tree is walked.</p>`,
+      };
+    },
+    // ch 28: the longest increasing subsequence
+    lis(r) {
+      const a = ints(r, 8, 1, 20), dp = Array(a.length).fill(1);
+      for (let i = 0; i < a.length; i++) for (let j = 0; j < i; j++) if (a[j] < a[i]) dp[i] = Math.max(dp[i], dp[j] + 1);
+      return {
+        ch: 28, title: "Rising, not necessarily together", prompt: "<p>What does it print?</p>",
+        code: `a = ${pyList(a)}\ndp = [1] * len(a)\nfor i in range(len(a)):\n    for j in range(i):\n        if a[j] < a[i]:\n            dp[i] = max(dp[i], dp[j] + 1)\nprint(dp, max(dp))`,
+        answer: `${pyList(dp)} ${Math.max(...dp)}`,
+        why: "<p><code>dp[i]</code> is the longest strictly rising subsequence that <i>ends</i> at a[i]: one more than the best earlier ending on a smaller number. The answer is the best ending anywhere.</p>",
+      };
+    },
+    // ch 29: the fewest coins
+    coins(r) {
+      const coins = distinctSorted(r, 3, 2, 9), amount = r.int(10, 30), dp = [0].concat(Array(amount).fill(Infinity));
+      for (let x = 1; x <= amount; x++) for (const c of coins) if (c <= x && dp[x - c] + 1 < dp[x]) dp[x] = dp[x - c] + 1;
+      return {
+        ch: 29, title: "The fewest coins", prompt: "<p>What does it print?</p>",
+        code: `coins = ${pyList(coins)}\namount = ${amount}\nINF = float("inf")\ndp = [0] + [INF] * amount\nfor x in range(1, amount + 1):\n    for c in coins:\n        if c <= x and dp[x - c] + 1 < dp[x]:\n            dp[x] = dp[x - c] + 1\nprint(dp[amount] if dp[amount] != INF else -1)`,
+        answer: String(dp[amount] === Infinity ? -1 : dp[amount]),
+        why: `<p><code>dp[x]</code> is the fewest coins making exactly x: try each coin as the last one. ${dp[amount] === Infinity ? `${amount} can't be made from these coins, so −1.` : `${amount} takes ${dp[amount]}.`} Always grabbing the biggest coin isn't safe for coin sets like these; the table is.</p>`,
+      };
+    },
+    // ch 30: the cheapest path down a grid
+    minPath(r) {
+      const g = Array.from({ length: 4 }, () => ints(r, 4, 1, 9)), d = g.map((row) => row.slice());
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) if (i || j) d[i][j] += Math.min(i ? d[i - 1][j] : Infinity, j ? d[i][j - 1] : Infinity);
+      return {
+        ch: 30, title: "Right and down, cheaply", prompt: "<p>Moving only right or down from the top-left to the bottom-right, what does it print?</p>",
+        code: `${pyMatrix("g", g)}\nfor i in range(4):\n    for j in range(4):\n        if i or j:\n            up = g[i - 1][j] if i else float("inf")\n            left = g[i][j - 1] if j else float("inf")\n            g[i][j] += min(up, left)\nprint(g[3][3])`,
+        answer: String(d[3][3]),
+        why: "<p>Each square's cheapest arrival is its own cost plus the cheaper of the square above and the square to its left. The table fills top-left to bottom-right, in place.</p>",
+      };
+    },
+    // ch 37: extended Euclid
+    extgcd(r) {
+      const A = r.int(20, 200), B = r.int(10, 150);
+      const ext = (a, b) => { if (b === 0) return [a, 1, 0]; const [g, x, y] = ext(b, a % b); return [g, y, x - Math.floor(a / b) * y]; };
+      const [g, x, y] = ext(A, B);
+      return {
+        ch: 37, title: "Extended Euclid", prompt: "<p>What does it print?</p>",
+        code: `def ext(a, b):\n    if b == 0:\n        return a, 1, 0\n    g, x, y = ext(b, a % b)\n    return g, y, x - (a // b) * y\nprint(*ext(${A}, ${B}))`,
+        answer: `${g} ${x} ${y}`,
+        why: `<p>It returns g = gcd(${A}, ${B}) and x, y with ${A}·x + ${B}·y = g: ${A}·(${x}) + ${B}·(${y}) = ${g}. When g = 1, x is ${A}'s inverse mod ${B}.</p>`,
+      };
+    },
+    // ch 38: the sieve
+    sieve(r) {
+      const n = r.int(20, 120), isP = Array(n + 1).fill(true); isP[0] = isP[1] = false;
+      for (let i = 2; i * i <= n; i++) if (isP[i]) for (let j = i * i; j <= n; j += i) isP[j] = false;
+      const ps = isP.map((b, i) => (b ? i : -1)).filter((i) => i >= 0);
+      return {
+        ch: 38, title: "Sieve it", prompt: "<p>What does it print?</p>",
+        code: `n = ${n}\nis_p = [True] * (n + 1)\nis_p[0] = is_p[1] = False\nfor i in range(2, int(n ** 0.5) + 1):\n    if is_p[i]:\n        for j in range(i * i, n + 1, i):\n            is_p[j] = False\nprimes = [i for i in range(n + 1) if is_p[i]]\nprint(len(primes), primes[-1])`,
+        answer: `${ps.length} ${ps[ps.length - 1]}`,
+        why: `<p>There are ${ps.length} primes up to ${n}, the biggest being ${ps[ps.length - 1]}. Crossing off starts at i², because smaller multiples of i were already crossed off by smaller primes, and stops at √${n}: any composite has a factor that small.</p>`,
+      };
+    },
+    // ch 41: xor cancels pairs
+    single(r) {
+      const vals = distinctSorted(r, 5, 1, 63), one = vals[4], a = r.shuffle(vals.slice(0, 4).flatMap((v) => [v, v]).concat(one));
+      return {
+        ch: 41, title: "The odd one out", prompt: "<p>What does it print?</p>",
+        code: `a = ${pyList(a)}\nx = 0\nfor v in a:\n    x ^= v\nprint(x, bin(x).count("1"))`,
+        answer: `${one} ${one.toString(2).split("").filter((c) => c === "1").length}`,
+        why: `<p>v ^ v = 0 and xor doesn't care about order, so every pair cancels and only the number without a partner is left: ${one}, which is <code>${one.toString(2)}</code> in binary.</p>`,
+      };
+    },
+  });
+
   function fmtPow(n) {
     const e = Math.floor(Math.log10(n)), m = n / 10 ** e;
     const sup = String(e).replace(/\d/g, (d) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[d]);
@@ -952,18 +1392,25 @@
   }
   const pyGraph = (adj, names) => "{" + names.map((x) => `"${x}": ${pyList(adj[x])}`).join(", ") + "}";
 
+  // a question's track defaults to DSA and its language to Python; "run", when given, is the program the
+  // checker runs instead of the one shown (for questions whose answer is a property of the code, like its growth)
   function make(gen, seed) {
     const q = GENS[gen](rng(seed));
-    return Object.assign({ gen, seed, kind: "trace", match: "tokens" }, q);
+    return Object.assign({ gen, seed, kind: "trace", match: "tokens", track: GENS[gen].track || "ds", lang: "py" }, q);
   }
   // marking: "tokens" compares the numbers, words and symbols like inf in order, ignoring brackets, commas and spaces
   const tokens = (s) => String(s).toLowerCase().match(/-?\d+|[a-z]+(?:\^\w+)?|[!]/g) || [];
   function correct(q, given) {
     if (q.match === "choice") return given != null && q.opts[given] && q.opts[given].ok;
+    // "text" answers have symbols that matter (+, -, #, |): compared exactly, ignoring spacing and blank lines
+    if (q.match === "text") { const t = (s) => String(s).trim().split(/\s+/).join(" "); return t(given) === t(q.answer); }
     return tokens(given).join(" ") === tokens(q.answer).join(" ");
   }
 
-  const API = { GENS, make, correct, tokens, names: Object.keys(GENS) };
+  // more generators (other tracks) register themselves with add(), from learn/mock-gen-x.js
+  const API = { GENS, make, correct, tokens, names: Object.keys(GENS), rng,
+    add(track, more) { for (const k in more) more[k].track = track; Object.assign(GENS, more); API.names = Object.keys(GENS); },
+    of(track) { return API.names.filter((g) => (GENS[g].track || "ds") === track); } };
   if (typeof module === "object" && module.exports) module.exports = API;
   else root.MOCKGEN = API;
 })(this);
