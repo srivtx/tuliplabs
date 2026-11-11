@@ -38,7 +38,7 @@ for (const gen of G.names) {
     }
     if (!String(q.answer).trim()) problems.push(`${gen} #${seed}: an empty answer`);
     if (q.needs === "express" && !EXPRESS) { skipped.add(gen); continue; }
-    cases.push({ gen, seed, code: q.run || q.code, runs: q.lang === "node" ? "node" : "py", answer: q.answer, choice: q.match === "choice" });
+    cases.push({ gen, seed, code: q.run || q.code, runs: q.lang === "node" ? "node" : "py", answer: q.answer, match: q.match, choice: q.match === "choice" });
   }
 }
 
@@ -89,7 +89,7 @@ async function runNode(code, lines) {
       if (perGen[c.gen].bad <= 2) problems.push(`${c.gen} #${c.seed}: the program printed ${JSON.stringify(tidy(c.out))}, the generator says ${JSON.stringify(tidy(c.answer))}`);
     }
     // the marking must accept the program's own output
-    if (!c.choice && !G.correct({ match: "tokens", answer: c.answer }, c.out)) problems.push(`${c.gen} #${c.seed}: marking rejects the program's own output`);
+    if (!c.choice && !G.correct({ match: c.match, answer: c.answer }, c.out)) problems.push(`${c.gen} #${c.seed}: marking rejects the program's own output`);
   }
   const byTrack = {};
   for (const [g, s] of Object.entries(perGen)) (byTrack[s.track] = byTrack[s.track] || []).push(`${g} ${s.n - s.bad}/${s.n}`);
