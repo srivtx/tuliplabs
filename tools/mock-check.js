@@ -96,6 +96,13 @@ async function runNode(code, lines) {
   for (const [t, list] of Object.entries(byTrack)) console.log(`  ${t}: ${list.length} generators, ${list.reduce((a, x) => a + +x.split(" ")[1].split("/")[1], 0)} programs\n    ${list.join(", ")}`);
 
   // the banks
+  const exercises = {};
+  const readExercises = (track) => {
+    const out = {};
+    for (const ch of JSON.parse(fs.readFileSync(path.join(__dirname, "..", "content", track + ".json"), "utf8")).chapters)
+      for (const s of ch.sections) for (const b of s.blocks) if (b.type === "exercise") out[b.id] = { ch: ch.num, b };
+    return out;
+  };
   for (const f of fs.readdirSync(path.join(__dirname, "..", "content")).filter((f) => /-mock\.json$/.test(f))) {
     const bank = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "content", f), "utf8"));
     if (ONLY && bank.track !== ONLY) continue;
@@ -112,6 +119,11 @@ async function runNode(code, lines) {
       if (q.kind === "order" && q.lines.length < 3) problems.push(`${f} ${q.id}: too few lines`);
       if (q.kind === "pattern" && !bank.chapters.find((c) => c.num === q.ch && c.pattern)) problems.push(`${f} ${q.id}: not a pattern chapter`);
       if (q.kind === "explain" && !(q.q && q.a)) problems.push(`${f} ${q.id}: no question or answer`);
+      if (q.kind === "code") {
+        // the page solves the exercise itself, so it must be a write exercise, with tests, in this chapter
+        const ex = (exercises[bank.track] = exercises[bank.track] || readExercises(bank.track))[q.ex];
+        if (!ex || ex.ch !== q.ch || ex.b.kind !== "write" || !ex.b.tests.trim()) problems.push(`${f} ${q.id}: not a write exercise with tests in chapter ${q.ch}`);
+      }
     }
     console.log(`  ${f.padEnd(14)} ${bank.questions.length} questions: ` + Object.entries(kinds).map(([k, n]) => `${n} ${k}`).join(", "));
   }

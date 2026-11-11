@@ -1,7 +1,9 @@
 /* Tulip Labs: the mock test (#mock), on every course track: DSA, Build your own X, Stats, ModSim, Complexity.
    A timed test drawn from the chapters you pick: multiple choice, "what does it print?", find the bug line,
-   which pattern fits (DSA), put the lines in order, explain it in your own words, and fresh "trace it"
-   questions from learn/mock-gen.js (DSA) and learn/mock-gen-x.js (the other tracks).
+   which pattern fits (DSA), put the lines in order, explain it in your own words, real problems to solve in
+   code (marked by their own tests, run in the page), and fresh "trace it" questions from learn/mock-gen.js
+   (DSA) and learn/mock-gen-x.js (the other tracks). A word in the setup sentence picks the mode: mixed,
+   quick-fire (no code to write) or all coding.
    Nothing is marked until the end (or after each question, if you ask for that). Then a results page
    with your weakest chapters first, every answer explained, and the misses added to spaced review.
    Misses also come back in later mocks (the next one, then 2 and 4 mocks on) until they're right 3 times.
@@ -11,13 +13,21 @@
    The first word of the setup sentence is the subject: clicking it opens the next track's mock. */
 (function () {
   "use strict";
-  const MIX = [["mc", 0.25], ["trace", 0.3], ["pattern", 0.1], ["out", 0.1], ["line", 0.08], ["order", 0.09], ["explain", 0.08]];
-  const KIND_NAME = { mc: "Multiple choice", trace: "Trace it", pattern: "Which pattern fits?", out: "What does it print?", line: "Find the bug", order: "Put it in order", explain: "Explain it" };
+  // what a mock is made of: a word in the setup sentence picks one. Kinds a track lacks are filled from the others.
+  const MODES = [
+    ["mixed", [["mc", 0.23], ["trace", 0.27], ["pattern", 0.1], ["out", 0.1], ["line", 0.08], ["order", 0.09], ["explain", 0.08], ["code", 0.05]]],
+    ["quick-fire", [["mc", 0.3], ["trace", 0.35], ["pattern", 0.15], ["out", 0.1], ["line", 0.1]]],
+    ["all coding", [["code", 1]]],
+  ];
+  const mixOf = (mode) => (MODES.find((m) => m[0] === mode) || MODES[0])[1];
+  const coding = (mode) => mode === "all coding";
+  const KIND_NAME = { mc: "Multiple choice", trace: "Trace it", pattern: "Which pattern fits?", out: "What does it print?", line: "Find the bug", order: "Put it in order", explain: "Explain it", code: "Code it" };
   const KIND_TEXT = {
     mc: "Four answers, one right. From every chapter's quick-fire quizzes.", trace: "A short program with fresh numbers: say what it prints. Made up for each test.",
     pattern: "A real interview problem, with its hints cut off. Which chapter's technique solves it?", out: "A snippet from a chapter: type exactly what it prints.",
     line: "A program with a wrong line. Click it.", order: "Scrambled lines and a couple of decoys. Build the working program.",
     explain: "A why-question. Say the answer in your own words, then hold it up against the model answer and mark yourself honestly.",
+    code: "A real problem from a chapter. Write the whole solution; its hidden checks mark it, like an online assessment. Run them as often as you like.",
   };
   // the subjects with a mock test: the sentence's first word cycles through them
   const SUBJECTS = [["ds", "DSA", "../dsa/"], ["bx", "Build your own X", "../build/"], ["ps", "Probability & Stats", "../stats/"], ["ms", "ModSim", "../modsim/"], ["tc", "Complexity in code", "../code/"]];
@@ -31,8 +41,13 @@
   const K = (name) => (TRACK === "ds" ? name : name + "_" + TRACK);
   const gensHere = () => window.MOCKGEN.of(TRACK);
   const chLang = (q) => (BANK.ch[q.ch] && BANK.ch[q.ch].lang) || "py";
-  const COUNTS = [10, 20, 40];
+  const countsOf = (mode) => (coding(mode) ? [3, 5, 10] : [10, 20, 40]);
   const PACES = [["90 s a question", 90], ["untimed", 0], ["45 s a question", 45]];
+  // a problem to code gets far longer than a question: 15 minutes at the usual pace, 10 at the quick one
+  const CODE_SECS = { 90: 900, 45: 600, 0: 0 };
+  const paceLabel = (st) => (coding(st.mode) ? (st.pace ? `${CODE_SECS[st.pace] / 60} minutes a problem` : "untimed") : PACES.find((p) => p[1] === st.pace)[0]);
+  const budgetOf = (qs, pace) => qs.reduce((t, q) => t + (q.kind === "code" ? CODE_SECS[pace] : pace), 0);
+  const budget = (r) => (r.budget != null ? r.budget : r.pace * r.count);
   const MARKS = [["at the end", "end"], ["after each one", "each"]];
   // chapters close enough that one could solve the other's problem: never offered against each other in "which pattern?"
   const FAMILIES = [[4, 43, 44, 45, 46, 59], [5, 27, 33], [6, 14, 15, 16], [7, 8], [9, 10], [11, 12], [17, 18, 34, 47], [19, 20, 21, 22, 23, 24, 25],
@@ -54,7 +69,8 @@
   // ------------------------------------------------------------ setup --
   function setupState() {
     const st = S()[K("mockSetup")] || {};
-    return { count: COUNTS.includes(st.count) ? st.count : 20, scope: st.scope || "started", pace: PACES.some((p) => p[1] === st.pace) ? st.pace : 90, marks: st.marks || "end" };
+    const mode = MODES.some((m) => m[0] === st.mode) ? st.mode : "mixed";
+    return { mode, count: countsOf(mode).includes(st.count) ? st.count : coding(mode) ? 5 : 20, scope: st.scope || "started", pace: PACES.some((p) => p[1] === st.pace) ? st.pace : 90, marks: st.marks || "end" };
   }
   function scopes() {
     const chs = A.data().chapters;
@@ -92,19 +108,28 @@
       sentence.textContent = "";
       const subj = SUBJECTS.findIndex((x) => x[0] === TRACK), nextSubj = SUBJECTS[(subj + 1) % SUBJECTS.length];
       sentence.append("Give me ",
-        word(String(st.count), () => { st.count = cycle(COUNTS, st.count); save(); }, "How many questions: click to change"),
+        word(String(st.count), () => { st.count = cycle(countsOf(st.mode), st.count); save(); }, "How many questions: click to change"),
         " ",
         word(SUBJECTS[subj][1], () => { location.href = nextSubj[2] + "#mock"; }, `The subject: click for ${nextSubj[1]}`),
-        " questions from ",
+        coding(st.mode) ? " problems from " : " questions from ",
         word(scope.label, () => { st.scope = cycle(sc.map((s) => s.key), st.scope); save(); }, "Which chapters: click to change"),
         ", ",
-        word(PACES.find((p) => p[1] === st.pace)[0], () => { st.pace = cycle(PACES.map((p) => p[1]), st.pace); save(); }, "How long: click to change"),
+        word(st.mode, () => { st.mode = cycle(MODES.map((x) => x[0]), st.mode); if (!countsOf(st.mode).includes(st.count)) st.count = coding(st.mode) ? 5 : 20; save(); }, "What kind of questions: click for mixed, quick-fire or all coding"),
+        ", ",
+        word(paceLabel(st), () => { st.pace = cycle(PACES.map((p) => p[1]), st.pace); save(); }, "How long: click to change"),
         ", marked ",
         h("span", { class: "mk-nowrap" }, word(MARKS.find((p) => p[1] === st.marks)[0], () => { st.marks = cycle(MARKS.map((p) => p[1]), st.marks); save(); }, "When you see the answers: click to change"), "."));
-      const total = st.pace ? Math.round((st.count * st.pace) / 60) : 0;
-      const have = available(scope);
-      const due = Math.min(dueBack(new Set(scope.nums)).length, Math.round(st.count * 0.3));
-      mix.innerHTML = (have < st.count ? `<b>These chapters hold ${have} questions, so the mock will be ${have} long.</b> ` : "") + `${scope.nums.length} chapter${scope.nums.length === 1 ? "" : "s"} · ${st.pace ? `${total} minutes on the clock` : "no clock"} · ${st.marks === "end" ? "nothing is marked until you finish, like a real test" : "each answer is marked as you go"}.${due ? ` ${due} question${due === 1 ? " you missed before is" : "s you missed before are"} due back.` : ""} Click any underlined word to change it, the subject too.`;
+      const have = available(scope, st.mode);
+      const n = Math.min(have, st.count);
+      // how many of them are problems to code, as pick() will choose them: any due back, plus a few fresh ones in a mixed mock
+      const back = dueBack(new Set(scope.nums), st.mode).slice(0, Math.round(st.count * 0.3));
+      const codeShare = (mixOf(st.mode).find((x) => x[0] === "code") || [0, 0])[1];
+      const codeBack = back.filter((e) => e.kind === "code").length;
+      const nCode = Math.min(n, codeBack + Math.min(Math.round((n - back.length) * codeShare), BANK.questions.filter((q) => q.kind === "code" && scope.nums.includes(q.ch)).length - codeBack));
+      const total = st.pace ? Math.round(((n - nCode) * st.pace + nCode * CODE_SECS[st.pace]) / 60) : 0;
+      const due = back.length;
+      const what = coding(st.mode) ? "problems" : "questions";
+      mix.innerHTML = (have < st.count ? `<b>These chapters hold ${have} ${what}, so the mock will be ${have} long.</b> ` : "") + `${scope.nums.length} chapter${scope.nums.length === 1 ? "" : "s"} · ${st.pace ? `${total} minutes on the clock` : "no clock"} · ${!coding(st.mode) && nCode ? `${nCode} of them to solve in code · ` : ""}${st.marks === "end" ? "nothing is marked until you finish, like a real test" : "each answer is marked as you go"}.${due ? ` ${due} ${due === 1 ? what.slice(0, -1) + " you missed before is" : what + " you missed before are"} due back.` : ""} Click any underlined word to change it, the subject too.`;
     };
     draw();
     const resume = S()[K("mockNow")] && S()[K("mockNow")].qs ? h("div", { class: "mk-resume" },
@@ -116,7 +141,7 @@
     if (gensHere().length) present.add("trace");
     m.append(h("div", { class: "col mk" },
       h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Mock test · " + A.cfg.short), h("h1", {}, "Test yourself like it's the real thing"),
-        h("p", { class: "tag" }, `Questions from every corner of the chapters you pick: multiple choice, what a program prints, the line with the bug,${present.has("pattern") ? " which technique a problem needs," : ""} scrambled code to put in order, why-questions to answer in your own words, and fresh trace questions made up on the spot for ${new Set(Object.values(GEN_CH)).size === A.data().chapters.length ? `every one of the ${A.data().chapters.length} chapters` : `${new Set(Object.values(GEN_CH)).size} of the chapters`}, so no two mocks are the same. Anything you miss comes back in later mocks until it sticks.`)),
+        h("p", { class: "tag" }, `Questions from every corner of the chapters you pick: multiple choice, what a program prints, the line with the bug,${present.has("pattern") ? " which technique a problem needs," : ""} real problems to solve in code, scrambled code to put in order, why-questions to answer in your own words, and fresh trace questions made up on the spot for ${new Set(Object.values(GEN_CH)).size === A.data().chapters.length ? `every one of the ${A.data().chapters.length} chapters` : `${new Set(Object.values(GEN_CH)).size} of the chapters`}, so no two mocks are the same. Anything you miss comes back in later mocks until it sticks.`)),
       resume,
       h("div", { class: "mk-setup" }, sentence, mix,
         h("div", { class: "btns" }, h("button", { class: "key primary", onclick: () => begin(st) }, "Start the mock →"))),
@@ -128,11 +153,11 @@
     window.scrollTo(0, 0);
   }
 
-  // how many questions a scope can give: its bank questions plus six fresh ones per generator that covers it
-  function available(scope) {
-    const nums = new Set(scope.nums);
-    const gens = gensHere().filter((g) => nums.has(GEN_CH[g])).length;
-    return BANK.questions.filter((q) => nums.has(q.ch)).length + 6 * gens;
+  // how many questions a scope can give in a mode: its bank questions of the mode's kinds, plus six fresh ones per generator that covers it
+  function available(scope, mode) {
+    const nums = new Set(scope.nums), kinds = new Set(mixOf(mode).map((x) => x[0]));
+    const gens = kinds.has("trace") ? gensHere().filter((g) => nums.has(GEN_CH[g])).length : 0;
+    return BANK.questions.filter((q) => nums.has(q.ch) && kinds.has(q.kind)).length + 6 * gens;
   }
 
   // ------------------------------------------------------------- pick --
@@ -142,9 +167,9 @@
   const BACK_AFTER = [1, 2, 4];
   const againKey = (q) => (q.kind === "trace" ? "g:" + q.gen : "q:" + q.id);
   const mockNo = () => (S()[K("mockHist")] || []).length;
-  function dueBack(inScope) {
-    const all = S()[K("mockAgain")] || {};
-    return Object.entries(all).filter(([, e]) => e.due <= mockNo() && inScope.has(e.ch) && (e.gen ? GEN_CH[e.gen] != null : BANK.byId[e.id]))
+  function dueBack(inScope, mode) {
+    const all = S()[K("mockAgain")] || {}, kinds = new Set(mixOf(mode).map((x) => x[0]));
+    return Object.entries(all).filter(([, e]) => e.due <= mockNo() && inScope.has(e.ch) && kinds.has(e.gen ? "trace" : e.kind) && (e.gen ? GEN_CH[e.gen] != null : BANK.byId[e.id]))
       .sort((a, b) => a[1].due - b[1].due || a[1].box - b[1].box).map(([k, e]) => e);
   }
   function rememberResults(qs) {
@@ -166,14 +191,15 @@
     const scope = scopes().find((s) => s.key === st.scope) || scopes()[0];
     const inScope = new Set(scope.nums);
     // first, what's due back from earlier mocks: up to 3 in 10
-    const back = dueBack(inScope).slice(0, Math.round(st.count * 0.3)).map((e) => (e.gen
+    const MIX = mixOf(st.mode);
+    const back = dueBack(inScope, st.mode).slice(0, Math.round(st.count * 0.3)).map((e) => (e.gen
       ? { kind: "trace", gen: e.gen, seed: (Math.random() * 1e9) | 0, ch: e.ch, again: true }
       : { kind: e.kind, id: e.id, ch: e.ch, again: true }));
     const taken = new Set(back.map(againKey));
-    const pools = { mc: [], pattern: [], out: [], line: [], order: [], explain: [], trace: [] };
+    const pools = { mc: [], pattern: [], out: [], line: [], order: [], explain: [], trace: [], code: [] };
     for (const q of BANK.questions) if (inScope.has(q.ch) && pools[q.kind] && !taken.has("q:" + q.id)) pools[q.kind].push({ kind: q.kind, id: q.id, ch: q.ch });
     const gens = gensHere().filter((g) => inScope.has(GEN_CH[g]) && !taken.has("g:" + g));
-    for (const g of gens) for (let k = 0; k < 6; k++) pools.trace.push({ kind: "trace", gen: g, seed: (Math.random() * 1e9) | 0, ch: GEN_CH[g] });
+    if (MIX.some((x) => x[0] === "trace")) for (const g of gens) for (let k = 0; k < 6; k++) pools.trace.push({ kind: "trace", gen: g, seed: (Math.random() * 1e9) | 0, ch: GEN_CH[g] });
     // spread each pool over chapters: shuffle, then take round-robin by chapter
     const spread = (list) => {
       const by = {};
@@ -200,7 +226,13 @@
     }
     while (left < 0) { const k = MIX.map((x) => x[0]).sort((a, b) => want[b] - want[a])[0]; want[k]--; left++; }
     let qs = back.slice();
-    for (const k in want) qs.push(...pools[k].slice(0, want[k]));
+    // the exercise behind a question (trace questions have none)
+    const exOf = (q) => (q.kind === "trace" ? null : q.kind === "code" ? BANK.byId[q.id].ex : q.id);
+    for (const k in want) {
+      // never the same exercise twice: as "which pattern?" and again as a problem to code
+      const asked = new Set(qs.map(exOf).filter(Boolean));
+      qs.push(...pools[k].filter((q) => !asked.has(exOf(q))).slice(0, want[k]));
+    }
     qs = A.shuffle(qs);
     // fix each question's option order now, so it's the same if you come back to it
     for (const q of qs) {
@@ -209,10 +241,15 @@
       if (q.kind === "pattern") q.choices = patternChoices(full, inScope);
       if (q.kind === "order") q.pool = A.shuffle(full.lines.concat(full.distractors).map((_, i) => i));
     }
-    return { qs, scope: scope.label, pace: st.pace, marks: st.marks, count: qs.length, at: Date.now(), used: 0, cur: 0 };
+    return { qs, scope: scope.label, mode: st.mode, pace: st.pace, budget: budgetOf(qs, st.pace), marks: st.marks, count: qs.length, at: Date.now(), used: 0, cur: 0 };
   }
   function resolve(q) {
     if (q.kind === "trace") return window.MOCKGEN.make(q.gen, q.seed);
+    if (q.kind === "code") {
+      // the exercise itself, from the chapter the page already holds
+      const bq = BANK.byId[q.id], f = A.findBlock(bq.ex);
+      return Object.assign({}, f ? f.b : { prompt: "<p>This problem has moved.</p>", starter: "", tests: "", solution: "" }, { title: bq.title, ex: bq.ex });
+    }
     return BANK.byId[q.id];
   }
   function wireDist(a) {
@@ -241,7 +278,7 @@
     startRun();
   }
   function startRun() {
-    for (const lang of new Set(run.qs.filter((q) => q.kind === "order").map(chLang))) A.Runner.start("", lang); // the runner warms up in the background, for marking orderings
+    for (const lang of new Set(run.qs.filter((q) => q.kind === "order" || q.kind === "code").map(chLang))) A.Runner.start("", lang); // the runner warms up in the background, for code and orderings
     view = "test";
     drawTest();
     clearInterval(tick);
@@ -251,7 +288,7 @@
       const now = Date.now();
       run.used += (now - last) / 1000; last = now;
       drawClock();
-      if (run.pace && run.used >= run.pace * run.count) finish(true);
+      if (run.pace && run.used >= budget(run)) finish(true);
     }, 500);
   }
   const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -259,7 +296,7 @@
   function drawClock() {
     if (!clockEl) return;
     if (!run.pace) { clockEl.textContent = fmtTime(run.used); return; }
-    const left = Math.max(0, run.pace * run.count - run.used);
+    const left = Math.max(0, budget(run) - run.used);
     clockEl.textContent = fmtTime(left) + " left";
     clockEl.classList.toggle("low", left < 60);
   }
@@ -306,6 +343,7 @@
   function keysHint(q) {
     if (q.kind === "mc" || q.kind === "pattern" || (q.kind === "trace" && resolve(q).match === "choice")) return "1–4 to pick · Enter for next";
     if (q.kind === "explain") return "Write it, then show the model answer";
+    if (q.kind === "code") return "Ctrl/⌘ + Enter runs the checks";
     if (q.kind === "out" || q.kind === "trace") return "Ctrl/⌘ + Enter for next";
     return "Enter for next";
   }
@@ -358,6 +396,27 @@
       };
       draw();
       body.append(h("div", { class: "prompt", html: (full.prompt || "") + `<p>Build <b>${esc(full.title || "the program")}</b>. ${full.distractors.length ? `${full.distractors.length} line${full.distractors.length === 1 ? " doesn't" : "s don't"} belong.` : ""} Click a placed line to take it back.</p>` }), built, pool);
+    } else if (q.kind === "code") {
+      // a real problem: the editor holds your solution, and the checks can run as often as you like before it's marked
+      const out = h("div", { class: "mk-checks" });
+      const runBtn = h("button", { class: "btn" }, "Run the checks");
+      let ed = null;
+      const runIt = async () => {
+        if (locked || runBtn.disabled) return;
+        runBtn.disabled = true;
+        runBtn.textContent = "Running…";
+        q.res = await runCode(q, full, ed.get());
+        A.save();
+        out.replaceChildren(checkResult(q.res));
+        runBtn.disabled = false;
+        runBtn.textContent = "Run the checks";
+      };
+      ed = (A.Editor || plainEditor)(q.a != null ? q.a : full.starter, { lang, readonly: locked, label: "Your solution", onRun: runIt,
+        onChange: (v) => { answer(q, v === full.starter ? null : v); out.textContent = ""; } });
+      runBtn.onclick = runIt;
+      if (!locked && q.res && q.res.code === ed.get()) out.append(checkResult(q.res));
+      body.append(h("div", { class: "prompt", html: full.prompt }), ed.el,
+        locked ? "" : h("div", { class: "btns mk-run" }, runBtn, h("span", { class: "kbd" }, lang === "node" ? "Ctrl/⌘ + Enter runs them too." : "The first run loads Python, which can take a few seconds.")), out);
     } else if (q.kind === "explain") {
       // said in your own words, then held up against the model answer: you mark it yourself
       const ta = h("textarea", { class: "guess mk-type mk-explain", rows: 4, placeholder: "Your answer, in a sentence or three…", "aria-label": "Your answer", disabled: locked });
@@ -377,6 +436,27 @@
       body.append(h("div", { class: "prompt", html: full.q }), ta, shown);
     }
   }
+  // a plain box, for a page whose engine is older than this file (a cached engine.js has no Editor)
+  function plainEditor(code, opts) {
+    const ta = A.h("textarea", { class: "guess mk-type", rows: 12, spellcheck: "false", "aria-label": opts.label, disabled: opts.readonly });
+    ta.value = code;
+    ta.oninput = () => opts.onChange && opts.onChange(ta.value);
+    ta.onkeydown = (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); opts.onRun && opts.onRun(); } };
+    return { el: ta, ta, get: () => ta.value };
+  }
+  // run a solution against the exercise's own tests, as the chapter page does; the result keeps the code it was for
+  async function runCode(q, full, code) {
+    try {
+      const r = await A.Runner.run({ op: "check", prelude: BANK.ch[q.ch].prelude, lang: chLang(q), setup: full.setup || "", code, tests: full.tests || "" });
+      return { code, passed: !!(r && r.passed), ok: r && r.ok, total: r && r.total, failed: r && r.failed, message: r && r.message, error: r && r.error };
+    } catch (e) { return { code, passed: false, error: String(e && e.message ? e.message : e) }; }
+  }
+  function checkResult(r) {
+    const { h } = A;
+    if (r.passed) return h("div", { class: "result pass" }, r.total ? `All ${r.total} check${r.total === 1 ? "" : "s"} pass.` : "It runs, and every check passes.");
+    if (r.error) return h("div", { class: "result fail" }, h("p", {}, "It stops with an error:"), h("pre", { class: "mk-code small" }, r.error));
+    return h("div", { class: "result fail" }, h("p", {}, `${r.ok || 0} of ${r.total || "?"} checks pass. This one doesn't:`), h("pre", { class: "mk-code small" }, r.failed || ""), r.message ? h("p", {}, r.message) : "");
+  }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // ------------------------------------------------------------- mark --
@@ -390,6 +470,7 @@
     else if (q.kind === "out") q.ok = tidy(q.a) === tidy(full.out) || tidy(q.a).replace(/\s+/g, " ") === tidy(full.out).replace(/\s+/g, " ");
     else if (q.kind === "line") q.ok = (full.lines || [full.line]).includes(q.a);
     else if (q.kind === "pattern") q.ok = q.choices[q.a] === full.ch;
+    else if (q.kind === "code") { q.res = q.res && q.res.code === q.a ? q.res : await runCode(q, full, q.a); q.ok = q.res.passed; }
     else if (q.kind === "order") {
       const all = full.lines.concat(full.distractors);
       const mine = q.a.map((k) => all[k]);
@@ -417,7 +498,7 @@
     const m = A.main();
     m.textContent = "";
     m.append(h("div", { class: "col mk" }, h("p", { class: "mk-ask" }, timeUp ? "Time's up. Marking…" : "Marking…"),
-      run.qs.some((q) => q.kind === "order" && q.a) ? h("p", { class: "kbd" }, "Orderings that differ from the reference run their tests, which may take a moment the first time.") : null));
+      run.qs.some((q) => (q.kind === "order" || q.kind === "code") && q.a) ? h("p", { class: "kbd" }, "Code runs against its checks, which may take a moment the first time.") : null));
     for (const q of run.qs) if (q.ok == null) await mark(q);
     const right = run.qs.filter((q) => q.ok).length;
     // the record: per-chapter stats for "my weakest chapters", the history, the review deck and some XP
@@ -426,7 +507,7 @@
     run.back = rememberResults(run.qs);
     (S()[K("mockHist")] = S()[K("mockHist")] || []).push({ at: Date.now(), n: run.qs.length, right, secs: Math.round(run.used), scope: run.scope });
     S()[K("mockHist")] = S()[K("mockHist")].slice(-30);
-    for (const q of run.qs) if (q.id && A.findBlock(q.id)) { if (q.ok) A.enroll(q.id, true); else A.schedule(q.id, false); }
+    for (const q of run.qs) { const id = q.kind === "code" ? BANK.byId[q.id].ex : q.id; if (id && A.findBlock(id)) { if (q.ok) A.enroll(id, true); else A.schedule(id, false); } }
     const done = run;
     delete S()[K("mockNow")];
     A.save();
@@ -460,6 +541,9 @@
       box.append(h("p", { html: `This is a <b>${esc(ch.name)}</b> problem${q.a != null && !q.ok ? `, not ${esc(BANK.ch[q.choices[q.a]].name)}` : ""}. It's the exercise <code>${esc(full.title)}</code> in chapter ${ch.num}.` }));
     } else if (q.kind === "order") {
       box.append(h("p", {}, "One working order:"), pre(full.lines.join("\n")));
+    } else if (q.kind === "code") {
+      if (q.res) box.append(checkResult(q.res));
+      box.append(h("p", {}, "One solution:"), pre(full.solution));
     }
     box.append(h("p", {}, h("a", { href: "#" + ch.num }, `Chapter ${ch.num}: ${ch.title} →`)));
     return box;
@@ -502,7 +586,7 @@
       h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Mock test · results"), h("h1", {}, timeUp ? "Time's up" : "Done")),
       h("div", { class: "mk-score" },
         h("div", { class: "mk-big" }, h("b", {}, right), h("span", {}, ` / ${n}`)),
-        h("div", {}, h("p", { class: "mk-pct" }, `${pct}% in ${fmtTime(done.used)}${done.pace ? ` of ${fmtTime(done.pace * n)}` : ""}`), h("p", {}, verdict))),
+        h("div", {}, h("p", { class: "mk-pct" }, `${pct}% in ${fmtTime(done.used)}${done.pace ? ` of ${fmtTime(budget(done))}` : ""}`), h("p", {}, verdict))),
       h("div", { class: "mk-strip" }, done.qs.map((q, k) => h("i", { class: q.ok ? "ok" : "bad", title: `Question ${k + 1}: ${q.ok ? "right" : "missed"}` }))),
       backNote(done),
       h("h3", { class: "mk-h" }, "By chapter, weakest first"),
@@ -523,7 +607,7 @@
 
   // ------------------------------------------------------------- keys --
   addEventListener("keydown", (e) => {
-    if (view !== "test" || location.hash !== "#mock") return;
+    if (view !== "test" || location.hash !== "#mock" || e.defaultPrevented) return; // the code editor handles its own keys first
     const q = run.qs[run.cur];
     const typing = e.target.tagName === "TEXTAREA";
     if (typing && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); document.querySelector(".mk-nav .btn.primary")?.click(); return; }

@@ -244,7 +244,8 @@ def parse_puzzle(raw, ch, path, n):
                 name, label, lo, hi, step, start = [x.strip() for x in line.split("|")]
                 sliders.append({"name": name, "label": label, "min": float(lo), "max": float(hi), "step": float(step), "start": float(start)})
         target, tol, expr = float(f["target"]), float(f.get("tol", 0)), f["expr"]
-        val = lambda vals: eval(expr, {"__builtins__": {}}, dict(zip([s["name"] for s in sliders], vals)))
+        # whole slider values go in as ints, so bit operators (^ & |) work as they do in the page
+        val = lambda vals: eval(expr, {"__builtins__": {}}, dict(zip([s["name"] for s in sliders], [int(v) if float(v).is_integer() else v for v in vals])))
         assert abs(val([s["start"] for s in sliders]) - target) > tol, f"{where}: the starting sliders already hit the target"
         import itertools
         axes = [[s["min"] + k * s["step"] for k in range(int(round((s["max"] - s["min"]) / s["step"])) + 1)] for s in sliders]

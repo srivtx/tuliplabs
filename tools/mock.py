@@ -8,6 +8,8 @@ can mark without running anything:
   explain  a chapter's "explain it" card: say it in your own words, then compare with the model answer
   pattern  (DSA) a write exercise's prompt: which chapter's technique solves it (the prompts that name it are left out)
   order    a parsons block: the right order, plus everything the page needs to run its tests
+  code     a write exercise that stands on its own: solve it in an editor, marked by its own tests in the page
+           (only the exercise's id, as `ex`: the page already holds the exercise, in content/<track>.json)
 
 Chapters that run in Node (lang: node) are run in Node in a box (learn/wb-node.js, via tools/mock-node.js),
 the runtime their page uses. Generated "trace it" questions don't live here: learn/mock-gen.js (DSA) and
@@ -143,6 +145,14 @@ def build_track(track, stats=False):
 
         for b in blocks:
             t = b["type"]
+            # a write exercise is also a "code it" question: the page solves it for real, marked by its own tests,
+            # which build.py --verify already runs alone (prelude + setup + code). Only problems that stand on their
+            # own: not "now do the same, but…", and not a whole program to rebuild.
+            if t == "exercise" and b.get("kind") == "write":
+                text = strip_tags(b["prompt"]).strip()
+                alone = not CONTINUES.match(text) and not re.search(r"\b(above|previous|same as|last exercise|you just wrote|from before)\b", text, re.I)
+                if alone and len(b["starter"].rstrip("\n").split("\n")) <= 30 and b["tests"].strip():
+                    add({"kind": "code", "id": b["id"] + "#code", "ex": b["id"], "title": b.get("title", "")}, ch)
             if t == "quiz":
                 add({"kind": "mc", "id": b["id"], "q": b["q"], "opts": b["opts"], "why": b.get("why", "")}, ch)
             elif t == "recall" and b.get("q") and b.get("a"):
