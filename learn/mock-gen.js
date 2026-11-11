@@ -5,7 +5,8 @@
    A question looks like:
      { gen, ch, title, prompt (HTML), code (Python), answer (what Python prints), match: "tokens" | "choice",
        opts (for "choice"), why (HTML) }
-   "tokens" answers are marked on their numbers and words, so "[1, 2]" and "1 2" both count. */
+   "tokens" answers are marked on their numbers and words, so "[1, 2]" and "1 2" both count; "text" answers,
+   whose symbols matter, must match exactly apart from spacing. */
 (function (root) {
   "use strict";
 
@@ -990,8 +991,9 @@ print("O(" + growth() + ")")`;
     // ch 3: grouping by a key
     anagrams(r) {
       const bases = [];
-      while (bases.length < 3) { const w = r.shuffle("aeinrst".split("")).slice(0, 3).sort().join(""); if (!bases.includes(w)) bases.push(w); }
-      const words = Array.from({ length: 7 }, () => r.shuffle(r.pick(bases).split("")).join(""));
+      const nb = r.int(2, 4);
+      while (bases.length < nb) { const w = r.shuffle("aeinrst".split("")).slice(0, 3).sort().join(""); if (!bases.includes(w)) bases.push(w); }
+      const words = Array.from({ length: r.int(5, 8) }, () => r.shuffle(r.pick(bases).split("")).join(""));
       const g = {};
       for (const w of words) { const k = w.split("").sort().join(""); g[k] = (g[k] || 0) + 1; }
       return {
@@ -1098,7 +1100,7 @@ print("O(" + growth() + ")")`;
       let s = "";
       const st = [];
       while (s.length < 8) { if (st.length && (r.next() < 0.5 || s.length + st.length >= 8)) s += close[open.indexOf(st.pop())]; else { const c = r.pick(open.split("")); st.push(c); s += c; } }
-      if (r.next() < 0.6) { const i = r.int(0, s.length - 1); s = s.slice(0, i) + r.pick("()[]{}".split("")) + s.slice(i + 1); }
+      if (r.next() < 0.75) { const i = r.int(0, s.length - 1); s = s.slice(0, i) + r.pick("()[]{}".split("").filter((c) => c !== s[i])) + s.slice(i + 1); }
       const pairs = { ")": "(", "]": "[", "}": "{" }, stack = [];
       let ans = null;
       for (let i = 0; i < s.length; i++) { const c = s[i]; if (open.includes(c)) stack.push(c); else if (!stack.length || stack.pop() !== pairs[c]) { ans = `bad at ${i}`; break; } }
@@ -1134,7 +1136,7 @@ print("O(" + growth() + ")")`;
     },
     // ch 14: how many rooms
     rooms(r) {
-      const ms = Array.from({ length: 6 }, () => { const s = r.int(0, 20); return [s, s + r.int(1, 8)]; }).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      const len = r.int(4, 10), ms = Array.from({ length: r.int(4, 7) }, () => { const s = r.int(0, 20); return [s, s + r.int(1, len)]; }).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
       const ends = [];
       for (const [s, e] of ms) { ends.sort((a, b) => a - b); if (ends.length && ends[0] <= s) ends[0] = e; else ends.push(e); }
       return {
@@ -1195,15 +1197,19 @@ print("O(" + growth() + ")")`;
     },
     // ch 19: shortest steps through a grid
     gridBFS(r) {
-      const R = 5, C = 6, g = Array.from({ length: R }, (_, i) => Array.from({ length: C }, (_, j) => ((i === 0 && j === 0) || (i === R - 1 && j === C - 1) || r.next() > 0.3 ? "." : "#")));
+      const R = 5, C = 6, g = Array.from({ length: R }, (_, i) => Array.from({ length: C }, (_, j) => ((i === 0 && j === 0) || r.next() > 0.32 ? "." : "#")));
       const dist = { "0,0": 0 }, q = [[0, 0]];
       while (q.length) { const [a, b] = q.shift(); for (const [da, db] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = a + da, y = b + db; if (x >= 0 && x < R && y >= 0 && y < C && g[x][y] === "." && dist[x + "," + y] == null) { dist[x + "," + y] = dist[a + "," + b] + 1; q.push([x, y]); } } }
-      const ans = dist[`${R - 1},${C - 1}`];
+      // the target: usually a square it can reach (the farther the likelier), sometimes an open one it can't
+      const open = []; for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) if (g[i][j] === "." && (i || j)) open.push([i, j]);
+      const reach = open.filter(([i, j]) => dist[i + "," + j] != null && dist[i + "," + j] >= 3), cut = open.filter(([i, j]) => dist[i + "," + j] == null);
+      const [ti, tj] = (cut.length && r.next() < 0.15) || !reach.length ? r.pick(cut.length ? cut : open) : r.pick(reach);
+      const ans = dist[ti + "," + tj];
       return {
-        ch: 19, title: "Through the maze", prompt: "<p>Steps go up, down, left or right, never through <code>#</code>. What does it print?</p>",
-        code: `from collections import deque\ngrid = [\n${g.map((row) => `    "${row.join("")}",`).join("\n")}\n]\nR, C = len(grid), len(grid[0])\ndist = {(0, 0): 0}\nq = deque([(0, 0)])\nwhile q:\n    r, c = q.popleft()\n    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):\n        nr, nc = r + dr, c + dc\n        if 0 <= nr < R and 0 <= nc < C and grid[nr][nc] == "." and (nr, nc) not in dist:\n            dist[(nr, nc)] = dist[(r, c)] + 1\n            q.append((nr, nc))\nprint(dist.get((R - 1, C - 1), -1))`,
+        ch: 19, title: "Through the maze", prompt: `<p>Steps go up, down, left or right, never through <code>#</code>. How many steps from the top-left corner to row ${ti}, column ${tj} (counting from 0)?</p>`,
+        code: `from collections import deque\ngrid = [\n${g.map((row) => `    "${row.join("")}",`).join("\n")}\n]\nR, C = len(grid), len(grid[0])\ndist = {(0, 0): 0}\nq = deque([(0, 0)])\nwhile q:\n    r, c = q.popleft()\n    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):\n        nr, nc = r + dr, c + dc\n        if 0 <= nr < R and 0 <= nc < C and grid[nr][nc] == "." and (nr, nc) not in dist:\n            dist[(nr, nc)] = dist[(r, c)] + 1\n            q.append((nr, nc))\nprint(dist.get((${ti}, ${tj}), -1))`,
         answer: String(ans == null ? -1 : ans),
-        why: `<p>BFS reaches every square in order of distance, so the first time it reaches the bottom-right corner is the shortest way: ${ans == null ? "here it never does, so −1" : ans + " steps"}. The fewest possible is ${R - 1 + C - 1}, with no walls in the way.</p>`,
+        why: `<p>BFS reaches every square in order of distance, so the first time it reaches (${ti}, ${tj}) is the shortest way: ${ans == null ? "here it never does, as walls cut it off, so −1" : ans + " steps"}. With no walls in the way it would be ${ti + tj}.</p>`,
       };
     },
     // ch 20: counting islands
@@ -1223,7 +1229,12 @@ print("O(" + growth() + ")")`;
     cycle(r) {
       const n = 6, order = r.shuffle([0, 1, 2, 3, 4, 5]), g = Array.from({ length: n }, () => []);
       for (let k = 0; k < 7; k++) { const i = r.int(0, n - 2), j = r.int(i + 1, n - 1); if (!g[order[i]].includes(order[j])) g[order[i]].push(order[j]); }
-      if (r.next() < 0.5) { const i = r.int(0, n - 2), j = r.int(i + 1, n - 1); if (!g[order[j]].includes(order[i])) g[order[j]].push(order[i]); }
+      if (r.next() < 0.5) {
+        const from = r.pick(order.filter((u) => g[u].length)), reach = [], seen = new Set(), go = (u) => { for (const v of g[u]) if (!seen.has(v)) { seen.add(v); reach.push(v); go(v); } };
+        go(from);
+        const back = r.pick(reach);
+        if (!g[back].includes(from)) g[back].push(from);
+      }
       const st = Array(n).fill(0);
       const has = (u) => { st[u] = 1; for (const v of g[u]) if (st[v] === 1 || (st[v] === 0 && has(v))) return true; st[u] = 2; return false; };
       let cyc = false;
@@ -1391,6 +1402,8 @@ print("O(" + growth() + ")")`;
   const tokens = (s) => String(s).toLowerCase().match(/-?\d+|[a-z]+(?:\^\w+)?|[!]/g) || [];
   function correct(q, given) {
     if (q.match === "choice") return given != null && q.opts[given] && q.opts[given].ok;
+    // "text" answers have symbols that matter (+, -, #, |): compared exactly, ignoring spacing and blank lines
+    if (q.match === "text") { const t = (s) => String(s).trim().split(/\s+/).join(" "); return t(given) === t(q.answer); }
     return tokens(given).join(" ") === tokens(q.answer).join(" ");
   }
 
