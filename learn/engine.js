@@ -1446,7 +1446,7 @@
 
   // what the mock test (learn/mock.js) may use: the page, the store, the runner and the review deck
   function mockApi() {
-    return { h, $, main, sidebar, S, save, schedule, enroll, award, toast, shuffle, highlight, findBlock, chProgress, Runner, cfg: CFG, data: () => DATA };
+    return { h, $, main, sidebar, S, save, schedule, enroll, award, toast, shuffle, highlight, findBlock, chProgress, Runner, Editor, cfg: CFG, data: () => DATA };
   }
 
   function route() {

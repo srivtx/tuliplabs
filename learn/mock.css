@@ -108,3 +108,8 @@
   .mk-item summary .mk-k{display:none}
   .mk-dot{width:24px;height:24px}
 }
+/* code it: the editor, its run button and what the checks said */
+.mk .ed{margin-top:10px}
+.mk-run{align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px}
+.mk-checks:not(:empty){margin-top:10px}
+.mk-checks .result p,.mk-feedback .result p{margin:0 0 6px}
