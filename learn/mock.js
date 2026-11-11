@@ -338,7 +338,7 @@
       ta.value = q.a || "";
       ta.oninput = () => answer(q, ta.value.trim() ? ta.value : null);
       body.append(h("div", { class: "prompt", html: q.kind === "out" ? "<p>What does it print?</p>" : full.prompt }), code(full.code), ta,
-        q.kind === "trace" ? h("p", { class: "kbd" }, "Lists can be typed with or without brackets and commas: [1, 2] and 1 2 both count.") : "");
+        q.kind === "trace" ? h("p", { class: "kbd" }, full.match === "text" ? "Type it as printed: the symbols count, the spacing doesn't." : full.lang === "sql" ? "One row per line, its values separated by spaces." : "Lists can be typed with or without brackets and commas: [1, 2] and 1 2 both count.") : "");
       setTimeout(() => !locked && ta.focus(), 30);
     } else if (q.kind === "line") {
       body.append(h("p", {}, "It should pass these checks, and it doesn't:"), h("pre", { class: "mk-code small", html: hl(full.checks.join("\n")) }),
@@ -445,7 +445,7 @@
     if (q.kind === "mc") { box.append(h("p", { html: "The answer: " + full.opts.find((o) => o.ok).t })); box.insertAdjacentHTML("beforeend", full.why || ""); }
     else if (q.kind === "trace") {
       if (full.match !== "choice" && q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));
-      box.append(h("p", {}, "It prints:"), h("pre", { class: "mk-code small" }, full.answer));
+      box.append(h("p", {}, full.lang === "sql" ? "It returns:" : "It prints:"), h("pre", { class: "mk-code small" }, full.answer));
       box.insertAdjacentHTML("beforeend", full.why || "");
     } else if (q.kind === "out") {
       if (q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));
