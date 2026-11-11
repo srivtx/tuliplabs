@@ -1,17 +1,36 @@
-/* Tulip Labs: the mock test (DSA, #mock).
-   A timed test drawn from the whole track: multiple choice, "what does it print?", find the bug line,
-   which pattern fits, put the lines in order, and fresh "trace it" questions from learn/mock-gen.js.
+/* Tulip Labs: the mock test (#mock), on every course track: DSA, Build your own X, Stats, ModSim, Complexity.
+   A timed test drawn from the chapters you pick: multiple choice, "what does it print?", find the bug line,
+   which pattern fits (DSA), put the lines in order, explain it in your own words, and fresh "trace it"
+   questions from learn/mock-gen.js (DSA) and learn/mock-gen-x.js (the other tracks).
    Nothing is marked until the end (or after each question, if you ask for that). Then a results page
    with your weakest chapters first, every answer explained, and the misses added to spaced review.
    Misses also come back in later mocks (the next one, then 2 and 4 mocks on) until they're right 3 times.
 
-   The question bank is content/ds-mock.json (tools/mock.py); generated questions are checked against
-   real Python by tools/mock-check.js. The engine calls MOCK.page(api) for #mock. */
+   The question banks are content/<track>-mock.json (tools/mock.py); generated questions are checked against
+   real Python, Node, Express and SQLite by tools/mock-check.js. The engine calls MOCK.page(api) for #mock.
+   The first word of the setup sentence is the subject: clicking it opens the next track's mock. */
 (function () {
   "use strict";
-  const BANK_URL = "../content/ds-mock.json";
-  const MIX = [["mc", 0.27], ["trace", 0.3], ["pattern", 0.12], ["out", 0.11], ["line", 0.1], ["order", 0.1]];
-  const KIND_NAME = { mc: "Multiple choice", trace: "Trace it", pattern: "Which pattern fits?", out: "What does it print?", line: "Find the bug", order: "Put it in order" };
+  const MIX = [["mc", 0.25], ["trace", 0.3], ["pattern", 0.1], ["out", 0.1], ["line", 0.08], ["order", 0.09], ["explain", 0.08]];
+  const KIND_NAME = { mc: "Multiple choice", trace: "Trace it", pattern: "Which pattern fits?", out: "What does it print?", line: "Find the bug", order: "Put it in order", explain: "Explain it" };
+  const KIND_TEXT = {
+    mc: "Four answers, one right. From every chapter's quick-fire quizzes.", trace: "A short program with fresh numbers: say what it prints. Made up for each test.",
+    pattern: "A real interview problem, with its hints cut off. Which chapter's technique solves it?", out: "A snippet from a chapter: type exactly what it prints.",
+    line: "A program with a wrong line. Click it.", order: "Scrambled lines and a couple of decoys. Build the working program.",
+    explain: "A why-question. Say the answer in your own words, then hold it up against the model answer and mark yourself honestly.",
+  };
+  // the subjects with a mock test: the sentence's first word cycles through them
+  const SUBJECTS = [["ds", "DSA", "../dsa/"], ["bx", "Build your own X", "../build/"], ["ps", "Probability & Stats", "../stats/"], ["ms", "ModSim", "../modsim/"], ["tc", "Complexity in code", "../code/"]];
+  // topics that cut across a track's parts, offered as scopes alongside them
+  const TOPICS = {
+    bx: [["Node and Express backends", [50, 51, 52, 53]], ["databases and storage", [6, 7, 8, 25, 38]], ["system design", [19, 20, 25, 34, 35, 36, 37, 38, 39, 40, 41]],
+      ["object modelling", [1]], ["languages and parsers", [2, 3, 4, 5]], ["dev tools", [8, 9, 26, 27, 28, 29, 30, 31]]],
+    ds: [["the interview core", [3, 4, 6, 7, 8, 9, 11, 13, 15, 17, 19, 20, 28]], ["graphs", [19, 20, 21, 22, 23, 24, 25, 51, 52, 53, 54, 55, 56]], ["dynamic programming", [28, 29, 30, 31, 32, 33, 34, 35, 36]]],
+  };
+  let TRACK = "ds";
+  const K = (name) => (TRACK === "ds" ? name : name + "_" + TRACK);
+  const gensHere = () => window.MOCKGEN.of(TRACK);
+  const chLang = (q) => (BANK.ch[q.ch] && BANK.ch[q.ch].lang) || "py";
   const COUNTS = [10, 20, 40];
   const PACES = [["90 s a question", 90], ["untimed", 0], ["45 s a question", 45]];
   const MARKS = [["at the end", "end"], ["after each one", "each"]];
@@ -24,17 +43,17 @@
 
   async function loadBank() {
     if (BANK) return BANK;
-    const r = await fetch(BANK_URL, { cache: "no-cache" });
+    const r = await fetch(`../content/${TRACK}-mock.json`, { cache: "no-cache" });
     BANK = await r.json();
     BANK.byId = Object.fromEntries(BANK.questions.map((q) => [q.id, q]));
     BANK.ch = Object.fromEntries(BANK.chapters.map((c) => [c.num, c]));
-    GEN_CH = Object.fromEntries(window.MOCKGEN.names.map((g) => [g, window.MOCKGEN.make(g, 1).ch]));
+    GEN_CH = Object.fromEntries(gensHere().map((g) => [g, window.MOCKGEN.make(g, 1).ch]));
     return BANK;
   }
 
   // ------------------------------------------------------------ setup --
   function setupState() {
-    const st = S().mockSetup || {};
+    const st = S()[K("mockSetup")] || {};
     return { count: COUNTS.includes(st.count) ? st.count : 20, scope: st.scope || "started", pace: PACES.some((p) => p[1] === st.pace) ? st.pace : 90, marks: st.marks || "end" };
   }
   function scopes() {
@@ -45,11 +64,13 @@
     const weak = weakest();
     if (weak.length) out.push({ key: "weak", label: "my weakest chapters", nums: weak });
     out.push({ key: "all", label: "the whole track", nums: chs.map((c) => c.num) });
-    for (const part of [...new Set(chs.map((c) => c.part))]) out.push({ key: "part:" + part, label: part.replace(/^Part (\d+) · /, "Part $1, "), nums: chs.filter((c) => c.part === part).map((c) => c.num) });
+    const have = new Set(chs.map((c) => c.num));
+    for (const [label, nums] of TOPICS[TRACK] || []) if (nums.some((n) => have.has(n))) out.push({ key: "topic:" + label, label, nums: nums.filter((n) => have.has(n)) });
+    for (const part of [...new Set(chs.map((c) => c.part).filter(Boolean))]) out.push({ key: "part:" + part, label: part.replace(/^Part (\w+) · /, "Part $1, "), nums: chs.filter((c) => c.part === part).map((c) => c.num) });
     return out;
   }
   function weakest() {
-    const st = S().mockStats || {};
+    const st = S()[K("mockStats")] || {};
     return Object.entries(st).filter(([, s]) => s.n >= 2 && s.right / s.n < 0.8).sort((a, b) => a[1].right / a[1].n - b[1].right / b[1].n).slice(0, 6).map(([n]) => +n);
   }
 
@@ -60,7 +81,7 @@
     const st = setupState();
     const sc = scopes();
     if (!sc.some((s) => s.key === st.scope)) st.scope = sc.some((s) => s.key === "started") ? "started" : "all";
-    const save = () => { S().mockSetup = st; A.save(); draw(); };
+    const save = () => { S()[K("mockSetup")] = st; A.save(); draw(); };
     const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
     // a clickable word: click to move to the next choice, shift-click for the previous one
     const word = (text, onPick, title) => h("button", { class: "mk-word", type: "button", title, onclick: onPick }, text);
@@ -69,8 +90,11 @@
     const draw = () => {
       const scope = sc.find((s) => s.key === st.scope);
       sentence.textContent = "";
+      const subj = SUBJECTS.findIndex((x) => x[0] === TRACK), nextSubj = SUBJECTS[(subj + 1) % SUBJECTS.length];
       sentence.append("Give me ",
         word(String(st.count), () => { st.count = cycle(COUNTS, st.count); save(); }, "How many questions: click to change"),
+        " ",
+        word(SUBJECTS[subj][1], () => { location.href = nextSubj[2] + "#mock"; }, `The subject: click for ${nextSubj[1]}`),
         " questions from ",
         word(scope.label, () => { st.scope = cycle(sc.map((s) => s.key), st.scope); save(); }, "Which chapters: click to change"),
         ", ",
@@ -80,25 +104,23 @@
       const total = st.pace ? Math.round((st.count * st.pace) / 60) : 0;
       const have = available(scope);
       const due = Math.min(dueBack(new Set(scope.nums)).length, Math.round(st.count * 0.3));
-      mix.innerHTML = (have < st.count ? `<b>These chapters hold ${have} questions, so the mock will be ${have} long.</b> ` : "") + `${scope.nums.length} chapter${scope.nums.length === 1 ? "" : "s"} · ${st.pace ? `${total} minutes on the clock` : "no clock"} · ${st.marks === "end" ? "nothing is marked until you finish, like a real test" : "each answer is marked as you go"}.${due ? ` ${due} question${due === 1 ? " you missed before is" : "s you missed before are"} due back.` : ""} Click any underlined word to change it.`;
+      mix.innerHTML = (have < st.count ? `<b>These chapters hold ${have} questions, so the mock will be ${have} long.</b> ` : "") + `${scope.nums.length} chapter${scope.nums.length === 1 ? "" : "s"} · ${st.pace ? `${total} minutes on the clock` : "no clock"} · ${st.marks === "end" ? "nothing is marked until you finish, like a real test" : "each answer is marked as you go"}.${due ? ` ${due} question${due === 1 ? " you missed before is" : "s you missed before are"} due back.` : ""} Click any underlined word to change it, the subject too.`;
     };
     draw();
-    const resume = S().mockNow && S().mockNow.qs ? h("div", { class: "mk-resume" },
-      h("p", {}, `You have a mock in progress: ${S().mockNow.qs.filter((q) => q.a != null).length} of ${S().mockNow.qs.length} answered.`),
-      h("div", { class: "btns" }, h("button", { class: "btn primary", onclick: () => { run = S().mockNow; startRun(); } }, "Carry on"),
-        h("button", { class: "btn", onclick: () => { delete S().mockNow; A.save(); pageSetup(); } }, "Throw it away"))) : null;
-    const hist = (S().mockHist || []).slice(-6).reverse();
+    const resume = S()[K("mockNow")] && S()[K("mockNow")].qs ? h("div", { class: "mk-resume" },
+      h("p", {}, `You have a mock in progress: ${S()[K("mockNow")].qs.filter((q) => q.a != null).length} of ${S()[K("mockNow")].qs.length} answered.`),
+      h("div", { class: "btns" }, h("button", { class: "btn primary", onclick: () => { run = S()[K("mockNow")]; startRun(); } }, "Carry on"),
+        h("button", { class: "btn", onclick: () => { delete S()[K("mockNow")]; A.save(); pageSetup(); } }, "Throw it away"))) : null;
+    const hist = (S()[K("mockHist")] || []).slice(-6).reverse();
+    const present = new Set(BANK.questions.map((q) => q.kind));
+    if (gensHere().length) present.add("trace");
     m.append(h("div", { class: "col mk" },
       h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Mock test · " + A.cfg.short), h("h1", {}, "Test yourself like it's the real thing"),
-        h("p", { class: "tag" }, "Questions from every corner of the chapters you pick: multiple choice, what a program prints, the line with the bug, which technique a problem needs, scrambled code to put in order, and fresh trace questions made up on the spot for every one of the 60 chapters, so no two mocks are the same. Anything you miss comes back in later mocks until it sticks.")),
+        h("p", { class: "tag" }, `Questions from every corner of the chapters you pick: multiple choice, what a program prints, the line with the bug,${present.has("pattern") ? " which technique a problem needs," : ""} scrambled code to put in order, why-questions to answer in your own words, and fresh trace questions made up on the spot for ${new Set(Object.values(GEN_CH)).size === A.data().chapters.length ? `every one of the ${A.data().chapters.length} chapters` : `${new Set(Object.values(GEN_CH)).size} of the chapters`}, so no two mocks are the same. Anything you miss comes back in later mocks until it sticks.`)),
       resume,
       h("div", { class: "mk-setup" }, sentence, mix,
         h("div", { class: "btns" }, h("button", { class: "key primary", onclick: () => begin(st) }, "Start the mock →"))),
-      h("div", { class: "mk-kinds" }, Object.entries(KIND_NAME).map(([k, name]) => h("div", {}, h("b", {}, name), h("span", {}, {
-        mc: "Four answers, one right. From every chapter's quick-fire quizzes.", trace: "A short program with fresh numbers: say what it prints. Made up for each test.",
-        pattern: "A real interview problem, with its hints cut off. Which chapter's technique solves it?", out: "A snippet from a chapter: type exactly what it prints.",
-        line: "A program with one wrong line. Click it.", order: "Scrambled lines and a couple of decoys. Build the working program.",
-      }[k])))),
+      h("div", { class: "mk-kinds" }, Object.entries(KIND_NAME).filter(([k]) => present.has(k)).map(([k, name]) => h("div", {}, h("b", {}, name), h("span", {}, KIND_TEXT[k])))),
       hist.length ? h("div", { class: "mk-hist" }, h("h3", {}, "Your last mocks"), h("table", {}, hist.map((r) => h("tr", {},
         h("td", {}, new Date(r.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })), h("td", {}, h("b", {}, `${r.right} / ${r.n}`)),
         h("td", {}, fmtTime(r.secs)), h("td", { class: "mk-muted" }, r.scope))))) : null));
@@ -109,7 +131,7 @@
   // how many questions a scope can give: its bank questions plus six fresh ones per generator that covers it
   function available(scope) {
     const nums = new Set(scope.nums);
-    const gens = window.MOCKGEN.names.filter((g) => nums.has(GEN_CH[g])).length;
+    const gens = gensHere().filter((g) => nums.has(GEN_CH[g])).length;
     return BANK.questions.filter((q) => nums.has(q.ch)).length + 6 * gens;
   }
 
@@ -119,14 +141,14 @@
   // time and it's retired. Misses on a generator bring back the same kind of trace with fresh numbers.
   const BACK_AFTER = [1, 2, 4];
   const againKey = (q) => (q.kind === "trace" ? "g:" + q.gen : "q:" + q.id);
-  const mockNo = () => (S().mockHist || []).length;
+  const mockNo = () => (S()[K("mockHist")] || []).length;
   function dueBack(inScope) {
-    const all = S().mockAgain || {};
+    const all = S()[K("mockAgain")] || {};
     return Object.entries(all).filter(([, e]) => e.due <= mockNo() && inScope.has(e.ch) && (e.gen ? GEN_CH[e.gen] != null : BANK.byId[e.id]))
       .sort((a, b) => a[1].due - b[1].due || a[1].box - b[1].box).map(([k, e]) => e);
   }
   function rememberResults(qs) {
-    const all = (S().mockAgain = S().mockAgain || {}), now = mockNo();
+    const all = (S()[K("mockAgain")] = S()[K("mockAgain")] || {}), now = mockNo();
     let missed = 0, retired = 0, kept = 0;
     for (const q of qs) {
       const key = againKey(q), e = all[key];
@@ -148,9 +170,9 @@
       ? { kind: "trace", gen: e.gen, seed: (Math.random() * 1e9) | 0, ch: e.ch, again: true }
       : { kind: e.kind, id: e.id, ch: e.ch, again: true }));
     const taken = new Set(back.map(againKey));
-    const pools = { mc: [], pattern: [], out: [], line: [], order: [], trace: [] };
+    const pools = { mc: [], pattern: [], out: [], line: [], order: [], explain: [], trace: [] };
     for (const q of BANK.questions) if (inScope.has(q.ch) && pools[q.kind] && !taken.has("q:" + q.id)) pools[q.kind].push({ kind: q.kind, id: q.id, ch: q.ch });
-    const gens = window.MOCKGEN.names.filter((g) => inScope.has(GEN_CH[g]) && !taken.has("g:" + g));
+    const gens = gensHere().filter((g) => inScope.has(GEN_CH[g]) && !taken.has("g:" + g));
     for (const g of gens) for (let k = 0; k < 6; k++) pools.trace.push({ kind: "trace", gen: g, seed: (Math.random() * 1e9) | 0, ch: GEN_CH[g] });
     // spread each pool over chapters: shuffle, then take round-robin by chapter
     const spread = (list) => {
@@ -161,6 +183,11 @@
       return out;
     };
     for (const k in pools) pools[k] = spread(pools[k]);
+    // trace questions: every generator once, in a random order, before any of them comes round again
+    const rounds = {};
+    for (const q of pools.trace) (rounds[q.gen] = rounds[q.gen] || []).push(q);
+    pools.trace = [];
+    for (let k = 0; k < 6; k++) pools.trace.push(...A.shuffle(Object.values(rounds).filter((r) => r[k]).map((r) => r[k])));
     const want = {};
     const fresh = st.count - back.length;
     let left = fresh;
@@ -209,12 +236,12 @@
   async function begin(st) {
     run = pick(st);
     if (!run.qs.length) { A.toast("No questions in those chapters yet"); return; }
-    S().mockNow = run;
+    S()[K("mockNow")] = run;
     A.save();
     startRun();
   }
   function startRun() {
-    if (run.qs.some((q) => q.kind === "order")) A.Runner.start("", "py"); // Python warms up in the background, for marking orderings
+    for (const lang of new Set(run.qs.filter((q) => q.kind === "order").map(chLang))) A.Runner.start("", lang); // the runner warms up in the background, for marking orderings
     view = "test";
     drawTest();
     clearInterval(tick);
@@ -278,6 +305,7 @@
   }
   function keysHint(q) {
     if (q.kind === "mc" || q.kind === "pattern" || (q.kind === "trace" && resolve(q).match === "choice")) return "1–4 to pick · Enter for next";
+    if (q.kind === "explain") return "Write it, then show the model answer";
     if (q.kind === "out" || q.kind === "trace") return "Ctrl/⌘ + Enter for next";
     return "Enter for next";
   }
@@ -287,10 +315,13 @@
   // one renderer per kind; each shows the question and records the answer in q.a
   function renderQuestion(body, q, full, locked) {
     const { h } = A;
+    const lang = q.kind === "trace" ? full.lang : chLang(q);
+    const hl = (src) => (lang === "sql" ? esc(src) : A.highlight(src, lang));
+    const bad = new Set(full.lines || [full.line]);
     const code = (src, lines) => {
       const pre = h("pre", { class: "mk-code" + (lines ? " lines" : "") });
-      if (lines) src.split("\n").forEach((l, n) => pre.append(h("button", { class: "mk-line" + (q.a === n ? " sel" : "") + (locked && n === full.line ? " right" : "") + (locked && q.a === n && n !== full.line ? " wrong" : ""), disabled: locked, onclick: () => { answer(q, n); [...pre.children].forEach((c, k) => c.classList.toggle("sel", k === n)); }, html: `<i>${n + 1}</i>` + (A.highlight(l, "py") || " ") })));
-      else pre.innerHTML = A.highlight(src, "py");
+      if (lines) src.split("\n").forEach((l, n) => pre.append(h("button", { class: "mk-line" + (q.a === n ? " sel" : "") + (locked && bad.has(n) ? " right" : "") + (locked && q.a === n && !bad.has(n) ? " wrong" : ""), disabled: locked, onclick: () => { answer(q, n); [...pre.children].forEach((c, k) => c.classList.toggle("sel", k === n)); }, html: `<i>${n + 1}</i>` + (hl(l) || " ") })));
+      else pre.innerHTML = hl(src);
       return pre;
     };
     const choices = (items, isRight) => h("div", { class: "opts" }, items.map((html, k) => {
@@ -301,17 +332,17 @@
     if (q.kind === "mc") {
       body.append(h("div", { class: "prompt", html: full.q }), choices(q.order.map((k) => full.opts[k].t), (k) => full.opts[q.order[k]].ok));
     } else if (q.kind === "trace" && full.match === "choice") {
-      body.append(h("div", { class: "prompt", html: full.prompt }), choices(q.order.map((k) => full.opts[k].t), (k) => full.opts[q.order[k]].ok));
+      body.append(h("div", { class: "prompt", html: full.prompt }), full.hide ? "" : code(full.code), choices(q.order.map((k) => full.opts[k].t), (k) => full.opts[q.order[k]].ok));
     } else if (q.kind === "trace" || q.kind === "out") {
       const ta = h("textarea", { class: "guess mk-type", rows: 2, placeholder: "Type exactly what it prints…", spellcheck: "false", "aria-label": "What it prints", disabled: locked });
       ta.value = q.a || "";
       ta.oninput = () => answer(q, ta.value.trim() ? ta.value : null);
       body.append(h("div", { class: "prompt", html: q.kind === "out" ? "<p>What does it print?</p>" : full.prompt }), code(full.code), ta,
-        q.kind === "trace" ? h("p", { class: "kbd" }, "Lists can be typed with or without brackets and commas: [1, 2] and 1 2 both count.") : null);
+        q.kind === "trace" ? h("p", { class: "kbd" }, "Lists can be typed with or without brackets and commas: [1, 2] and 1 2 both count.") : "");
       setTimeout(() => !locked && ta.focus(), 30);
     } else if (q.kind === "line") {
-      body.append(h("p", {}, "It should pass these checks, and it doesn't:"), h("pre", { class: "mk-code small", html: A.highlight(full.checks.join("\n"), "py") }),
-        h("p", { class: "mk-ask" }, "One line is wrong. Click it."), code(full.code, true));
+      body.append(h("p", {}, "It should pass these checks, and it doesn't:"), h("pre", { class: "mk-code small", html: hl(full.checks.join("\n")) }),
+        h("p", { class: "mk-ask" }, bad.size > 1 ? "Two lines side by side are wrong. Click either one." : "One line is wrong. Click it."), code(full.code, true));
     } else if (q.kind === "pattern") {
       body.append(h("div", { class: "prompt", html: full.prompt }), h("p", { class: "mk-ask" }, "Which technique solves it best?"),
         choices(q.choices.map((n) => BANK.ch[n].name), (k) => q.choices[k] === full.ch));
@@ -322,11 +353,28 @@
       const draw = () => {
         built.textContent = ""; pool.textContent = "";
         if (!chosen().length) built.append(h("p", { class: "mk-muted" }, "Click lines below to build the program, top to bottom."));
-        chosen().forEach((k, n) => built.append(h("button", { class: "mk-ln", disabled: locked, onclick: () => { const a = chosen().slice(); a.splice(n, 1); answer(q, a.length ? a : null); draw(); }, html: A.highlight(all[k], "py") })));
-        q.pool.filter((k) => !chosen().includes(k)).forEach((k) => pool.append(h("button", { class: "mk-ln", disabled: locked, onclick: () => { answer(q, chosen().concat(k)); draw(); }, html: A.highlight(all[k], "py") })));
+        chosen().forEach((k, n) => built.append(h("button", { class: "mk-ln", disabled: locked, onclick: () => { const a = chosen().slice(); a.splice(n, 1); answer(q, a.length ? a : null); draw(); }, html: hl(all[k]) })));
+        q.pool.filter((k) => !chosen().includes(k)).forEach((k) => pool.append(h("button", { class: "mk-ln", disabled: locked, onclick: () => { answer(q, chosen().concat(k)); draw(); }, html: hl(all[k]) })));
       };
       draw();
       body.append(h("div", { class: "prompt", html: (full.prompt || "") + `<p>Build <b>${esc(full.title || "the program")}</b>. ${full.distractors.length ? `${full.distractors.length} line${full.distractors.length === 1 ? " doesn't" : "s don't"} belong.` : ""} Click a placed line to take it back.</p>` }), built, pool);
+    } else if (q.kind === "explain") {
+      // said in your own words, then held up against the model answer: you mark it yourself
+      const ta = h("textarea", { class: "guess mk-type mk-explain", rows: 4, placeholder: "Your answer, in a sentence or three…", "aria-label": "Your answer", disabled: locked });
+      ta.value = q.text || "";
+      ta.oninput = () => { q.text = ta.value; A.save(); };
+      const shown = h("div", { class: "mk-model" });
+      const draw = () => {
+        shown.textContent = "";
+        if (!q.seen && !locked) { shown.append(h("button", { class: "btn", onclick: () => { q.seen = true; A.save(); draw(); } }, "Show the model answer")); return; }
+        shown.append(h("p", { class: "mk-muted" }, "The model answer:"), h("div", { class: "mk-modelans", html: full.a }));
+        if (locked) return;
+        shown.append(h("p", { class: "mk-ask" }, "Did yours say the same thing?"), h("div", { class: "opts two" },
+          h("button", { class: "opt" + (q.a === 1 ? " sel" : ""), onclick: () => { answer(q, 1); draw(); } }, "I had it"),
+          h("button", { class: "opt" + (q.a === 0 ? " sel" : ""), onclick: () => { answer(q, 0); draw(); } }, "I didn't")));
+      };
+      draw();
+      body.append(h("div", { class: "prompt", html: full.q }), ta, shown);
     }
   }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -336,10 +384,11 @@
   async function mark(q) {
     const full = resolve(q);
     if (q.a == null) return (q.ok = false);
-    if (q.kind === "mc") q.ok = !!full.opts[q.order[q.a]].ok;
+    if (q.kind === "explain") q.ok = q.a === 1;
+    else if (q.kind === "mc") q.ok = !!full.opts[q.order[q.a]].ok;
     else if (q.kind === "trace") q.ok = full.match === "choice" ? !!full.opts[q.order[q.a]].ok : window.MOCKGEN.correct(full, q.a);
     else if (q.kind === "out") q.ok = tidy(q.a) === tidy(full.out) || tidy(q.a).replace(/\s+/g, " ") === tidy(full.out).replace(/\s+/g, " ");
-    else if (q.kind === "line") q.ok = q.a === full.line;
+    else if (q.kind === "line") q.ok = (full.lines || [full.line]).includes(q.a);
     else if (q.kind === "pattern") q.ok = q.choices[q.a] === full.ch;
     else if (q.kind === "order") {
       const all = full.lines.concat(full.distractors);
@@ -349,7 +398,7 @@
       else {
         // the same lines in another order can still be right: run the block's own tests with Python
         try {
-          const r = await A.Runner.run({ op: "check", prelude: BANK.ch[q.ch].prelude, lang: "py", setup: full.setup, code: mine.join("\n"), tests: full.tests || "" });
+          const r = await A.Runner.run({ op: "check", prelude: BANK.ch[q.ch].prelude, lang: chLang(q), setup: full.setup, code: mine.join("\n"), tests: full.tests || "" });
           q.ok = !!(r && r.passed);
         } catch (e) { q.ok = false; }
       }
@@ -368,18 +417,18 @@
     const m = A.main();
     m.textContent = "";
     m.append(h("div", { class: "col mk" }, h("p", { class: "mk-ask" }, timeUp ? "Time's up. Marking…" : "Marking…"),
-      run.qs.some((q) => q.kind === "order" && q.a) ? h("p", { class: "kbd" }, "Orderings that differ from the reference run their tests in Python, which may take a moment the first time.") : null));
+      run.qs.some((q) => q.kind === "order" && q.a) ? h("p", { class: "kbd" }, "Orderings that differ from the reference run their tests, which may take a moment the first time.") : null));
     for (const q of run.qs) if (q.ok == null) await mark(q);
     const right = run.qs.filter((q) => q.ok).length;
     // the record: per-chapter stats for "my weakest chapters", the history, the review deck and some XP
-    const st = (S().mockStats = S().mockStats || {});
+    const st = (S()[K("mockStats")] = S()[K("mockStats")] || {});
     for (const q of run.qs) { const s = (st[q.ch] = st[q.ch] || { n: 0, right: 0 }); s.n++; if (q.ok) s.right++; }
     run.back = rememberResults(run.qs);
-    (S().mockHist = S().mockHist || []).push({ at: Date.now(), n: run.qs.length, right, secs: Math.round(run.used), scope: run.scope });
-    S().mockHist = S().mockHist.slice(-30);
+    (S()[K("mockHist")] = S()[K("mockHist")] || []).push({ at: Date.now(), n: run.qs.length, right, secs: Math.round(run.used), scope: run.scope });
+    S()[K("mockHist")] = S()[K("mockHist")].slice(-30);
     for (const q of run.qs) if (q.id && A.findBlock(q.id)) { if (q.ok) A.enroll(q.id, true); else A.schedule(q.id, false); }
     const done = run;
-    delete S().mockNow;
+    delete S()[K("mockNow")];
     A.save();
     if (right) A.award(right * 2, `mock test, ${right} right`);
     view = "results";
@@ -392,7 +441,7 @@
     const ch = BANK.ch[q.ch];
     const verdict = h("p", { class: "mk-verdict" }, h("b", {}, q.ok ? "Right." : q.a == null ? "Not answered." : "Not this time."));
     const box = h("div", { class: "why" }, verdict);
-    const pre = (s) => h("pre", { class: "mk-code small", html: A.highlight(s, "py") });
+    const pre = (s) => h("pre", { class: "mk-code small", html: A.highlight(s, chLang(q)) });
     if (q.kind === "mc") { box.append(h("p", { html: "The answer: " + full.opts.find((o) => o.ok).t })); box.insertAdjacentHTML("beforeend", full.why || ""); }
     else if (q.kind === "trace") {
       if (full.match !== "choice" && q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));
@@ -402,7 +451,11 @@
       if (q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));
       box.append(h("p", {}, "It prints:"), h("pre", { class: "mk-code small" }, full.out));
     } else if (q.kind === "line") {
-      box.append(h("p", { html: `Line ${full.line + 1} is the bug${q.a != null && !q.ok ? ` (you picked line ${q.a + 1})` : ""}. The fix:` }), pre(full.fix), h("div", { html: full.prompt }));
+      const ls = full.lines || [full.line];
+      box.append(h("p", { html: `${ls.length > 1 ? `Lines ${ls[0] + 1} and ${ls[1] + 1} are` : `Line ${full.line + 1} is`} the bug${q.a != null && !q.ok ? ` (you picked line ${q.a + 1})` : ""}. The fix:` }), pre(full.fix), h("div", { html: full.prompt }));
+    } else if (q.kind === "explain") {
+      if (q.text && q.text.trim()) box.append(h("p", {}, "You wrote:"), h("blockquote", { class: "mk-yours" }, q.text));
+      box.append(h("p", {}, "The model answer:"), h("div", { class: "mk-modelans", html: full.a }));
     } else if (q.kind === "pattern") {
       box.append(h("p", { html: `This is a <b>${esc(ch.name)}</b> problem${q.a != null && !q.ok ? `, not ${esc(BANK.ch[q.choices[q.a]].name)}` : ""}. It's the exercise <code>${esc(full.title)}</code> in chapter ${ch.num}.` }));
     } else if (q.kind === "order") {
@@ -485,6 +538,7 @@
   window.MOCK = {
     async page(api) {
       A = api;
+      if (TRACK !== (A.cfg.id || "ds")) { TRACK = A.cfg.id || "ds"; BANK = null; }
       A.sidebar("mock");
       const m = A.main();
       if (view === "test" && run) { startRun(); return; }

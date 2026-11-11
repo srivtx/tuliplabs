@@ -89,6 +89,14 @@
 .mk-mark{font-weight:700}.mk-item.ok .mk-mark{color:var(--ok)}.mk-item.bad .mk-mark{color:var(--bad)}
 .mk-item>.mk-body,.mk-item>.why{padding:0 14px 12px}
 
+/* explain it: your words, then the model answer, then you mark yourself */
+.mk-explain{min-height:96px;font-family:inherit;font-size:15px;line-height:1.5}
+.mk-model{margin-top:12px}
+.mk-modelans{border-left:3px solid var(--line);padding:4px 0 4px 14px;margin:6px 0 10px}
+.mk-modelans p{margin:0 0 8px}
+.mk-yours{margin:4px 0 10px;padding:6px 12px;border-left:3px solid var(--muted);color:var(--muted);white-space:pre-wrap}
+.opts.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+
 @media (max-width:620px){
   .mk-setup{padding:16px}
   .mk-sentence{font-size:22px}
