@@ -253,6 +253,90 @@
 "twist": "<p>The watcher changes their mind: they want stretches with <b>exactly</b> <code>k</code> kinds. Write <code>longest_exactly_k(s, k)</code>, and return 0 if no stretch has exactly <code>k</code> kinds.</p>",
 "twisttests": "assert longest_exactly_k(\"aabcbbd\", 2) == 4\nassert longest_exactly_k(\"aab\", 3) == 0\nassert longest_exactly_k(\"abcab\", 3) == 5\nassert longest_exactly_k(\"\", 1) == 0\nassert longest_exactly_k(\"aaab\", 1) == 3",
 "twistsolution": "def longest_exactly_k(s, k):\n    count = {}\n    left = best = 0\n    for right, ch in enumerate(s):\n        count[ch] = count.get(ch, 0) + 1\n        while len(count) > k:\n            out = s[left]\n            count[out] -= 1\n            if count[out] == 0:\n                del count[out]\n            left += 1\n        if len(count) == k:\n            best = max(best, right - left + 1)\n    return best"
+},
+{
+"id": "range",
+"title": "Where does it start and end?",
+"fn": "find_range",
+"ch": 9,
+"decoys": [
+3,
+7,
+4,
+15
+],
+"bigo": "O(log n)",
+"hints": [
+"<p>Finding <i>one</i> copy with binary search is easy. Why isn't walking left and right from it fast enough?</p>",
+"<p>Ask a different question: \"what's the first index whose value is ≥ x?\" That's a yes/no boundary, and binary search finds boundaries.</p>",
+"<p>Write <code>first_at_least(v)</code> with <code>lo, hi = 0, len(a)</code>: if <code>a[mid] &lt; v</code> set <code>lo = mid + 1</code>, else <code>hi = mid</code>. Then the range is <code>first_at_least(x)</code> to <code>first_at_least(x + 1) - 1</code>.</p>"
+],
+"tests": [
+{
+"tag": "missing",
+"code": "assert find_range([1, 3, 5], 4) == (-1, -1)\nassert find_range([1, 3, 5], 9) == (-1, -1)\nassert find_range([1, 3, 5], 0) == (-1, -1)"
+},
+{
+"tag": "empty",
+"code": "assert find_range([], 3) == (-1, -1)"
+},
+{
+"tag": "dups",
+"code": "assert find_range([7] * 10, 7) == (0, 9)\nassert find_range([1, 7, 7], 7) == (1, 2)"
+},
+{
+"tag": "big",
+"code": "import random, time\nrandom.seed(5)\nbig = sorted([random.randint(0, 1000) for _ in range(100000)] + [500] * 100000)\nqs = [random.randint(-5, 1005) for _ in range(3000)] + [500] * 100\nt0 = time.perf_counter()\ngot = [find_range(big, q) for q in qs]\nsecs = time.perf_counter() - t0\nimport bisect\nfor q, g in zip(qs, got):\n    lo, hi = bisect.bisect_left(big, q), bisect.bisect_right(big, q) - 1\n    assert g == ((lo, hi) if lo <= hi else (-1, -1)), f\"find_range(big, {q}) gave {g}\"\nassert secs < 1.5, f\"{secs:.2f} s for 3,100 queries on 200,000 amounts: scanning is too slow\""
+}
+],
+"clarify": [
+{
+"q": "What if x isn't in the list?",
+"a": "Return (-1, -1).",
+"tag": "missing"
+},
+{
+"q": "Can the ledger be empty?",
+"a": "Yes. Then x is missing: (-1, -1).",
+"tag": "empty"
+},
+{
+"q": "Can one amount fill most of the ledger?",
+"a": "Yes, a million copies of the same amount happens. Your answer must stay fast then too.",
+"tag": "dups"
+},
+{
+"q": "Is it sorted smallest first?",
+"a": "Yes.",
+"tag": null
+},
+{
+"q": "Are the amounts whole numbers?",
+"a": "Yes.",
+"tag": null
+},
+{
+"q": "Can I use the bisect module?",
+"a": "Yes, or write the search yourself.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A ledger keeps transaction amounts <b>sorted</b>. Auditors keep asking: where does amount <code>x</code> first appear, and where does it last appear?</p>\n<p>Write <code>find_range(a, x)</code>: return a tuple <code>(first, last)</code> of the first and last index of <code>x</code> in the sorted list <code>a</code>. Each query should be fast, because the auditors ask thousands of them.</p>\n<p><code>find_range([1, 2, 2, 2, 5], 2)</code> is <code>(1, 3)</code>. <code>find_range([1, 3, 5], 5)</code> is <code>(2, 2)</code>.</p>",
+"examples": "assert find_range([1, 2, 2, 2, 5], 2) == (1, 3)\nassert find_range([1, 3, 5], 5) == (2, 2)",
+"starter": "def find_range(a, x):\n    pass",
+"solution": "def find_range(a, x):\n    def first_at_least(v):\n        lo, hi = 0, len(a)\n        while lo < hi:\n            mid = (lo + hi) // 2\n            if a[mid] < v:\n                lo = mid + 1\n            else:\n                hi = mid\n        return lo\n    lo = first_at_least(x)\n    if lo == len(a) or a[lo] != x:\n        return (-1, -1)\n    return (lo, first_at_least(x + 1) - 1)",
+"brute": "def find_range(a, x):\n    idx = [i for i, v in enumerate(a) if v == x]\n    return (idx[0], idx[-1]) if idx else (-1, -1)",
+"approach": "<p>Two binary searches: the first index whose value is at least <code>x</code>, and the first index whose value is at least <code>x + 1</code>. The answer is the first, and one before the second. Each is O(log n), even when <code>x</code> fills half the ledger.</p>",
+"twist": "<p>The auditors now want counts: write <code>count_between(a, lo, hi)</code>, the number of amounts with <code>lo &lt;= amount &lt;= hi</code>. Same sorted ledger, same need for speed.</p>",
+"twisttests": "assert count_between([1, 2, 2, 2, 5], 2, 4) == 3\nassert count_between([1, 2, 2, 2, 5], 0, 9) == 5\nassert count_between([1, 3, 5], 6, 9) == 0\nassert count_between([], 1, 2) == 0\nassert count_between([4, 4], 4, 4) == 2",
+"twistsolution": "import bisect\n\ndef count_between(a, lo, hi):\n    if lo > hi:\n        return 0\n    return bisect.bisect_right(a, hi) - bisect.bisect_left(a, lo)"
 }
 ]
 }

@@ -298,3 +298,95 @@ def longest_exactly_k(s, k):
             best = max(best, right - left + 1)
     return best
 ```
+
+```interview
+id: range
+title: Where does it start and end?
+fn: find_range
+ch: 9
+decoys: 3, 7, 4, 15
+bigo: O(log n)
+---prompt
+A ledger keeps transaction amounts **sorted**. Auditors keep asking: where does amount `x` first appear, and where does it last appear?
+
+Write `find_range(a, x)`: return a tuple `(first, last)` of the first and last index of `x` in the sorted list `a`. Each query should be fast, because the auditors ask thousands of them.
+
+`find_range([1, 2, 2, 2, 5], 2)` is `(1, 3)`. `find_range([1, 3, 5], 5)` is `(2, 2)`.
+---examples
+assert find_range([1, 2, 2, 2, 5], 2) == (1, 3)
+assert find_range([1, 3, 5], 5) == (2, 2)
+---clarify
++ missing | What if x isn't in the list? | Return (-1, -1).
++ empty | Can the ledger be empty? | Yes. Then x is missing: (-1, -1).
++ dups | Can one amount fill most of the ledger? | Yes, a million copies of the same amount happens. Your answer must stay fast then too.
+- | Is it sorted smallest first? | Yes.
+- | Are the amounts whole numbers? | Yes.
+- | Can I use the bisect module? | Yes, or write the search yourself.
+---test missing
+assert find_range([1, 3, 5], 4) == (-1, -1)
+assert find_range([1, 3, 5], 9) == (-1, -1)
+assert find_range([1, 3, 5], 0) == (-1, -1)
+---test empty
+assert find_range([], 3) == (-1, -1)
+---test dups
+assert find_range([7] * 10, 7) == (0, 9)
+assert find_range([1, 7, 7], 7) == (1, 2)
+---test big
+import random, time
+random.seed(5)
+big = sorted([random.randint(0, 1000) for _ in range(100000)] + [500] * 100000)
+qs = [random.randint(-5, 1005) for _ in range(3000)] + [500] * 100
+t0 = time.perf_counter()
+got = [find_range(big, q) for q in qs]
+secs = time.perf_counter() - t0
+import bisect
+for q, g in zip(qs, got):
+    lo, hi = bisect.bisect_left(big, q), bisect.bisect_right(big, q) - 1
+    assert g == ((lo, hi) if lo <= hi else (-1, -1)), f"find_range(big, {q}) gave {g}"
+assert secs < 1.5, f"{secs:.2f} s for 3,100 queries on 200,000 amounts: scanning is too slow"
+---starter
+def find_range(a, x):
+    pass
+---solution
+def find_range(a, x):
+    def first_at_least(v):
+        lo, hi = 0, len(a)
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if a[mid] < v:
+                lo = mid + 1
+            else:
+                hi = mid
+        return lo
+    lo = first_at_least(x)
+    if lo == len(a) or a[lo] != x:
+        return (-1, -1)
+    return (lo, first_at_least(x + 1) - 1)
+---brute
+def find_range(a, x):
+    idx = [i for i, v in enumerate(a) if v == x]
+    return (idx[0], idx[-1]) if idx else (-1, -1)
+---approach
+Two binary searches: the first index whose value is at least `x`, and the first index whose value is at least `x + 1`. The answer is the first, and one before the second. Each is O(log n), even when `x` fills half the ledger.
+---hint
+Finding *one* copy with binary search is easy. Why isn't walking left and right from it fast enough?
+---hint
+Ask a different question: "what's the first index whose value is ≥ x?" That's a yes/no boundary, and binary search finds boundaries.
+---hint
+Write `first_at_least(v)` with `lo, hi = 0, len(a)`: if `a[mid] < v` set `lo = mid + 1`, else `hi = mid`. Then the range is `first_at_least(x)` to `first_at_least(x + 1) - 1`.
+---twist
+The auditors now want counts: write `count_between(a, lo, hi)`, the number of amounts with `lo <= amount <= hi`. Same sorted ledger, same need for speed.
+---twisttests
+assert count_between([1, 2, 2, 2, 5], 2, 4) == 3
+assert count_between([1, 2, 2, 2, 5], 0, 9) == 5
+assert count_between([1, 3, 5], 6, 9) == 0
+assert count_between([], 1, 2) == 0
+assert count_between([4, 4], 4, 4) == 2
+---twistsolution
+import bisect
+
+def count_between(a, lo, hi):
+    if lo > hi:
+        return 0
+    return bisect.bisect_right(a, hi) - bisect.bisect_left(a, lo)
+```
