@@ -136,7 +136,7 @@ Grouped by the hard part, so similar apps teach each other.
 ### Location
 | App | The hard part | Simulate |
 |---|---|---|
-| **Uber** (rides) | Live driver locations, geo index, matching, surge, trip state | 1M location updates a second; a dense city cell; a driver who drops off |
+| **Uber** (rides) ✓ | Live driver locations, geo index, matching, trip state | Built: the nearest drivers with a geo index (cell size and ring search); matching a busy evening (at once vs batched); two matchers and dropped phones (a claim with an expiry). Still to add: surge pricing and a dense city cell |
 | **Yelp** (nearby) | Proximity search, read-heavy geo | Quadtree vs geohash on a city with hot spots |
 | **DoorDash** (delivery) | Three sides (eater, restaurant, courier), dispatch, ETAs | Dispatch at dinner rush |
 | **Google Maps** | Tiles, routing (Dijkstra, A*, contraction hierarchies), live traffic | Route across a country: precompute vs search |
@@ -233,7 +233,7 @@ Each principle is **taught** in one first-principles unit and **reused** in the 
    - Snip gets scope and sketch;
    - the whole Redis unit.
 2. **Floors 0–1:** the start of the beginner path. Each unit links to the Wind Tunnel experiment that already covers it.
-3. **The apps people ask about most:** WhatsApp ✓ (scope, napkin, sketch, follow a message; then hold 500M connections, Bob's patchy day, keep a group chat in order), then Uber, Twitter/X, YouTube, Ticketmaster, Stripe. Their first-principles units on floors 2–4 come just before them.
+3. **The apps people ask about most:** WhatsApp ✓ (scope, napkin, sketch, follow a message; then hold 500M connections, Bob's patchy day, keep a group chat in order), Uber ✓ (scope, napkin, sketch, follow a ride; then find the nearest drivers, match a busy evening, one driver for one rider), then Twitter/X, YouTube, Ticketmaster, Stripe. Their first-principles units on floors 2–4 come just before them.
 4. **New whiteboard kinds** `api`, `data` and `tradeoff`, added to the units already built.
 5. **A system design mock:** one unseen app, 45 minutes, whiteboard first and then simulate, with a scorecard. It follows the DSA interview mode.
 6. **The rest of the apps**, then the frontier.

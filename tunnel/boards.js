@@ -9,6 +9,8 @@
        bottleneck  traffic is about to climb: tap the part that gives out first, then watch the ramp
        draw        a brief, goals and a budget: change the drawing until 30 s of traffic meets every goal
        evict, persist, shard   the Redis unit's labs (tunnel/kv.js; their pages are in tunnel/board-kinds.js)
+       conns, offline, order   WhatsApp's labs (tunnel/chat.js)
+       nearby, batch, dispatch Uber's labs (tunnel/geo.js)
    Every number here is checked by tools/board-check.js against the simulators the page runs.
    A design: parts {id, kind, x, y, n (machines), size, batch} on a 960 × 540 board, and wires [from, to]. */
 (function (root) {
@@ -48,6 +50,15 @@
     blob: { name: "blob store", say: "photos and videos, by link", icon: '<rect x="3" y="4" width="20" height="18" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M3 19l6-6 4 4 3-3 7 7"/>' },
     poller: { name: "poller", say: "phones ask \"anything new?\" every 5 s", icon: '<path d="M4 10a8.5 8.5 0 0 1 15-3.5l1.5 1.5M22 16a8.5 8.5 0 0 1-15 3.5L5.5 18"/><path d="M21 3v5h-5M5 23v-5h5"/>' },
     index: { name: "message search", say: "an index of every message", icon: '<circle cx="11" cy="11" r="7"/><path d="M16 16l7 7"/>' },
+    rider: { name: "rider", fixed: true, say: "the app that asks for a ride", icon: '<path d="M13 24s-7-7.5-7-13a7 7 0 0 1 14 0c0 5.5-7 13-7 13z"/><circle cx="13" cy="11" r="2.6"/>' },
+    driver: { name: "driver", fixed: true, say: "the app in the car, sending where it is", icon: '<path d="M3 17v-4l3-6h14l3 6v4z"/><path d="M3 13h20"/><circle cx="8" cy="19" r="2.2"/><circle cx="18" cy="19" r="2.2"/>' },
+    locsvc: { name: "location service", say: "takes every driver's pings", icon: '<circle cx="13" cy="18" r="3"/><path d="M8 12.5a7 7 0 0 1 10 0M4.5 9a12 12 0 0 1 17 0"/>' },
+    geoidx: { name: "geo index", say: "map cells → the drivers in them, in RAM", icon: '<rect x="3" y="3" width="20" height="20" rx="2"/><path d="M3 9.7h20M3 16.3h20M9.7 3v20M16.3 3v20"/><circle cx="13" cy="13" r="1.6"/>' },
+    matcher: { name: "matcher", say: "pairs riders with drivers", icon: '<circle cx="6" cy="7" r="3"/><circle cx="20" cy="19" r="3"/><path d="M9 7h4a4 4 0 0 1 4 4v5"/><path d="M14.5 13.5 17 16l2.5-2.5"/>' },
+    eta: { name: "ETA service", say: "minutes to reach her, by road", icon: '<path d="M8 23 11 3M18 23 15 3M13 6v2M13 12v2M13 18v2"/>' },
+    trips: { name: "trip store", say: "each ride and its driver, claimed once", icon: '<path d="M6 2h14v21l-2.5-1.5L15 23l-2-1.5L11 23l-2.5-1.5L6 23z"/><path d="M9.5 8h7M9.5 12h7M9.5 16h4"/>' },
+    pingdb: { name: "ping table", say: "every ping, a row on disk", icon: '<ellipse cx="13" cy="5" rx="9" ry="3"/><path d="M4 5v16c0 1.7 4 3 9 3s9-1.3 9-3V5M8 11h10M8 15h10M8 19h10"/>' },
+    scan: { name: "full scan", say: "measure the rider to every driver", icon: '<circle cx="13" cy="13" r="10"/><circle cx="13" cy="13" r="5"/><path d="M13 13 20 6"/>' },
   };
 
   // what a part says on the board itself, where there's room for about 18 characters
@@ -55,7 +66,8 @@
     worker: "does queued work", idgen: "next short code", cdn: "near the users", client: "send commands", loop: "one thread", keyspace: "key → value, RAM",
     expiry: "keys with a TTL", evict: "frees RAM", aof: "every write", rdb: "a periodic copy", rreplica: "follows along", sql: "tables on disk", threads: "many threads",
     phone: "one open socket", gateway: "holds sockets", sessions: "who's where", chat: "routes messages", inbox: "waits for acks", push: "wakes a phone", blob: "photos, videos",
-    poller: "asks every 5 s", index: "reads messages" };
+    poller: "asks every 5 s", index: "reads messages", rider: "wants a ride", driver: "pings every 4 s", locsvc: "takes pings", geoidx: "cells → drivers",
+    matcher: "pairs them up", eta: "minutes by road", trips: "one ride each", pingdb: "a row a ping", scan: "checks them all" };
   for (const k in TAGS) PARTS[k].tag = TAGS[k];
 
   // A sketch's grade: each rubric item is a link the design needs (between parts of these kinds, either way round),
@@ -407,6 +419,107 @@
     ],
   };
 
+
+  // ------------------------------------------------------------------------------------------------- Uber --
+  const UB_FOLLOW = {
+    nodes: [P("R", "rider", 95, 140, { label: "Rina" }), P("D", "driver", 95, 400, { label: "Dev" }), P("g", "gateway", 285, 270), P("lo", "locsvc", 475, 400), P("ge", "geoidx", 665, 400),
+      P("ma", "matcher", 475, 140), P("et", "eta", 665, 140), P("tr", "trips", 860, 140)],
+    wires: [["R", "g"], ["D", "g"], ["g", "lo"], ["lo", "ge"], ["g", "ma"], ["ma", "ge"], ["ma", "et"], ["ma", "tr"]],
+  };
+  const UB_REF = {
+    nodes: [P("ri", "rider", 95, 140), P("dr", "driver", 95, 400), P("gw", "gateway", 285, 270), P("lo", "locsvc", 475, 400), P("ge", "geoidx", 665, 400),
+      P("ma", "matcher", 475, 140), P("et", "eta", 665, 140), P("tr", "trips", 860, 140)],
+    wires: [["ri", "gw"], ["dr", "gw"], ["gw", "lo"], ["lo", "ge"], ["gw", "ma"], ["ma", "ge"], ["ma", "et"], ["ma", "tr"]],
+  };
+  const UBER_UNIT = {
+    id: "uber", name: "Uber", sub: "rides, matched in seconds, in every city", floor: 7, group: "Location",
+    w: [
+      {
+        id: "ub-scope", kind: "scope", title: "What is Uber?",
+        lede: "You're designing a ride app the size of Uber. Before any boxes, pin down what it must do. Sort the cards: <b>what it does</b>, <b>how well</b>, <b>not now</b>.",
+        cards: [
+          { t: "Ask for a ride and see the price first", bin: "does", why: "The rider's side: where from, where to, how much." },
+          { t: "Match the rider with a driver nearby", bin: "does", why: "The heart of it: dispatch." },
+          { t: "Show the car moving on the map until pickup", bin: "does", why: "Every driver's phone sends where it is, and the rider's app is pushed the updates." },
+          { t: "A driver found within seconds of asking", bin: "how", why: "A promise about speed. It's why the drivers' locations live in memory." },
+          { t: "Never send one driver to two riders", bin: "how", why: "Correctness under concurrency: two matchers can reach for the same driver at the same moment." },
+          { t: "Keep going when a driver's phone drops mid-offer", bin: "how", why: "Phones lose signal in tunnels and car parks. A rider must not wait forever on a dead phone." },
+          { t: "Food delivery", bin: "not", why: "Three sides instead of two (eater, restaurant, courier): its own unit, DoorDash." },
+          { t: "Turn-by-turn directions for the driver", bin: "not", why: "Routing is Google Maps' unit. Uber only needs an ETA: minutes from the driver to the rider." },
+          { t: "Paying drivers into their bank accounts", bin: "not", why: "Payouts and ledgers belong to the Stripe unit." },
+        ],
+        why: "A ride app does three things: take a request with a price, find a driver, and show the car coming. The hard part is in \"how well\": a driver in seconds, never two riders for one driver, and no rider stuck on a phone that dropped. Food, directions and payouts are big systems of their own.",
+      },
+      {
+        id: "ub-napkin", kind: "napkin", title: "Size Uber",
+        lede: "At the busiest hour <b>3 million</b> drivers are online, and each driver's phone sends where it is every <b>4 seconds</b>. A location (driver id, latitude, longitude, time) is about <b>100 bytes</b>. Riders take <b>25 million</b> rides a day.",
+        q: {},
+        design: { nodes: [P("dr", "driver", 95, 330), P("lo", "locsvc", 420, 330), P("ge", "geoidx", 760, 330)], wires: [["dr", "lo"], ["lo", "ge"]] },
+        notes: [
+          { id: "u", on: "lo", dx: 0, dy: -190, label: "location updates a second", unit: "/s", calc: "3e6 / 4", hint: "drivers ÷ seconds between pings" },
+          { id: "r", on: "ge", dx: -10, dy: -190, label: "every driver's latest spot", unit: "MB", calc: "3e6 * 100 / 1e6", hint: "drivers × bytes; 1 MB is 10⁶ bytes" },
+          { id: "q", on: "lo", dx: 0, dy: 60, label: "ride requests a second", unit: "/s", calc: "25e6 / (24 * 3600)", hint: "a day is 86,400 seconds" },
+        ],
+        why: "3 million drivers pinging every 4 s is 750,000 location updates a second. Yet the live map is tiny: every driver's latest spot is 300 MB, which fits in one machine's memory. Ride requests are only 289 a second. So Uber is write-heavy in an unusual way: a flood of small updates that overwrite each other, and a trickle of questions about them.",
+      },
+      {
+        id: "ub-sketch", kind: "sketch", title: "Draw Uber",
+        lede: "Draw the server side. Drivers' phones stream where they are; a rider asks for a ride and must get the nearest driver who can reach her soonest, and that driver must be hers alone. Drag parts in from the tray and wire them. Two of the parts don't belong.",
+        q: {},
+        tray: ["gateway", "locsvc", "geoidx", "matcher", "eta", "trips", "lb", "pingdb", "scan"],
+        design: { nodes: [P("ri", "rider", 95, 140), P("dr", "driver", 95, 400)], wires: [] },
+        reference: UB_REF,
+        rubric: [
+          { link: [["driver", "gateway"]], say: "Driver apps keep a connection open to a gateway and send where they are every 4 s." },
+          { link: [["rider", "gateway"]], say: "Rider apps connect the same way, so the car's position can be pushed to them as it moves." },
+          { link: [["gateway", "locsvc"]], say: "Location pings go to a location service." },
+          { link: [["locsvc", "geoidx"]], say: "Each ping overwrites the driver's spot in an in-memory geo index: the map cut into cells, each listing the drivers in it." },
+          { link: [["gateway", "matcher"]], say: "Ride requests go to the matcher (dispatch)." },
+          { link: [["matcher", "geoidx"]], say: "The matcher asks the geo index for drivers in the rider's cell and the cells around it." },
+          { link: [["matcher", "eta"]], say: "It ranks them by minutes to reach her on real roads, not by distance as the crow flies." },
+          { link: [["matcher", "trips"]], say: "It claims the driver in the trip store in one step, so no other rider can get them." },
+        ],
+        wrong: {
+          pingdb: "750,000 pings a second as rows on disk, then a distance query over millions of rows per request. Matching needs only each driver's latest spot: keep it in memory, and log the history.",
+          scan: "289 requests a second × 3 million drivers is 867 million distance checks a second, nearly all of them in other cities. Ask the geo index for the cells around her.",
+        },
+        why: "Both apps hold a connection to a gateway. Driver pings flow to the location service, which overwrites each driver's spot in a geo index kept in memory. A ride request goes to the matcher, which asks the geo index for drivers in nearby cells, ranks them by ETA on real roads, and claims one in the trip store so no one else can. The pings' history goes to a log for analytics; it's never on the matching path.",
+      },
+      {
+        id: "ub-follow", kind: "follow", title: "Follow a ride",
+        lede: "Rina wants a ride across town, and Dev is driving nearby. Tap the parts each request passes through, in order.",
+        q: {}, item: "request",
+        design: UB_FOLLOW,
+        rounds: [
+          { say: "Dev turns a corner. His app sends where he is now.", path: ["D", "g", "lo", "ge"] },
+          { say: "Rina asks for a ride. Which drivers are near her?", path: ["R", "g", "ma", "ge"] },
+          { say: "The matcher offered Rina's ride to Dev, and he taps accept. Make the ride his alone.", path: ["D", "g", "ma", "tr"] },
+        ],
+        why: "A location ping never touches the matcher: it just overwrites Dev's spot in the geo index, 750,000 times a second across the world. A ride request asks the index for nearby cells, so it looks at a few dozen drivers, not millions. The accept goes back through the matcher to the trip store, where the driver is claimed in one step, so a second rider can't get him too.",
+      },
+    ],
+    s: [
+      {
+        id: "ub-nearby", kind: "nearby", title: "Find the nearest drivers",
+        lede: "A city 20 km across with <b>3,000</b> drivers: crowded downtown, a busy airport, thin suburbs. <b>40</b> riders ask for a ride, and each needs her <b>5</b> nearest drivers. The geo index cuts the map into square cells. Pick the cell size and how far to look. The goal: the <b>true 5 nearest</b> for every rider, with at most <b>80</b> units of work a request on average (a cell opened or a driver measured is 1 each).",
+        sim: { seed: 1 }, goals: { right: 40, work: 80 }, answer: { cell: 0.25, search: "widen" },
+        why: "Checking every driver is always right and always 3,000 units of work. Her own cell alone misses drivers just over the line: a rider near a cell's edge has neighbours in the next cell. Her cell and the 8 around it is right with big cells, but downtown a 4 km cell holds hundreds of drivers, so it costs 1,700. With small cells the 8 around her can be empty in the suburbs, and then she gets fewer than 5. Widening ring by ring, until nothing further out could be closer than the 5th found, is always right. Its cost has a sweet spot: 250 m cells cost 54, while 100 m cells cost 108, because the suburbs need so many empty cells opened. Uber's index (H3) works the same way, with hexagons instead of squares.",
+      },
+      {
+        id: "ub-batch", kind: "batch", title: "Match a busy evening",
+        lede: "A busy hour downtown: <b>20</b> riders ask every minute, and <b>240</b> drivers take them. Matching each rider the moment she asks gives her the nearest free driver, even when that driver is the only one near the next rider. A matcher can instead collect riders for a few seconds and pair the whole batch so the total drive is shortest. Pick the window. The goal: the car reaches riders in <b>4.4 minutes</b> or less on average, counting the wait to be matched.",
+        sim: { seed: 1 }, goals: { wait: 4.4 }, answer: 60,
+        why: "Matching at once takes the car 5.4 minutes on average: first come, first served hands out nearby drivers that a later rider needed more. A batch can swap them so the total drive is shortest. Every minute meets the goal: the drive falls to 3.6 minutes, and riders wait 39 s to be matched, 4.2 in all. Every 30 s gets to 4.5. Every 2 minutes drives shortest of all, 3.2, but riders wait 81 s first, so the total climbs back to 4.6. Batching trades a little waiting for much better matches, and real dispatchers tune the window city by city and hour by hour.",
+      },
+      {
+        id: "ub-dispatch", kind: "dispatch", title: "One driver, one rider",
+        lede: "Two matcher servers hand out drivers at the same time, so two riders on the same corner can reach for the same driver. And now and then a driver's phone drops just as an offer arrives. Drivers take <b>3 to 12 s</b> to tap accept. Choose how a matcher claims a driver and how long an offer stays open, then run the evening. The goal: <b>no driver sent to two riders</b>, <b>no rider stuck</b>, <b>no accept thrown away</b>, and every rider has a driver within <b>a minute</b>.",
+        sim: { seed: 1 }, goals: { worst: 60 }, answer: { claim: "cas", expiry: 15 },
+        why: "Checking that a driver is free and marking them busy only when they accept leaves a gap of several seconds: twin requests on the same corner both read \"free\", both offer, and the driver accepts both. 27 drivers got two riders. Claiming the driver in one step (compare-and-set: free → offered to this ride) closes the gap: the second matcher sees the claim and offers the next driver. An offer that never expires strands a rider on a dead phone. 5 s throws away accepts from drivers who needed longer, and 60 s keeps the rider waiting over a minute whenever a phone drops. 15 s fits everyone who answers, so the worst wait is 38 s. A claim with an expiry is a lease.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -435,7 +548,7 @@
 [7, "slack", "Slack / Discord", "Fan-out to big channels", "Talk in real time"], [7, "zoom", "Zoom", "WebRTC and SFUs", "Talk in real time"],
     [7, "twitter", "Twitter / X", "The celebrity problem", "Feeds and social"], [7, "instagram", "Instagram", "Photos and a feed", "Feeds and social"], [7, "tiktok", "TikTok", "A feed a model makes", "Feeds and social"],
     [7, "reddit", "Reddit", "Votes and hot ranking", "Feeds and social"], [7, "linkedin", "LinkedIn", "Degrees of connection", "Feeds and social"],
-    [7, "uber", "Uber", "Live locations, matching", "Location"], [7, "yelp", "Yelp", "Nearby search", "Location"], [7, "doordash", "DoorDash", "Dispatch at dinner rush", "Location"], [7, "maps", "Google Maps", "Tiles and routing", "Location"],
+[7, "yelp", "Yelp", "Nearby search", "Location"], [7, "doordash", "DoorDash", "Dispatch at dinner rush", "Location"], [7, "maps", "Google Maps", "Tiles and routing", "Location"],
     [7, "youtube", "YouTube", "Upload, transcode, stream", "Media"], [7, "netflix", "Netflix", "A CDN inside ISPs", "Media"], [7, "spotify", "Spotify", "Offline caching", "Media"],
     [7, "dropbox", "Dropbox", "Chunks, dedupe, sync", "Files and documents"], [7, "gdocs", "Google Docs", "OT vs CRDT", "Files and documents"], [7, "pastebin", "Pastebin", "Blobs and expiry", "Files and documents"],
     [7, "amazon", "Amazon checkout", "Inventory and sagas", "Money and commerce"], [7, "ticketmaster", "Ticketmaster", "100k people, 1k seats", "Money and commerce"],
@@ -447,12 +560,13 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
   REDIS_UNIT.cover = REDIS_REF;
   WA_UNIT.cover = WA_REF;
+  UBER_UNIT.cover = UB_REF;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];

@@ -13,6 +13,7 @@ const N = require(path.join(__dirname, "..", "tunnel", "net.js"));
 const SD = require(path.join(__dirname, "..", "tunnel", "boards.js"));
 const KV = require(path.join(__dirname, "..", "tunnel", "kv.js"));
 const CH = require(path.join(__dirname, "..", "tunnel", "chat.js"));
+const GEO = require(path.join(__dirname, "..", "tunnel", "geo.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -188,6 +189,58 @@ for (const b of BOARDS) {
 }
 // a whiteboard part with a name on it (Alice, Bob) still has a kind the catalog knows
 for (const b of BOARDS) for (const nd of (b.design || { nodes: [] }).nodes) if (nd.label) ok(SD.PARTS[nd.kind], `${b.id}: ${nd.label} has no part kind`);
+
+// --------------------------------------------------------------------------------------------- Uber labs --
+const says = (text, x) => text.replace(/,/g, "").includes(String(x));
+// the matcher's assignment solver finds the cheapest pairing: against every permutation, on small random grids
+{
+  const R = GEO.rng(42);
+  for (let t = 0; t < 60; t++) {
+    const n = 1 + Math.floor(R() * 4), m = n + Math.floor(R() * 3), cost = Array.from({ length: n }, () => Array.from({ length: m }, () => Math.round(R() * 100)));
+    let best = Infinity;
+    const walk = (i, used, sum) => { if (i === n) { best = Math.min(best, sum); return; } for (let j = 0; j < m; j++) if (!used.has(j)) { used.add(j); walk(i + 1, used, sum + cost[i][j]); used.delete(j); } };
+    walk(0, new Set(), 0);
+    const a = GEO.assign(cost), got = a.reduce((x, j, i) => x + cost[i][j], 0);
+    ok(new Set(a).size === n && a.every((j) => j >= 0) && got === best, `assign(): grid ${t} costs ${got}, the best is ${best}`);
+  }
+}
+for (const b of BOARDS) {
+  if (b.kind === "nearby") {
+    // only the answer's cell size and search meet both goals; widening is right at every size; her own cell never is
+    const g = b.goals, C = GEO.city({ seed: b.sim.seed }), at = {};
+    for (const cell of GEO.CELLS) for (const search of cell ? GEO.SEARCH : ["scan"]) {
+      const r = (at[cell + search] = GEO.nearby({ cell, search, C })), pass = r.right === r.n && r.work <= g.work;
+      ok(pass === (cell === b.answer.cell && search === b.answer.search), `${b.id}: ${cell} km cells, ${search}: ${r.right}/${r.n} right, ${Math.round(r.work)} work, ${pass ? "passes" : "fails"}`);
+      if (search === "widen" || search === "scan") ok(r.right === r.n, `${b.id}: ${search} with ${cell} km cells got ${r.right}/${r.n}`);
+      if (search === "cell") ok(r.right < r.n, `${b.id}: her own ${cell} km cell found everyone's true 5`);
+    }
+    for (const seed of [2, 3, 4]) for (const cell of [1, 0.25]) ok(GEO.nearby({ cell, search: "widen", seed }).right === 40, `${b.id} seed ${seed}: widening ${cell} km cells missed someone`);
+    for (const [k, w] of [["0scan", 3000], ["4ring", Math.round(at["4ring"].work / 100) * 100], ["0.25widen", Math.round(at["0.25widen"].work)], ["0.1widen", Math.round(at["0.1widen"].work)]]) ok(says(b.why, w), `${b.id}: the why doesn't say ${k} costs ${w}`);
+  }
+  if (b.kind === "batch") {
+    // only the answer's window meets the goal; batching beats matching at once on every seed
+    const runs = Object.fromEntries(GEO.WINDOWS.map((w) => [w, GEO.match({ window: w, seed: b.sim.seed })])), m1 = (x) => (x / 60).toFixed(1);
+    for (const w of GEO.WINDOWS) ok((runs[w].wait / 60 <= b.goals.wait) === (w === b.answer), `${b.id}: a ${w} s window takes ${m1(runs[w].wait)} min`);
+    for (const w of GEO.WINDOWS) ok(runs[w].n === runs[w].asked, `${b.id}: a ${w} s window left riders unmatched`);
+    for (const seed of [2, 3, 4]) ok(GEO.match({ window: b.answer, seed }).wait < GEO.match({ window: 0, seed }).wait, `${b.id} seed ${seed}: batching didn't beat matching at once`);
+    const A = runs[b.answer], L = runs[120];
+    for (const x of [m1(runs[0].wait), m1(A.pick), Math.round(A.toMatch), m1(A.wait), m1(runs[30].wait), m1(L.pick), Math.round(L.toMatch), m1(L.wait)]) ok(says(b.why, x), `${b.id}: the why doesn't say ${x}`);
+  }
+  if (b.kind === "dispatch") {
+    // on every seed only the answer meets all four goals, and the choices never change the evening itself
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const base = GEO.evening({ seed }).rides.map((o) => o.t.toFixed(3)).join();
+      for (const claim of GEO.CLAIMS) for (const expiry of GEO.EXPIRY) {
+        const v = GEO.evening({ claim, expiry, seed }), pass = !v.doubled && !v.stuck && !v.late && v.worst <= b.goals.worst;
+        ok(pass === (claim === b.answer.claim && expiry === b.answer.expiry), `${b.id} seed ${seed}: ${claim}, ${expiry} s: ${v.doubled} doubled, ${v.stuck} stuck, ${v.late} late, worst ${Math.round(v.worst)} s`);
+        ok(v.rides.map((o) => o.t.toFixed(3)).join() === base, `${b.id} seed ${seed}: ${claim}/${expiry} changed the requests`);
+      }
+    }
+    const chk = GEO.evening({ claim: "check", expiry: 15, seed: b.sim.seed }), good = GEO.evening({ ...b.answer, seed: b.sim.seed });
+    ok(says(b.why, `${chk.doubled} drivers got two riders`), `${b.id}: the why doesn't say ${chk.doubled} drivers got two riders`);
+    ok(says(b.why, `worst wait is ${Math.round(good.worst)} s`), `${b.id}: the why doesn't say the worst wait is ${Math.round(good.worst)} s`);
+  }
+}
 
 const ids = BOARDS.map((b) => b.id), ladder = SD.LADDER.map((u) => u.id);
 ok(new Set(ids).size === ids.length, "two questions share an id");

@@ -513,3 +513,266 @@
     if (r === c.B.answer) { F.solvedHere = true; c.solved(F.tries === 1 ? 3 : F.tries === 2 ? 2 : 1); }
   }
 })();
+
+/* The Uber labs (tunnel/geo.js):
+     nearby    a city of 3,000 drivers: pick the geo index's cell size and how far a search looks
+     batch     a busy evening downtown: match each rider at once, or collect a few seconds of riders and pair the batch
+     dispatch  two matchers, phones that drop mid-offer: how a driver is claimed, and how long an offer stays open */
+(function () {
+  "use strict";
+  const UI = window.SD.UI, GEO = window.GEO;
+  const K = 30, MX = 40, MY = 130, mx = (x) => MX + x * K, my = (y) => MY + y * K;
+  const dots = (pts) => pts.map((p) => `M${mx(p.x).toFixed(1)} ${my(p.y).toFixed(1)}h0`).join("");
+  function city(c, C, sub) {
+    const { s } = c;
+    return [s("text", { class: "ev-h", x: MX, y: 96 }, "The city"), s("text", { class: "ev-sub", x: MX, y: 114 }, sub),
+      s("rect", { class: "ub-map", x: MX, y: MY, width: C.W * K, height: C.H * K, rx: 6 }),
+      s("text", { class: "ub-place", x: mx(7.5), y: my(5.5) + 84, "text-anchor": "middle" }, "downtown"), s("text", { class: "ub-place", x: mx(16.2), y: my(2.6) - 40, "text-anchor": "middle" }, "airport")];
+  }
+  const stars = (runs) => (runs <= 2 ? 3 : runs <= 4 ? 2 : 1);
+
+  // ----------------------------------------------------------------------------------------------- nearby --
+  const CELL_WORD = { 4: "4 km cells", 2: "2 km cells", 1: "1 km cells", 0.5: "500 m cells", 0.25: "250 m cells", 0.1: "100 m cells", 0: "none: measure every driver" };
+  const LOOK_WORD = { cell: "her own cell", ring: "her cell and the 8 around it", widen: "ring after ring, until nothing closer can hide" };
+  const shown = (F) => {
+    const R = F.res;
+    if (!R) return -1;
+    if (F.anim < R.n) return Math.floor(F.anim);
+    if (F.pick != null) return F.pick;
+    const bad = R.list.findIndex((r) => !r.ok);
+    return bad >= 0 ? bad : R.list.reduce((b, r, i) => (r.work > R.list[b].work ? i : b), 0);
+  };
+  // a magnifier on one rider's search: 240 × 130, centred on her
+  function zoom(c, cur, X, Y) {
+    const { s, F } = c, C = F.C, q = cur.q, at = (k) => C.drivers[k];
+    const far = Math.max(...[...cur.found, ...cur.truth].map((k) => GEO.dist(at(k), q)), 0.2), hw = Math.min(4, Math.max(0.35, far * 1.3)), z = 120 / hw, vh = 65 / z;
+    F.zw = hw;
+    const zx = (x) => X + 120 + (x - q.x) * z, zy = (y) => Y + 65 + (y - q.y) * z, inside = (p) => Math.abs(p.x - q.x) <= hw + 0.1 && Math.abs(p.y - q.y) <= vh + 0.1;
+    const pts = (L) => L.filter(inside).map((p) => `M${zx(p.x).toFixed(1)} ${zy(p.y).toFixed(1)}h0`).join("");
+    const kids = [s("rect", { class: "ub-map", x: X, y: Y, width: 240, height: 130, rx: 6 })];
+    const cell = F.res.cell;
+    if (cell) {
+      for (const [x, y] of cur.cells) if (Math.abs((x + 0.5) * cell - q.x) < hw + cell && Math.abs((y + 0.5) * cell - q.y) < vh + cell) kids.push(s("rect", { class: "ub-open", x: zx(x * cell), y: zy(y * cell), width: cell * z, height: cell * z }));
+      if ((2 * hw) / cell < 60) {
+        let d = "";
+        for (let x = Math.ceil((q.x - hw) / cell) * cell; x <= q.x + hw; x += cell) d += `M${zx(x).toFixed(1)} ${Y}v130`;
+        for (let y = Math.ceil((q.y - vh) / cell) * cell; y <= q.y + vh; y += cell) d += `M${X} ${zy(y).toFixed(1)}h240`;
+        kids.push(s("path", { class: "ub-grid", d }));
+      }
+    }
+    kids.push(s("path", { class: "ub-drv z", d: pts(C.drivers) }), s("path", { class: "ub-seen z", d: pts(cur.seen ? cur.seen.map(at) : C.drivers) }));
+    for (const k of cur.truth) if (!cur.found.includes(k)) kids.push(s("path", { class: "ub-miss", d: `M${zx(q.x)} ${zy(q.y)}L${zx(at(k).x)} ${zy(at(k).y)}` }));
+    for (const k of cur.found) kids.push(s("path", { class: "ub-found" + (cur.truth.includes(k) ? "" : " wrong"), d: `M${zx(q.x)} ${zy(q.y)}L${zx(at(k).x)} ${zy(at(k).y)}` }));
+    kids.push(s("circle", { class: "ub-r cur" + (cur.ok ? " ok" : " no"), cx: zx(q.x), cy: zy(q.y), r: 5 }), s("text", { class: "ev-tick", x: X + 234, y: Y + 124, "text-anchor": "end" }, `${(2 * hw).toFixed(1)} km across`));
+    return [s("clipPath", { id: "ub-zc" }, s("rect", { x: X, y: Y, width: 240, height: 130, rx: 6 })), s("g", { "clip-path": "url(#ub-zc)" }, ...kids), s("rect", { class: "ub-zb", x: X, y: Y, width: 240, height: 130, rx: 6 })];
+  }
+  UI.nearby = {
+    init(c) { const C = GEO.city({ seed: c.B.sim.seed }); Object.assign(c.F, { C, cell: 1, search: "cell", res: null, anim: 0, runs: 0, pick: null, all: dots(C.drivers) }); },
+    draw(c) {
+      const { s, F } = c, C = F.C, R = F.res, i = shown(F), cur = i >= 0 ? R.list[i] : null, upto = R ? Math.min(R.n, Math.floor(F.anim)) : 0;
+      const kids = city(c, C, `${c.num(C.drivers.length)} drivers · ${C.riders.length} riders · 20 km × 11 km`);
+      // the cells it opened for the rider on show, then the grid over everything
+      if (cur && F.cell) for (const [x, y] of cur.cells) kids.push(s("rect", { class: "ub-open", x: mx(x * F.cell), y: my(y * F.cell), width: Math.min(F.cell, C.W - x * F.cell) * K, height: Math.min(F.cell, C.H - y * F.cell) * K }));
+      if (F.cell) {
+        let d = "";
+        for (let x = F.cell; x < C.W - 1e-9; x += F.cell) d += `M${mx(x).toFixed(1)} ${MY}v${C.H * K}`;
+        for (let y = F.cell; y < C.H - 1e-9; y += F.cell) d += `M${MX} ${my(y).toFixed(1)}h${C.W * K}`;
+        kids.push(s("path", { class: "ub-grid" + (F.cell < 0.5 ? " fine" : ""), d }));
+      }
+      kids.push(s("path", { class: "ub-drv", d: F.all }));
+      if (cur) {
+        kids.push(s("path", { class: "ub-seen", d: cur.seen ? dots(cur.seen.map((k) => C.drivers[k])) : F.all }));
+        const at = (k) => C.drivers[k], q = cur.q;
+        for (const k of cur.truth) if (!cur.found.includes(k)) kids.push(s("path", { class: "ub-miss", d: `M${mx(q.x)} ${my(q.y)}L${mx(at(k).x)} ${my(at(k).y)}` }));
+        for (const k of cur.found) kids.push(s("path", { class: "ub-found" + (cur.truth.includes(k) ? "" : " wrong"), d: `M${mx(q.x)} ${my(q.y)}L${mx(at(k).x)} ${my(at(k).y)}` }));
+      }
+      // the riders: tap one to see her search
+      C.riders.forEach((q, k) => {
+        const r = R && k < upto ? R.list[k] : null;
+        kids.push(s("circle", { class: "ub-r" + (r ? (r.ok ? " ok" : " no") : "") + (k === i ? " cur" : ""), cx: mx(q.x), cy: my(q.y), r: k === i ? 6.5 : 4.6,
+          onclick: () => { if (R && F.anim >= R.n) { F.pick = k; c.redraw(); } } }));
+      });
+      // the rider on show, up close, and every request's work so far
+      const X = 680;
+      if (cur) {
+        const what = cur.ok ? "her true 5 nearest ✓" : cur.near < 5 ? `only ${cur.near} driver${cur.near === 1 ? "" : "s"} found ✗` : "a nearer driver missed ✗";
+        kids.push(s("text", { class: "ev-h", x: X, y: 158 }, `Rider ${i + 1}`), s("text", { class: "ub-sum b", x: X + 240, y: 158, "text-anchor": "end" }, `${c.num(cur.work)} work`),
+          s("text", { class: "ub-what" + (cur.ok ? "" : " no"), x: X, y: 177 }, what), ...zoom(c, cur, X, 186),
+          s("text", { class: "ub-sum", x: X, y: 336 }, `${c.num(cur.opened)} cell${cur.opened === 1 ? "" : "s"} opened + ${c.num(cur.checked)} measured`));
+      } else kids.push(s("text", { class: "ev-sub", x: X, y: 172 }, "pick the cells and the search,"), s("text", { class: "ev-sub", x: X, y: 188 }, "then find drivers for all 40 riders"));
+      const BY = 446, BH = 84, lg = (v) => (Math.log10(Math.max(1, v)) / Math.log10(3000)) * BH, goal = c.B.goals.work;
+      kids.push(s("path", { class: "ub-axis", d: `M${X} ${BY}h240` }), s("text", { class: "ev-tick", x: X, y: BY + 16 }, "work, request by request (log scale)"));
+      if (R) for (let k = 0; k < upto; k++) { const r = R.list[k]; kids.push(s("rect", { class: "ub-bar" + (r.ok ? (r.work > goal ? " over" : "") : " no") + (k === i ? " cur" : ""), x: X + k * 6, y: BY - lg(r.work), width: 4.5, height: Math.max(1, lg(r.work)) })); }
+      kids.push(s("path", { class: "ub-goal", d: `M${X - 4} ${BY - lg(goal)}h248` }), s("text", { class: "ev-tick", x: X + 244, y: BY - lg(goal) - 5, "text-anchor": "end" }, `${goal} a request`));
+      kids.push(s("text", { class: "ev-tick", x: MX, y: 486 }, "lit dots: drivers measured · shaded: cells opened · green lines: the 5 found · red dashes: a nearer driver it missed"));
+      if (cur) { const q = cur.q, hw = F.zw; kids.push(s("rect", { class: "ub-zf", x: mx(q.x - hw), y: my(q.y - hw * 0.54), width: 2 * hw * K, height: 1.08 * hw * K })); }
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= R.n) return;
+      F.anim = Math.min(R.n, F.anim + dt * (c.REDUCED ? 400 : 6));
+      c.redraw();
+      if (F.anim >= R.n) { if (R.right === R.n && R.work <= c.B.goals.work) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= F.res.n ? F.res : null, goal = c.B.goals.work;
+      const say = R && !(R.right === R.n && R.work <= goal) ? h("p", { class: "sd-verdict no" }, R.right < R.n ? `✗ ${R.n - R.right} of ${R.n} riders didn't get their true 5 nearest.` : `✗ Every rider is right, but a request costs ${c.num(Math.round(R.work))} on average.`) : null;
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Tap a rider on the map to see her search. Shaded cells were opened, lit drivers were measured, and green lines join her to the 5 it found."), say)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; F.pick = null; F.anim = 0; c.redraw(); c.rebrief(); };
+      const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "the geo index: ", h("button", { class: "sd-word", onclick: () => set("cell", cyc(GEO.CELLS, F.cell)) }, CELL_WORD[F.cell])),
+        F.cell ? h("p", {}, "a search looks in ", h("button", { class: "sd-word", onclick: () => set("search", cyc(GEO.SEARCH, F.search)) }, LOOK_WORD[F.search])) : null),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < F.res.n, onclick: () => { F.runs++; F.res = GEO.nearby({ cell: F.cell, search: F.search, C: F.C }); F.anim = 0; F.pick = null; c.redraw(); c.rebrief(); } }, "Find drivers"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const F = c.F, R = F.res && F.anim >= F.res.n ? F.res : null, g = c.B.goals;
+      return [["the true 5 nearest, every rider", R ? R.right === R.n : null, R ? `${R.right}/${R.n}` : "run it"], [`work ≤ ${g.work} a request`, R ? R.work <= g.work : null, R ? c.num(Math.round(R.work)) : "·"],
+        ["the costliest request", null, R ? c.num(R.worst) : "·"]];
+    },
+  };
+
+  // ------------------------------------------------------------------------------------------------ batch --
+  const WIN_WORD = { 0: "the moment she asks", 5: "every 5 s", 15: "every 15 s", 30: "every 30 s", 60: "every minute", 120: "every 2 minutes" };
+  const WIN_TICK = { 0: "at once", 5: "5 s", 15: "15 s", 30: "30 s", 60: "1 min", 120: "2 min" };
+  const clock = (t) => `8:${String(Math.floor(t / 60)).padStart(2, "0")} pm`;
+  UI.batch = {
+    init(c) { Object.assign(c.F, { win: 0, res: null, anim: 0, runs: 0, tried: {}, C: GEO.city({ seed: 1, drivers: 0, riders: 0 }) }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, T = 1800, now = R ? Math.min(1, F.anim) * T : 0;
+      const kids = city(c, F.C, R ? `${R.n} rides from 8 pm to 8:30 · 240 drivers · ${clock(now)}` : "20 riders a minute downtown · 240 drivers");
+      if (R) for (const r of R.rides) {
+        if (r.t > now) continue;
+        if (r.matched > now) { kids.push(s("circle", { class: "ub-ask", cx: mx(r.x), cy: my(r.y), r: 4 + (c.REDUCED ? 0 : ((now - r.t) % 8) / 2) })); continue; }
+        // a pickup: the driver's drive to her, bright when it's new and fading to a trace
+        const age = now - r.matched, far = r.pick > 600 ? " far" : r.pick > 300 ? " mid" : "";
+        kids.push(s("path", { class: "ub-pick" + far + (age < 90 ? " new" : ""), d: `M${mx(r.from.x).toFixed(1)} ${my(r.from.y).toFixed(1)}L${mx(r.x).toFixed(1)} ${my(r.y).toFixed(1)}` }));
+        if (age < 90) kids.push(s("circle", { class: "ub-car", cx: mx(r.x), cy: my(r.y), r: 2.6 }));
+      }
+      // every window tried: the drive, plus the wait to be matched, against the goal
+      const X = 680, BY = 446, PX = 26, top = (m) => BY - m * PX, goal = c.B.goals.wait;
+      kids.push(s("text", { class: "ev-h", x: X, y: 172 }, "Until the car arrives"), s("text", { class: "ev-sub", x: X, y: 190 }, "average minutes, for each window"));
+      kids.push(s("path", { class: "ub-axis", d: `M${X} ${BY}h244` }));
+      GEO.WINDOWS.forEach((w, k) => {
+        const x = X + k * 41, m = F.tried[w];
+        if (m) {
+          const p = m.pick / 60, q = m.toMatch / 60;
+          kids.push(s("rect", { class: "ub-drive", x, y: top(p), width: 28, height: p * PX }), s("rect", { class: "ub-mwait", x, y: top(p + q), width: 28, height: Math.max(0.5, q * PX) }),
+            s("text", { class: "ub-val" + (m.wait / 60 <= goal ? " ok" : ""), x: x + 14, y: top(p + q) - 6, "text-anchor": "middle" }, (m.wait / 60).toFixed(1)));
+        }
+        kids.push(s("text", { class: "ev-tick" + (w === F.win ? " on" : ""), x: x + 14, y: BY + 16, "text-anchor": "middle" }, WIN_TICK[w]));
+      });
+      kids.push(s("path", { class: "ub-goal", d: `M${X - 4} ${top(goal)}h252` }), s("text", { class: "ev-tick", x: X + 248, y: top(goal) - 5, "text-anchor": "end" }, `${goal} min`));
+      kids.push(s("rect", { class: "ub-drive", x: X, y: 474, width: 10, height: 10 }), s("text", { class: "ev-tick", x: X + 15, y: 483 }, "the drive"), s("rect", { class: "ub-mwait", x: X + 92, y: 474, width: 10, height: 10 }), s("text", { class: "ev-tick", x: X + 107, y: 483 }, "waiting to be matched"));
+      kids.push(s("text", { class: "ev-tick", x: MX, y: 486 }, "rings: riders waiting · lines: a driver's drive to a rider, teal when short, red when long"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 6));
+      if (F.anim >= 1) F.tried[F.win] = R;
+      c.redraw();
+      if (F.anim >= 1) { if (R.wait / 60 <= c.B.goals.wait) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null;
+      const say = R && R.wait / 60 > c.B.goals.wait ? h("p", { class: "sd-verdict no" }, `✗ The car takes ${(R.wait / 60).toFixed(1)} minutes on average: ${(R.pick / 60).toFixed(1)} driving, ${Math.round(R.toMatch)} s waiting to be matched.`) : null;
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Pick how often the matcher runs, then play the half hour. Every window you try lands in the chart, so you can compare."), say)];
+    },
+    tools(c) {
+      const { h, F } = c, L = GEO.WINDOWS;
+      return [h("div", { class: "sd-insp" }, h("p", {}, "match riders ", h("button", { class: "sd-word", onclick: () => { F.win = L[(L.indexOf(F.win) + 1) % L.length]; F.res = null; c.redraw(); c.rebrief(); } }, WIN_WORD[F.win]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: () => { F.runs++; F.res = GEO.match({ window: F.win, seed: c.B.sim.seed }); F.anim = 0; c.redraw(); c.rebrief(); } }, "Play the evening"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} evening${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals.wait;
+      return [[`the car arrives in ≤ ${g} min`, R ? R.wait / 60 <= g : null, R ? `${(R.wait / 60).toFixed(1)} min` : "run it"], ["the drive", null, R ? `${(R.pick / 60).toFixed(1)} min` : "·"], ["waiting to be matched", null, R ? `${Math.round(R.toMatch)} s` : "·"]];
+    },
+  };
+
+  // --------------------------------------------------------------------------------------------- dispatch --
+  const CLAIM_WORD = { check: "marks a driver busy only on accept", cas: "claims a driver before offering" };
+  const EXP_WORD = { 0: "until the driver answers", 5: "for 5 s", 15: "for 15 s", 60: "for 60 s" };
+  const NAMES = ["Dev", "Ines", "Kofi", "Mara", "Tomás", "Yuki", "Lena", "Omar", "Priya", "Sam"];
+  const LX0 = 120, LX1 = 920, LANE = [176, 236];
+  const CX0 = 200, CX1 = 920, SPAN = 45, cx = (t) => CX0 + (Math.min(t, SPAN) / SPAN) * (CX1 - CX0);
+  UI.dispatch = {
+    init(c) { Object.assign(c.F, { claim: "check", expiry: 0, res: null, anim: 0, runs: 0 }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, kids = [], T = 4 * 3600, tx = (t) => LX0 + (t / T) * (LX1 - LX0), upto = R ? Math.min(1, F.anim) * T : 0;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "One evening, two matchers"), s("text", { class: "ev-sub", x: 40, y: 114 }, R ? `${R.n} rides from 8 pm to midnight · ${R.drops} offers reached a phone that dropped` : "run it to see every ride request"));
+      ["matcher A", "matcher B"].forEach((name, m) => kids.push(s("path", { class: "ub-lane", d: `M${LX0} ${LANE[m]}H${LX1}` }), s("text", { class: "ub-ln", x: LX0 - 12, y: LANE[m] + 4, "text-anchor": "end" }, name)));
+      ["8 pm", "9 pm", "10 pm", "11 pm", "midnight"].forEach((w, k) => kids.push(s("text", { class: "ev-tick", x: tx(k * 3600), y: 266, "text-anchor": k === 0 ? "start" : k === 4 ? "end" : "middle" }, w)));
+      if (R) {
+        const pos = new Map();
+        for (const o of R.rides) { if (o.t > upto) break; pos.set(o.i, [tx(o.t), LANE[o.m]]); }
+        for (const o of R.rides) {
+          if (!pos.has(o.i)) break;
+          const [x, y] = pos.get(o.i);
+          if (o.st === "double" && o.with != null && pos.has(o.with)) { const [x2, y2] = pos.get(o.with); kids.push(s("path", { class: "ub-dline", d: `M${x} ${y}L${x2} ${y2}` })); }
+          if (o.st === "stuck") kids.push(s("path", { class: "wa-lost", d: `M${x - 3.5} ${y - 3.5}l7 7m0-7l-7 7` }));
+          else kids.push(s("circle", { class: "ub-ride" + (o.st === "double" ? " dbl" : ""), cx: x, cy: y, r: o.st === "double" ? 3.8 : 2.2 }));
+          if (o.tries.length > 1) kids.push(s("circle", { class: "ub-retry", cx: x, cy: y, r: 6 }));
+          if (o.tries.some((t) => t.late)) kids.push(s("path", { class: "ub-late", d: `M${x} ${y - 9}v-7` }));
+        }
+      }
+      kids.push(s("text", { class: "ev-tick", x: LX0, y: 290 }, "dots: matched · rings: took a second offer · amber pairs: one driver, two riders · ticks: an accept thrown away · ×: stuck"));
+      // up close: the first two requests from the same corner
+      const tw = R ? R.rides.find((o) => o.twin != null && o.t <= upto) : null;
+      kids.push(s("text", { class: "ub-ln", x: 40, y: 330 }, "Up close"));
+      if (!tw) kids.push(s("text", { class: "ev-sub", x: 40, y: 350 }, "two riders on the same corner, a moment apart: run the evening to watch them"));
+      else {
+        const a = R.rides.find((o) => o.i === tw.twin), pair = [a, tw], t0 = a.t;
+        kids.push(s("text", { class: "ev-sub", x: 40, y: 348 }, `Rina and Raj ask on the same corner, ${(tw.t - a.t).toFixed(1)} s apart; seconds after Rina asks →`));
+        for (let k = 0; k <= SPAN; k += 5) kids.push(s("path", { class: "ub-tick", d: `M${cx(k)} 364v150` }), s("text", { class: "ev-tick", x: cx(k), y: 528, "text-anchor": "middle" }, `${k}`));
+        pair.forEach((o, j) => {
+          const y = 396 + j * 62, who = j ? "Raj" : "Rina";
+          kids.push(s("text", { class: "ub-ln", x: CX0 - 14, y: y + 4, "text-anchor": "end" }, `${who} · matcher ${"AB"[o.m]}`));
+          if (!o.tries.length) return;
+          o.tries.forEach((t) => {
+            const end = t.ok ? o.at : t.expired ? t.t + F.expiry : SPAN + t0, x1 = cx(t.t - t0), x2 = cx(end - t0);
+            kids.push(s("path", { class: "ub-offer" + (t.ok ? " ok" : t.dead ? " dead" : " late"), d: `M${x1} ${y}H${x2}` }), s("circle", { class: "ub-od", cx: x1, cy: y, r: 3 }),
+              s("text", { class: "ub-ot", x: x1 + 4, y: y - 9 }, `offer → ${NAMES[t.d % 10]}`));
+            const note = t.ok ? (o.st === "double" ? "✓ accepted, but so did the other" : "✓ accepted") : t.dead ? (t.expired ? "phone dropped · offer closed" : "phone dropped… still waiting") : "accepted too late";
+            kids.push(s("text", { class: "ub-on" + (t.ok && o.st !== "double" ? " ok" : " no"), x: Math.min(x2 + 4, 912), y: y + 18, "text-anchor": x2 > 760 ? "end" : "start" }, note));
+          });
+        });
+      }
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 2.6));
+      c.redraw();
+      if (F.anim >= 1) { if (good(c, R)) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null;
+      const miss = R ? [R.doubled && `${R.doubled} driver${R.doubled > 1 ? "s were" : " was"} sent to two riders`, R.stuck && `${R.stuck} rider${R.stuck > 1 ? "s are" : " is"} stuck on a dead phone`, R.late && `${R.late} accept${R.late > 1 ? "s were" : " was"} thrown away`,
+        R.worst > c.B.goals.worst && `someone waited ${Math.round(R.worst)} s for a driver`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Pick how a matcher claims a driver and how long an offer stays open, then run the evening. The close-up below the timeline replays two riders who asked on the same corner."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "a matcher ", h("button", { class: "sd-word", onclick: () => set("claim", F.claim === "check" ? "cas" : "check") }, CLAIM_WORD[F.claim])),
+        h("p", {}, "an offer stays open ", h("button", { class: "sd-word", onclick: () => { const L = GEO.EXPIRY; set("expiry", L[(L.indexOf(F.expiry) + 1) % L.length]); } }, EXP_WORD[F.expiry]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: () => { F.runs++; F.res = GEO.evening({ claim: F.claim, expiry: F.expiry, seed: c.B.sim.seed }); F.anim = 0; c.redraw(); c.rebrief(); } }, "Run the evening"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} evening${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals.worst, v = (x) => (R ? String(x) : "run it");
+      return [["no driver sent to two riders", R ? !R.doubled : null, v(R && R.doubled)], ["no rider stuck", R ? !R.stuck : null, v(R && R.stuck)], ["no accept thrown away", R ? !R.late : null, v(R && R.late)],
+        [`a driver within ${g === 60 ? "a minute" : g + " s"}`, R ? R.worst <= g : null, R ? `${Math.round(R.worst)} s` : "·"]];
+    },
+  };
+  const good = (c, R) => !R.doubled && !R.stuck && !R.late && R.worst <= c.B.goals.worst;
+})();

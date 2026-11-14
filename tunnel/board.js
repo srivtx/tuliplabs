@@ -68,8 +68,8 @@
 
   // --------------------------------------------------------------- sheet --
   const W = 960, H = 540, PW = 160, PH = 66;
-  const KIND_WORD = { scope: "Scope it", napkin: "Napkin math", sketch: "Sketch it", follow: "Follow it", bottleneck: "Find the bottleneck", draw: "Draw it", evict: "Eviction lab", persist: "Crash lab", shard: "Cluster lab", conns: "Capacity lab", offline: "Delivery lab", order: "Ordering lab" };
-  const KIND_GLYPH = { scope: "▤", napkin: "✎", sketch: "✐", follow: "⤳", bottleneck: "◔", draw: "▭", evict: "⇄", persist: "⏻", shard: "◫", conns: "⌁", offline: "✉", order: "⇅" };
+  const KIND_WORD = { scope: "Scope it", napkin: "Napkin math", sketch: "Sketch it", follow: "Follow it", bottleneck: "Find the bottleneck", draw: "Draw it", evict: "Eviction lab", persist: "Crash lab", shard: "Cluster lab", conns: "Capacity lab", offline: "Delivery lab", order: "Ordering lab", nearby: "Geo lab", batch: "Matching lab", dispatch: "Race lab" };
+  const KIND_GLYPH = { scope: "▤", napkin: "✎", sketch: "✐", follow: "⤳", bottleneck: "◔", draw: "▭", evict: "⇄", persist: "⏻", shard: "◫", conns: "⌁", offline: "✉", order: "⇅", nearby: "⌖", batch: "⋈", dispatch: "⇆" };
   const MODE_WORD = { w: "Whiteboard", s: "Simulate" };
   const SIZES = { cache: Object.keys(K.cache.sizes), db: Object.keys(K.db.sizes) };
 
@@ -254,10 +254,12 @@
       const [a, b] = D.wires[selW], p = wirePaths.get(a + ">" + b);
       if (p) { try { const L = p.getTotalLength(), pt = p.getPointAtLength(L / 2); kids.push(s("g", { class: "sd-cut", transform: `translate(${pt.x} ${pt.y})`, "data-cut": selW, role: "button", "aria-label": "Cut this wire" }, s("circle", { r: 13 }), s("path", { d: "M-4.5-4.5l9 9M4.5-4.5l-9 9" }))); } catch (e) { /* hidden */ } }
     }
+    // two lines fit on the board; the whole sentence is in the list beside it
+    const short = (t) => (t.length <= 84 ? t : t.slice(0, t.lastIndexOf(" ", 80)).replace(/[,.:;]$/, "") + "…");
     problems.forEach((p, k) => {
       const nd = p.node && part(p.node);
       const x = nd ? Math.min(W - 130, Math.max(130, nd.x)) : W / 2, y = nd ? (nd.y > H / 2 ? nd.y - PH / 2 - 54 : nd.y + PH / 2 + 12) : 40 + k * 50;
-      kids.push(s("foreignObject", { x: x - 125, y, width: 250, height: 46, class: "sd-prob-fo" }, h("div", { class: "sd-prob", xmlns: "http://www.w3.org/1999/xhtml" }, p.text)));
+      kids.push(s("foreignObject", { x: x - 125, y, width: 250, height: 46, class: "sd-prob-fo" }, h("div", { class: "sd-prob", xmlns: "http://www.w3.org/1999/xhtml" }, short(p.text))));
     });
     if (B.kind === "napkin") for (const n of B.notes) {
       const nd = part(n.on), x = nd.x + n.dx - 85, y = nd.y + n.dy;
