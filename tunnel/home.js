@@ -365,6 +365,84 @@ def newsletter():
         ["Kubernetes", "Run the workers as their own deployment, and scale it on the oldest job's age or the queue's depth (KEDA does this), not on CPU."],
       ],
     },
+    wt07: {
+      files: [
+        {
+          name: "router.py", lang: "py", run: true,
+          src: (c) => {
+            const lag = c.lag, back = Math.min(lag / 2, 0.5), ryw = c.ryw ? "True" : "False";
+            // what the Python prints: Ana writes at t=0 and reads back at `back`, before the replica has it
+            const sees = c.ryw && back < c.rywFor ? "True" : back >= lag ? "True" : "False";
+            return `# Writes to the primary, reads to replicas,
+# and read-your-writes, with a clock you control.
+${col([[`REPLICAS = ${c.replicas}`, "your system.yaml"], [`LAG = ${lag}`, "seconds a copy takes"], [`READ_YOUR_WRITES = ${ryw}`], [`FOR = ${c.rywFor}`, "seconds after a write"]])}
+
+primary = {}
+replica = {}
+pending = []  # (lands_at, key, value)
+last_write = {}  # user -> when they last wrote
+
+
+def write(user, key, value, now):
+    primary[key] = value
+    pending.append((now + LAG, key, value))
+    last_write[user] = now
+
+
+def read(user, key, now):
+    for lands, k, v in [p for p in pending if p[0] <= now]:
+        replica[k] = v  # copies that have landed
+    wrote = last_write.get(user)
+    if READ_YOUR_WRITES and wrote is not None:
+        if now - wrote < FOR:
+            return primary.get(key)  # your own: fresh
+    if REPLICAS == 0:
+        return primary.get(key)
+    return replica.get(key)  # anyone's: may lag
+
+
+write("ana", "comment:7", "hello", now=0.0)
+mine = read("ana", "comment:7", now=${back})
+print("ana sees her comment:", mine is not None)
+# → ana sees her comment: ${c.replicas === 0 ? "True" : sees}
+later = read("ben", "comment:7", now=${lag + 0.5})
+print("ben, a little later:", later is not None)
+# → ben, a little later: True`;
+          },
+        },
+        {
+          name: "database.rb", lang: "conf",
+          src: (c) => `# Rails does the same routing: writes to the
+# primary, reads to a replica, and for ${c.rywFor} s
+# after a write, that user's reads stay on the
+# primary.
+class ApplicationRecord < ActiveRecord::Base
+  primary_abstract_class
+  connects_to database: {
+    writing: :primary, reading: :replica
+  }
+end
+
+# config/environments/production.rb
+config.active_record.database_selector =
+  { delay: ${c.rywFor}.seconds }${c.ryw ? "" : "  # yours: off"}
+config.active_record.database_resolver =
+  ActiveRecord::Middleware::DatabaseSelector::Resolver
+config.active_record.database_resolver_context =
+  ActiveRecord::Middleware::DatabaseSelector::
+    Resolver::Session`,
+        },
+      ],
+      try: [{ replicas: 2, ryw: false }, { replicas: 3, ryw: true, lag: 0.5 }, { replicas: 0, ryw: false }],
+      watch: (c) => `Graph <b>replication lag</b> per replica, in seconds: Postgres reports it as <code>replay_lag</code> in <code>pg_stat_replication</code>, MySQL as <code>Seconds_Behind_Source</code>. Alert when it passes your read-your-writes window (${c.rywFor} s here): past that, even the fix can't hide it. Graph the primary's load too: every read you pin to it is load the replicas don't take.`,
+      stack: [
+        ["Postgres", "Streaming replication is asynchronous by default, so replicas lag. <code>synchronous_commit = remote_apply</code> makes a write wait until a replica has it: no stale reads, but slower writes."],
+        ["MySQL", "Replicas apply the binlog after the primary. Read-your-writes by hand: remember the write's GTID, and read from a replica only once <code>WAIT_FOR_EXECUTED_GTID_SET</code> says it has it."],
+        ["Django", "A database router's <code>db_for_read</code> picks the replica; send a user's reads to <code>'default'</code> for a few seconds after they write, with a timestamp in their session."],
+        ["AWS Aurora", "Replicas share the primary's storage, so lag is usually under 100 ms: rarer stale reads, but still not none."],
+        ["Caches", "The same bug, bigger: write to the database, read from a cache that still has the old value. Delete the key on write, and read your own writes from the source."],
+      ],
+    },
     wt08: {
       files: [
         {
