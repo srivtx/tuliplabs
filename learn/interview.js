@@ -167,7 +167,7 @@
   function runReq(code, tests) {
     // stop a run that goes on too long, the way a judge would, so a slow answer can't freeze the page
     let timer;
-    const limit = new Promise((res) => { timer = setTimeout(() => { A.Runner.stop(); res({ passed: false, timeout: true }); }, RUN_LIMIT); });
+    const limit = new Promise((res) => { timer = setTimeout(() => { A.Runner.of("py").stop(); res({ passed: false, timeout: true }); }, RUN_LIMIT); });
     const go = A.Runner.run({ op: "check", prelude: DATA.prelude, lang: "py", setup: "", code, tests }).then((x) => x || { passed: false, error: "No answer from Python." });
     return Promise.race([go, limit]).finally(() => clearTimeout(timer));
   }
