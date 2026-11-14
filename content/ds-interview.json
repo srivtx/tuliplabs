@@ -676,6 +676,89 @@
 "twist": "<p>The robot gets a forklift: it may <b>remove at most one shelf</b> along the way. Write <code>shortest_path_one_wall(grid)</code>: fewest steps, where stepping onto one <code>#</code> square is allowed once. The start and end squares are always open in this version.</p>",
 "twisttests": "assert shortest_path_one_wall([\".#\", \"#.\"]) == 2\nassert shortest_path_one_wall([\".#.\", \"##.\", \"...\"]) == 4\nassert shortest_path_one_wall([\"..\", \"..\"]) == 2\nassert shortest_path_one_wall([\".##\", \"###\", \"##.\"]) == -1\nassert shortest_path_one_wall([\".\"]) == 0",
 "twistsolution": "from collections import deque\n\ndef shortest_path_one_wall(grid):\n    rows, cols = len(grid), len(grid[0])\n    seen = {(0, 0, 0)}\n    q = deque([(0, 0, 0, 0)])\n    while q:\n        r, c, used, d = q.popleft()\n        if (r, c) == (rows - 1, cols - 1):\n            return d\n        for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):\n            if 0 <= nr < rows and 0 <= nc < cols:\n                nu = used + (grid[nr][nc] == \"#\")\n                if nu <= 1 and (nr, nc, nu) not in seen:\n                    seen.add((nr, nc, nu))\n                    q.append((nr, nc, nu, d + 1))\n    return -1"
+},
+{
+"id": "groups",
+"title": "How many friend groups?",
+"fn": "count_groups",
+"ch": 22,
+"decoys": [
+19,
+21,
+25,
+3
+],
+"bigo": "O(n + m)",
+"hints": [
+"<p>You start with <code>n</code> groups. What happens to the count each time a link joins two <i>different</i> groups?</p>",
+"<p>Give everyone a <code>parent</code>, starting as themselves. A group is everyone who reaches the same root by following parents.</p>",
+"<p>For each link, <code>ra, rb = find(a), find(b)</code>; if they differ, <code>parent[ra] = rb</code> and the count drops by one. Make <code>find</code> shorten the path as it walks: <code>parent[x] = parent[parent[x]]</code>.</p>"
+],
+"tests": [
+{
+"tag": "zero",
+"code": "assert count_groups(0, []) == 0"
+},
+{
+"tag": "self",
+"code": "assert count_groups(2, [(0, 0), (1, 1)]) == 2"
+},
+{
+"tag": "dups",
+"code": "assert count_groups(3, [(1, 2), (2, 1), (1, 2)]) == 2"
+},
+{
+"tag": "big",
+"code": "n = 200000\nlinks = [(i, i + 1) for i in range(0, n - 1, 2)] + [(i, i + 2) for i in range(0, n - 2, 2)]\nr, secs = timed(count_groups, n, links)\nassert r == 1\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 people: relabelling whole groups on every link is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can there be zero people?",
+"a": "Yes. Then there are no groups: 0.",
+"tag": "zero"
+},
+{
+"q": "Can someone be linked to themselves?",
+"a": "Yes, it's a glitch in the app. It changes nothing.",
+"tag": "self"
+},
+{
+"q": "Can the same friendship appear twice?",
+"a": "Yes, in either order: (1, 2) and (2, 1).",
+"tag": "dups"
+},
+{
+"q": "Is friendship two-way?",
+"a": "Yes, if a is b's friend then b is a's.",
+"tag": null
+},
+{
+"q": "Do I need to list the groups?",
+"a": "No, just count them.",
+"tag": null
+},
+{
+"q": "Are the numbers always in range?",
+"a": "Yes, from 0 to n - 1.",
+"tag": null
+}
+],
+"bigos": [
+"O(n + m)",
+"O(n × m)",
+"O((n + m) log n)",
+"O(n²)"
+],
+"prompt": "<p>A social app has <code>n</code> people, numbered <code>0</code> to <code>n - 1</code>, and a list of friendships <code>links</code>, each a pair <code>(a, b)</code>. Friends of friends are in the same group.</p>\n<p>Write <code>count_groups(n, links)</code>: return how many separate groups there are. Someone with no friends is a group of one.</p>\n<p><code>count_groups(5, [(0, 1), (1, 2), (3, 4)])</code> is <code>2</code>.</p>\n<p>(Here <code>m</code> is the number of links.)</p>",
+"examples": "assert count_groups(5, [(0, 1), (1, 2), (3, 4)]) == 2\nassert count_groups(3, []) == 3",
+"starter": "def count_groups(n, links):\n    pass",
+"solution": "def count_groups(n, links):\n    parent = list(range(n))\n\n    def find(x):\n        while parent[x] != x:\n            parent[x] = parent[parent[x]]\n            x = parent[x]\n        return x\n\n    groups = n\n    for a, b in links:\n        ra, rb = find(a), find(b)\n        if ra != rb:\n            parent[ra] = rb\n            groups -= 1\n    return groups",
+"brute": "def count_groups(n, links):\n    label = list(range(n))\n    for a, b in links:\n        la, lb = label[a], label[b]\n        if la != lb:\n            for i in range(n):\n                if label[i] == la:\n                    label[i] = lb\n    return len(set(label))",
+"approach": "<p>Union-find: every person points towards a representative of their group. A link finds both representatives and, if they differ, joins one under the other, which removes one group. With path halving each find is nearly O(1), so it's about O(n + m).</p>",
+"twist": "<p>Now the app wants a live number: write <code>largest_after_each(n, links)</code>, which returns a list with the size of the <b>biggest group after each link</b> is added.</p>",
+"twisttests": "assert largest_after_each(5, [(0, 1), (1, 2), (3, 4)]) == [2, 3, 3]\nassert largest_after_each(2, [(0, 0)]) == [1]\nassert largest_after_each(4, [(0, 1), (2, 3), (1, 3)]) == [2, 2, 4]\nassert largest_after_each(3, []) == []",
+"twistsolution": "def largest_after_each(n, links):\n    parent = list(range(n))\n    size = [1] * n\n\n    def find(x):\n        while parent[x] != x:\n            parent[x] = parent[parent[x]]\n            x = parent[x]\n        return x\n\n    best, out = 1 if n else 0, []\n    for a, b in links:\n        ra, rb = find(a), find(b)\n        if ra != rb:\n            if size[ra] > size[rb]:\n                ra, rb = rb, ra\n            parent[ra] = rb\n            size[rb] += size[ra]\n            best = max(best, size[rb])\n        out.append(best)\n    return out"
 }
 ]
 }

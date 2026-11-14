@@ -815,3 +815,110 @@ def shortest_path_one_wall(grid):
                     q.append((nr, nc, nu, d + 1))
     return -1
 ```
+
+```interview
+id: groups
+title: How many friend groups?
+fn: count_groups
+ch: 22
+decoys: 19, 21, 25, 3
+bigo: O(n + m)
+bigos: O(n + m); O(n × m); O((n + m) log n); O(n²)
+---prompt
+A social app has `n` people, numbered `0` to `n - 1`, and a list of friendships `links`, each a pair `(a, b)`. Friends of friends are in the same group.
+
+Write `count_groups(n, links)`: return how many separate groups there are. Someone with no friends is a group of one.
+
+`count_groups(5, [(0, 1), (1, 2), (3, 4)])` is `2`.
+
+(Here `m` is the number of links.)
+---examples
+assert count_groups(5, [(0, 1), (1, 2), (3, 4)]) == 2
+assert count_groups(3, []) == 3
+---clarify
++ zero | Can there be zero people? | Yes. Then there are no groups: 0.
++ self | Can someone be linked to themselves? | Yes, it's a glitch in the app. It changes nothing.
++ dups | Can the same friendship appear twice? | Yes, in either order: (1, 2) and (2, 1).
+- | Is friendship two-way? | Yes, if a is b's friend then b is a's.
+- | Do I need to list the groups? | No, just count them.
+- | Are the numbers always in range? | Yes, from 0 to n - 1.
+---test zero
+assert count_groups(0, []) == 0
+---test self
+assert count_groups(2, [(0, 0), (1, 1)]) == 2
+---test dups
+assert count_groups(3, [(1, 2), (2, 1), (1, 2)]) == 2
+---test big
+n = 200000
+links = [(i, i + 1) for i in range(0, n - 1, 2)] + [(i, i + 2) for i in range(0, n - 2, 2)]
+r, secs = timed(count_groups, n, links)
+assert r == 1
+assert secs < 1.5, f"{secs:.2f} s for 200,000 people: relabelling whole groups on every link is too slow"
+---starter
+def count_groups(n, links):
+    pass
+---solution
+def count_groups(n, links):
+    parent = list(range(n))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    groups = n
+    for a, b in links:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+            groups -= 1
+    return groups
+---brute
+def count_groups(n, links):
+    label = list(range(n))
+    for a, b in links:
+        la, lb = label[a], label[b]
+        if la != lb:
+            for i in range(n):
+                if label[i] == la:
+                    label[i] = lb
+    return len(set(label))
+---approach
+Union-find: every person points towards a representative of their group. A link finds both representatives and, if they differ, joins one under the other, which removes one group. With path halving each find is nearly O(1), so it's about O(n + m).
+---hint
+You start with `n` groups. What happens to the count each time a link joins two *different* groups?
+---hint
+Give everyone a `parent`, starting as themselves. A group is everyone who reaches the same root by following parents.
+---hint
+For each link, `ra, rb = find(a), find(b)`; if they differ, `parent[ra] = rb` and the count drops by one. Make `find` shorten the path as it walks: `parent[x] = parent[parent[x]]`.
+---twist
+Now the app wants a live number: write `largest_after_each(n, links)`, which returns a list with the size of the **biggest group after each link** is added.
+---twisttests
+assert largest_after_each(5, [(0, 1), (1, 2), (3, 4)]) == [2, 3, 3]
+assert largest_after_each(2, [(0, 0)]) == [1]
+assert largest_after_each(4, [(0, 1), (2, 3), (1, 3)]) == [2, 2, 4]
+assert largest_after_each(3, []) == []
+---twistsolution
+def largest_after_each(n, links):
+    parent = list(range(n))
+    size = [1] * n
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    best, out = 1 if n else 0, []
+    for a, b in links:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            if size[ra] > size[rb]:
+                ra, rb = rb, ra
+            parent[ra] = rb
+            size[rb] += size[ra]
+            best = max(best, size[rb])
+        out.append(best)
+    return out
+```
