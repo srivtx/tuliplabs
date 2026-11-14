@@ -108,13 +108,18 @@
       for (const v of [0.2, 0.4, 0.6, 0.8]) { const y = CY1 - (v / TOP) * (CY1 - CY0); kids.push(s("path", { class: "ev-grid", d: `M${CX0} ${y} H${CX1}` }), s("text", { class: "ev-tick", x: CX0 - 6, y: y + 4, "text-anchor": "end" }, pct(v))); }
       kids.push(s("text", { class: "ev-tick", x: CX1, y: CY1 + 18, "text-anchor": "end" }, "200,000 requests →"));
       if (r.shift) { const x = (CX0 + CX1) / 2; kids.push(s("path", { class: "ev-flip", d: `M${x} ${CY0 - 6} V${CY1}` }), s("text", { class: "ev-tick", x: x + 6, y: CY0 + 4 }, "the trend flips")); }
+      const labs = [];
       if (F.res) for (const [id] of POL) {
         const hs = F.res[id].hits, n = Math.max(1, Math.ceil(F.t * hs.length)), pts = [];
         for (let i = 0; i < n; i++) pts.push(`${(CX0 + ((i + 0.5) / hs.length) * (CX1 - CX0)).toFixed(1)} ${(CY1 - (Math.min(TOP, hs[i]) / TOP) * (CY1 - CY0)).toFixed(1)}`);
         kids.push(s("path", { class: `ev-line p-${id}${id === show ? " on" : ""}`, d: "M" + pts.join(" L") }));
         const last = pts[pts.length - 1].split(" ");
-        kids.push(s("text", { class: `ev-lab p-${id}`, x: +last[0] + 6, y: +last[1] + 4 }, POL.find((p) => p[0] === id)[1]));
+        labs.push({ id, x: +last[0] + 6, y: +last[1] + 4 });
       }
+      // the line ends' names, pushed apart so two lines that meet don't print on top of each other
+      labs.sort((p, q) => p.y - q.y);
+      for (let i = 1; i < labs.length; i++) if (labs[i].y - labs[i - 1].y < 13) labs[i].y = labs[i - 1].y + 13;
+      for (const L of labs) kids.push(s("text", { class: `ev-lab p-${L.id}`, x: L.x, y: L.y }, POL.find((p) => p[0] === L.id)[1]));
       // the four policies: tap one to guess, later to look at its keyspace
       POL.forEach(([id, name, say], i) => {
         const x = 44 + i * 224, y = 452;
@@ -194,7 +199,7 @@
         const g = s("g", { class: "ps-box" + (i === 3 ? " log" : "") + (i === 4 ? " disk" : ""), transform: `translate(${x} 100)` },
           s("rect", { class: "ps-bf", width: 150, height: 74, rx: 13 }), s("rect", { class: "ps-bi", x: 1, y: 1, width: 148, height: 72, rx: 13, filter: "url(#sd-sk)" }),
           s("text", { class: "ps-bn", x: 14, y: 30 }, name));
-        if (i === 3) g.append(wordS(c, 14, 54, "appendfsync " + F.aof, () => { const L = ["off", "always", "everysec", "no"]; F.aof = L[(L.indexOf(F.aof) + 1) % L.length]; F.res = null; c.redraw(); c.rebrief(); }));
+        if (i === 3) g.append(wordS(c, 14, 54, F.aof === "off" ? "log off" : "fsync " + F.aof, () => { const L = ["off", "always", "everysec", "no"]; F.aof = L[(L.indexOf(F.aof) + 1) % L.length]; F.res = null; c.redraw(); c.rebrief(); }));
         else if (i === 4) g.append(wordS(c, 14, 54, F.rdb ? "snapshot on" : "snapshot off", () => { F.rdb = !F.rdb; F.res = null; c.redraw(); c.rebrief(); }));
         else g.append(s("text", { class: "ps-bs", x: 14, y: 54 }, say));
         kids.push(g);
