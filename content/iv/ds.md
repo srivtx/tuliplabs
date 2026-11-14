@@ -922,3 +922,88 @@ def largest_after_each(n, links):
         out.append(best)
     return out
 ```
+
+```interview
+id: stalls
+title: Pick the stalls
+fn: best_picks
+ch: 28
+decoys: 16, 27, 15, 8
+bigo: O(n)
+---prompt
+A street market has a row of stalls, each with a value `vals[i]` you'd earn by running it. The rules say you can't run **two neighbouring stalls**.
+
+Write `best_picks(vals)`: return the most you can earn.
+
+`best_picks([2, 7, 9, 3, 1])` is `12`: stalls 0, 2 and 4 give 2 + 9 + 1.
+---examples
+assert best_picks([2, 7, 9, 3, 1]) == 12
+assert best_picks([5, 1, 1, 5]) == 10
+---clarify
++ empty | Can the row be empty? | Yes. Then you earn 0.
++ one | Can there be just one stall? | Yes. Take it if it's worth something.
++ neg | Can a stall lose money (a negative value)? | Yes. You don't have to run it, so you'd skip it.
+- | Do I have to say which stalls? | No, just the total.
+- | Are values whole numbers? | Yes.
+- | Can I run zero stalls? | Yes, and then you earn 0.
+---test empty
+assert best_picks([]) == 0
+---test one
+assert best_picks([4]) == 4
+---test neg
+assert best_picks([-3, -1]) == 0
+assert best_picks([-2, 5, -1, 4]) == 9
+assert best_picks([3, -10, -10, 3]) == 6
+---test big
+import random
+random.seed(4)
+big = [random.randint(-50, 100) for _ in range(200000)]
+r, secs = timed(best_picks, big)
+take = skip = 0
+for v in big:
+    take, skip = skip + v, max(take, skip)
+assert r == max(take, skip, 0)
+assert secs < 1.5, f"{secs:.2f} s for 200,000 stalls: trying every choice is far too slow"
+---starter
+def best_picks(vals):
+    pass
+---solution
+def best_picks(vals):
+    take = skip = 0   # best total if the last stall is taken / not taken
+    for v in vals:
+        take, skip = skip + v, max(take, skip)
+    return max(take, skip)
+---brute
+def best_picks(vals):
+    def best(i):
+        if i >= len(vals):
+            return 0
+        return max(best(i + 1), vals[i] + best(i + 2))
+    return best(0)
+---approach
+Walk the stalls once, keeping two numbers: the best total if the last stall was run, and the best if it wasn't. A stall can only be run if the one before wasn't. That's dynamic programming with O(1) memory: O(n).
+---hint
+Trying every set of stalls doubles with each stall. What's the only thing about the past that limits your choice for stall `i`?
+---hint
+Whether stall `i - 1` was taken. So keep the best total ending "taken" and the best ending "not taken".
+---hint
+For each `v`: `take, skip = skip + v, max(take, skip)`. The answer is `max(take, skip)`, which is never below 0 because `skip` starts at 0.
+---twist
+The market moves to a **roundabout**: the stalls form a circle, so the first and the last are neighbours too. Write `best_picks_circle(vals)`.
+---twisttests
+assert best_picks_circle([2, 3, 2]) == 3
+assert best_picks_circle([1, 2, 3, 1]) == 4
+assert best_picks_circle([5]) == 5
+assert best_picks_circle([]) == 0
+assert best_picks_circle([4, 1, 1, 4]) == 5
+---twistsolution
+def best_picks_circle(vals):
+    def line(vs):
+        take = skip = 0
+        for v in vs:
+            take, skip = skip + v, max(take, skip)
+        return max(take, skip)
+    if len(vals) <= 1:
+        return max(vals[0], 0) if vals else 0
+    return max(line(vals[1:]), line(vals[:-1]))
+```

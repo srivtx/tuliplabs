@@ -759,6 +759,90 @@
 "twist": "<p>Now the app wants a live number: write <code>largest_after_each(n, links)</code>, which returns a list with the size of the <b>biggest group after each link</b> is added.</p>",
 "twisttests": "assert largest_after_each(5, [(0, 1), (1, 2), (3, 4)]) == [2, 3, 3]\nassert largest_after_each(2, [(0, 0)]) == [1]\nassert largest_after_each(4, [(0, 1), (2, 3), (1, 3)]) == [2, 2, 4]\nassert largest_after_each(3, []) == []",
 "twistsolution": "def largest_after_each(n, links):\n    parent = list(range(n))\n    size = [1] * n\n\n    def find(x):\n        while parent[x] != x:\n            parent[x] = parent[parent[x]]\n            x = parent[x]\n        return x\n\n    best, out = 1 if n else 0, []\n    for a, b in links:\n        ra, rb = find(a), find(b)\n        if ra != rb:\n            if size[ra] > size[rb]:\n                ra, rb = rb, ra\n            parent[ra] = rb\n            size[rb] += size[ra]\n            best = max(best, size[rb])\n        out.append(best)\n    return out"
+},
+{
+"id": "stalls",
+"title": "Pick the stalls",
+"fn": "best_picks",
+"ch": 28,
+"decoys": [
+16,
+27,
+15,
+8
+],
+"bigo": "O(n)",
+"hints": [
+"<p>Trying every set of stalls doubles with each stall. What's the only thing about the past that limits your choice for stall <code>i</code>?</p>",
+"<p>Whether stall <code>i - 1</code> was taken. So keep the best total ending \"taken\" and the best ending \"not taken\".</p>",
+"<p>For each <code>v</code>: <code>take, skip = skip + v, max(take, skip)</code>. The answer is <code>max(take, skip)</code>, which is never below 0 because <code>skip</code> starts at 0.</p>"
+],
+"tests": [
+{
+"tag": "empty",
+"code": "assert best_picks([]) == 0"
+},
+{
+"tag": "one",
+"code": "assert best_picks([4]) == 4"
+},
+{
+"tag": "neg",
+"code": "assert best_picks([-3, -1]) == 0\nassert best_picks([-2, 5, -1, 4]) == 9\nassert best_picks([3, -10, -10, 3]) == 6"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(4)\nbig = [random.randint(-50, 100) for _ in range(200000)]\nr, secs = timed(best_picks, big)\ntake = skip = 0\nfor v in big:\n    take, skip = skip + v, max(take, skip)\nassert r == max(take, skip, 0)\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 stalls: trying every choice is far too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the row be empty?",
+"a": "Yes. Then you earn 0.",
+"tag": "empty"
+},
+{
+"q": "Can there be just one stall?",
+"a": "Yes. Take it if it's worth something.",
+"tag": "one"
+},
+{
+"q": "Can a stall lose money (a negative value)?",
+"a": "Yes. You don't have to run it, so you'd skip it.",
+"tag": "neg"
+},
+{
+"q": "Do I have to say which stalls?",
+"a": "No, just the total.",
+"tag": null
+},
+{
+"q": "Are values whole numbers?",
+"a": "Yes.",
+"tag": null
+},
+{
+"q": "Can I run zero stalls?",
+"a": "Yes, and then you earn 0.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A street market has a row of stalls, each with a value <code>vals[i]</code> you'd earn by running it. The rules say you can't run <b>two neighbouring stalls</b>.</p>\n<p>Write <code>best_picks(vals)</code>: return the most you can earn.</p>\n<p><code>best_picks([2, 7, 9, 3, 1])</code> is <code>12</code>: stalls 0, 2 and 4 give 2 + 9 + 1.</p>",
+"examples": "assert best_picks([2, 7, 9, 3, 1]) == 12\nassert best_picks([5, 1, 1, 5]) == 10",
+"starter": "def best_picks(vals):\n    pass",
+"solution": "def best_picks(vals):\n    take = skip = 0   # best total if the last stall is taken / not taken\n    for v in vals:\n        take, skip = skip + v, max(take, skip)\n    return max(take, skip)",
+"brute": "def best_picks(vals):\n    def best(i):\n        if i >= len(vals):\n            return 0\n        return max(best(i + 1), vals[i] + best(i + 2))\n    return best(0)",
+"approach": "<p>Walk the stalls once, keeping two numbers: the best total if the last stall was run, and the best if it wasn't. A stall can only be run if the one before wasn't. That's dynamic programming with O(1) memory: O(n).</p>",
+"twist": "<p>The market moves to a <b>roundabout</b>: the stalls form a circle, so the first and the last are neighbours too. Write <code>best_picks_circle(vals)</code>.</p>",
+"twisttests": "assert best_picks_circle([2, 3, 2]) == 3\nassert best_picks_circle([1, 2, 3, 1]) == 4\nassert best_picks_circle([5]) == 5\nassert best_picks_circle([]) == 0\nassert best_picks_circle([4, 1, 1, 4]) == 5",
+"twistsolution": "def best_picks_circle(vals):\n    def line(vs):\n        take = skip = 0\n        for v in vs:\n            take, skip = skip + v, max(take, skip)\n        return max(take, skip)\n    if len(vals) <= 1:\n        return max(vals[0], 0) if vals else 0\n    return max(line(vals[1:]), line(vals[:-1]))"
 }
 ]
 }
