@@ -197,9 +197,18 @@
   }
 
   // ---------------------------------------------------------- Wind Tunnel --
+  // a whiteboard question's card: its drawing, chalk on the card's colour, with the kind of question on a tag
+  const SD_KIND = { follow: "Follow it", napkin: "Napkin math", bottleneck: "Find the bottleneck", draw: "Draw it" };
+  function sketch(d) {
+    const box = (n) => `<rect x="${n.x - 80}" y="${n.y - 33}" width="160" height="66" rx="14"/>`;
+    const at = (id) => d.nodes.find((n) => n.id === id);
+    const line = ([a, b]) => { const p = at(a), q = at(b); return p && q ? `<path d="M${p.x} ${p.y} C${(p.x + q.x) / 2} ${p.y} ${(p.x + q.x) / 2} ${q.y} ${q.x} ${q.y}"/>` : ""; };
+    return h("span", { class: "la-sketch", html: `<svg viewBox="0 40 960 500" aria-hidden="true"><g class="w">${d.wires.map(line).join("")}</g><g class="b">${d.nodes.map(box).join("")}</g></svg>` });
+  }
   const WT_HUE = { wt01: "cyan", wt02: "teal", wt03: "blue", wt04: "violet", wt05: "red", wt06: "amber", wt07: "green", wt08: "yellow", wt09: "orange", wt10: "lilac", wt11: "pink", wt12: "cyan" };
   function tunnel() {
-    const X = (window.WT && window.WT.experiments) || [];
+    const X = (window.WT && window.WT.experiments) || [], SDQ = (window.SD && window.SD.BOARDS) || [];
+    const SD_HUE = ["pink", "amber", "violet", "cyan", "red", "green"];
     const live = X.filter((x) => x.live), have = live.filter((x) => done[x.id]).length;
     const next = live.find((x) => !done[x.id]) || live[0];
     const P_ = S.wt || {};
@@ -209,6 +218,9 @@
       h("div", { class: "part" }, "Experiments"),
       h("div", { class: "branch" }, live.map((x) => h("a", { href: `lab.html#${X.indexOf(x) + 1}`, class: done[x.id] ? "done" : null },
         h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), glyph(done[x.id] ? 2 : P_[x.id] ? 1 : 0, done[x.id] ? "done" : "")))),
+      SDQ.length ? h("div", { class: "part" }, "Whiteboard") : null,
+      SDQ.length ? h("div", { class: "branch" }, SDQ.map((b, i) => h("a", { href: `board.html#${i + 1}`, class: done[b.id] ? "done" : null },
+        h("span", { class: "n" }, i + 1), h("span", { class: "t" }, b.title), glyph(done[b.id] ? 2 : 0, done[b.id] ? "done" : "")))) : null,
       h("div", { class: "part" }, "Being built"),
       h("div", { class: "branch" }, X.filter((x) => !x.live).map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))));
     const plotOf = (x) => {
@@ -238,6 +250,10 @@
       h("div", { class: "note", html: "Every number in an experiment's text comes out of the same seeded simulator you're watching, and is checked before it ships. Same seed, same run: that's what makes rewind exact. The pictures below are frames from that simulator." }),
       secH("Live experiments", "each one is its own system, caught at the moment it bends"),
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, live.map(plotOf))),
+      SDQ.length ? secH("Whiteboard", "system design on a sheet that runs: one product, six questions") : null,
+      SDQ.length ? h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, SDQ.map((b, i) => plot({ href: `board.html#${i + 1}`, num: i + 1, title: b.title, sub: b.lede.replace(/<[^>]+>/g, "").split(". ")[0] + ".",
+        hue: SD_HUE[i % SD_HUE.length], media: sketch(b.design), tag: SD_KIND[b.kind], pct: done[b.id] ? 100 : 0, bloomed: !!done[b.id],
+        next: !done[b.id] && SDQ.findIndex((x) => !done[x.id]) === i ? "next" : null })))) : null,
       secH("Being built", "the question each one will answer"),
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, X.filter((x) => !x.live).map(plotOf))));
     layout(side, col);
