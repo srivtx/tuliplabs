@@ -29,6 +29,11 @@
    `allWorkers` (website and job workers together).
 
    new Sim(cfg, seed) · sim.set({...}) · sim.advance(toTime) · sim.view() for drawing · sim.stats(t0, t1) for a window ·
+   noisy: a script run by one customer sends `noisy` requests a second on top of everyone else (open load). Everyone
+   else is `tenants` customers, each request from one of them at random. A rate limiter (`limit` > 0) in front gives
+   every customer a token bucket: it holds up to `burst` tokens and refills at `limit` a second; a request takes a token,
+   and one that finds none is refused at once with a 429 ("limited"). With a script running, stats are about everyone
+   else, and say separately what the script got: nTput (answered/s) and n429 (refused/s).
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
@@ -79,6 +84,7 @@
     cache: 0, keys: 10000, zipf: 1, cacheTime: 0.002, warm: false,
     cancel: true, retries: 0, backoff: 0, jitter: false, surge: null,
     batch: null, jobWorkers: 0,
+    noisy: 0, tenants: 40, limit: 0, burst: 10,
   };
 
   class Sim {
@@ -104,6 +110,8 @@
     this.jobQ = [];           // background jobs waiting for a job worker, and the ones being worked on
     this.jobBusy = [];
     this.batches = [];        // every batch that landed: {t, n, left, last}, for jobAge and backlog
+    this.buckets = new Map(); // the rate limiter: customer -> {tok, t}; customer 0 is the script
+    this.nEpoch = 0;          // like epoch, for the script's own stream
       this.sizeServers();
       this.nc = this.live() * this.cfg.workers;
       // a warm cache already holds the hottest keys, hottest most recently used (a cache that has run for a while)
@@ -118,6 +126,28 @@
     start() {
       if (this.cfg.mode === "open") this.scheduleArrival();
       else this.addUsers(this.cfg.users);
+      this.scheduleNoisy();
+    }
+    scheduleNoisy() {
+      if (this.cfg.noisy > 0) this.ev.push({ t: this.t + this.exp(1 / this.cfg.noisy), type: "noisy", epoch: this.nEpoch });
+    }
+    // the rate limiter: does this customer have a token? Buckets start full and refill continuously
+    admit(q) {
+      const c = this.cfg;
+      if (!(c.limit > 0)) return true;
+      if (q.cust === undefined) q.cust = q.noisy ? 0 : 1 + Math.min(c.tenants - 1, Math.floor(this.r() * c.tenants));
+      let b = this.buckets.get(q.cust);
+      if (!b) { b = { tok: c.burst, t: this.t }; this.buckets.set(q.cust, b); }
+      b.tok = Math.min(c.burst, b.tok + (this.t - b.t) * c.limit);
+      b.t = this.t;
+      if (b.tok >= 1) { b.tok -= 1; return true; }
+      return false;
+    }
+    // the script's bucket right now, 0..1 full, for drawing
+    scriptTokens() {
+      const c = this.cfg, b = this.buckets.get(0);
+      if (!(c.limit > 0)) return 0;
+      return b ? Math.min(c.burst, b.tok + (this.t - b.t) * c.limit) / c.burst : 1;
     }
     scheduleArrival() {
       if (this.cfg.rate > 0) this.ev.push({ t: this.t + this.exp(1 / this.cfg.rate), type: "arrive", epoch: this.epoch });
@@ -138,6 +168,9 @@
       const old = this.cfg;
       this.cfg = { ...old, ...patch };
       if (this.cfg.mode === "open" && patch.rate !== undefined && patch.rate !== old.rate) { this.epoch++; this.scheduleArrival(); }
+      if (patch.noisy !== undefined && patch.noisy !== old.noisy) { this.nEpoch++; this.scheduleNoisy(); }
+      // a new limit or burst: every bucket keeps what it had, capped at the new size
+      if (patch.limit !== undefined || patch.burst !== undefined) for (const b of this.buckets.values()) b.tok = Math.min(this.cfg.burst, b.tok);
       if (this.cfg.mode === "closed" && patch.users !== undefined && this.cfg.users > this.users) this.addUsers(this.cfg.users - this.users);
       if (patch.servers !== undefined) { this.sizeServers(); this.logBusy(); }
       if (patch.workers !== undefined) { this.srv.forEach((s, i) => this.fill(i)); this.logBusy(); }
@@ -186,11 +219,17 @@
       while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < u) lo = m + 1; else hi = m; }
       return lo + 1;
     }
-    send(prev) {
-      const q = { id: this.nextId++, sent: this.t, closed: this.cfg.mode === "closed" };
-      if (prev) { q.first = prev.first ?? prev.sent; q.tries = (prev.tries || 0) + 1; q.closed = prev.closed; if (prev.key !== undefined) q.key = prev.key; }
+    send(prev, noisy) {
+      const q = { id: this.nextId++, sent: this.t, closed: this.cfg.mode === "closed" && !noisy };
+      if (noisy) q.noisy = true;
+      if (prev) { q.first = prev.first ?? prev.sent; q.tries = (prev.tries || 0) + 1; q.closed = prev.closed; q.noisy = prev.noisy; q.cust = prev.cust; if (prev.key !== undefined) q.key = prev.key; }
       const sec = Math.floor(this.t);
       this.tries[sec] = (this.tries[sec] || 0) + 1;
+      if (!this.admit(q)) {
+        if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : null], ["lim"]);
+        this.finish(q, false, "limited");
+        return;
+      }
       if (this.cfg.cache > 0) {
         if (q.key === undefined) q.key = this.pickKey();
         if (this.lru.has(q.key)) {
@@ -202,7 +241,7 @@
         }
         q.hit = false;
       }
-      if (this.feed) this.feed.push(["in"]);
+      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : null]);
       if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
       const i = this.route();
       q.srv = i;
@@ -266,12 +305,12 @@
         if (this.cfg.jitter) d *= this.r();
         this.waiting++;
         this.ev.push({ t: this.t + d, type: "retry", q });
-        if (this.feed && !q.hit) this.feed.push(["out", false, why, q.srv || 0]);
+        if (this.feed && !q.hit && why !== "limited") this.feed.push(["out", false, why, q.srv || 0]);
         return;
       }
       const sent = q.first ?? q.sent;
-      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit });
-      if (this.feed && !q.hit) this.feed.push(["out", ok, why, q.srv || 0]);
+      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit, n: q.noisy });
+      if (this.feed && !q.hit && why !== "limited") this.feed.push(["out", ok, why, q.srv || 0]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
     }
@@ -291,6 +330,10 @@
           if (e.epoch !== this.epoch || this.cfg.mode !== "open") continue;
           this.send();
           this.scheduleArrival();
+        } else if (e.type === "noisy") {
+          if (e.epoch !== this.nEpoch) continue;
+          this.send(null, true);
+          this.scheduleNoisy();
         } else if (e.type === "wake") {
           this.thinking--;
           this.send();
@@ -351,10 +394,13 @@
     // numbers for requests that finished in (t0, t1]
     stats(t0, t1) {
       const lats = [], d = this.done;
-      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length;
+      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0;
       while (lo < hi) { const m = (lo + hi) >> 1; if (d[m].at <= t0) lo = m + 1; else hi = m; }
       for (let i = lo; i < d.length && d[i].at <= t1; i++) {
         const r = d[i];
+        // the script's requests are counted on their own: every other number is about everyone else
+        if (r.n) { if (r.ok) nOk++; else if (r.why === "limited") n429++; continue; }
+        if (r.why === "limited") limited++;
         if (r.ok) { ok++; lats.push(r.lat); } else bad++;
         if (r.hit !== undefined) { looked++; if (r.hit) hits++; }
       }
@@ -365,6 +411,7 @@
         tput: ok / span, mean: lats.length ? lats.reduce((s, x) => s + x, 0) / lats.length : 0,
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
         hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
+        nTput: nOk / span, n429: n429 / span, limited,
         ...this.jobStats(t0, t1),
       };
     }
