@@ -1020,6 +1020,7 @@
     side.append(h("a", { class: "top-link", href: "#", "aria-current": current === "home" ? "page" : null }, h("span", { class: "n" }, "✿"), "Your garden"));
     side.append(h("a", { class: "top-link", href: "#review", "aria-current": current === "review" ? "page" : null }, h("span", { class: "n" }, "↻"), "Spaced review"));
     if (window.MOCK) side.append(h("a", { class: "top-link", href: "#mock", "aria-current": current === "mock" ? "page" : null }, h("span", { class: "n" }, "◷"), "Mock test"));
+    if (window.INTERVIEW) side.append(h("a", { class: "top-link", href: "#interview", "aria-current": current === "interview" ? "page" : null }, h("span", { class: "n" }, "◎"), "Interview"));
     if (DATA.chapters.some((c) => c.puzzles && c.puzzles.length)) side.append(h("a", { class: "top-link", href: "#puzzles", "aria-current": current === "puzzles" ? "page" : null }, h("span", { class: "n" }, "◆"), "Puzzles"));
     // Parts are branches; chapters hang off them like └── lines in a file tree.
     let part = null, branch = null;
@@ -1455,6 +1456,7 @@
     if (!hash) return pageHome();
     if (hash === "review") return pageReview();
     if (hash === "mock" && window.MOCK) return window.MOCK.page(mockApi());
+    if (hash === "interview" && window.INTERVIEW) return window.INTERVIEW.page(mockApi());
     if (hash === "puzzles") return pagePuzzleWall();
     const [num, sec] = hash.split("/");
     const ch = DATA.chapters.find((c) => String(c.num) === num);

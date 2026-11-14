@@ -145,6 +145,8 @@
       resume,
       h("div", { class: "mk-setup" }, sentence, mix,
         h("div", { class: "btns" }, h("button", { class: "key primary", onclick: () => begin(st) }, "Start the mock →"))),
+      window.INTERVIEW && TRACK === "ds" ? h("p", { class: "mk-iv" }, h("a", { href: "#interview" }, "Or sit an interview"),
+        ": one problem you haven't seen, 45 minutes, from asking questions to a follow-up, with a scorecard at the end.") : null,
       h("div", { class: "mk-kinds" }, Object.entries(KIND_NAME).filter(([k]) => present.has(k)).map(([k, name]) => h("div", {}, h("b", {}, name), h("span", {}, KIND_TEXT[k])))),
       hist.length ? h("div", { class: "mk-hist" }, h("h3", {}, "Your last mocks"), h("table", {}, hist.map((r) => h("tr", {},
         h("td", {}, new Date(r.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })), h("td", {}, h("b", {}, `${r.right} / ${r.n}`)),

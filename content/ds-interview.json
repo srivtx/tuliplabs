@@ -1,0 +1,1014 @@
+{
+"track": "ds",
+"prelude": "import time\n\ndef timed(fn, *args):\n    \"\"\"Run fn(*args) and return (result, seconds).\"\"\"\n    t = time.perf_counter()\n    out = fn(*args)\n    return out, time.perf_counter() - t",
+"problems": [
+{
+"id": "pairs",
+"title": "Pairs that hit the target",
+"fn": "count_pairs",
+"ch": 3,
+"decoys": [
+7,
+6,
+9,
+28
+],
+"bigo": "O(n)",
+"hints": [
+"<p>Checking every pair is O(n²). For one card <code>v</code>, what value would its partner need to be?</p>",
+"<p>Its partner is <code>t - v</code>. If you remember how many times each value has appeared <i>so far</i>, you know how many partners <code>v</code> has to its left.</p>",
+"<p>Keep <code>seen = {}</code> of counts. For each <code>v</code>: add <code>seen.get(t - v, 0)</code> to the answer, then do <code>seen[v] += 1</code>. Adding before recording stops a card pairing with itself.</p>"
+],
+"tests": [
+{
+"tag": "tiny",
+"code": "assert count_pairs([], 5) == 0\nassert count_pairs([5], 10) == 0"
+},
+{
+"tag": "dups",
+"code": "assert count_pairs([3, 3, 3], 6) == 3\nassert count_pairs([1, 1, 1, 1], 2) == 6"
+},
+{
+"tag": "neg",
+"code": "assert count_pairs([-2, 7, 0, 5], 5) == 2\nassert count_pairs([0, 0], 0) == 1"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(7)\nbig = [random.randint(-1000, 1000) for _ in range(200000)]\nr, secs = timed(count_pairs, big, 17)\nfrom collections import Counter\nc = Counter(big)\nassert r == sum(c[v] * c[17 - v] for v in c if v < 17 - v)\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 cards: checking every pair is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the list be empty, or hold just one card?",
+"a": "Yes, both. With fewer than two cards there are no pairs, so return 0.",
+"tag": "tiny"
+},
+{
+"q": "Can two cards have the same value?",
+"a": "Yes, often. Count pairs of positions, so three 3s with t = 6 make 3 pairs.",
+"tag": "dups"
+},
+{
+"q": "Can a value be negative or zero?",
+"a": "Yes: refunds show up as negative cards. Any whole number.",
+"tag": "neg"
+},
+{
+"q": "Is the list sorted?",
+"a": "No, it's in the order the cards were scanned.",
+"tag": null
+},
+{
+"q": "Should I print the answer or return it?",
+"a": "Return it.",
+"tag": null
+},
+{
+"q": "Which language should I use?",
+"a": "Whichever you're comfortable in. Python is fine.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A shop sells gift cards of different values. A customer wants to spend exactly <code>t</code> using <b>two different cards</b>.</p>\n<p>Write <code>count_pairs(a, t)</code>: given the card values <code>a</code>, return how many pairs of positions <code>i &lt; j</code> have <code>a[i] + a[j] == t</code>.</p>\n<p><code>count_pairs([1, 5, 3, 3, 4], 6)</code> is <code>2</code>: 1 + 5 and 3 + 3. <code>count_pairs([2, 4, 2], 6)</code> is also <code>2</code>, because each 2 pairs with the 4.</p>",
+"examples": "assert count_pairs([1, 5, 3, 3, 4], 6) == 2\nassert count_pairs([2, 4, 2], 6) == 2",
+"starter": "def count_pairs(a, t):\n    pass",
+"solution": "def count_pairs(a, t):\n    seen = {}\n    pairs = 0\n    for v in a:\n        pairs += seen.get(t - v, 0)\n        seen[v] = seen.get(v, 0) + 1\n    return pairs",
+"brute": "def count_pairs(a, t):\n    n = len(a)\n    return sum(1 for i in range(n) for j in range(i + 1, n) if a[i] + a[j] == t)",
+"approach": "<p>Walk the list once, keeping a count of every value seen so far. Each new value <code>v</code> pairs with every earlier <code>t - v</code>, so add that count, then record <code>v</code>. One pass, O(n).</p>",
+"twist": "<p>Good. Now the customer wants a <b>difference</b>, not a sum: count pairs <code>i &lt; j</code> where <code>a[j] - a[i] == t</code> (the later card is worth exactly <code>t</code> more). Write <code>count_rises(a, t)</code>. For <code>[1, 4, 2, 5]</code> and <code>t = 3</code> that's <code>2</code>: 1 → 4 and 2 → 5.</p>",
+"twisttests": "assert count_rises([1, 4, 2, 5], 3) == 2\nassert count_rises([5, 2], 3) == 0\nassert count_rises([1, 1, 1], 0) == 3\nassert count_rises([], 1) == 0",
+"twistsolution": "def count_rises(a, t):\n    seen = {}\n    rises = 0\n    for v in a:\n        rises += seen.get(v - t, 0)\n        seen[v] = seen.get(v, 0) + 1\n    return rises"
+},
+{
+"id": "closest",
+"title": "The closest pair",
+"fn": "closest_sum",
+"ch": 7,
+"decoys": [
+3,
+9,
+15,
+28
+],
+"bigo": "O(n)",
+"hints": [
+"<p>The list is sorted. What does that tell you about <code>a[0] + a[-1]</code> compared with <code>a[1] + a[-1]</code>?</p>",
+"<p>Start with <code>i = 0</code> and <code>j = len(a) - 1</code>. If <code>a[i] + a[j]</code> is below <code>t</code>, no pair using <code>a[i]</code> with anything left of <code>j</code> can be closer, so move <code>i</code>.</p>",
+"<p>Loop while <code>i &lt; j</code>: record <code>abs(s - t)</code>, then <code>i += 1</code> if <code>s &lt; t</code>, <code>j -= 1</code> if <code>s &gt; t</code>, and return 0 if it's exact.</p>"
+],
+"tests": [
+{
+"tag": "tiny",
+"code": "assert closest_sum([], 4) is None\nassert closest_sum([3], 4) is None"
+},
+{
+"tag": "dups",
+"code": "assert closest_sum([5, 5], 10) == 0\nassert closest_sum([1, 4, 4, 9], 8) == 0"
+},
+{
+"tag": "neg",
+"code": "assert closest_sum([-8, -3, 1, 6], -10) == 1\nassert closest_sum([-5, -1], 0) == 6"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(3)\nbig = sorted(random.sample(range(-10**9, 10**9), 200000))\nr, secs = timed(closest_sum, big, 123456789)\nimport bisect\nbest = None\nfor i, v in enumerate(big):\n    k = bisect.bisect_left(big, 123456789 - v, i + 1)\n    for j in (k - 1, k):\n        if i < j < len(big):\n            d = abs(v + big[j] - 123456789)\n            best = d if best is None else min(best, d)\nassert r == best\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 weights: trying every pair is too slow\""
+}
+],
+"clarify": [
+{
+"q": "What if there are fewer than two weights?",
+"a": "Then there's no pair. Return None.",
+"tag": "tiny"
+},
+{
+"q": "Can two weights be equal?",
+"a": "Yes, and two equal weights are still two different weights.",
+"tag": "dups"
+},
+{
+"q": "Can weights or the target be negative?",
+"a": "Yes, they're offsets from a reference weight. Any whole numbers.",
+"tag": "neg"
+},
+{
+"q": "Is the list really sorted?",
+"a": "Yes, smallest first.",
+"tag": null
+},
+{
+"q": "Do I need to return which pair it was?",
+"a": "No, just the distance.",
+"tag": null
+},
+{
+"q": "Is there a time limit?",
+"a": "Aim for the best you can. We'll talk about cost before you code.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A lab has weights sorted from lightest to heaviest. You need two <b>different</b> weights whose total is as close as possible to a target <code>t</code>.</p>\n<p>Write <code>closest_sum(a, t)</code>: <code>a</code> is sorted in ascending order. Return the smallest possible <code>abs(a[i] + a[j] - t)</code> over pairs <code>i &lt; j</code>.</p>\n<p><code>closest_sum([1, 3, 4, 7, 10], 15)</code> is <code>1</code>: 4 + 10 = 14, which is 1 away. <code>closest_sum([2, 5, 9], 7)</code> is <code>0</code>: 2 + 5.</p>",
+"examples": "assert closest_sum([1, 3, 4, 7, 10], 15) == 1\nassert closest_sum([2, 5, 9], 7) == 0",
+"starter": "def closest_sum(a, t):\n    pass",
+"solution": "def closest_sum(a, t):\n    if len(a) < 2:\n        return None\n    i, j = 0, len(a) - 1\n    best = abs(a[i] + a[j] - t)\n    while i < j:\n        s = a[i] + a[j]\n        best = min(best, abs(s - t))\n        if s < t:\n            i += 1\n        elif s > t:\n            j -= 1\n        else:\n            return 0\n    return best",
+"brute": "def closest_sum(a, t):\n    n = len(a)\n    if n < 2:\n        return None\n    return min(abs(a[i] + a[j] - t) for i in range(n) for j in range(i + 1, n))",
+"approach": "<p>Put one finger on each end. If the pair is too small, only moving the left finger right can make it bigger; if too big, move the right finger left. Every step throws away one weight for good, so it's one pass, O(n).</p>",
+"twist": "<p>Nice. Now the weights arrive <b>unsorted</b>, straight off the scale. Change <code>closest_sum(a, t)</code> so it works for any order. What does that cost now?</p>",
+"twisttests": "assert closest_sum([10, 1, 7, 4, 3], 15) == 1\nassert closest_sum([9, 2, 5], 7) == 0\nassert closest_sum([6, -8, 1, -3], -10) == 1\nassert closest_sum([4], 4) is None",
+"twistsolution": "def closest_sum(a, t):\n    a = sorted(a)\n    if len(a) < 2:\n        return None\n    i, j = 0, len(a) - 1\n    best = abs(a[i] + a[j] - t)\n    while i < j:\n        s = a[i] + a[j]\n        best = min(best, abs(s - t))\n        if s < t:\n            i += 1\n        elif s > t:\n            j -= 1\n        else:\n            return 0\n    return best"
+},
+{
+"id": "distinct",
+"title": "Longest stretch with few kinds",
+"fn": "longest_k_kinds",
+"ch": 8,
+"decoys": [
+3,
+7,
+11,
+31
+],
+"bigo": "O(n)",
+"hints": [
+"<p>If a stretch has too many kinds, any longer stretch containing it does too. So once it breaks, you never need to look further right with the same start.</p>",
+"<p>Keep a window <code>s[left:right + 1]</code> and a dict of letter counts inside it. Move <code>right</code> every step; move <code>left</code> only when there are too many kinds.</p>",
+"<p>After adding <code>s[right]</code>, <code>while len(count) &gt; k:</code> take one off <code>count[s[left]]</code> (deleting it at zero) and step <code>left</code>. Then the window length <code>right - left + 1</code> is a candidate.</p>"
+],
+"tests": [
+{
+"tag": "empty",
+"code": "assert longest_k_kinds(\"\", 2) == 0"
+},
+{
+"tag": "kzero",
+"code": "assert longest_k_kinds(\"aaa\", 0) == 0"
+},
+{
+"tag": "bigk",
+"code": "assert longest_k_kinds(\"abcab\", 10) == 5\nassert longest_k_kinds(\"z\", 1) == 1"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(11)\nbig = \"\".join(\"d\" if i % 60000 == 59999 else random.choice(\"abc\") for i in range(200000))\nr, secs = timed(longest_k_kinds, big, 3)\nfrom collections import Counter\nc, i, want = Counter(), 0, 0\nfor j, ch in enumerate(big):\n    c[ch] += 1\n    while len(c) > 3:\n        c[big[i]] -= 1\n        if not c[big[i]]:\n            del c[big[i]]\n        i += 1\n    want = max(want, j - i + 1)\nassert r == want\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 birds: restarting from every position is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the log be empty?",
+"a": "Yes. Then the answer is 0.",
+"tag": "empty"
+},
+{
+"q": "Can k be 0?",
+"a": "Yes. No letters are allowed, so the answer is 0.",
+"tag": "kzero"
+},
+{
+"q": "What if k is more than the number of kinds in the log?",
+"a": "Then the whole log counts.",
+"tag": "bigk"
+},
+{
+"q": "Are the letters only lowercase?",
+"a": "Yes, a to z. It won't matter much.",
+"tag": null
+},
+{
+"q": "Should I return the substring itself?",
+"a": "Just its length.",
+"tag": null
+},
+{
+"q": "Can I use extra memory?",
+"a": "Yes, within reason.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A bird watcher logs one letter per bird they see, in order, like <code>\"aabcbbd\"</code>. They want the longest <b>unbroken</b> stretch of the log that has at most <code>k</code> different kinds of bird.</p>\n<p>Write <code>longest_k_kinds(s, k)</code>: return the length of the longest substring of <code>s</code> with at most <code>k</code> distinct letters.</p>\n<p><code>longest_k_kinds(\"aabcbbd\", 2)</code> is <code>4</code>: <code>\"bcbb\"</code>. <code>longest_k_kinds(\"abc\", 3)</code> is <code>3</code>.</p>",
+"examples": "assert longest_k_kinds(\"aabcbbd\", 2) == 4\nassert longest_k_kinds(\"abc\", 3) == 3",
+"starter": "def longest_k_kinds(s, k):\n    pass",
+"solution": "def longest_k_kinds(s, k):\n    count = {}\n    left = best = 0\n    for right, ch in enumerate(s):\n        count[ch] = count.get(ch, 0) + 1\n        while len(count) > k:\n            out = s[left]\n            count[out] -= 1\n            if count[out] == 0:\n                del count[out]\n            left += 1\n        best = max(best, right - left + 1)\n    return best",
+"brute": "def longest_k_kinds(s, k):\n    best = 0\n    for i in range(len(s)):\n        kinds = set()\n        for j in range(i, len(s)):\n            kinds.add(s[j])\n            if len(kinds) > k:\n                break\n            best = max(best, j - i + 1)\n    return best",
+"approach": "<p>Slide a window over the log. Grow it on the right one letter at a time, keeping a count per letter; whenever it holds more than <code>k</code> kinds, shrink it from the left until it's legal again. Each letter enters and leaves once: O(n).</p>",
+"twist": "<p>The watcher changes their mind: they want stretches with <b>exactly</b> <code>k</code> kinds. Write <code>longest_exactly_k(s, k)</code>, and return 0 if no stretch has exactly <code>k</code> kinds.</p>",
+"twisttests": "assert longest_exactly_k(\"aabcbbd\", 2) == 4\nassert longest_exactly_k(\"aab\", 3) == 0\nassert longest_exactly_k(\"abcab\", 3) == 5\nassert longest_exactly_k(\"\", 1) == 0\nassert longest_exactly_k(\"aaab\", 1) == 3",
+"twistsolution": "def longest_exactly_k(s, k):\n    count = {}\n    left = best = 0\n    for right, ch in enumerate(s):\n        count[ch] = count.get(ch, 0) + 1\n        while len(count) > k:\n            out = s[left]\n            count[out] -= 1\n            if count[out] == 0:\n                del count[out]\n            left += 1\n        if len(count) == k:\n            best = max(best, right - left + 1)\n    return best"
+},
+{
+"id": "range",
+"title": "Where does it start and end?",
+"fn": "find_range",
+"ch": 9,
+"decoys": [
+3,
+7,
+4,
+15
+],
+"bigo": "O(log n)",
+"hints": [
+"<p>Finding <i>one</i> copy with binary search is easy. Why isn't walking left and right from it fast enough?</p>",
+"<p>Ask a different question: \"what's the first index whose value is ≥ x?\" That's a yes/no boundary, and binary search finds boundaries.</p>",
+"<p>Write <code>first_at_least(v)</code> with <code>lo, hi = 0, len(a)</code>: if <code>a[mid] &lt; v</code> set <code>lo = mid + 1</code>, else <code>hi = mid</code>. Then the range is <code>first_at_least(x)</code> to <code>first_at_least(x + 1) - 1</code>.</p>"
+],
+"tests": [
+{
+"tag": "missing",
+"code": "assert find_range([1, 3, 5], 4) == (-1, -1)\nassert find_range([1, 3, 5], 9) == (-1, -1)\nassert find_range([1, 3, 5], 0) == (-1, -1)"
+},
+{
+"tag": "empty",
+"code": "assert find_range([], 3) == (-1, -1)"
+},
+{
+"tag": "dups",
+"code": "assert find_range([7] * 10, 7) == (0, 9)\nassert find_range([1, 7, 7], 7) == (1, 2)"
+},
+{
+"tag": "big",
+"code": "import random, time\nrandom.seed(5)\nbig = sorted([random.randint(0, 1000) for _ in range(100000)] + [500] * 100000)\nqs = [random.randint(-5, 1005) for _ in range(3000)] + [500] * 100\nt0 = time.perf_counter()\ngot = [find_range(big, q) for q in qs]\nsecs = time.perf_counter() - t0\nimport bisect\nfor q, g in zip(qs, got):\n    lo, hi = bisect.bisect_left(big, q), bisect.bisect_right(big, q) - 1\n    assert g == ((lo, hi) if lo <= hi else (-1, -1)), f\"find_range(big, {q}) gave {g}\"\nassert secs < 1.5, f\"{secs:.2f} s for 3,100 queries on 200,000 amounts: scanning is too slow\""
+}
+],
+"clarify": [
+{
+"q": "What if x isn't in the list?",
+"a": "Return (-1, -1).",
+"tag": "missing"
+},
+{
+"q": "Can the ledger be empty?",
+"a": "Yes. Then x is missing: (-1, -1).",
+"tag": "empty"
+},
+{
+"q": "Can one amount fill most of the ledger?",
+"a": "Yes, a million copies of the same amount happens. Your answer must stay fast then too.",
+"tag": "dups"
+},
+{
+"q": "Is it sorted smallest first?",
+"a": "Yes.",
+"tag": null
+},
+{
+"q": "Are the amounts whole numbers?",
+"a": "Yes.",
+"tag": null
+},
+{
+"q": "Can I use the bisect module?",
+"a": "Yes, or write the search yourself.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A ledger keeps transaction amounts <b>sorted</b>. Auditors keep asking: where does amount <code>x</code> first appear, and where does it last appear?</p>\n<p>Write <code>find_range(a, x)</code>: return a tuple <code>(first, last)</code> of the first and last index of <code>x</code> in the sorted list <code>a</code>. Each query should be fast, because the auditors ask thousands of them.</p>\n<p><code>find_range([1, 2, 2, 2, 5], 2)</code> is <code>(1, 3)</code>. <code>find_range([1, 3, 5], 5)</code> is <code>(2, 2)</code>.</p>",
+"examples": "assert find_range([1, 2, 2, 2, 5], 2) == (1, 3)\nassert find_range([1, 3, 5], 5) == (2, 2)",
+"starter": "def find_range(a, x):\n    pass",
+"solution": "def find_range(a, x):\n    def first_at_least(v):\n        lo, hi = 0, len(a)\n        while lo < hi:\n            mid = (lo + hi) // 2\n            if a[mid] < v:\n                lo = mid + 1\n            else:\n                hi = mid\n        return lo\n    lo = first_at_least(x)\n    if lo == len(a) or a[lo] != x:\n        return (-1, -1)\n    return (lo, first_at_least(x + 1) - 1)",
+"brute": "def find_range(a, x):\n    idx = [i for i, v in enumerate(a) if v == x]\n    return (idx[0], idx[-1]) if idx else (-1, -1)",
+"approach": "<p>Two binary searches: the first index whose value is at least <code>x</code>, and the first index whose value is at least <code>x + 1</code>. The answer is the first, and one before the second. Each is O(log n), even when <code>x</code> fills half the ledger.</p>",
+"twist": "<p>The auditors now want counts: write <code>count_between(a, lo, hi)</code>, the number of amounts with <code>lo &lt;= amount &lt;= hi</code>. Same sorted ledger, same need for speed.</p>",
+"twisttests": "assert count_between([1, 2, 2, 2, 5], 2, 4) == 3\nassert count_between([1, 2, 2, 2, 5], 0, 9) == 5\nassert count_between([1, 3, 5], 6, 9) == 0\nassert count_between([], 1, 2) == 0\nassert count_between([4, 4], 4, 4) == 2",
+"twistsolution": "import bisect\n\ndef count_between(a, lo, hi):\n    if lo > hi:\n        return 0\n    return bisect.bisect_right(a, hi) - bisect.bisect_left(a, lo)"
+},
+{
+"id": "higher",
+"title": "Wait for a higher price",
+"fn": "wait_for_higher",
+"ch": 11,
+"decoys": [
+12,
+7,
+15,
+28
+],
+"bigo": "O(n)",
+"hints": [
+"<p>On a falling market every day looks ahead a long way. What work is being repeated?</p>",
+"<p>Keep the days that haven't found their answer yet. When a new price arrives, which of them does it answer?</p>",
+"<p>A stack of indices: <code>while stack and prices[stack[-1]] &lt; p:</code> pop <code>j</code> and set <code>out[j] = i - j</code>. Then push <code>i</code>.</p>"
+],
+"tests": [
+{
+"tag": "equal",
+"code": "assert wait_for_higher([2, 2, 3]) == [2, 1, 0]\nassert wait_for_higher([4, 4, 4]) == [0, 0, 0]"
+},
+{
+"tag": "never",
+"code": "assert wait_for_higher([9, 7, 5]) == [0, 0, 0]"
+},
+{
+"tag": "empty",
+"code": "assert wait_for_higher([]) == []"
+},
+{
+"tag": "big",
+"code": "big = list(range(150000, 0, -1)) + [10**6]\nr, secs = timed(wait_for_higher, big)\nassert r == [150000 - i for i in range(150000)] + [0]\nassert secs < 1.5, f\"{secs:.2f} s for 150,001 falling days: looking ahead from each day is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Does an equal price count as higher?",
+"a": "No, it must be strictly higher.",
+"tag": "equal"
+},
+{
+"q": "What if a higher price never comes?",
+"a": "Put 0 for that day.",
+"tag": "never"
+},
+{
+"q": "Can the list be empty?",
+"a": "Yes. Return an empty list.",
+"tag": "empty"
+},
+{
+"q": "Are prices whole numbers?",
+"a": "Yes, in cents.",
+"tag": null
+},
+{
+"q": "Should I change the list in place?",
+"a": "No, return a new one.",
+"tag": null
+},
+{
+"q": "How many days can there be?",
+"a": "Up to a few hundred thousand.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A trader looks at a list of daily prices. For each day they want to know: <b>how many days until the price is strictly higher</b> than today's?</p>\n<p>Write <code>wait_for_higher(prices)</code>: return a list where entry <code>i</code> is the number of days after day <code>i</code> until a strictly higher price, or <code>0</code> if it never comes.</p>\n<p><code>wait_for_higher([3, 1, 4, 2, 5])</code> is <code>[2, 1, 2, 1, 0]</code>.</p>",
+"examples": "assert wait_for_higher([3, 1, 4, 2, 5]) == [2, 1, 2, 1, 0]\nassert wait_for_higher([5, 4, 6]) == [2, 1, 0]",
+"starter": "def wait_for_higher(prices):\n    pass",
+"solution": "def wait_for_higher(prices):\n    out = [0] * len(prices)\n    waiting = []\n    for i, p in enumerate(prices):\n        while waiting and prices[waiting[-1]] < p:\n            j = waiting.pop()\n            out[j] = i - j\n        waiting.append(i)\n    return out",
+"brute": "def wait_for_higher(prices):\n    out = []\n    for i, p in enumerate(prices):\n        d = 0\n        for j in range(i + 1, len(prices)):\n            if prices[j] > p:\n                d = j - i\n                break\n        out.append(d)\n    return out",
+"approach": "<p>Keep a stack of days still waiting for a higher price; their prices only fall from bottom to top. Each new price pops every waiting day it beats and fills in their answers, then waits itself. Every day is pushed and popped once: O(n).</p>",
+"twist": "<p>The market is now a <b>loop</b>: after the last day comes the first day again. Write <code>wait_circular(prices)</code>: days until a strictly higher price, looking past the end and round to the start, or 0 if no price in the whole loop is higher.</p>",
+"twisttests": "assert wait_circular([3, 1, 4, 2, 5]) == [2, 1, 2, 1, 0]\nassert wait_circular([5, 1, 2]) == [0, 1, 1]\nassert wait_circular([2, 2]) == [0, 0]\nassert wait_circular([]) == []",
+"twistsolution": "def wait_circular(prices):\n    n = len(prices)\n    out = [0] * n\n    waiting = []\n    for k in range(2 * n):\n        i = k % n\n        while waiting and prices[waiting[-1]] < prices[i]:\n            j = waiting.pop()\n            out[j] = (i - j) % n\n        if k < n:\n            waiting.append(i)\n    return out"
+},
+{
+"id": "median",
+"title": "The running middle",
+"fn": "running_median",
+"ch": 15,
+"decoys": [
+6,
+9,
+14,
+11
+],
+"bigo": "O(n log n)",
+"hints": [
+"<p>You only ever need the middle. Do you need the whole list in order to know it?</p>",
+"<p>Split the readings into a lower half and an upper half. You need the biggest of the lower half fast, and the smallest of the upper half fast. Which structure gives you the top in O(1)?</p>",
+"<p>Python's <code>heapq</code> is a min-heap; store negatives for the lower half. Push each reading to the right side, then move one top across if the sizes differ by more than one.</p>"
+],
+"tests": [
+{
+"tag": "even",
+"code": "assert running_median([4, 9]) == [4, 4]\nassert running_median([9, 4, 7, 3]) == [9, 4, 7, 4]"
+},
+{
+"tag": "dups",
+"code": "assert running_median([3, 3, 3, 1]) == [3, 3, 3, 3]"
+},
+{
+"tag": "neg",
+"code": "assert running_median([-1, -5, 0]) == [-1, -5, -1]"
+},
+{
+"tag": "empty",
+"code": "assert running_median([]) == []"
+},
+{
+"tag": "big",
+"code": "import random, heapq\nrandom.seed(9)\nbig = [random.randint(-10**6, 10**6) for _ in range(100000)]\nr, secs = timed(running_median, big)\nlo, hi, want = [], [], []\nfor v in big:\n    if lo and v > -lo[0]:\n        heapq.heappush(hi, v)\n    else:\n        heapq.heappush(lo, -v)\n    if len(lo) > len(hi) + 1:\n        heapq.heappush(hi, -heapq.heappop(lo))\n    elif len(hi) > len(lo):\n        heapq.heappush(lo, -heapq.heappop(hi))\n    want.append(-lo[0])\nassert r == want\nassert secs < 1.5, f\"{secs:.2f} s for 100,000 readings: sorting after every reading is too slow\""
+}
+],
+"clarify": [
+{
+"q": "With an even count, which middle do I show?",
+"a": "The lower of the two middle values.",
+"tag": "even"
+},
+{
+"q": "Can readings repeat?",
+"a": "Yes, the same reading can arrive many times.",
+"tag": "dups"
+},
+{
+"q": "Can readings be negative?",
+"a": "Yes, it's a thermometer in a freezer sometimes.",
+"tag": "neg"
+},
+{
+"q": "Can there be no readings at all?",
+"a": "Yes. Return an empty list.",
+"tag": "empty"
+},
+{
+"q": "Do readings arrive sorted?",
+"a": "No, in any order.",
+"tag": null
+},
+{
+"q": "Can I store all the readings?",
+"a": "Yes, memory is fine.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A sensor sends readings one at a time. After <b>each</b> reading, a dashboard shows the middle value of everything seen so far.</p>\n<p>Write <code>running_median(a)</code>: return a list whose entry <code>i</code> is the median of <code>a[0..i]</code>. When there's an even number of readings, use the <b>lower</b> of the two middle values, so every answer is a reading.</p>\n<p><code>running_median([5, 2, 8, 1])</code> is <code>[5, 2, 5, 2]</code>: after <code>5, 2</code> the middle two are 2 and 5, and the lower is 2.</p>",
+"examples": "assert running_median([5, 2, 8, 1]) == [5, 2, 5, 2]\nassert running_median([1, 2, 3]) == [1, 1, 2]",
+"starter": "def running_median(a):\n    pass",
+"solution": "import heapq\n\ndef running_median(a):\n    low, high, out = [], [], []   # low is a max-heap (negated), high a min-heap\n    for v in a:\n        if low and v > -low[0]:\n            heapq.heappush(high, v)\n        else:\n            heapq.heappush(low, -v)\n        if len(low) > len(high) + 1:\n            heapq.heappush(high, -heapq.heappop(low))\n        elif len(high) > len(low):\n            heapq.heappush(low, -heapq.heappop(high))\n        out.append(-low[0])\n    return out",
+"brute": "def running_median(a):\n    out = []\n    for i in range(len(a)):\n        s = sorted(a[:i + 1])\n        out.append(s[i // 2])\n    return out",
+"approach": "<p>Keep two heaps: a max-heap of the lower half and a min-heap of the upper half, with the lower half one bigger when the count is odd. The median is the top of the lower half. Each reading is a push and maybe one move: O(log n), so O(n log n) in all.</p>",
+"twist": "<p>The dashboard changes: show the <b>k-th smallest</b> reading so far, or <code>None</code> until there are <code>k</code> readings. Write <code>running_kth(a, k)</code>.</p>",
+"twisttests": "assert running_kth([5, 2, 8, 1], 2) == [None, 5, 5, 2]\nassert running_kth([3, 1, 2], 1) == [3, 1, 1]\nassert running_kth([4, 4], 3) == [None, None]\nassert running_kth([], 1) == []",
+"twistsolution": "import heapq\n\ndef running_kth(a, k):\n    keep, out = [], []   # the k smallest so far, as a max-heap (negated)\n    for v in a:\n        heapq.heappush(keep, -v)\n        if len(keep) > k:\n            heapq.heappop(keep)\n        out.append(-keep[0] if len(keep) == k else None)\n    return out"
+},
+{
+"id": "bookings",
+"title": "Merge the bookings",
+"fn": "merge_bookings",
+"ch": 14,
+"decoys": [
+15,
+7,
+16,
+9
+],
+"bigo": "O(n log n)",
+"hints": [
+"<p>If the bookings were in start order, which booking could the next one possibly overlap with?</p>",
+"<p>Sort them. Then each booking only needs comparing with the last block you've built so far.</p>",
+"<p>For each <code>[s, e]</code> in sorted order: if <code>s &lt;= out[-1][1]</code>, set <code>out[-1][1] = max(out[-1][1], e)</code>; otherwise append <code>[s, e]</code>.</p>"
+],
+"tests": [
+{
+"tag": "touch",
+"code": "assert merge_bookings([[1, 3], [3, 5]]) == [[1, 5]]\nassert merge_bookings([[1, 2], [4, 5]]) == [[1, 2], [4, 5]]"
+},
+{
+"tag": "unsorted",
+"code": "assert merge_bookings([[8, 9], [1, 2], [5, 7], [6, 8]]) == [[1, 2], [5, 9]]"
+},
+{
+"tag": "empty",
+"code": "assert merge_bookings([]) == []"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(2)\nbig = []\nfor i in range(100000):\n    s = random.randint(0, 10**8)\n    big.append([s, s + random.randint(1, 600)])\nr, secs = timed(merge_bookings, [b[:] for b in big])\nwant = []\nfor s, e in sorted(big):\n    if want and s <= want[-1][1]:\n        want[-1][1] = max(want[-1][1], e)\n    else:\n        want.append([s, e])\nassert r == want\nassert secs < 1.5, f\"{secs:.2f} s for 100,000 bookings: comparing every pair is too slow\""
+}
+],
+"clarify": [
+{
+"q": "If one booking ends at 3 and the next starts at 3, is that one block?",
+"a": "Yes. The room is never free in between, so join them.",
+"tag": "touch"
+},
+{
+"q": "Are the bookings in time order?",
+"a": "No, they're in the order people made them.",
+"tag": "unsorted"
+},
+{
+"q": "Can the calendar be empty?",
+"a": "Yes. Return an empty list.",
+"tag": "empty"
+},
+{
+"q": "Can a booking have start equal to end?",
+"a": "No, every booking is at least one unit long.",
+"tag": null
+},
+{
+"q": "Are times whole numbers?",
+"a": "Yes, minutes since midnight.",
+"tag": null
+},
+{
+"q": "Can I sort the input in place?",
+"a": "Better not; make a sorted copy.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A meeting room's calendar is a list of bookings <code>[start, end]</code>, in no particular order. A booking holds the room from <code>start</code> up to, but not including, <code>end</code>.</p>\n<p>Write <code>merge_bookings(bs)</code>: return the times the room is busy, as a sorted list of <code>[start, end]</code> blocks where overlapping bookings are joined into one.</p>\n<p><code>merge_bookings([[5, 8], [1, 3], [2, 4]])</code> is <code>[[1, 4], [5, 8]]</code>.</p>",
+"examples": "assert merge_bookings([[5, 8], [1, 3], [2, 4]]) == [[1, 4], [5, 8]]\nassert merge_bookings([[1, 10], [2, 3]]) == [[1, 10]]",
+"starter": "def merge_bookings(bs):\n    pass",
+"solution": "def merge_bookings(bs):\n    out = []\n    for s, e in sorted(bs):\n        if out and s <= out[-1][1]:\n            out[-1][1] = max(out[-1][1], e)\n        else:\n            out.append([s, e])\n    return out",
+"brute": "def merge_bookings(bs):\n    blocks = [list(b) for b in bs]\n    changed = True\n    while changed:\n        changed = False\n        for i in range(len(blocks)):\n            for j in range(i + 1, len(blocks)):\n                a, b = blocks[i], blocks[j]\n                if a[0] <= b[1] and b[0] <= a[1]:\n                    blocks[i] = [min(a[0], b[0]), max(a[1], b[1])]\n                    del blocks[j]\n                    changed = True\n                    break\n            if changed:\n                break\n    return sorted(blocks)",
+"approach": "<p>Sort by start time. Then walk once: a booking that starts before (or exactly when) the current block ends extends it; otherwise it starts a new block. Sorting is O(n log n) and the walk is O(n).</p>",
+"twist": "<p>The office wants fewer rooms. Write <code>rooms_needed(bs)</code>: the smallest number of rooms that fits every booking, where a booking ending at 3 frees its room for one starting at 3.</p>",
+"twisttests": "assert rooms_needed([[1, 4], [2, 5], [7, 9]]) == 2\nassert rooms_needed([[1, 3], [3, 5]]) == 1\nassert rooms_needed([[1, 10], [2, 3], [4, 5], [2, 9]]) == 3\nassert rooms_needed([]) == 0",
+"twistsolution": "def rooms_needed(bs):\n    events = sorted([(s, 1) for s, e in bs] + [(e, -1) for s, e in bs])\n    busy = most = 0\n    for _, d in events:\n        busy += d\n        most = max(most, busy)\n    return most"
+},
+{
+"id": "maze",
+"title": "Out of the warehouse",
+"fn": "shortest_path",
+"ch": 19,
+"decoys": [
+20,
+23,
+30,
+27
+],
+"bigo": "O(rows × cols)",
+"hints": [
+"<p>Every step costs the same. Which search reaches the squares in order of how far away they are?</p>",
+"<p>Use a queue: start at (0, 0) with distance 0, and from each square add its open, unvisited neighbours with distance + 1.</p>",
+"<p><code>collections.deque</code>, a <code>dist</code> grid of -1s, and mark a square the moment you add it to the queue, not when you take it out, so nothing is queued twice.</p>"
+],
+"tests": [
+{
+"tag": "blocked",
+"code": "assert shortest_path([\"#.\", \"..\"]) == -1\nassert shortest_path([\"..\", \".#\"]) == -1"
+},
+{
+"tag": "single",
+"code": "assert shortest_path([\".\"]) == 0"
+},
+{
+"tag": "nodiag",
+"code": "assert shortest_path([\".#\", \"..\"]) == 2\nassert shortest_path([\".#\", \"#.\"]) == -1"
+},
+{
+"tag": "big",
+"code": "n = 301\nrows = []\nfor r in range(n):\n    if r % 2 == 1:\n        rows.append((\"#\" * (n - 1) + \".\") if r % 4 == 1 else (\".\" + \"#\" * (n - 1)))\n    else:\n        rows.append(\".\" * n)\nr, secs = timed(shortest_path, rows)\nfrom collections import deque\ndist = {(0, 0): 0}\nq = deque([(0, 0)])\nwhile q:\n    y, x = q.popleft()\n    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):\n        ny, nx = y + dy, x + dx\n        if 0 <= ny < n and 0 <= nx < n and rows[ny][nx] == \".\" and (ny, nx) not in dist:\n            dist[(ny, nx)] = dist[(y, x)] + 1\n            q.append((ny, nx))\nassert r == dist[(n - 1, n - 1)]\nassert secs < 1.5, f\"{secs:.2f} s on a 301 × 301 snake: exploring every path is too slow\""
+}
+],
+"clarify": [
+{
+"q": "What if the start or the end square is a shelf?",
+"a": "Then the robot can't do it: return -1.",
+"tag": "blocked"
+},
+{
+"q": "Can the floor be a single square?",
+"a": "Yes. The robot is already there: 0 steps.",
+"tag": "single"
+},
+{
+"q": "Can the robot move diagonally?",
+"a": "No, only up, down, left and right.",
+"tag": "nodiag"
+},
+{
+"q": "Is every row the same length?",
+"a": "Yes, the floor is a rectangle.",
+"tag": null
+},
+{
+"q": "Does it matter which path I take?",
+"a": "No, only how many steps.",
+"tag": null
+},
+{
+"q": "Can the robot step off the floor?",
+"a": "No, it stays on the grid.",
+"tag": null
+}
+],
+"bigos": [
+"O(rows + cols)",
+"O(rows × cols)",
+"O(rows × cols × log(rows × cols))",
+"O(2^(rows × cols))"
+],
+"prompt": "<p>A robot starts in the top-left corner of a warehouse floor and must reach the bottom-right corner. The floor is a list of strings: <code>.</code> is open floor and <code>#</code> is a shelf. The robot moves one square up, down, left or right per step.</p>\n<p>Write <code>shortest_path(grid)</code>: return the fewest steps to get from the top-left to the bottom-right, or <code>-1</code> if it can't be done.</p>\n<p>For <code>[\".#.\", \"...\", \"#..\"]</code> the answer is <code>4</code>.</p>",
+"examples": "assert shortest_path([\".#.\", \"...\", \"#..\"]) == 4\nassert shortest_path([\".#\", \"#.\"]) == -1",
+"starter": "def shortest_path(grid):\n    pass",
+"solution": "from collections import deque\n\ndef shortest_path(grid):\n    rows, cols = len(grid), len(grid[0])\n    if grid[0][0] == \"#\" or grid[-1][-1] == \"#\":\n        return -1\n    dist = [[-1] * cols for _ in range(rows)]\n    dist[0][0] = 0\n    q = deque([(0, 0)])\n    while q:\n        r, c = q.popleft()\n        if (r, c) == (rows - 1, cols - 1):\n            return dist[r][c]\n        for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):\n            if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] == \".\" and dist[nr][nc] < 0:\n                dist[nr][nc] = dist[r][c] + 1\n                q.append((nr, nc))\n    return -1",
+"brute": "def shortest_path(grid):\n    rows, cols = len(grid), len(grid[0])\n    if grid[0][0] == \"#\" or grid[-1][-1] == \"#\":\n        return -1\n    best = [[None] * cols for _ in range(rows)]\n    changed = True\n    best[0][0] = 0\n    while changed:\n        changed = False\n        for r in range(rows):\n            for c in range(cols):\n                if grid[r][c] != \".\" or best[r][c] is None:\n                    continue\n                for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):\n                    if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] == \".\":\n                        if best[nr][nc] is None or best[nr][nc] > best[r][c] + 1:\n                            best[nr][nc] = best[r][c] + 1\n                            changed = True\n    v = best[-1][-1]\n    return -1 if v is None else v",
+"approach": "<p>Breadth-first search from the start. A queue visits squares in order of distance, so the first time you reach a square is by a shortest route; mark it and never visit it again. Each square is handled once: O(rows × cols).</p>",
+"twist": "<p>The robot gets a forklift: it may <b>remove at most one shelf</b> along the way. Write <code>shortest_path_one_wall(grid)</code>: fewest steps, where stepping onto one <code>#</code> square is allowed once. The start and end squares are always open in this version.</p>",
+"twisttests": "assert shortest_path_one_wall([\".#\", \"#.\"]) == 2\nassert shortest_path_one_wall([\".#.\", \"##.\", \"...\"]) == 4\nassert shortest_path_one_wall([\"..\", \"..\"]) == 2\nassert shortest_path_one_wall([\".##\", \"###\", \"##.\"]) == -1\nassert shortest_path_one_wall([\".\"]) == 0",
+"twistsolution": "from collections import deque\n\ndef shortest_path_one_wall(grid):\n    rows, cols = len(grid), len(grid[0])\n    seen = {(0, 0, 0)}\n    q = deque([(0, 0, 0, 0)])\n    while q:\n        r, c, used, d = q.popleft()\n        if (r, c) == (rows - 1, cols - 1):\n            return d\n        for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):\n            if 0 <= nr < rows and 0 <= nc < cols:\n                nu = used + (grid[nr][nc] == \"#\")\n                if nu <= 1 and (nr, nc, nu) not in seen:\n                    seen.add((nr, nc, nu))\n                    q.append((nr, nc, nu, d + 1))\n    return -1"
+},
+{
+"id": "groups",
+"title": "How many friend groups?",
+"fn": "count_groups",
+"ch": 22,
+"decoys": [
+19,
+21,
+25,
+3
+],
+"bigo": "O(n + m)",
+"hints": [
+"<p>You start with <code>n</code> groups. What happens to the count each time a link joins two <i>different</i> groups?</p>",
+"<p>Give everyone a <code>parent</code>, starting as themselves. A group is everyone who reaches the same root by following parents.</p>",
+"<p>For each link, <code>ra, rb = find(a), find(b)</code>; if they differ, <code>parent[ra] = rb</code> and the count drops by one. Make <code>find</code> shorten the path as it walks: <code>parent[x] = parent[parent[x]]</code>.</p>"
+],
+"tests": [
+{
+"tag": "zero",
+"code": "assert count_groups(0, []) == 0"
+},
+{
+"tag": "self",
+"code": "assert count_groups(2, [(0, 0), (1, 1)]) == 2"
+},
+{
+"tag": "dups",
+"code": "assert count_groups(3, [(1, 2), (2, 1), (1, 2)]) == 2"
+},
+{
+"tag": "big",
+"code": "n = 200000\nlinks = [(i, i + 1) for i in range(0, n - 1, 2)] + [(i, i + 2) for i in range(0, n - 2, 2)]\nr, secs = timed(count_groups, n, links)\nassert r == 1\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 people: relabelling whole groups on every link is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can there be zero people?",
+"a": "Yes. Then there are no groups: 0.",
+"tag": "zero"
+},
+{
+"q": "Can someone be linked to themselves?",
+"a": "Yes, it's a glitch in the app. It changes nothing.",
+"tag": "self"
+},
+{
+"q": "Can the same friendship appear twice?",
+"a": "Yes, in either order: (1, 2) and (2, 1).",
+"tag": "dups"
+},
+{
+"q": "Is friendship two-way?",
+"a": "Yes, if a is b's friend then b is a's.",
+"tag": null
+},
+{
+"q": "Do I need to list the groups?",
+"a": "No, just count them.",
+"tag": null
+},
+{
+"q": "Are the numbers always in range?",
+"a": "Yes, from 0 to n - 1.",
+"tag": null
+}
+],
+"bigos": [
+"O(n + m)",
+"O(n × m)",
+"O((n + m) log n)",
+"O(n²)"
+],
+"prompt": "<p>A social app has <code>n</code> people, numbered <code>0</code> to <code>n - 1</code>, and a list of friendships <code>links</code>, each a pair <code>(a, b)</code>. Friends of friends are in the same group.</p>\n<p>Write <code>count_groups(n, links)</code>: return how many separate groups there are. Someone with no friends is a group of one.</p>\n<p><code>count_groups(5, [(0, 1), (1, 2), (3, 4)])</code> is <code>2</code>.</p>\n<p>(Here <code>m</code> is the number of links.)</p>",
+"examples": "assert count_groups(5, [(0, 1), (1, 2), (3, 4)]) == 2\nassert count_groups(3, []) == 3",
+"starter": "def count_groups(n, links):\n    pass",
+"solution": "def count_groups(n, links):\n    parent = list(range(n))\n\n    def find(x):\n        while parent[x] != x:\n            parent[x] = parent[parent[x]]\n            x = parent[x]\n        return x\n\n    groups = n\n    for a, b in links:\n        ra, rb = find(a), find(b)\n        if ra != rb:\n            parent[ra] = rb\n            groups -= 1\n    return groups",
+"brute": "def count_groups(n, links):\n    label = list(range(n))\n    for a, b in links:\n        la, lb = label[a], label[b]\n        if la != lb:\n            for i in range(n):\n                if label[i] == la:\n                    label[i] = lb\n    return len(set(label))",
+"approach": "<p>Union-find: every person points towards a representative of their group. A link finds both representatives and, if they differ, joins one under the other, which removes one group. With path halving each find is nearly O(1), so it's about O(n + m).</p>",
+"twist": "<p>Now the app wants a live number: write <code>largest_after_each(n, links)</code>, which returns a list with the size of the <b>biggest group after each link</b> is added.</p>",
+"twisttests": "assert largest_after_each(5, [(0, 1), (1, 2), (3, 4)]) == [2, 3, 3]\nassert largest_after_each(2, [(0, 0)]) == [1]\nassert largest_after_each(4, [(0, 1), (2, 3), (1, 3)]) == [2, 2, 4]\nassert largest_after_each(3, []) == []",
+"twistsolution": "def largest_after_each(n, links):\n    parent = list(range(n))\n    size = [1] * n\n\n    def find(x):\n        while parent[x] != x:\n            parent[x] = parent[parent[x]]\n            x = parent[x]\n        return x\n\n    best, out = 1 if n else 0, []\n    for a, b in links:\n        ra, rb = find(a), find(b)\n        if ra != rb:\n            if size[ra] > size[rb]:\n                ra, rb = rb, ra\n            parent[ra] = rb\n            size[rb] += size[ra]\n            best = max(best, size[rb])\n        out.append(best)\n    return out"
+},
+{
+"id": "stalls",
+"title": "Pick the stalls",
+"fn": "best_picks",
+"ch": 28,
+"decoys": [
+16,
+27,
+15,
+8
+],
+"bigo": "O(n)",
+"hints": [
+"<p>Trying every set of stalls doubles with each stall. What's the only thing about the past that limits your choice for stall <code>i</code>?</p>",
+"<p>Whether stall <code>i - 1</code> was taken. So keep the best total ending \"taken\" and the best ending \"not taken\".</p>",
+"<p>For each <code>v</code>: <code>take, skip = skip + v, max(take, skip)</code>. The answer is <code>max(take, skip)</code>, which is never below 0 because <code>skip</code> starts at 0.</p>"
+],
+"tests": [
+{
+"tag": "empty",
+"code": "assert best_picks([]) == 0"
+},
+{
+"tag": "one",
+"code": "assert best_picks([4]) == 4"
+},
+{
+"tag": "neg",
+"code": "assert best_picks([-3, -1]) == 0\nassert best_picks([-2, 5, -1, 4]) == 9\nassert best_picks([3, -10, -10, 3]) == 6"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(4)\nbig = [random.randint(-50, 100) for _ in range(200000)]\nr, secs = timed(best_picks, big)\ntake = skip = 0\nfor v in big:\n    take, skip = skip + v, max(take, skip)\nassert r == max(take, skip, 0)\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 stalls: trying every choice is far too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the row be empty?",
+"a": "Yes. Then you earn 0.",
+"tag": "empty"
+},
+{
+"q": "Can there be just one stall?",
+"a": "Yes. Take it if it's worth something.",
+"tag": "one"
+},
+{
+"q": "Can a stall lose money (a negative value)?",
+"a": "Yes. You don't have to run it, so you'd skip it.",
+"tag": "neg"
+},
+{
+"q": "Do I have to say which stalls?",
+"a": "No, just the total.",
+"tag": null
+},
+{
+"q": "Are values whole numbers?",
+"a": "Yes.",
+"tag": null
+},
+{
+"q": "Can I run zero stalls?",
+"a": "Yes, and then you earn 0.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A street market has a row of stalls, each with a value <code>vals[i]</code> you'd earn by running it. The rules say you can't run <b>two neighbouring stalls</b>.</p>\n<p>Write <code>best_picks(vals)</code>: return the most you can earn.</p>\n<p><code>best_picks([2, 7, 9, 3, 1])</code> is <code>12</code>: stalls 0, 2 and 4 give 2 + 9 + 1.</p>",
+"examples": "assert best_picks([2, 7, 9, 3, 1]) == 12\nassert best_picks([5, 1, 1, 5]) == 10",
+"starter": "def best_picks(vals):\n    pass",
+"solution": "def best_picks(vals):\n    take = skip = 0   # best total if the last stall is taken / not taken\n    for v in vals:\n        take, skip = skip + v, max(take, skip)\n    return max(take, skip)",
+"brute": "def best_picks(vals):\n    def best(i):\n        if i >= len(vals):\n            return 0\n        return max(best(i + 1), vals[i] + best(i + 2))\n    return best(0)",
+"approach": "<p>Walk the stalls once, keeping two numbers: the best total if the last stall was run, and the best if it wasn't. A stall can only be run if the one before wasn't. That's dynamic programming with O(1) memory: O(n).</p>",
+"twist": "<p>The market moves to a <b>roundabout</b>: the stalls form a circle, so the first and the last are neighbours too. Write <code>best_picks_circle(vals)</code>.</p>",
+"twisttests": "assert best_picks_circle([2, 3, 2]) == 3\nassert best_picks_circle([1, 2, 3, 1]) == 4\nassert best_picks_circle([5]) == 5\nassert best_picks_circle([]) == 0\nassert best_picks_circle([4, 1, 1, 4]) == 5",
+"twistsolution": "def best_picks_circle(vals):\n    def line(vs):\n        take = skip = 0\n        for v in vs:\n            take, skip = skip + v, max(take, skip)\n        return max(take, skip)\n    if len(vals) <= 1:\n        return max(vals[0], 0) if vals else 0\n    return max(line(vals[1:]), line(vals[:-1]))"
+},
+{
+"id": "toll",
+"title": "The cheapest drive",
+"fn": "min_path_cost",
+"ch": 30,
+"decoys": [
+19,
+23,
+16,
+27
+],
+"bigo": "O(rows × cols)",
+"hints": [
+"<p>Trying every route branches at every block. How many ways can the van <i>arrive</i> at block (r, c)?</p>",
+"<p>Only from (r - 1, c) or (r, c - 1). If you already knew the cheapest cost to reach both, you'd know the cheapest cost to reach (r, c).</p>",
+"<p><code>best[r][c] = grid[r][c] + min(best[r - 1][c], best[r][c - 1])</code>, with the top row and the left column having only one choice. Fill in reading order.</p>"
+],
+"tests": [
+{
+"tag": "single",
+"code": "assert min_path_cost([[5]]) == 5"
+},
+{
+"tag": "line",
+"code": "assert min_path_cost([[1, 2, 3]]) == 6\nassert min_path_cost([[1], [2], [3]]) == 6"
+},
+{
+"tag": "zero",
+"code": "assert min_path_cost([[0, 0], [0, 0]]) == 0"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(8)\nn = 400\nbig = [[random.randint(0, 9) for _ in range(n)] for _ in range(n)]\nr, secs = timed(min_path_cost, big)\nbest = [0] * n\nfor i in range(n):\n    for j in range(n):\n        if i == 0 and j == 0:\n            best[j] = big[0][0]\n        elif i == 0:\n            best[j] = best[j - 1] + big[i][j]\n        elif j == 0:\n            best[j] = best[j] + big[i][j]\n        else:\n            best[j] = min(best[j], best[j - 1]) + big[i][j]\nassert r == best[-1]\nassert secs < 1.5, f\"{secs:.2f} s on a 400 × 400 city: trying every route is far too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the city be one block?",
+"a": "Yes. Then the van just pays that block's toll.",
+"tag": "single"
+},
+{
+"q": "Can the city be a single row or a single column?",
+"a": "Yes. Then there's only one way through.",
+"tag": "line"
+},
+{
+"q": "Can a toll be zero?",
+"a": "Yes, some blocks are free. No toll is negative.",
+"tag": "zero"
+},
+{
+"q": "Can the van go left or up?",
+"a": "No, only right or down.",
+"tag": null
+},
+{
+"q": "Is the grid a rectangle?",
+"a": "Yes, every row is the same length.",
+"tag": null
+},
+{
+"q": "Do I need the route itself?",
+"a": "No, only the cost.",
+"tag": null
+}
+],
+"bigos": [
+"O(rows + cols)",
+"O(rows × cols)",
+"O(rows × cols × log(rows × cols))",
+"O(2^(rows + cols))"
+],
+"prompt": "<p>A city is a grid of blocks, and <code>grid[r][c]</code> is the toll for driving through block <code>(r, c)</code>. A delivery van starts at the top-left block and must reach the bottom-right one, moving only <b>right or down</b>. It pays the toll of every block it drives through, including the first and the last.</p>\n<p>Write <code>min_path_cost(grid)</code>: return the smallest total toll.</p>\n<p>For <code>[[1, 3, 1], [1, 5, 1], [4, 2, 1]]</code> the answer is <code>7</code>: right, right, down, down.</p>",
+"examples": "assert min_path_cost([[1, 3, 1], [1, 5, 1], [4, 2, 1]]) == 7\nassert min_path_cost([[1, 2], [5, 1]]) == 4",
+"starter": "def min_path_cost(grid):\n    pass",
+"solution": "def min_path_cost(grid):\n    rows, cols = len(grid), len(grid[0])\n    best = [[0] * cols for _ in range(rows)]\n    for r in range(rows):\n        for c in range(cols):\n            if r == 0 and c == 0:\n                prev = 0\n            elif r == 0:\n                prev = best[r][c - 1]\n            elif c == 0:\n                prev = best[r - 1][c]\n            else:\n                prev = min(best[r - 1][c], best[r][c - 1])\n            best[r][c] = prev + grid[r][c]\n    return best[-1][-1]",
+"brute": "def min_path_cost(grid):\n    rows, cols = len(grid), len(grid[0])\n    def go(r, c):\n        if r == rows - 1 and c == cols - 1:\n            return grid[r][c]\n        options = []\n        if r + 1 < rows:\n            options.append(go(r + 1, c))\n        if c + 1 < cols:\n            options.append(go(r, c + 1))\n        return grid[r][c] + min(options)\n    return go(0, 0)",
+"approach": "<p>The cheapest way into a block comes either from above or from the left, so its best cost is its toll plus the smaller of those two. Fill the grid row by row: each block once, O(rows × cols).</p>",
+"twist": "<p>The dispatcher wants to know how many routes tie for cheapest. Write <code>count_cheapest(grid)</code>: the number of right/down routes whose total toll equals the minimum.</p>",
+"twisttests": "assert count_cheapest([[1, 3, 1], [1, 5, 1], [4, 2, 1]]) == 1\nassert count_cheapest([[0, 0], [0, 0]]) == 2\nassert count_cheapest([[1, 1, 1], [1, 1, 1]]) == 3\nassert count_cheapest([[7]]) == 1",
+"twistsolution": "def count_cheapest(grid):\n    rows, cols = len(grid), len(grid[0])\n    best = [[0] * cols for _ in range(rows)]\n    ways = [[0] * cols for _ in range(rows)]\n    for r in range(rows):\n        for c in range(cols):\n            if r == 0 and c == 0:\n                best[r][c], ways[r][c] = grid[0][0], 1\n                continue\n            froms = []\n            if r:\n                froms.append((best[r - 1][c], ways[r - 1][c]))\n            if c:\n                froms.append((best[r][c - 1], ways[r][c - 1]))\n            low = min(b for b, _ in froms)\n            best[r][c] = low + grid[r][c]\n            ways[r][c] = sum(w for b, w in froms if b == low)\n    return ways[-1][-1]"
+},
+{
+"id": "combos",
+"title": "Every way to pay",
+"fn": "combos",
+"ch": 27,
+"decoys": [
+29,
+3,
+16,
+7
+],
+"bigo": "O(2ⁿ) at worst, cut short by pruning",
+"hints": [
+"<p>Listing every subset is 2ⁿ, which is hopeless at 40 coins. How can you stop exploring a branch early?</p>",
+"<p>Sort first. Then once a coin is bigger than what's left to pay, every coin after it is too: <code>break</code>.</p>",
+"<p>In the loop at one depth, <code>if i &gt; start and nums[i] == nums[i - 1]: continue</code> skips duplicate values, so <code>[2, 2]</code> is built only once.</p>"
+],
+"tests": [
+{
+"tag": "dups",
+"code": "assert combos([1, 1, 1], 2) == [[1, 1]]\nassert combos([2, 2, 2, 4], 4) == [[2, 2], [4]]"
+},
+{
+"tag": "zero",
+"code": "assert combos([3, 1], 0) == [[]]"
+},
+{
+"tag": "none",
+"code": "assert combos([5, 6], 4) == []\nassert combos([], 3) == []"
+},
+{
+"tag": "big",
+"code": "nums = list(range(40, 0, -1))\nr, secs = timed(combos, nums, 25)\nassert len(r) == 142 and r == sorted(r)\nassert all(sum(c) == 25 and c == sorted(c) and len(set(c)) == len(c) for c in r)\nassert secs < 1.5, f\"{secs:.2f} s for 40 coins: trying every subset (2⁴⁰ of them) never finishes\""
+}
+],
+"clarify": [
+{
+"q": "Can there be several coins of the same value?",
+"a": "Yes. [2, 2] made from different 2-coins is still just one way.",
+"tag": "dups"
+},
+{
+"q": "What if the target is 0?",
+"a": "Paying nothing is one way: return [[]].",
+"tag": "zero"
+},
+{
+"q": "What if it can't be done?",
+"a": "Return an empty list.",
+"tag": "none"
+},
+{
+"q": "Are coin values positive?",
+"a": "Yes, every coin is worth at least 1.",
+"tag": null
+},
+{
+"q": "Does the order of coins in a set matter?",
+"a": "No: sort each set.",
+"tag": null
+},
+{
+"q": "How many coins can I have?",
+"a": "Up to about 40.",
+"tag": null
+}
+],
+"bigos": [
+"O(n log n)",
+"O(n²)",
+"O(n × target)",
+"O(2ⁿ) at worst, cut short by pruning"
+],
+"prompt": "<p>A vending machine takes exact change. You have a pocket of coins <code>nums</code> (each coin used at most once) and need to pay exactly <code>target</code>.</p>\n<p>Write <code>combos(nums, target)</code>: return <b>every different set of coins</b> that adds up to <code>target</code>. Each set is a sorted list, and the whole answer is sorted too. Two coins of the same value are interchangeable, so the same set must not appear twice.</p>\n<p><code>combos([2, 5, 2, 1, 2], 5)</code> is <code>[[1, 2, 2], [5]]</code>.</p>",
+"examples": "assert combos([2, 5, 2, 1, 2], 5) == [[1, 2, 2], [5]]\nassert combos([3, 4], 2) == []",
+"starter": "def combos(nums, target):\n    pass",
+"solution": "def combos(nums, target):\n    nums = sorted(nums)\n    out = []\n\n    def go(start, left, picked):\n        if left == 0:\n            out.append(picked[:])\n            return\n        for i in range(start, len(nums)):\n            if i > start and nums[i] == nums[i - 1]:\n                continue          # the same value at this spot was already tried\n            if nums[i] > left:\n                break             # sorted, so everything after is too big as well\n            picked.append(nums[i])\n            go(i + 1, left - nums[i], picked)\n            picked.pop()\n\n    go(0, target, [])\n    return out",
+"brute": "from itertools import combinations\n\ndef combos(nums, target):\n    found = set()\n    for k in range(len(nums) + 1):\n        for c in combinations(sorted(nums), k):\n            if sum(c) == target:\n                found.add(c)\n    return sorted(list(c) for c in found)",
+"approach": "<p>Sort the coins, then backtrack: choose the next coin from left to right, recurse with what's left to pay, and undo. Stop a branch as soon as a coin is bigger than what's left, and skip a coin equal to the one just tried at the same depth, so no set appears twice.</p>",
+"twist": "<p>The machine now gives you an endless supply of each coin <b>value</b> in <code>nums</code>. Write <code>combos_reuse(nums, target)</code>: every different multiset of those values that adds up to <code>target</code>, each sorted, the whole list sorted.</p>",
+"twisttests": "assert combos_reuse([2, 3], 6) == [[2, 2, 2], [3, 3]]\nassert combos_reuse([2, 3, 5], 8) == [[2, 2, 2, 2], [2, 3, 3], [3, 5]]\nassert combos_reuse([2, 2], 4) == [[2, 2]]\nassert combos_reuse([4], 2) == []\nassert combos_reuse([1], 0) == [[]]",
+"twistsolution": "def combos_reuse(nums, target):\n    vals = sorted(set(nums))\n    out = []\n\n    def go(start, left, picked):\n        if left == 0:\n            out.append(picked[:])\n            return\n        for i in range(start, len(vals)):\n            if vals[i] > left:\n                break\n            picked.append(vals[i])\n            go(i, left - vals[i], picked)\n            picked.pop()\n\n    go(0, target, [])\n    return out"
+}
+]
+}
