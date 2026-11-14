@@ -764,7 +764,7 @@
     return h("div", { class: "pgrid", style: `grid-template-columns:repeat(${w},auto)` }, rows.flatMap((r, i) => r.map((t, j) => make ? make(t, i, j) : cell(t, { tabindex: -1 }))));
   }
   function starsEl(n) { return h("span", { class: "stars", "aria-label": `${n} of 3 stars` }, [1, 2, 3].map((k) => h("i", { class: k <= n ? "on" : "" }))); }
-  function renderPuzzle(b) {
+  function renderPuzzle(b, desk) {
     const best = (S.stars = S.stars || {})[b.id] || 0;
     const head = h("span", { class: "pstar" }, best ? starsEl(best) : "");
     const sh = shell(b, "puzzle", "Puzzle", b.title);
@@ -773,47 +773,109 @@
     const msg = h("div", { class: "pmsg" });
     const btns = h("div", { class: "btns" });
     let tries = 0;
+    // What the desk on the right reads: a live picture of this puzzle (mirror), and three hints,
+    // each drawn on the board itself. Every hint you take lowers the stars this puzzle can still give.
+    const pz = { b, el: sh.el, used: 0, won: false, hints: [], hint: () => {}, mirror: () => null };
+    let live = false;
+    const ping = () => live && desk.touch(pz);
+    pz.cap = () => Math.max(1, 3 - pz.used);
+    pz.take = () => { if (pz.won || pz.used >= pz.hints.length) return; pz.hint(pz.used); pz.used++; ping(); };
     function solved(stars, note) {
+      const capped = stars > pz.cap();
+      stars = Math.min(stars, pz.cap());
+      pz.won = true;
       const prev = S.stars[b.id] || 0;
       if (stars > prev) { S.stars[b.id] = stars; save(); award(5 * (stars - prev), stars === 3 ? "puzzle, 3 stars" : "puzzle solved"); }
       head.replaceChildren(starsEl(Math.max(stars, prev)));
-      msg.replaceChildren(h("div", { class: "result pass" }, starsEl(stars), " ", note || "Solved."), b.why ? h("div", { class: "why", html: b.why }) : "");
+      msg.replaceChildren(h("div", { class: "result pass" }, starsEl(stars), " ", (note || "Solved.") + (capped ? ` The hint${pz.used > 1 ? "s" : ""} cost ${3 - pz.cap()} star${3 - pz.cap() > 1 ? "s" : ""}.` : "")), b.why ? h("div", { class: "why", html: b.why }) : "");
       sh.done();
       confetti(sh.el.querySelector(".bh"));
+      ping();
     }
-    const fail = (t) => { tries++; msg.replaceChildren(h("div", { class: "result fail" }, t)); };
+    const fail = (t) => { tries++; msg.replaceChildren(h("div", { class: "result fail" }, t)); ping(); };
     const byTries = () => (tries === 0 ? 3 : tries <= 2 ? 2 : 1);
+    const grid = (rows, cls) => miniGrid(rows, cls);
     if (b.kind === "swap") {
       // Fewest moves: click two cells to swap them (neighbours only when `adjacent`).
-      let cur = b.cells.slice(), pick = -1, moves = 0;
+      let cur = b.cells.slice(), pick = -1, moves = 0, lit = new Set(), arcs = false;
       const count = h("span", { class: "pcount" });
+      const placed = () => cur.filter((x, i) => x === b.goal[i]).length;
+      // a swap that puts two tiles home at once, or failing that one
+      const goodSwap = () => {
+        const off = cur.map((x, i) => i).filter((i) => cur[i] !== b.goal[i]);
+        for (const i of off) for (const j of off) if (i < j && cur[i] === b.goal[j] && cur[j] === b.goal[i] && (!b.adjacent || j - i === 1)) return [i, j];
+        for (const i of off) for (const j of off) if (i !== j && cur[j] === b.goal[i] && (!b.adjacent || Math.abs(j - i) === 1)) return [i, j];
+        return null;
+      };
       const draw = () => {
         const won = cur.every((x, i) => x === b.goal[i]);
-        board.replaceChildren(h("div", { class: "prow" }, cur.map((t, i) => cell(t, { class: "pc t" + (i === pick ? " sel" : "") + (won ? " good" : ""), onclick: () => tap(i) }))),
+        board.replaceChildren(h("div", { class: "prow" }, cur.map((t, i) => cell(t, { class: "pc t" + (i === pick ? " sel" : "") + (won ? " good" : "") + (lit.has(i) ? " hint" : ""), onclick: () => tap(i) }))),
           h("div", { class: "prow goal" }, h("span", { class: "plab" }, "goal"), b.goal.map((t) => h("span", { class: "pc t ghost" }, t))));
         count.textContent = `${moves} swap${moves === 1 ? "" : "s"} · fewest possible: ${b.par}`;
-        if (won) solved(moves <= b.par ? 3 : moves <= b.par + 2 ? 2 : 1, moves <= b.par ? "The fewest swaps possible." : `Done in ${moves}. It can be done in ${b.par}: try again for 3 stars.`);
+        if (won && !pz.won) solved(moves <= b.par ? 3 : moves <= b.par + 2 ? 2 : 1, moves <= b.par ? "The fewest swaps possible." : `Done in ${moves}. It can be done in ${b.par}: try again for 3 stars.`);
+        ping();
       };
       const tap = (i) => {
         if (cur.every((x, k) => x === b.goal[k])) return;
+        lit = new Set();
         if (pick < 0) { pick = i; return draw(); }
         if (pick === i) { pick = -1; return draw(); }
         if (b.adjacent && Math.abs(pick - i) !== 1) { pick = i; msg.replaceChildren(h("div", { class: "result fail" }, "Only neighbours can swap here.")); return draw(); }
         [cur[pick], cur[i]] = [cur[i], cur[pick]]; pick = -1; moves++; msg.textContent = ""; draw();
       };
-      btns.append(count, h("button", { class: "btn", onclick: () => { cur = b.cells.slice(); pick = -1; moves = 0; msg.textContent = ""; draw(); } }, "Start over"));
+      pz.hints = ["Light up the tiles that aren't home", "Show a swap that sends two tiles home", "Make that swap for me"];
+      pz.hint = (n) => {
+        if (n === 0) { arcs = true; lit = new Set(cur.map((x, i) => i).filter((i) => cur[i] !== b.goal[i])); }
+        else { const s = goodSwap(); lit = new Set(s || []); if (n === 2 && s) { [cur[s[0]], cur[s[1]]] = [cur[s[1]], cur[s[0]]]; moves++; lit = new Set(); } }
+        draw();
+      };
+      // the desk: every tile on a line, with an arc from each one that's away to where it belongs
+      pz.mirror = () => {
+        const n = cur.length, W = 248, step = Math.min(30, (W - 8) / n), x0 = (W - step * n) / 2 + step / 2;
+        const used = new Set(), paths = [];
+        if (arcs) cur.forEach((t, i) => {
+          if (t === b.goal[i]) return;
+          const j = b.goal.findIndex((g, k) => g === t && cur[k] !== g && !used.has(k));
+          if (j < 0) return;
+          used.add(j);
+          const a = x0 + i * step, c = x0 + j * step, hgt = 8 + Math.abs(j - i) * 6;
+          paths.push(`<path d="M${a} 44 C${a} ${44 - hgt} ${c} ${44 - hgt} ${c} 40" class="dk-arc"/><circle cx="${c}" cy="40" r="2.2" class="dk-arcend"/>`);
+        });
+        const tiles = cur.map((t, i) => `<rect x="${x0 + i * step - step / 2 + 2}" y="48" width="${step - 4}" height="${step - 4}" rx="4" class="${t === b.goal[i] ? "dk-ok" : "dk-off"}"/><text x="${x0 + i * step}" y="${48 + (step - 4) / 2 + 4}" text-anchor="middle" class="dk-tx">${esc(t)}</text>`).join("");
+        return h("div", {},
+          h("div", { class: "dk-svg", html: `<svg viewBox="0 0 ${W} ${52 + step}" width="100%" role="img" aria-label="Tiles, green when home">${paths.join("")}${tiles}</svg>` }),
+          h("p", { class: "dk-line" }, `${placed()} of ${cur.length} home · ${moves} swap${moves === 1 ? "" : "s"}, best is ${b.par}`));
+      };
+      btns.append(count, h("button", { class: "btn", onclick: () => { cur = b.cells.slice(); pick = -1; moves = 0; lit = new Set(); msg.textContent = ""; draw(); } }, "Start over"));
       draw();
     } else if (b.kind === "fix") {
       // Fix the picture: mark every cell that's wrong, then check.
       const marked = new Set();
       const key = (i, j) => i + "," + j;
-      const draw = () => board.replaceChildren(gridEl(b.grid, (t, i, j) => cell(t, { class: "pc " + (CELL[t] || "t") + (marked.has(key(i, j)) ? " mark" : ""), onclick: () => { marked.has(key(i, j)) ? marked.delete(key(i, j)) : marked.add(key(i, j)); draw(); } })));
+      const want = b.wrong.map(([i, j]) => key(i, j));
+      let rows = new Set(), cross = null;
+      const draw = () => {
+        board.replaceChildren(gridEl(b.grid, (t, i, j) => cell(t, { class: "pc " + (CELL[t] || "t") + (marked.has(key(i, j)) ? " mark" : "") + (rows.has(i) || (cross && (cross[0] === i || cross[1] === j)) ? " hint" : ""), onclick: () => { marked.has(key(i, j)) ? marked.delete(key(i, j)) : marked.add(key(i, j)); draw(); } })));
+        ping();
+      };
+      const unfound = () => b.wrong.filter(([i, j]) => !marked.has(key(i, j)));
+      pz.hints = ["Light up the rows with a mistake", "Narrow it to one row and one column", "Mark one for me"];
+      pz.hint = (n) => {
+        if (n === 0) rows = new Set(b.wrong.map(([i]) => i));
+        else { rows = new Set(); const u = unfound()[0]; if (u) { if (n === 1) cross = u; else { marked.add(key(...u)); cross = null; } } }
+        draw();
+      };
+      // the desk: a small map of the board with your marks on it; once it's right, the before and after
+      pz.mirror = () => pz.won && b.fixed
+        ? h("div", { class: "dk-pair" }, h("div", {}, h("span", { class: "plab" }, "before"), grid(b.grid, (i, j) => want.includes(key(i, j)) ? "bad" : "")), h("div", {}, h("span", { class: "plab" }, "after"), grid(b.fixed, (i, j) => want.includes(key(i, j)) ? "ok" : "")))
+        : h("div", {}, grid(b.grid, (i, j) => marked.has(key(i, j)) ? "mark" : rows.has(i) || (cross && (cross[0] === i || cross[1] === j)) ? "lit" : ""),
+          h("p", { class: "dk-line" }, marked.size ? `${marked.size} marked. Check when you think that's all of them.` : "Tap the cells that are wrong."));
       const check = h("button", { class: "btn primary" }, "Check");
       check.onclick = () => {
-        const want = new Set(b.wrong.map(([i, j]) => key(i, j)));
-        const miss = [...want].filter((k) => !marked.has(k)).length, extra = [...marked].filter((k) => !want.has(k)).length;
+        const ws = new Set(want);
+        const miss = [...ws].filter((k) => !marked.has(k)).length, extra = [...marked].filter((k) => !ws.has(k)).length;
         if (!miss && !extra) {
-          if (b.fixed) board.replaceChildren(gridEl(b.fixed, (t, i, j) => cell(t, { class: "pc " + (CELL[t] || "t") + (want.has(key(i, j)) ? " good" : "") }, "span")));
+          if (b.fixed) board.replaceChildren(gridEl(b.fixed, (t, i, j) => cell(t, { class: "pc " + (CELL[t] || "t") + (ws.has(key(i, j)) ? " good" : "") }, "span")));
           return solved(byTries());
         }
         fail(`${miss ? `${miss} wrong cell${miss > 1 ? "s" : ""} still unmarked. ` : ""}${extra ? `${extra} marked cell${extra > 1 ? "s are" : " is"} actually fine.` : ""}`);
@@ -823,31 +885,64 @@
     } else if (b.kind === "frame") {
       // Predict the frame: which picture comes next?
       const opts = shuffle(b.options.map((g, k) => ({ g, ok: k === 0 })));
-      let over = false;
-      board.append(h("div", { class: "pnow" }, h("span", { class: "plab" }, "now"), gridEl(b.grid)),
-        h("div", { class: "popts" }, opts.map((o, k) => {
-          const el = h("button", { class: "popt", "aria-label": `Option ${k + 1}` }, h("span", { class: "plab" }, String.fromCharCode(65 + k)), gridEl(o.g));
-          el.onclick = () => {
-            if (over || el.classList.contains("wrong")) return;
-            if (o.ok) { over = true; el.classList.add("right"); solved(byTries()); }
-            else { el.classList.add("wrong"); fail("Not that one. Look again at what changes from one step to the next."); }
-          };
-          return el;
-        })));
+      let over = false, peek = null;
+      const at = (g, i, j) => (g[i] || [])[j];
+      // how many cells differ from now, counting cells that appear or vanish
+      const diff = (g) => { let n = 0; const R = Math.max(g.length, b.grid.length); for (let i = 0; i < R; i++) { const C = Math.max((g[i] || []).length, (b.grid[i] || []).length); for (let j = 0; j < C; j++) if (at(g, i, j) !== at(b.grid, i, j)) n++; } return n; };
+      const els = opts.map((o, k) => {
+        const el = h("button", { class: "popt", "aria-label": `Option ${k + 1}`, onmouseenter: () => { peek = o; ping(); }, onfocus: () => { peek = o; ping(); } }, h("span", { class: "plab" }, String.fromCharCode(65 + k)), gridEl(o.g));
+        el.onclick = () => {
+          if (over || el.classList.contains("wrong")) return;
+          if (o.ok) { over = true; el.classList.add("right"); solved(byTries()); }
+          else { el.classList.add("wrong"); fail("Not that one. Look again at what changes from one step to the next."); }
+        };
+        return el;
+      });
+      board.append(h("div", { class: "pnow" }, h("span", { class: "plab" }, "now"), gridEl(b.grid)), h("div", { class: "popts" }, els));
+      pz.hints = ["Count what changes in each option", "Cross out one wrong option", "Cross out all but one"];
+      pz.hint = (n) => {
+        if (n === 0) els.forEach((el, k) => el.querySelector(".plab").textContent = `${String.fromCharCode(65 + k)} · ${diff(opts[k].g)} change${diff(opts[k].g) === 1 ? "" : "s"}`);
+        else { const bad = els.filter((el, k) => !opts[k].ok && !el.classList.contains("wrong")); (n === 1 ? bad.slice(0, 1) : bad).forEach((el) => el.classList.add("wrong")); }
+      };
+      // the desk: now, and the option you're looking at, with every cell that would change lit up
+      pz.mirror = () => {
+        const o = pz.won ? opts.find((x) => x.ok) : peek;
+        if (!o) return h("div", {}, grid(b.grid), h("p", { class: "dk-line" }, "Point at an option to see what it changes."));
+        const d = diff(o.g);
+        return h("div", {}, h("div", { class: "dk-pair" },
+          h("div", {}, h("span", { class: "plab" }, "now"), grid(b.grid, (i, j) => at(b.grid, i, j) !== at(o.g, i, j) ? "lit" : "")),
+          h("div", {}, h("span", { class: "plab" }, `→ ${String.fromCharCode(65 + opts.indexOf(o))}`), grid(o.g, (i, j) => at(b.grid, i, j) !== at(o.g, i, j) ? (pz.won ? "ok" : "mark") : ""))),
+          h("p", { class: "dk-line" }, pz.won ? `The next frame: one step of the rule changes these ${d} cell${d === 1 ? "" : "s"}.` : d ? `${d} cell${d === 1 ? "" : "s"} change. Does the rule change exactly those?` : "Nothing changes. Is that what one step does?"));
+      };
     } else if (b.kind === "order") {
       // Order the steps: tap them in the order they happen.
-      let pool = shuffle(b.items.map((t, i) => ({ t, i }))), ans = [];
-      const draw = (marks) => board.replaceChildren(h("div", { class: "pz" },
-        h("div", {}, h("h4", {}, "Steps"), h("ol", {}, pool.map((it) => h("li", {}, h("button", { class: "ln wrapln", html: it.t, onclick: () => { pool = pool.filter((x) => x !== it); ans.push(it); msg.textContent = ""; draw(); } }))))),
-        h("div", {}, h("h4", {}, "In order"), h("ol", {}, ans.map((it, k) => h("li", { class: marks ? (marks[k] ? "right" : "wrong") : "" }, h("button", { class: "ln wrapln", html: it.t, onclick: () => { ans = ans.filter((x) => x !== it); pool.push(it); msg.textContent = ""; draw(); } })))))));
+      let pool = shuffle(b.items.map((t, i) => ({ t, i }))), ans = [], glow = -1, marks = null;
+      const draw = () => {
+        board.replaceChildren(h("div", { class: "pz" },
+          h("div", {}, h("h4", {}, "Steps"), h("ol", {}, pool.map((it) => h("li", { class: it.i === glow ? "hint" : "" }, h("button", { class: "ln wrapln", html: it.t, onclick: () => { pool = pool.filter((x) => x !== it); ans.push(it); glow = -1; marks = null; msg.textContent = ""; draw(); } }))))),
+          h("div", {}, h("h4", {}, "In order"), h("ol", {}, ans.map((it, k) => h("li", { class: (marks ? (marks[k] ? "right" : "wrong") : "") + (it.i === glow ? " hint" : "") }, h("button", { class: "ln wrapln", html: it.t, onclick: () => { ans = ans.filter((x) => x !== it); pool.push(it); marks = null; msg.textContent = ""; draw(); } })))))));
+        ping();
+      };
+      const lead = () => { let k = 0; while (k < ans.length && ans[k].i === k) k++; return k; };
+      pz.hints = ["Light up the step that comes next", "Show which placed steps are out of place", "Place the next step for me"];
+      pz.hint = (n) => {
+        if (n === 0) glow = lead();
+        else if (n === 1) marks = ans.map((it, k) => it.i === k);
+        else { const k = lead(); pool.push(...ans.slice(k)); ans = ans.slice(0, k); const it = pool.find((x) => x.i === k); if (it) { pool = pool.filter((x) => x !== it); ans.push(it); } marks = null; glow = -1; }
+        draw();
+      };
+      // the desk: your order drawn as a pipeline that grows a box per step, with empty slots still to fill
+      pz.mirror = () => h("div", { class: "dk-flow" },
+        ans.map((it, k) => h("div", { class: "dk-node" + (marks ? (marks[k] ? " ok" : " bad") : "") + (k === ans.length - 1 ? " new" : "") }, h("b", {}, k + 1), h("span", { html: it.t }))),
+        pool.length ? h("div", { class: "dk-node ghost" }, h("b", {}, "+"), h("span", {}, `${pool.length} more step${pool.length === 1 ? "" : "s"} to place`)) : null);
       const check = h("button", { class: "btn primary" }, "Check order");
       check.onclick = () => {
         if (pool.length) return fail("Place every step first.");
-        const marks = ans.map((it, k) => it.i === k);
-        draw(marks);
+        marks = ans.map((it, k) => it.i === k);
+        draw();
         if (marks.every(Boolean)) solved(byTries()); else fail(`${marks.filter((m) => !m).length} step${marks.filter((m) => !m).length > 1 ? "s are" : " is"} in the wrong place (red). Tap one to send it back.`);
       };
-      btns.append(check, h("button", { class: "btn", onclick: () => { pool = shuffle(b.items.map((t, i) => ({ t, i }))); ans = []; msg.textContent = ""; draw(); } }, "Start over"));
+      btns.append(check, h("button", { class: "btn", onclick: () => { pool = shuffle(b.items.map((t, i) => ({ t, i }))); ans = []; glow = -1; marks = null; msg.textContent = ""; draw(); } }, "Start over"));
       draw();
     } else if (b.kind === "target") {
       // Hit the target: move the sliders until the value lands on the target.
@@ -856,18 +951,59 @@
       const vals = b.sliders.map((s) => s.start);
       const fmt = (x) => (Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 1 ? x.toFixed(2) : x.toFixed(3)).replace(/\.?0+$/, "") || "0";
       const out = h("div", { class: "ptarget" });
+      // the desk plots where you've been: each value you try leaves a dot, so the curve draws itself as you explore
+      let act = 0, trail = [], curve = false, shade = false;
+      const others = () => vals.filter((v, k) => k !== act).join(",");
+      const hit = (y) => Math.abs(y - b.target) <= b.tol + 1e-9;
+      const sweep = () => { const s = b.sliders[act], n = Math.min(120, Math.round((s.max - s.min) / s.step) + 1); return Array.from({ length: n }, (_, k) => { const x = s.min + ((s.max - s.min) * k) / Math.max(1, n - 1), v = vals.slice(); v[act] = x; const y = f(...v); return [x, y]; }).filter(([, y]) => isFinite(y)); };
+      const arrows = b.sliders.map(() => h("span", { class: "parrow" }));
       const draw = () => {
         const v = f(...vals), off = v - b.target, close = Math.abs(off) <= b.tol;
         const span = Math.max(Math.abs(b.target) * 2, 1), pos = (x) => Math.max(0, Math.min(100, 50 + (50 * (x - b.target)) / span));
         out.replaceChildren(h("div", { class: "ptbar" }, h("i", { class: "tgt", style: `left:${pos(b.target - b.tol)}%;width:${Math.max(1, pos(b.target + b.tol) - pos(b.target - b.tol))}%` }), h("b", { class: close ? "hit" : "", style: `left:${pos(v)}%` })),
           h("p", {}, `${b.output}: `, h("b", {}, fmt(v) + (b.unit ? " " + b.unit : "")), ` · target ${fmt(b.target)}${b.tol ? ` ± ${fmt(b.tol)}` : ""}`));
+        if (isFinite(v)) { trail = trail.filter((p) => !(p.k === act && p.o === others() && p.x === vals[act])); trail.push({ k: act, o: others(), x: vals[act], y: v }); }
+        ping();
         return close;
+      };
+      pz.hints = ["Draw the whole curve for this slider", "Show which way to move", "Shade every value that hits"];
+      pz.hint = (n) => {
+        if (n === 0) curve = true;
+        else if (n === 1) {
+          const pts = sweep().filter(([, y]) => hit(y)), x = vals[act];
+          arrows.forEach((a) => a.textContent = "");
+          if (!pts.length) arrows[act].textContent = b.sliders.length > 1 ? "this one alone can't reach it: move another" : "";
+          else { const near = pts.reduce((a, p) => (Math.abs(p[0] - x) < Math.abs(a[0] - x) ? p : a)); arrows[act].textContent = near[0] > x ? "→ higher" : near[0] < x ? "← lower" : "right here"; }
+        } else { curve = true; shade = true; }
+        draw();
+      };
+      pz.mirror = () => {
+        const s = b.sliders[act], W = 248, H = 130, L = 30, B = 18;
+        const pts = trail.filter((p) => p.k === act && p.o === others());
+        const all = curve ? sweep() : [];
+        const ys = [b.target - b.tol, b.target + b.tol, ...pts.map((p) => p.y), ...all.map((p) => p[1])];
+        const lg = ys.every((y) => y > 0) && Math.max(...ys) / Math.min(...ys) > 100, T = (y) => (lg ? Math.log10(y) : y);
+        let y0 = Math.min(...ys.map(T)), y1 = Math.max(...ys.map(T));
+        if (y1 - y0 < 1e-9) { y0 -= 1; y1 += 1; }
+        const pad = (y1 - y0) * 0.08; y0 -= pad; y1 += pad;
+        const X = (x) => L + ((x - s.min) / Math.max(1e-9, s.max - s.min)) * (W - L - 6), Y = (y) => 6 + (1 - (T(y) - y0) / (y1 - y0)) * (H - B - 6);
+        const band = `<rect x="${L}" y="${Y(b.target + b.tol) - (b.tol ? 0 : 1)}" width="${W - L - 6}" height="${Math.max(2, Y(b.target - b.tol) - Y(b.target + b.tol))}" class="dk-band"/>`;
+        const sh = shade ? all.filter(([, y]) => hit(y)).map(([x]) => `<rect x="${X(x) - 2}" y="6" width="4" height="${H - B - 6}" class="dk-shade"/>`).join("") : "";
+        const line = all.length ? `<path d="M${all.map(([x, y]) => `${X(x).toFixed(1)} ${Y(y).toFixed(1)}`).join(" L")}" class="dk-curve"/>` : "";
+        const now = pts.find((p) => p.x === vals[act]);
+        const dots = pts.map((p) => `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${p === now ? 4.5 : 2.4}" class="${hit(p.y) ? "dk-hit" : p === now ? "dk-cur" : "dk-dot"}"/>`).join("");
+        const axis = `<line x1="${L}" y1="${H - B}" x2="${W - 6}" y2="${H - B}" class="dk-ax"/><line x1="${L}" y1="6" x2="${L}" y2="${H - B}" class="dk-ax"/>
+          <text x="${L}" y="${H - 4}" class="dk-tick">${fmt(s.min)}</text><text x="${W - 6}" y="${H - 4}" text-anchor="end" class="dk-tick">${fmt(s.max)}</text>
+          <text x="${L - 4}" y="${Y(b.target) + 3}" text-anchor="end" class="dk-tick">${fmt(b.target)}</text>`;
+        return h("div", {},
+          h("div", { class: "dk-svg", html: `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(b.output)} against ${esc(s.label)}">${band}${sh}${axis}${line}${dots}</svg>` }),
+          h("p", { class: "dk-line" }, `${b.output} against ${s.label}${lg ? " (a log scale)" : ""}. `, pts.length < 3 && !curve ? "Every value you try leaves a dot." : "The green band is the target."));
       };
       board.append(...b.sliders.map((s, k) => {
         const lab = h("output", {}, fmt(vals[k]));
         const r = h("input", { type: "range", min: s.min, max: s.max, step: s.step, value: s.start, "aria-label": s.label });
-        r.oninput = () => { vals[k] = +r.value; lab.textContent = fmt(vals[k]); draw(); };
-        return h("label", { class: "pslider" }, h("span", {}, s.label), r, lab);
+        r.oninput = () => { vals[k] = +r.value; act = k; arrows.forEach((a) => a.textContent = ""); lab.textContent = fmt(vals[k]); draw(); };
+        return h("label", { class: "pslider" }, h("span", {}, s.label), r, lab, arrows[k]);
       }), out);
       const check = h("button", { class: "btn primary" }, "Lock it in");
       check.onclick = () => (draw() ? solved(byTries(), "On target.") : fail("Not on target yet. Watch which way the marker moves as you drag."));
@@ -876,7 +1012,73 @@
     }
     const ask = b.prompt || (b.kind === "order" ? "<p>Tap the steps in the order they happen. Tap a placed step to send it back.</p>" : "");
     sh.body.append(...[ask ? h("div", { class: "prompt", html: ask }) : null, board, btns, msg].filter(Boolean));
+    sh.el.addEventListener("pointerdown", ping);
+    if (desk) { desk.add(pz); live = true; }
     return sh.el;
+  }
+  // a small copy of a puzzle grid for the desk; `tone(i, j)` colours a cell: mark, lit, ok or bad
+  function miniGrid(rows, tone) {
+    const w = Math.max(...rows.map((r) => r.length));
+    return h("div", { class: "dk-grid", style: `grid-template-columns:repeat(${w},auto)` }, rows.flatMap((r, i) => r.map((t, j) => h("i", { class: "pc " + (CELL[t] || "t") + (tone && tone(i, j) ? " " + tone(i, j) : "") }, CELL[t] ? "" : t))));
+  }
+
+  // The puzzle desk: the right side of puzzle mode. A flower with a petal per puzzle, the puzzles as
+  // stepping stones, and the one you're on: its live picture and a ladder of three hints.
+  // On narrow screens it's a sheet that pulls up from the bottom.
+  const GLYPH = { order: "⇣", fix: "✕", frame: "▣", target: "◎", swap: "⇄" };
+  function puzzleDesk(ch) {
+    const all = [];
+    let act = null, open = false, held = null, hintKey = "";
+    const hintRow = h("div", { class: "dk-foot" }), head = h("div", { class: "rail-h" }), pic = h("div", { class: "dk-pic" });
+    const flowerBox = h("div", { class: "dk-fl" }), stones = h("ol", { class: "rail-steps dk-stones" }), now = h("div", { class: "dk-now" });
+    const bar = h("button", { class: "dk-bar", "aria-expanded": "false" });
+    const body = h("div", { class: "dk-body" }, flowerBox, h("div", { class: "rail-h" }, `Chapter ${ch.num} · puzzles`), stones, now);
+    const el = h("aside", { class: "pdesk", "aria-label": "Puzzle desk" }, bar, body);
+    bar.onclick = () => { open = !open; el.classList.toggle("open", open); bar.setAttribute("aria-expanded", open); };
+    const stars = (id) => (S.stars || {})[id] || 0;
+    function petals() {
+      const n = all.length, cx = 60, cy = 66, spread = Math.min(150, 26 * (n - 1)), rx = Math.max(6, Math.min(13, 64 / n));
+      // the outer petals go behind, the middle ones in front, like a real cup
+      const order = all.map((z, k) => k).sort((a, b) => Math.abs(b - (n - 1) / 2) - Math.abs(a - (n - 1) / 2));
+      const p = order.map((k) => {
+        const z = all[k], a = n > 1 ? -spread / 2 + (spread * k) / (n - 1) : 0, s = stars(z.b.id);
+        return `<ellipse cx="${cx}" cy="${cy - 22}" rx="${rx}" ry="22" transform="rotate(${a} ${cx} ${cy})" class="dk-pet${s ? " s" + s : ""}${z === act ? " on" : ""}"/>`;
+      }).join("");
+      return `<svg viewBox="0 0 120 100" width="120" height="100" role="img" aria-label="A petal for each puzzle"><path d="M60 66 C60 80 58 90 60 100" class="dk-stem"/><path d="M60 88 C50 80 40 82 34 86 C42 92 52 92 60 88" class="dk-leaf"/>${p}</svg>`;
+    }
+    function draw() {
+      const got = all.reduce((a, z) => a + stars(z.b.id), 0), won = all.filter((z) => stars(z.b.id)).length;
+      flowerBox.replaceChildren(h("div", { html: petals() }), h("div", {}, h("b", { class: "dk-big" }, `${won} of ${all.length}`), h("p", { class: "rail-note" }, `solved · ${got} of ${all.length * 3} stars`)));
+      stones.replaceChildren(...all.map((z, k) => h("li", { class: z === act ? "now" : stars(z.b.id) ? "done" : "" },
+        h("button", { onclick: () => { held = act = z; draw(); z.el.scrollIntoView({ behavior: "smooth", block: "start" }); } },
+          h("i", { class: "dk-gl" }, GLYPH[z.b.kind] || "·"), h("span", {}, z.b.title), stars(z.b.id) ? starsEl(stars(z.b.id)) : null))));
+      const k = all.indexOf(act);
+      bar.replaceChildren(h("span", { class: "dk-gl" }, GLYPH[act ? act.b.kind : ""] || "◆"), h("span", {}, act ? `Puzzle ${k + 1} of ${all.length} · ${act.b.title}` : "Puzzle desk"), h("small", {}, open ? "close" : "picture · hints"));
+      if (!act) return now.replaceChildren();
+      if (!now.firstChild) now.append(head, pic, hintRow);
+      head.textContent = `Now · ${act.b.title}`;
+      pic.replaceChildren(act.mirror() || "");
+      // the hint line is a button: rebuilt only when what it says changes, so a click never lands on one being replaced
+      const left = act.hints.length - act.used, key = [all.indexOf(act), act.used, act.won].join();
+      if (key === hintKey) return;
+      hintKey = key;
+      hintRow.replaceChildren(act.won ? h("p", { class: "dk-line" }, "Solved. Scroll on for the next one.")
+        : left > 0 ? h("p", { class: "dk-hint" }, h("button", { class: "linkish", onclick: () => act.take() }, `Hint ${act.used + 1}: ${act.hints[act.used].toLowerCase()}`),
+          h("small", {}, act.cap() > 1 ? ` · up to ${act.cap() - 1} star${act.cap() - 1 > 1 ? "s" : ""} after it` : " · it's 1 star either way"))
+          : h("p", { class: "dk-line" }, "No hints left. You've got this."));
+    }
+    // the puzzle you last touched stays on the desk while any of it is on screen
+    const onScreen = (z) => { const r = z.el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; };
+    // the puzzle in the middle of the screen is the one on the desk
+    const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => {
+      const e = es.filter((x) => x.isIntersecting).pop();
+      if (e) { const z = all.find((q) => q.el === e.target); if (z && z !== act && !(held && onScreen(held))) { held = null; act = z; draw(); } }
+    }, { rootMargin: "-35% 0px -55% 0px" }) : null;
+    return {
+      el,
+      add(z) { all.push(z); if (!act) act = z; if (io) io.observe(z.el); draw(); },
+      touch(z) { held = act = z; draw(); },
+    };
   }
 
   // Puzzle mode for one chapter: its simulation to play with, then its puzzles, no prose.
@@ -887,7 +1089,8 @@
     const viz = ch.sections.flatMap((s) => s.blocks).filter((b) => b.type === "viz");
     const got = ch.puzzles.reduce((a, p) => a + ((S.stars || {})[p.id] || 0), 0);
     const ctx = { ch, review: false, runBlocksBefore: () => [] };
-    m.append(h("div", { class: "col pmode" },
+    const desk = puzzleDesk(ch);
+    m.append(h("div", { class: "chgrid pdgrid" }, h("div", { class: "col pmode" },
       h("header", { class: "ch-head cover dark" },
         h("div", { class: "cv-text" },
           h("div", { class: "eyebrow" }, `Chapter ${ch.num} · ${CFG.short} · puzzle mode`),
@@ -895,9 +1098,9 @@
           h("p", { class: "tag" }, "No reading. Touch the pictures until they're right."),
           h("div", { class: "meta" }, modeSwitch(ch, "puzzle"), h("span", { class: "pill" }, `${got} / ${ch.puzzles.length * 3} stars`))),
         h("div", { class: "cv-art" }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), flower(ch.id, "cv-fl"))),
-      ...ch.puzzles.map(renderPuzzle),
+      ...ch.puzzles.map((b) => renderPuzzle(b, desk)),
       ...viz.map((b) => renderBlock(b, ctx)),
-      h("div", { class: "pager" }, h("a", { class: "btn", href: "#" + ch.num }, "← Back to the lesson"), h("a", { class: "btn", href: "#puzzles" }, "Every puzzle →"))));
+      h("div", { class: "pager" }, h("a", { class: "btn", href: "#" + ch.num }, "← Back to the lesson"), h("a", { class: "btn", href: "#puzzles" }, "Every puzzle →"))), desk.el));
     requestAnimationFrame(() => bloomAll(true));
     document.title = `Puzzles · ${ch.num}. ${ch.title} · ${CFG.pageTitle}`;
     window.scrollTo(0, 0);
