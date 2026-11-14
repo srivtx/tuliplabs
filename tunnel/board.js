@@ -68,8 +68,8 @@
 
   // --------------------------------------------------------------- sheet --
   const W = 960, H = 540, PW = 160, PH = 66;
-  const KIND_WORD = { scope: "Scope it", napkin: "Napkin math", sketch: "Sketch it", follow: "Follow it", bottleneck: "Find the bottleneck", draw: "Draw it", evict: "Eviction lab", persist: "Crash lab", shard: "Cluster lab", conns: "Capacity lab", offline: "Delivery lab", order: "Ordering lab" };
-  const KIND_GLYPH = { scope: "▤", napkin: "✎", sketch: "✐", follow: "⤳", bottleneck: "◔", draw: "▭", evict: "⇄", persist: "⏻", shard: "◫", conns: "⌁", offline: "✉", order: "⇅" };
+  const KIND_WORD = { scope: "Scope it", napkin: "Napkin math", sketch: "Sketch it", follow: "Follow it", bottleneck: "Find the bottleneck", draw: "Draw it", evict: "Eviction lab", persist: "Crash lab", shard: "Cluster lab", conns: "Capacity lab", offline: "Delivery lab", order: "Ordering lab", nearby: "Geo lab", batch: "Matching lab", dispatch: "Race lab" };
+  const KIND_GLYPH = { scope: "▤", napkin: "✎", sketch: "✐", follow: "⤳", bottleneck: "◔", draw: "▭", evict: "⇄", persist: "⏻", shard: "◫", conns: "⌁", offline: "✉", order: "⇅", nearby: "⌖", batch: "⋈", dispatch: "⇆" };
   const MODE_WORD = { w: "Whiteboard", s: "Simulate" };
   const SIZES = { cache: Object.keys(K.cache.sizes), db: Object.keys(K.db.sizes) };
 
