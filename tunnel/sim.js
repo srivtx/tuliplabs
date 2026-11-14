@@ -29,6 +29,21 @@
    `allWorkers` (website and job workers together).
 
    new Sim(cfg, seed) · sim.set({...}) · sim.advance(toTime) · sim.view() for drawing · sim.stats(t0, t1) for a window ·
+   noisy: a script run by one customer sends `noisy` requests a second on top of everyone else (open load). Everyone
+   else is `tenants` customers, each request from one of them at random. A rate limiter (`limit` > 0) in front gives
+   every customer a token bucket: it holds up to `burst` tokens and refills at `limit` a second; a request takes a token,
+   and one that finds none is refused at once with a 429 ("limited"). With a script running, stats are about everyone
+   else, and say separately what the script got: nTput (answered/s) and n429 (refused/s).
+   A database with replicas (`writes` > 0): a share `writes` of requests are writes, and the machines are a primary
+   (server 1) and `replicas` read replicas behind it. Writes always go to the primary. Each write, once done, brings its
+   writer back to read it `readAfter` seconds later on average ("I posted; show me"). Reads go to the replicas in turn,
+   or to the primary when there are none. A replica sees a write `lag` seconds after the primary commits it (exponential).
+   A writer's own read served by a replica before it has seen the write is stale: stats count it (`stale`, and
+   `staleRate` of those reads). With ryw:true, a writer's reads within `rywFor` seconds of their write go to the primary.
+   Shards (`shards` > 0): the data is split over that many machines. Each request is about one account; a hash puts the
+   account at a point on a ring, and the ring is cut into `shards` equal arcs, one per machine. A share `hot` of all
+   requests (a percentage) are about one viral account. With hotSplit > 1, that account's reads are spread over the hotSplit machines
+   that follow its arc on the ring, a copy on each.
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
@@ -79,6 +94,9 @@
     cache: 0, keys: 10000, zipf: 1, cacheTime: 0.002, warm: false,
     cancel: true, retries: 0, backoff: 0, jitter: false, surge: null,
     batch: null, jobWorkers: 0,
+    noisy: 0, tenants: 40, limit: 0, burst: 10,
+    writes: 0, replicas: 0, lag: 1, readAfter: 1, ryw: false, rywFor: 5,
+    shards: 0, hot: 0, hotSplit: 1,
   };
 
   class Sim {
@@ -104,6 +122,8 @@
     this.jobQ = [];           // background jobs waiting for a job worker, and the ones being worked on
     this.jobBusy = [];
     this.batches = [];        // every batch that landed: {t, n, left, last}, for jobAge and backlog
+    this.buckets = new Map(); // the rate limiter: customer -> {tok, t}; customer 0 is the script
+    this.nEpoch = 0;          // like epoch, for the script's own stream
       this.sizeServers();
       this.nc = this.live() * this.cfg.workers;
       // a warm cache already holds the hottest keys, hottest most recently used (a cache that has run for a while)
@@ -118,6 +138,28 @@
     start() {
       if (this.cfg.mode === "open") this.scheduleArrival();
       else this.addUsers(this.cfg.users);
+      this.scheduleNoisy();
+    }
+    scheduleNoisy() {
+      if (this.cfg.noisy > 0) this.ev.push({ t: this.t + this.exp(1 / this.cfg.noisy), type: "noisy", epoch: this.nEpoch });
+    }
+    // the rate limiter: does this customer have a token? Buckets start full and refill continuously
+    admit(q) {
+      const c = this.cfg;
+      if (!(c.limit > 0)) return true;
+      if (q.cust === undefined) q.cust = q.noisy ? 0 : 1 + Math.min(c.tenants - 1, Math.floor(this.r() * c.tenants));
+      let b = this.buckets.get(q.cust);
+      if (!b) { b = { tok: c.burst, t: this.t }; this.buckets.set(q.cust, b); }
+      b.tok = Math.min(c.burst, b.tok + (this.t - b.t) * c.limit);
+      b.t = this.t;
+      if (b.tok >= 1) { b.tok -= 1; return true; }
+      return false;
+    }
+    // the script's bucket right now, 0..1 full, for drawing
+    scriptTokens() {
+      const c = this.cfg, b = this.buckets.get(0);
+      if (!(c.limit > 0)) return 0;
+      return b ? Math.min(c.burst, b.tok + (this.t - b.t) * c.limit) / c.burst : 1;
     }
     scheduleArrival() {
       if (this.cfg.rate > 0) this.ev.push({ t: this.t + this.exp(1 / this.cfg.rate), type: "arrive", epoch: this.epoch });
@@ -127,7 +169,7 @@
     }
     // servers that exist: more are added now; fewer means the last ones stop taking work and leave once empty
     sizeServers() {
-      const n = Math.max(1, this.cfg.servers | 0);
+      const n = this.cfg.shards > 0 ? this.cfg.shards | 0 : this.cfg.writes > 0 ? 1 + Math.max(0, this.cfg.replicas | 0) : Math.max(1, this.cfg.servers | 0);
       this.srv.forEach((s, i) => { s.gone = i >= n; });
       while (this.srv.length < n) this.srv.push({ queue: [], busy: [], gone: false });
       this.prune();
@@ -138,8 +180,11 @@
       const old = this.cfg;
       this.cfg = { ...old, ...patch };
       if (this.cfg.mode === "open" && patch.rate !== undefined && patch.rate !== old.rate) { this.epoch++; this.scheduleArrival(); }
+      if (patch.noisy !== undefined && patch.noisy !== old.noisy) { this.nEpoch++; this.scheduleNoisy(); }
+      // a new limit or burst: every bucket keeps what it had, capped at the new size
+      if (patch.limit !== undefined || patch.burst !== undefined) for (const b of this.buckets.values()) b.tok = Math.min(this.cfg.burst, b.tok);
       if (this.cfg.mode === "closed" && patch.users !== undefined && this.cfg.users > this.users) this.addUsers(this.cfg.users - this.users);
-      if (patch.servers !== undefined) { this.sizeServers(); this.logBusy(); }
+      if (patch.servers !== undefined || patch.replicas !== undefined || patch.shards !== undefined) { this.sizeServers(); this.logBusy(); }
       if (patch.workers !== undefined) { this.srv.forEach((s, i) => this.fill(i)); this.logBusy(); }
       if (patch.cache !== undefined) this.evict();
       if (patch.jobWorkers !== undefined) {
@@ -186,11 +231,17 @@
       while (lo < hi) { const m = (lo + hi) >> 1; if (c[m] < u) lo = m + 1; else hi = m; }
       return lo + 1;
     }
-    send(prev) {
-      const q = { id: this.nextId++, sent: this.t, closed: this.cfg.mode === "closed" };
-      if (prev) { q.first = prev.first ?? prev.sent; q.tries = (prev.tries || 0) + 1; q.closed = prev.closed; if (prev.key !== undefined) q.key = prev.key; }
+    send(prev, noisy) {
+      const q = { id: this.nextId++, sent: this.t, closed: this.cfg.mode === "closed" && !noisy };
+      if (noisy) q.noisy = true;
+      if (prev) { q.first = prev.first ?? prev.sent; q.tries = (prev.tries || 0) + 1; q.closed = prev.closed; q.noisy = prev.noisy; q.cust = prev.cust; if (prev.key !== undefined) q.key = prev.key; }
       const sec = Math.floor(this.t);
       this.tries[sec] = (this.tries[sec] || 0) + 1;
+      if (!this.admit(q)) {
+        if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : null], ["lim"]);
+        this.finish(q, false, "limited");
+        return;
+      }
       if (this.cfg.cache > 0) {
         if (q.key === undefined) q.key = this.pickKey();
         if (this.lru.has(q.key)) {
@@ -202,9 +253,24 @@
         }
         q.hit = false;
       }
-      if (this.feed) this.feed.push(["in"]);
+      if (this.cfg.writes > 0 && !q.follow && q.write === undefined) q.write = this.r() < this.cfg.writes;
+      if (this.cfg.shards > 0 && q.acct === undefined) { q.hot = this.r() * 100 < this.cfg.hot; q.acct = q.hot ? 0 : 1 + Math.floor(this.r() * this.cfg.keys); }
+      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : q.write ? "w" : q.hot ? "h" : null]);
       if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
-      const i = this.route();
+      const i = this.route(q);
+      q.srv = i;
+      if (this.feed && this.live() > 1) this.feed.push(["route", i]);
+      const s = this.srv[i];
+      if (s.busy.length < this.cfg.workers) this.serve(q);
+      else if (s.queue.length >= this.cfg.queueMax) this.finish(q, false, "full");
+      else s.queue.push(q);
+    }
+    sendQ(q) {
+      const sec = Math.floor(this.t);
+      this.tries[sec] = (this.tries[sec] || 0) + 1;
+      if (this.feed) this.feed.push(["in", null, "r"]);
+      if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
+      const i = this.route(q);
       q.srv = i;
       if (this.feed && this.live() > 1) this.feed.push(["route", i]);
       const s = this.srv[i];
@@ -214,9 +280,24 @@
     }
     live() { let n = 0; for (const s of this.srv) if (!s.gone) n++; return n; }
     // the load balancer: which server gets the next request
-    route() {
+    route(q) {
       const S = this.srv, n = S.length;
       if (n === 1) return 0;
+      if (this.cfg.shards > 0 && q && q.acct !== undefined) {
+        // the ring: an account's hash picks its arc; the viral one may be spread over the next few machines
+        const live = []; for (let i = 0; i < n; i++) if (!S[i].gone) live.push(i);
+        const home = Math.min(live.length - 1, Math.floor(ringPos(q.acct) * live.length));
+        if (!q.hot || this.cfg.hotSplit <= 1) return live[home];
+        return live[(home + Math.floor(this.r() * Math.min(this.cfg.hotSplit, live.length))) % live.length];
+      }
+      if (this.cfg.writes > 0) {
+        // the primary takes every write, and a writer's own read while read-your-writes holds; replicas take the rest
+        if (!q || q.write || (q.follow && this.cfg.ryw && this.t - q.follow.at < this.cfg.rywFor)) return 0;
+        let L = 0; for (let i = 1; i < n; i++) if (!S[i].gone) L++;
+        if (!L) return 0;
+        for (let j = 0; j < n; j++) { const i = (this.rr + j) % n; if (i > 0 && !S[i].gone) { this.rr = (i + 1) % n; return i; } }
+        return 1;
+      }
       const ok = (i) => !S[i].gone;
       if (this.cfg.lb === "random") {
         const L = []; for (let i = 0; i < n; i++) if (ok(i)) L.push(i);
@@ -266,12 +347,12 @@
         if (this.cfg.jitter) d *= this.r();
         this.waiting++;
         this.ev.push({ t: this.t + d, type: "retry", q });
-        if (this.feed && !q.hit) this.feed.push(["out", false, why, q.srv || 0]);
+        if (this.feed && !q.hit && why !== "limited") this.feed.push(["out", false, why, q.srv || 0]);
         return;
       }
       const sent = q.first ?? q.sent;
-      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit });
-      if (this.feed && !q.hit) this.feed.push(["out", ok, why, q.srv || 0]);
+      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit, n: q.noisy, own: q.ownRead, stale: q.stale, srv: q.srv || 0 });
+      if (this.feed && !q.hit && why !== "limited") this.feed.push(["out", ok, why, q.srv || 0]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
     }
@@ -291,6 +372,13 @@
           if (e.epoch !== this.epoch || this.cfg.mode !== "open") continue;
           this.send();
           this.scheduleArrival();
+        } else if (e.type === "follow") {
+          const q = { id: this.nextId++, sent: this.t, follow: e.follow, write: false };
+          this.sendQ(q);
+        } else if (e.type === "noisy") {
+          if (e.epoch !== this.nEpoch) continue;
+          this.send(null, true);
+          this.scheduleNoisy();
         } else if (e.type === "wake") {
           this.thinking--;
           this.send();
@@ -316,6 +404,14 @@
           if (q.job) { this.jobDone(q); this.fill(i); this.prune(); continue; }
           // the answer fills the cache on its way back, even if the client already gave up
           if (q.key !== undefined && this.cfg.cache > 0) { this.lru.delete(q.key); this.lru.set(q.key, true); this.evict(); }
+          // a write that's done brings its writer back to look at it; the replicas will have it after the lag
+          if (q.write && !q.over) {
+            const at = this.t, seen = at + this.exp(this.cfg.lag);
+            if (this.feed && this.srv.length > 1) this.feed.push(["repl", seen - at]);
+            this.ev.push({ t: at + this.exp(this.cfg.readAfter), type: "follow", follow: { at, seen } });
+          }
+          // a writer's own read, answered by a replica that hasn't seen their write yet: stale
+          if (q.follow) { q.ownRead = true; q.stale = i > 0 && this.t < q.follow.seen; if (q.stale && this.feed) this.feed.push(["stale", i]); }
           // a request that already timed out still used the worker; its answer just arrives to nobody
           this.finish(q, true);
           this.fill(i);
@@ -351,10 +447,17 @@
     // numbers for requests that finished in (t0, t1]
     stats(t0, t1) {
       const lats = [], d = this.done;
-      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length;
+      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0, own = 0, stale = 0, onPrimary = 0, onReplicas = 0;
+      const perSrv = [];
       while (lo < hi) { const m = (lo + hi) >> 1; if (d[m].at <= t0) lo = m + 1; else hi = m; }
       for (let i = lo; i < d.length && d[i].at <= t1; i++) {
         const r = d[i];
+        // the script's requests are counted on their own: every other number is about everyone else
+        if (r.n) { if (r.ok) nOk++; else if (r.why === "limited") n429++; continue; }
+        if (r.why === "limited") limited++;
+        if (r.own) { own++; if (r.stale) stale++; }
+        if (r.ok) perSrv[r.srv] = (perSrv[r.srv] || 0) + 1;
+        if (r.ok) { if (r.srv) onReplicas++; else onPrimary++; }
         if (r.ok) { ok++; lats.push(r.lat); } else bad++;
         if (r.hit !== undefined) { looked++; if (r.hit) hits++; }
       }
@@ -365,11 +468,16 @@
         tput: ok / span, mean: lats.length ? lats.reduce((s, x) => s + x, 0) / lats.length : 0,
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
         hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
+        nTput: nOk / span, n429: n429 / span, limited,
+        stale, staleRate: own ? stale / own : 0, primary: onPrimary / span, replicaLoad: onReplicas / span,
+        hottest: Math.max(0, ...perSrv.map((x) => (x || 0) / span)), coolest: perSrv.length ? Math.min(...Array.from({ length: this.srv.length }, (_, i) => (perSrv[i] || 0) / span)) : 0,
         ...this.jobStats(t0, t1),
       };
     }
     triesIn(t0, t1) { let n = 0; for (let i = Math.floor(t0); i < Math.ceil(t1); i++) n += this.tries[i] || 0; return n; }
     // busy workers ÷ workers that existed, over the window (whole seconds, as the page and the checks ask for)
+    // how busy one machine is right now, 0..1 (the page's per-machine numbers)
+    busyOf(i) { const s = this.srv[i]; return s ? s.busy.length / Math.max(1, this.cfg.workers) : 0; }
     util(t0, t1) {
       this.acc(Math.min(t1, this.t));
       let a = 0, c = 0;
@@ -389,6 +497,13 @@
       s.advance(warm + span);
       return s.stats(warm, warm + span);
     }
+  }
+  // where an account sits on the ring, 0..1: a 32-bit integer hash, the same in every engine. Account 0 is the viral one
+  function ringPos(acct) {
+    let h = (acct * 2654435761 + 0x9e3779b9) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   }
   function pct(sorted, p) {
     if (!sorted.length) return 0;
@@ -410,6 +525,6 @@
   // the share of reads the hottest n of N keys get under Zipf(s): the best any cache of n keys could do
   function zipfShare(n, N, s = 1) { const c = zipfTable(N, s); return n <= 0 ? 0 : c[Math.min(N, n) - 1]; }
 
-  root.WTSim = { Sim, erlangC, zipfShare, rng, DEFAULTS };
+  root.WTSim = { Sim, erlangC, zipfShare, rng, DEFAULTS, ringPos };
 })(typeof window !== "undefined" ? window : globalThis);
 if (typeof module !== "undefined") module.exports = globalThis.WTSim || window.WTSim;

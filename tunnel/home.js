@@ -16,6 +16,8 @@
   const pct = (x) => `${Math.round(x * 100)}%`;
   const pad = (s, w) => s + " ".repeat(Math.max(1, w - s.length));
   // the ways a line of code can be commented, lined up in one column
+  // ring.py's printed spread for each shard count: 10,000 accounts hashed with md5 (worked out once in Python)
+  const SPREAD = { 1: "1.00", 2: "1.01", 3: "1.01", 4: "1.02", 5: "1.01", 6: "1.02", 7: "1.05", 8: "1.03" };
   const col = (rows, w = 26) => rows.map(([code, note]) => (note ? pad(code, w) + "# " + note : code)).join("\n");
 
   const home = {
@@ -363,6 +365,225 @@ def newsletter():
         ["Java", "<code>Executors.newFixedThreadPool(4)</code> hides an <i>unbounded</i> queue. Build a <code>ThreadPoolExecutor</code> over an <code>ArrayBlockingQueue</code> with <code>CallerRunsPolicy</code>, so a full queue pushes back on whoever fills it."],
         ["Node.js", "One thread serves every request, so slow work in a handler is the shared line from the tunnel. Put it in a queue like BullMQ, run by a separate worker process with <code>concurrency: 4</code>."],
         ["Kubernetes", "Run the workers as their own deployment, and scale it on the oldest job's age or the queue's depth (KEDA does this), not on CPU."],
+      ],
+    },
+    wt07: {
+      files: [
+        {
+          name: "router.py", lang: "py", run: true,
+          src: (c) => {
+            const lag = c.lag, back = Math.min(lag / 2, 0.5), ryw = c.ryw ? "True" : "False";
+            // what the Python prints: Ana writes at t=0 and reads back at `back`, before the replica has it
+            const sees = c.ryw && back < c.rywFor ? "True" : back >= lag ? "True" : "False";
+            return `# Writes to the primary, reads to replicas,
+# and read-your-writes, with a clock you control.
+${col([[`REPLICAS = ${c.replicas}`, "your system.yaml"], [`LAG = ${lag}`, "seconds a copy takes"], [`READ_YOUR_WRITES = ${ryw}`], [`FOR = ${c.rywFor}`, "seconds after a write"]])}
+
+primary = {}
+replica = {}
+pending = []  # (lands_at, key, value)
+last_write = {}  # user -> when they last wrote
+
+
+def write(user, key, value, now):
+    primary[key] = value
+    pending.append((now + LAG, key, value))
+    last_write[user] = now
+
+
+def read(user, key, now):
+    for lands, k, v in [p for p in pending if p[0] <= now]:
+        replica[k] = v  # copies that have landed
+    wrote = last_write.get(user)
+    if READ_YOUR_WRITES and wrote is not None:
+        if now - wrote < FOR:
+            return primary.get(key)  # your own: fresh
+    if REPLICAS == 0:
+        return primary.get(key)
+    return replica.get(key)  # anyone's: may lag
+
+
+write("ana", "comment:7", "hello", now=0.0)
+mine = read("ana", "comment:7", now=${back})
+print("ana sees her comment:", mine is not None)
+# → ana sees her comment: ${c.replicas === 0 ? "True" : sees}
+later = read("ben", "comment:7", now=${lag + 0.5})
+print("ben, a little later:", later is not None)
+# → ben, a little later: True`;
+          },
+        },
+        {
+          name: "database.rb", lang: "conf",
+          src: (c) => `# Rails does the same routing: writes to the
+# primary, reads to a replica, and for ${c.rywFor} s
+# after a write, that user's reads stay on the
+# primary.
+class ApplicationRecord < ActiveRecord::Base
+  primary_abstract_class
+  connects_to database: {
+    writing: :primary, reading: :replica
+  }
+end
+
+# config/environments/production.rb
+config.active_record.database_selector =
+  { delay: ${c.rywFor}.seconds }${c.ryw ? "" : "  # yours: off"}
+config.active_record.database_resolver =
+  ActiveRecord::Middleware::DatabaseSelector::Resolver
+config.active_record.database_resolver_context =
+  ActiveRecord::Middleware::DatabaseSelector::
+    Resolver::Session`,
+        },
+      ],
+      try: [{ replicas: 2, ryw: false }, { replicas: 3, ryw: true, lag: 0.5 }, { replicas: 0, ryw: false }],
+      watch: (c) => `Graph <b>replication lag</b> per replica, in seconds: Postgres reports it as <code>replay_lag</code> in <code>pg_stat_replication</code>, MySQL as <code>Seconds_Behind_Source</code>. Alert when it passes your read-your-writes window (${c.rywFor} s here): past that, even the fix can't hide it. Graph the primary's load too: every read you pin to it is load the replicas don't take.`,
+      stack: [
+        ["Postgres", "Streaming replication is asynchronous by default, so replicas lag. <code>synchronous_commit = remote_apply</code> makes a write wait until a replica has it: no stale reads, but slower writes."],
+        ["MySQL", "Replicas apply the binlog after the primary. Read-your-writes by hand: remember the write's GTID, and read from a replica only once <code>WAIT_FOR_EXECUTED_GTID_SET</code> says it has it."],
+        ["Django", "A database router's <code>db_for_read</code> picks the replica; send a user's reads to <code>'default'</code> for a few seconds after they write, with a timestamp in their session."],
+        ["AWS Aurora", "Replicas share the primary's storage, so lag is usually under 100 ms: rarer stale reads, but still not none."],
+        ["Caches", "The same bug, bigger: write to the database, read from a cache that still has the old value. Delete the key on write, and read your own writes from the source."],
+      ],
+    },
+    wt08: {
+      files: [
+        {
+          name: "limiter.py", lang: "py", run: true,
+          src: (c) => {
+            // the same arithmetic as the Python below, in the same order, so the printed numbers match exactly
+            const bucket = () => ({ tok: c.burst, last: 0 });
+            const take = (b, now) => { b.tok = Math.min(c.burst, b.tok + (now - b.last) * c.limit); b.last = now; if (b.tok >= 1) { b.tok -= 1; return true; } return false; };
+            const s = bucket();
+            let ok = 0;
+            for (let i = 0; i < 200; i++) if (take(s, i / 200)) ok++;
+            const a = bucket(), first = take(a, 5.0) ? 200 : 429, second = take(a, 5.01) ? 200 : 429;
+            return `# A token bucket per customer: a fair API.
+${col([[`RATE = ${c.limit}`, "tokens a second, your yaml"], [`BURST = ${c.burst}`, "the most a bucket holds"]])}
+
+
+class Bucket:
+    def __init__(self):
+        self.tokens, self.last = BURST, 0.0
+
+    def take(self, now):
+        gained = (now - self.last) * RATE
+        self.tokens = min(BURST, self.tokens + gained)
+        self.last = now
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        return False
+
+
+buckets = {}
+
+
+def handle(customer, now):
+    b = buckets.setdefault(customer, Bucket())
+    if not b.take(now):
+        return 429  # Too Many Requests: at once
+    return 200
+
+
+# the script: 200 requests in its first second
+codes = [handle("script", i / 200) for i in range(200)]
+print(f"script: {codes.count(200)} of 200 let in")
+# → script: ${ok} of 200 let in
+
+# a person clicks twice, 10 ms apart
+print("ana:", handle("ana", 5.0), handle("ana", 5.01))
+# → ana: ${first} ${second}`;
+          },
+        },
+        {
+          name: "nginx.conf", lang: "conf",
+          src: (c) => `# nginx: the same bucket, one per API key
+limit_req_zone $http_x_api_key
+    zone=per_key:10m rate=${c.limit}r/s;
+
+server {
+    location /api/ {
+        limit_req zone=per_key burst=${c.burst} nodelay;
+        limit_req_status 429;
+        proxy_pass http://app;
+    }
+}`,
+        },
+      ],
+      try: [{ limit: 25, burst: 10 }, { limit: 20, burst: 1 }, { limit: 5, burst: 2 }],
+      watch: (c) => `Graph <b>429s per customer</b>, not in total: one key with thousands is a script, and every key with a few means the limit is too tight for real people. Send a <code>Retry-After</code> header with each 429 so well-behaved clients wait instead of hammering. And keep the limit below what the server can carry for everyone at once: here ${n(c.limit)} a second for one customer, with ${n(c.workers / c.service)} a second of room in all.`,
+      stack: [
+        ["Go", "<code>rate.NewLimiter(20, 10)</code> from <code>golang.org/x/time/rate</code> is this bucket; keep one per key in a map, and call <code>Allow()</code>."],
+        ["Python", "In one process, a dict of buckets like the file above. Across several, the bucket has to live in Redis, updated in one Lua script so two servers can't both spend the last token."],
+        ["Node.js", "<code>express-rate-limit</code> counts in fixed windows by default: 20 a minute can become 40 across a window's edge. A token bucket has no edges."],
+        ["Envoy", "The <code>local_rate_limit</code> filter takes a <code>token_bucket</code> with <code>max_tokens</code> (the burst) and <code>tokens_per_fill</code> each <code>fill_interval</code> (the rate)."],
+        ["Several servers", "With 4 servers each enforcing 20 a second on its own, a customer gets up to 80. Either share the bucket (Redis) or give each server a quarter of the limit."],
+      ],
+    },
+    wt09: {
+      files: [
+        {
+          name: "ring.py", lang: "py", run: true,
+          src: (c) => {
+            // the same counts as the Python below: each of 10,000 accounts hashed with md5 onto the ring
+            return `# A hash ring, and a hot key with copies.
+import hashlib
+import random
+
+${col([[`SHARDS = ${c.shards}`, "your system.yaml"], [`COPIES = ${c.hotSplit}`, "of the viral account"]])}
+
+
+def where(key):
+    h = hashlib.md5(key.encode()).digest()
+    point = int.from_bytes(h[:4], "big") / 2**32
+    return int(point * SHARDS)  # equal arcs
+
+
+def shard_for(key, hot=("singer",)):
+    home = where(key)
+    if key in hot and COPIES > 1:
+        return (home + random.randrange(COPIES)) % SHARDS
+    return home
+
+
+# ordinary accounts spread out evenly
+counts = [0] * SHARDS
+for n in range(10_000):
+    counts[where(f"user:{n}")] += 1
+spread = max(counts) / (10_000 / SHARDS)
+print(f"busiest shard holds {spread:.2f}x its share")
+# → busiest shard holds ${SPREAD[c.shards] || "1.00"}x its share
+
+# the singer's reads land on COPIES shards
+random.seed(1)
+hits = {shard_for("singer") for _ in range(1000)}
+print(f"the singer is served by {len(hits)} shard(s)")
+# → the singer is served by ${Math.min(c.hotSplit, c.shards)} shard(s)`;
+          },
+        },
+        {
+          name: "redis.conf", lang: "conf",
+          src: (c) => `# Redis Cluster hashes each key to one of 16384
+# slots (CRC16 mod 16384), and each node owns a
+# range of slots: the same idea as the ring.
+cluster-enabled yes
+cluster-node-timeout 5000
+
+# A hot key lives in one slot on one node. Copy
+# it under ${c.hotSplit > 1 ? c.hotSplit : "a few"} suffixed names to land
+# in different slots, and read any one:
+#   SET singer:{1} ...   SET singer:{2} ...
+# The {braces} pick the part that is hashed.`,
+        },
+      ],
+      try: [{ shards: 4, hotSplit: 1 }, { shards: 6, hotSplit: 2 }, { shards: 3, hotSplit: 4 }],
+      watch: (c) => `Graph load <b>per shard</b>, never just the fleet's average: here the average said ${Math.round(c.rate / c.shards)} a second each while one shard drowned. Track the top keys by request count (Redis has <code>redis-cli --hotkeys</code>) and alert when one key's share passes a few percent: that's the moment to give it copies or a cache.`,
+      stack: [
+        ["Consistent hashing", "With <code>hash % shards</code>, adding a shard moves almost every key. On a ring with many virtual points per shard, a new shard takes over only about 1/n of the keys."],
+        ["DynamoDB", "Partitions split by key, and each has a throughput cap. A hot partition key gets throttled however much capacity the table has: add a random suffix to spread it, or put DAX (a cache) in front."],
+        ["Cassandra", "A partition key sits on its replicas round the token ring. Reads of one hot partition hit the same few nodes: denormalise, or bucket the key by time."],
+        ["Kafka", "Messages with the same key go to the same partition, in order. One busy key means one busy partition and one busy consumer: key by something finer if order allows."],
+        ["Caches", "Often the simplest fix for a hot read: keep the key in a small in-process cache on every app server for a second or two, and the shard barely sees it."],
       ],
     },
   };

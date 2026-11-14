@@ -115,6 +115,41 @@ for (const x of experiments.filter((e) => e.live)) {
     const small = Sim.measure({ ...s, rate, cache: lo, warm: true }, { span: 600 }), big = Sim.measure({ ...s, rate, cache: hi, warm: true }, { span: 600 });
     if (!(small.hit < need && small.p99 > 2)) bad.push(`${x.id} a cache of ${lo} already keeps up (hit ${small.hit.toFixed(3)}, need ${need.toFixed(3)})`);
     if (!(big.hit > need && big.errors === 0 && big.p99 < 1)) bad.push(`${x.id} a cache of ${hi} doesn't keep up (hit ${big.hit.toFixed(3)}, p99 ${ms(big.p99)})`);
+  } else if (th === "hotshare") {
+    // one account's share lands on one shard on top of an even split of the rest: the busiest shard is about
+    // rate × (1 - h) ÷ shards + rate × h, and p99 is under the line at 0.75× the answer and over it at 1.25×
+    const h = A / 100, expect = s.rate * (1 - h) / s.shards + s.rate * h;
+    const at = Sim.measure({ ...s, hot: A }, { span: 600 });
+    if (Math.abs(at.hottest - expect) / expect > 0.06) bad.push(`${x.id} at ${A}% the busiest shard does ${at.hottest.toFixed(1)}/s, theory ${expect.toFixed(1)}`);
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, hot: Math.round(A * 0.75) }, { seed, span: 600 }), hi = Sim.measure({ ...s, hot: Math.round(A * 1.25) }, { seed, span: 600 });
+      if (!(lo.p99 < x.predict.bend)) bad.push(`${x.id} at ${Math.round(A * 0.75)}% p99 is already ${ms(lo.p99)} (seed ${seed})`);
+      if (!(hi.p99 > x.predict.bend)) bad.push(`${x.id} at ${Math.round(A * 1.25)}% p99 is still ${ms(hi.p99)} (seed ${seed})`);
+    }
+  } else if (th === "replicas") {
+    // reads (the crowd's plus each writer's read-back) spread over the replicas must fit under capacity at ~85% busy:
+    // one fewer drowns, the answer keeps p99 under 400 ms, on every seed
+    const reads = s.rate * (1 - s.writes) + s.rate * s.writes, expect = Math.ceil(reads / (cap * 0.85));
+    if (expect !== A) bad.push(`${x.id} predict answer ${A}, theory says ${expect} (reads ${reads.toFixed(0)}/s)`);
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, replicas: A - 1 }, { seed, span: 600 }), at = Sim.measure({ ...s, replicas: A }, { seed, span: 600 });
+      if (!(lo.p99 > 2)) bad.push(`${x.id} ${A - 1} replicas already cope (p99 ${ms(lo.p99)}, seed ${seed})`);
+      if (!(at.p99 < 0.4 && at.errors === 0)) bad.push(`${x.id} ${A} replicas don't cope (p99 ${ms(at.p99)}, seed ${seed})`);
+    }
+    // the stale share is the chance the lag outlasts the read-back: both exponential, so lag ÷ (lag + readAfter)
+    const st = Sim.measure({ ...s, replicas: A }, { span: 1200 }), theory = s.lag / (s.lag + s.readAfter);
+    if (Math.abs(st.staleRate - theory) > 0.04) bad.push(`${x.id} stale reads ${st.staleRate.toFixed(3)}, theory ${theory.toFixed(3)}`);
+  } else if (th === "room") {
+    // the most a second source can send before everyone else's p99 passes the line: under it at 0.8×, over at 1.25×,
+    // and the server is busy by about what the answer implies, (everyone else + the answer) ÷ capacity
+    const k = x.predict.axis.knob, line = x.predict.bend;
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, [k]: Math.round(A * 0.8) }, { seed, span: 600 }), hi = Sim.measure({ ...s, [k]: Math.round(A * 1.25) }, { seed, span: 600 });
+      if (!(lo.p99 < line && lo.errors === 0)) bad.push(`${x.id} at ${Math.round(A * 0.8)} p99 is already ${ms(lo.p99)} (seed ${seed})`);
+      if (!(hi.p99 > line)) bad.push(`${x.id} at ${Math.round(A * 1.25)} p99 is still ${ms(hi.p99)} (seed ${seed})`);
+    }
+    const at = Sim.measure({ ...s, [k]: A }, { span: 600 }), expect = (s.rate + A) / cap;
+    if (Math.abs(at.util - expect) > 0.03) bad.push(`${x.id} at ${A} the server is ${at.util.toFixed(2)} busy, not ${expect.toFixed(2)}`);
   } else if (th === "drain") {
     // a batch drains in its work ÷ the job workers: every seed's first batch, within the tolerance
     const B = s.batch, jw = x.predict.setup.jobWorkers, expect = B.n * B.service / jw;

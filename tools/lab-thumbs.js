@@ -18,7 +18,12 @@ const MOMENTS = {
   wt04: { set: { cache: 250, rate: 160 }, run: 40 }, // the cache taking the hits
   wt05: { set: {}, run: 40 },                  // the storm, after the surge has gone
   wt06: { set: {}, run: 14 },                  // the newsletter towering in the website's own line
+  wt07: { set: { replicas: 2 }, run: 20 },     // writes copying to the replicas, and a stale read popping red
+  wt08: { set: { limit: 20 }, run: 20 },       // the limiter bouncing the script's flood back as 429s
+  wt09: { set: {}, run: 20 },                  // the viral account melting one shard under the hash ring
 };
+// ONLY=wt08 renders just those (comma-separated), and skips the Workbench shot
+const ONLY = process.env.ONLY ? process.env.ONLY.split(",") : null;
 
 async function trimmed(page, dataUrl, maxW) {
   return page.evaluate(async ([url, maxW]) => {
@@ -48,7 +53,7 @@ const save = (file, dataUrl) => {
 };
 
 (async () => {
-  const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+  const browser = await chromium.launch(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 860 }, deviceScaleFactor: 2 });
   await page.addInitScript(() => { try { localStorage.setItem("vnl-theme", "dark"); localStorage.setItem("vnl-code-v1", "{}"); } catch (e) {} });
   const errors = [];
@@ -57,7 +62,7 @@ const save = (file, dataUrl) => {
   // Wind Tunnel
   await page.goto(`${BASE}/tunnel/lab.html?shot#1`);
   const X = await page.evaluate(() => window.WT.experiments.map((x, i) => ({ n: i + 1, id: x.id, live: !!x.live })));
-  for (const x of X.filter((x) => x.live && MOMENTS[x.id])) {
+  for (const x of X.filter((x) => x.live && MOMENTS[x.id] && (!ONLY || ONLY.includes(x.id)))) {
     await page.goto(`${BASE}/tunnel/lab.html?shot#${x.n}`);
     await page.reload();
     await page.waitForSelector(".wt-stage canvas");
@@ -68,6 +73,7 @@ const save = (file, dataUrl) => {
     save(path.join(ROOT, "tunnel", "shots", `${x.id}.webp`), await trimmed(page, url, 1100));
   }
 
+  if (ONLY) { await browser.close(); if (errors.length) { console.log(errors.join("\n")); process.exit(1); } return; }
   // Workbench: Ledger with seven tickets committed and the eighth written, after a run and a power cut
   const data = JSON.parse(fs.readFileSync(path.join(ROOT, "content", "wb.json"), "utf8"));
   const P = data.projects[0];
