@@ -198,6 +198,25 @@
 
   // ---------------------------------------------------------- Wind Tunnel --
   // a whiteboard question's card: its drawing, chalk on the card's colour, with the kind of question on a tag
+  // The ladder of system design units, floor by floor from first principles to the frontier: a built unit glows and
+  // links to its first question it hasn't solved; a planned one is its name, quiet, with its hard part on hover.
+  function unitQs(u) { return [...u.w, ...u.s]; }
+  const unitHref = (u) => { const qs = unitQs(u), i = qs.findIndex((b) => !done[b.id]); return `board.html#${u.id}/${(i < 0 ? 0 : i) + 1}`; };
+  function ladderMap(SDX) {
+    const floors = SDX.FLOORS.map(([name, kicker], f) => {
+      const us = SDX.LADDER.filter((u) => u.floor === f);
+      const groups = [];
+      for (const u of us) { const g = u.group || ""; let G = groups.find((x) => x.g === g); if (!G) groups.push((G = { g, us: [] })); G.us.push(u); }
+      const live = us.filter((u) => !u.soon);
+      return h("li", { class: "lad-f" + (live.length ? " has" : ""), style: `--f:${f}` },
+        h("div", { class: "lad-n" }, h("b", {}, f), h("span", {}, name), h("small", {}, kicker)),
+        h("div", { class: "lad-us" }, groups.map((G) => h("p", {}, G.g ? h("em", {}, G.g) : null, G.us.flatMap((u, i) => [i ? h("i", { class: "lad-dot" }, " · ") : null,
+          u.soon ? h("span", { class: "lad-u", title: u.sub }, u.name)
+            : h("a", { class: "lad-u live", href: unitHref(u), title: u.sub }, h("span", { class: "lad-t", "aria-hidden": "true" }, "✿"), u.name,
+              h("small", {}, ` ${unitQs(u).filter((b) => done[b.id]).length}/${unitQs(u).length}`))])))));
+    });
+    return h("ol", { class: "lad", id: "ladder" }, floors);
+  }
   const SD_KIND = { follow: "Follow it", napkin: "Napkin math", bottleneck: "Find the bottleneck", draw: "Draw it" };
   function sketch(d) {
     const box = (n) => `<rect x="${n.x - 80}" y="${n.y - 33}" width="160" height="66" rx="14"/>`;
@@ -207,7 +226,7 @@
   }
   const WT_HUE = { wt01: "cyan", wt02: "teal", wt03: "blue", wt04: "violet", wt05: "red", wt06: "amber", wt07: "green", wt08: "yellow", wt09: "orange", wt10: "lilac", wt11: "pink", wt12: "cyan" };
   function tunnel() {
-    const X = (window.WT && window.WT.experiments) || [], SDQ = (window.SD && window.SD.BOARDS) || [];
+    const X = (window.WT && window.WT.experiments) || [], SDX = window.SD || {}, UNITS = SDX.UNITS || [], SDQ = SDX.BOARDS || [];
     const SD_HUE = ["pink", "amber", "violet", "cyan", "red", "green"];
     const live = X.filter((x) => x.live), have = live.filter((x) => done[x.id]).length;
     const next = live.find((x) => !done[x.id]) || live[0];
@@ -218,9 +237,10 @@
       h("div", { class: "part" }, "Experiments"),
       h("div", { class: "branch" }, live.map((x) => h("a", { href: `lab.html#${X.indexOf(x) + 1}`, class: done[x.id] ? "done" : null },
         h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), glyph(done[x.id] ? 2 : P_[x.id] ? 1 : 0, done[x.id] ? "done" : "")))),
-      SDQ.length ? h("div", { class: "part" }, "Whiteboard") : null,
-      SDQ.length ? h("div", { class: "branch" }, SDQ.map((b, i) => h("a", { href: `board.html#${i + 1}`, class: done[b.id] ? "done" : null },
-        h("span", { class: "n" }, i + 1), h("span", { class: "t" }, b.title), glyph(done[b.id] ? 2 : 0, done[b.id] ? "done" : "")))) : null,
+      UNITS.length ? h("div", { class: "part" }, "System design") : null,
+      UNITS.length ? h("div", { class: "branch" }, UNITS.map((u, i) => { const qs = unitQs(u), d = qs.filter((b) => done[b.id]).length;
+        return h("a", { href: unitHref(u), class: d === qs.length ? "done" : null }, h("span", { class: "n" }, i + 1), h("span", { class: "t" }, u.name), glyph(d === qs.length ? 2 : d ? 1 : 0, `${d} of ${qs.length}`)); }),
+        h("a", { href: "#ladder" }, h("span", { class: "n" }, "↗"), h("span", { class: "t" }, "The whole ladder"))) : null,
       h("div", { class: "part" }, "Being built"),
       h("div", { class: "branch" }, X.filter((x) => !x.live).map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))));
     const plotOf = (x) => {
@@ -250,10 +270,12 @@
       h("div", { class: "note", html: "Every number in an experiment's text comes out of the same seeded simulator you're watching, and is checked before it ships. Same seed, same run: that's what makes rewind exact. The pictures below are frames from that simulator." }),
       secH("Live experiments", "each one is its own system, caught at the moment it bends"),
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, live.map(plotOf))),
-      SDQ.length ? secH("Whiteboard", "system design on a sheet that runs: one product, six questions") : null,
-      SDQ.length ? h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, SDQ.map((b, i) => plot({ href: `board.html#${i + 1}`, num: i + 1, title: b.title, sub: b.lede.replace(/<[^>]+>/g, "").split(". ")[0] + ".",
-        hue: SD_HUE[i % SD_HUE.length], media: sketch(b.design), tag: SD_KIND[b.kind], pct: done[b.id] ? 100 : 0, bloomed: !!done[b.id],
-        next: !done[b.id] && SDQ.findIndex((x) => !done[x.id]) === i ? "next" : null })))) : null,
+      UNITS.length ? secH("System design", "every unit in two modes: on the whiteboard you scope, size and sketch it; in simulation it runs") : null,
+      UNITS.length ? h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, UNITS.map((u, i) => { const qs = unitQs(u), d = qs.filter((b) => done[b.id]).length;
+        return plot({ href: unitHref(u), num: i + 1, title: u.name, sub: u.sub, hue: SD_HUE[i % SD_HUE.length], media: sketch(u.cover), tag: `${qs.length} questions`,
+          pct: (100 * d) / qs.length, bloomed: d === qs.length, next: d < qs.length && UNITS.findIndex((x) => unitQs(x).some((b) => !done[b.id])) === i ? (d ? "carry on" : "start here") : null }); }))) : null,
+      UNITS.length ? secH("The ladder", `${SDX.LADDER.length} units, first principles first: nothing on a floor needs a floor above it`) : null,
+      UNITS.length ? h("div", { class: "lad-wrap" }, ladderMap(SDX)) : null,
       secH("Being built", "the question each one will answer"),
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, X.filter((x) => !x.live).map(plotOf))));
     layout(side, col);
