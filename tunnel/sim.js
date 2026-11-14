@@ -49,6 +49,14 @@
    `trips` more for its files (scripts, styles, images), one after another. With cdn:true the files come from an edge
    server near each user, `edgeRtt` away, instead. The network adds to a page's time but never to the servers' work.
    stats give p99far and p99near, each region's own p99.
+   Split brain (`seats` > 0): two data centres, one machine each: machine 1 is the east, machine 2 the west, and each
+   user books at the nearer one (`west`% live in the west). Everyone wants the best seat left, so a booking takes the
+   lowest-numbered free seat as its side sees it. While the link between them is up, each sale reaches both sides at
+   once. `cut` {at, for, every} takes the link down for `for` seconds: each side then sells from its own copy, and a seat
+   both sell is sold twice (`double`). A share `likes`% of requests are likes instead, which never clash.
+   With seatQ (likeQ) a booking (a like) needs a majority of the three copies, two of which live in the east: from the
+   west that costs a round trip east (`wan`) on every write, and while the link is down the west refuses them
+   (`seatErr`, `likeErr`). Without, each side accepts on its own and the copies are merged when the link heals.
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
@@ -103,6 +111,7 @@
     writes: 0, replicas: 0, lag: 1, readAfter: 1, ryw: false, rywFor: 5,
     shards: 0, hot: 0, hotSplit: 1,
     far: 0, rtt: 0.2, nearRtt: 0, api: 1, trips: 0, cdn: false, edgeRtt: 0.02,
+    seats: 0, west: 50, likes: 0, wan: 0.06, cut: null, seatQ: false, likeQ: false,
   };
 
   class Sim {
@@ -130,6 +139,16 @@
     this.batches = [];        // every batch that landed: {t, n, left, last}, for jobAge and backlog
     this.buckets = new Map(); // the rate limiter: customer -> {tok, t}; customer 0 is the script
     this.nEpoch = 0;          // like epoch, for the script's own stream
+      // split brain: each side's copy of which seats are sold, the truth (bit 1 east, bit 2 west), and the link
+      if (this.cfg.seats > 0) {
+        this.copies = [new Uint8Array(this.cfg.seats), new Uint8Array(this.cfg.seats)];
+        this.sold = new Uint8Array(this.cfg.seats);
+        this.low = [0, 0];
+        this.cutSold = [];
+        this.dbl = [];
+      }
+      this.isCut = false;
+      this.cuts = [];
       this.sizeServers();
       this.nc = this.live() * this.cfg.workers;
       // a warm cache already holds the hottest keys, hottest most recently used (a cache that has run for a while)
@@ -138,6 +157,7 @@
       const sg = this.cfg.surge;
       if (sg) { this.ev.push({ t: sg.at, type: "surge", rate: sg.rate }); this.ev.push({ t: sg.at + sg.for, type: "surge", back: true }); }
       if (this.cfg.batch) this.ev.push({ t: this.cfg.batch.at, type: "batch" });
+      if (this.cfg.cut) this.ev.push({ t: this.cfg.cut.at, type: "cut" });
     }
     exp(mean) { return -Math.log(1 - this.r()) * mean; }
     serviceTime(i) { const c = this.cfg, m = c.service * (i === 0 ? c.slow || 1 : 1); return c.dist === "fixed" ? m : this.exp(m); }
@@ -175,7 +195,7 @@
     }
     // servers that exist: more are added now; fewer means the last ones stop taking work and leave once empty
     sizeServers() {
-      const n = this.cfg.shards > 0 ? this.cfg.shards | 0 : this.cfg.writes > 0 ? 1 + Math.max(0, this.cfg.replicas | 0) : Math.max(1, this.cfg.servers | 0);
+      const n = this.cfg.seats > 0 ? 2 : this.cfg.shards > 0 ? this.cfg.shards | 0 : this.cfg.writes > 0 ? 1 + Math.max(0, this.cfg.replicas | 0) : Math.max(1, this.cfg.servers | 0);
       this.srv.forEach((s, i) => { s.gone = i >= n; });
       while (this.srv.length < n) this.srv.push({ queue: [], busy: [], gone: false });
       this.prune();
@@ -260,6 +280,17 @@
         q.hit = false;
       }
       if (this.cfg.far > 0 && q.far === undefined) q.far = this.r() * 100 < this.cfg.far;
+      if (this.cfg.seats > 0 && q.dc === undefined) {
+        q.dc = this.r() * 100 < this.cfg.west ? 1 : 0;
+        q.like = this.r() * 100 < this.cfg.likes;
+        // a write that needs a majority can't get one from the west while the link is down: refused at once
+        if (this.isCut && q.dc === 1 && (q.like ? this.cfg.likeQ : this.cfg.seatQ)) {
+          q.srv = 1;
+          if (this.feed) this.feed.push(["in", null, "q"], ["route", 1]);
+          this.finish(q, false, "quorum");
+          return;
+        }
+      }
       if (this.cfg.writes > 0 && !q.follow && q.write === undefined) q.write = this.r() < this.cfg.writes;
       if (this.cfg.shards > 0 && q.acct === undefined) { q.hot = this.r() * 100 < this.cfg.hot; q.acct = q.hot ? 0 : 1 + Math.floor(this.r() * this.cfg.keys); }
       if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : q.write ? "w" : q.hot ? "h" : q.far ? "f" : null]);
@@ -290,6 +321,7 @@
     route(q) {
       const S = this.srv, n = S.length;
       if (n === 1) return 0;
+      if (this.cfg.seats > 0 && q && q.dc !== undefined) return q.dc;
       if (this.cfg.shards > 0 && q && q.acct !== undefined) {
         // the ring: an account's hash picks its arc; the viral one may be spread over the next few machines
         const live = []; for (let i = 0; i < n; i++) if (!S[i].gone) live.push(i);
@@ -358,16 +390,36 @@
         return;
       }
       const sent = q.first ?? q.sent;
-      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent + (ok ? this.net(q) : 0), ok, why, hit: q.hit, n: q.noisy, own: q.ownRead, stale: q.stale, srv: q.srv || 0, far: q.far });
+      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent + (ok ? this.net(q) : 0), ok, why, hit: q.hit, n: q.noisy, own: q.ownRead, stale: q.stale, srv: q.srv || 0, far: q.far, like: q.like });
       if (this.feed && !q.hit && why !== "limited") this.feed.push(["out", ok, why, q.srv || 0]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
     }
-    // the network's share of a page: every round trip pays the distance, the servers' answer is only one of them
+    // the network's share of a page: every round trip pays the distance, the servers' answer is only one of them.
+    // A write from the west that needs a majority pays a round trip east too.
     net(q) {
-      const c = this.cfg;
-      if (q.far) return c.api * c.rtt + c.trips * (c.cdn ? c.edgeRtt : c.rtt);
-      return c.far > 0 || c.nearRtt ? (c.api + c.trips) * c.nearRtt : 0;
+      const c = this.cfg, wan = q.dc === 1 && (q.like ? c.likeQ : c.seatQ) ? c.wan : 0;
+      if (q.far) return wan + c.api * c.rtt + c.trips * (c.cdn ? c.edgeRtt : c.rtt);
+      return wan + (c.far > 0 || c.nearRtt ? (c.api + c.trips) * c.nearRtt : 0);
+    }
+    // a booking: the lowest free seat as this side sees it. With the link up both sides see every sale at once; cut,
+    // each sells from its own copy, and a seat the other side has also sold is now sold twice
+    book(q) {
+      const d = q.dc, mine = this.copies[d], N = this.cfg.seats;
+      let s = this.low[d];
+      while (s < N && mine[s]) s++;
+      this.low[d] = s;
+      if (s >= N) { q.soldOut = true; return; }
+      mine[s] = 1;
+      if (this.isCut) this.cutSold.push(s); else this.copies[1 - d][s] = 1;
+      if (this.sold[s] & (1 << (1 - d))) { this.dbl.push(this.t); if (this.feed) this.feed.push(["stale", d]); }
+      this.sold[s] |= 1 << d;
+    }
+    // the link is back: each side learns what the other sold meanwhile
+    heal() {
+      if (!this.copies) return;
+      for (const s of this.cutSold) this.copies[0][s] = this.copies[1][s] = 1;
+      this.cutSold = [];
     }
     // a closed-loop user got an answer (or gave up): think again, or leave if there are now too many users
     rethink() {
@@ -425,10 +477,27 @@
           }
           // a writer's own read, answered by a replica that hasn't seen their write yet: stale
           if (q.follow) { q.ownRead = true; q.stale = i > 0 && this.t < q.follow.seen; if (q.stale && this.feed) this.feed.push(["stale", i]); }
+          if (q.dc !== undefined && !q.over && this.isCut && q.dc === 1 && (q.like ? this.cfg.likeQ : this.cfg.seatQ)) { this.finish(q, false, "quorum"); this.fill(i); this.prune(); continue; }
+          if (q.dc !== undefined && !q.like && !q.over) this.book(q);
           // a request that already timed out still used the worker; its answer just arrives to nobody
           this.finish(q, true);
           this.fill(i);
           this.prune();
+        } else if (e.type === "cut") {
+          if (!this.cfg.cut) continue;
+          if (!e.heal) {
+            this.isCut = true;
+            this.cuts.push({ at: this.t, end: null });
+            this.ev.push({ t: this.t + this.cfg.cut.for, type: "cut", heal: true });
+            if (this.feed) this.feed.push(["cut", true]);
+          } else {
+            this.isCut = false;
+            this.heal();
+            const k = this.cuts[this.cuts.length - 1];
+            k.end = this.t;
+            if (this.cfg.cut.every > 0) this.ev.push({ t: k.at + this.cfg.cut.every, type: "cut" });
+            if (this.feed) this.feed.push(["cut", false]);
+          }
         } else if (e.type === "timeout") {
           const q = e.q;
           if (q.over) continue;
@@ -444,7 +513,7 @@
     // for drawing: every server's queue and busy list, and the totals the one-server page used
     get queue() { return this.srv.length === 1 ? this.srv[0].queue : this.srv.flatMap((s) => s.queue); }
     get busy() { return this.srv.length === 1 ? this.srv[0].busy : this.srv.flatMap((s) => s.busy); }
-    view() { return { t: this.t, srv: this.srv, workers: this.cfg.workers, thinking: this.thinking, users: this.users, cached: this.lru.size, waiting: this.waiting }; }
+    view() { return { t: this.t, srv: this.srv, workers: this.cfg.workers, thinking: this.thinking, users: this.users, cached: this.lru.size, waiting: this.waiting, cut: this.isCut }; }
     // background jobs: how long the slowest waited in (t0, t1] (done in the window, or still waiting at its end), and
     // how many are not done yet. Judged as of now, so ask about windows that end now (as the page and the checks do).
     jobStats(t0, t1) {
@@ -460,7 +529,7 @@
     // numbers for requests that finished in (t0, t1]
     stats(t0, t1) {
       const lats = [], farL = [], nearL = [], d = this.done;
-      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0, own = 0, stale = 0, onPrimary = 0, onReplicas = 0;
+      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0, own = 0, stale = 0, onPrimary = 0, onReplicas = 0, seatErr = 0, likeErr = 0;
       const perSrv = [];
       while (lo < hi) { const m = (lo + hi) >> 1; if (d[m].at <= t0) lo = m + 1; else hi = m; }
       for (let i = lo; i < d.length && d[i].at <= t1; i++) {
@@ -468,6 +537,7 @@
         // the script's requests are counted on their own: every other number is about everyone else
         if (r.n) { if (r.ok) nOk++; else if (r.why === "limited") n429++; continue; }
         if (r.why === "limited") limited++;
+        if (r.why === "quorum") { if (r.like) likeErr++; else seatErr++; }
         if (r.own) { own++; if (r.stale) stale++; }
         if (r.ok) perSrv[r.srv] = (perSrv[r.srv] || 0) + 1;
         if (r.ok) { if (r.srv) onReplicas++; else onPrimary++; }
@@ -483,6 +553,7 @@
         tput: ok / span, mean: lats.length ? lats.reduce((s, x) => s + x, 0) / lats.length : 0,
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
         p99far: pct(farL, 0.99), p99near: pct(nearL, 0.99), p50far: pct(farL, 0.5),
+        seatErr, likeErr, double: this.dbl ? this.dbl.filter((x) => x > t0 && x <= t1).length : 0,
         hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
         nTput: nOk / span, n429: n429 / span, limited,
         stale, staleRate: own ? stale / own : 0, primary: onPrimary / span, replicaLoad: onReplicas / span,
