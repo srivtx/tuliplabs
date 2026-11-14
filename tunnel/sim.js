@@ -57,6 +57,8 @@
    With seatQ (likeQ) a booking (a like) needs a majority of the three copies, two of which live in the east: from the
    west that costs a round trip east (`wan`) on every write, and while the link is down the west refuses them
    (`seatErr`, `likeErr`). Without, each side accepts on its own and the copies are merged when the link heals.
+   A bill (`price` {worker, cache}): every worker costs price.worker a month and the cache price.cache per 1,000 keys;
+   stats give `cost`, the monthly bill of the design as it stands.
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
@@ -112,6 +114,7 @@
     shards: 0, hot: 0, hotSplit: 1,
     far: 0, rtt: 0.2, nearRtt: 0, api: 1, trips: 0, cdn: false, edgeRtt: 0.02,
     seats: 0, west: 50, likes: 0, wan: 0.06, cut: null, seatQ: false, likeQ: false,
+    price: null,
   };
 
   class Sim {
@@ -415,6 +418,11 @@
       if (this.sold[s] & (1 << (1 - d))) { this.dbl.push(this.t); if (this.feed) this.feed.push(["stale", d]); }
       this.sold[s] |= 1 << d;
     }
+    // the design's monthly bill: workers that exist, and the cache by the started thousand keys
+    bill() {
+      const c = this.cfg;
+      return c.price ? this.live() * c.workers * c.price.worker + (c.cache > 0 ? Math.ceil(c.cache / 1000) * c.price.cache : 0) : 0;
+    }
     // the link is back: each side learns what the other sold meanwhile
     heal() {
       if (!this.copies) return;
@@ -553,7 +561,7 @@
         tput: ok / span, mean: lats.length ? lats.reduce((s, x) => s + x, 0) / lats.length : 0,
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
         p99far: pct(farL, 0.99), p99near: pct(nearL, 0.99), p50far: pct(farL, 0.5),
-        seatErr, likeErr, double: this.dbl ? this.dbl.filter((x) => x > t0 && x <= t1).length : 0,
+        seatErr, likeErr, double: this.dbl ? this.dbl.filter((x) => x > t0 && x <= t1).length : 0, cost: this.bill(),
         hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
         nTput: nOk / span, n429: n429 / span, limited,
         stale, staleRate: own ? stale / own : 0, primary: onPrimary / span, replicaLoad: onReplicas / span,
