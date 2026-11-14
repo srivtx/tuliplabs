@@ -9,7 +9,7 @@
 .iv-quit:hover{color:var(--ink);border-color:var(--ink)}
 
 /* the clock and the stages stay in view under the site header while you work */
-.iv-head{position:sticky;top:56px;z-index:5;background:var(--bg);padding-top:4px;margin:0 0 22px}
+.iv-head{position:sticky;top:var(--top-h,56px);z-index:5;background:var(--bg);padding-top:4px;margin:0 0 22px}
 .iv-head .iv-stages{margin:0}
 /* the five stages: words on one line, joined by hairlines */
 .iv-stages{display:flex;align-items:center;margin:0 0 22px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 0 7px;overflow-x:auto;scrollbar-width:none}
