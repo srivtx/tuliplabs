@@ -115,6 +115,17 @@ for (const x of experiments.filter((e) => e.live)) {
     const small = Sim.measure({ ...s, rate, cache: lo, warm: true }, { span: 600 }), big = Sim.measure({ ...s, rate, cache: hi, warm: true }, { span: 600 });
     if (!(small.hit < need && small.p99 > 2)) bad.push(`${x.id} a cache of ${lo} already keeps up (hit ${small.hit.toFixed(3)}, need ${need.toFixed(3)})`);
     if (!(big.hit > need && big.errors === 0 && big.p99 < 1)) bad.push(`${x.id} a cache of ${hi} doesn't keep up (hit ${big.hit.toFixed(3)}, p99 ${ms(big.p99)})`);
+  } else if (th === "hotshare") {
+    // one account's share lands on one shard on top of an even split of the rest: the busiest shard is about
+    // rate × (1 - h) ÷ shards + rate × h, and p99 is under the line at 0.75× the answer and over it at 1.25×
+    const h = A / 100, expect = s.rate * (1 - h) / s.shards + s.rate * h;
+    const at = Sim.measure({ ...s, hot: A }, { span: 600 });
+    if (Math.abs(at.hottest - expect) / expect > 0.06) bad.push(`${x.id} at ${A}% the busiest shard does ${at.hottest.toFixed(1)}/s, theory ${expect.toFixed(1)}`);
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, hot: Math.round(A * 0.75) }, { seed, span: 600 }), hi = Sim.measure({ ...s, hot: Math.round(A * 1.25) }, { seed, span: 600 });
+      if (!(lo.p99 < x.predict.bend)) bad.push(`${x.id} at ${Math.round(A * 0.75)}% p99 is already ${ms(lo.p99)} (seed ${seed})`);
+      if (!(hi.p99 > x.predict.bend)) bad.push(`${x.id} at ${Math.round(A * 1.25)}% p99 is still ${ms(hi.p99)} (seed ${seed})`);
+    }
   } else if (th === "replicas") {
     // reads (the crowd's plus each writer's read-back) spread over the replicas must fit under capacity at ~85% busy:
     // one fewer drowns, the answer keeps p99 under 400 ms, on every seed
