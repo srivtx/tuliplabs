@@ -150,6 +150,17 @@ for (const x of experiments.filter((e) => e.live)) {
     }
     const at = Sim.measure({ ...s, [k]: A }, { span: 600 }), expect = (s.rate + A) / cap;
     if (Math.abs(at.util - expect) > 0.03) bad.push(`${x.id} at ${A} the server is ${at.util.toFixed(2)} busy, not ${expect.toFixed(2)}`);
+  } else if (th === "trips") {
+    // every round trip pays the distance: far p99 ≈ the server's own p99 + (api + trips) × rtt, so the most file trips
+    // under the line is the whole part of (line − server p99) ÷ rtt − api; the sim is under it there and over one more
+    const alone = Sim.measure({ ...s, far: 0, nearRtt: 0, trips: 0 }, { span: 600 }).p99, line = x.predict.bend;
+    const expect = (line - alone) / s.rtt - s.api;
+    if (!(expect >= A && expect < A + 1)) bad.push(`${x.id} predict answer ${A}, theory says ${expect.toFixed(2)}`);
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, trips: A }, { seed, span: 600 }), hi = Sim.measure({ ...s, trips: A + 1 }, { seed, span: 600 });
+      if (!(lo.p99far < line)) bad.push(`${x.id} at ${A} trips the far p99 is already ${ms(lo.p99far)} (seed ${seed})`);
+      if (!(hi.p99far > line)) bad.push(`${x.id} at ${A + 1} trips the far p99 is still ${ms(hi.p99far)} (seed ${seed})`);
+    }
   } else if (th === "drain") {
     // a batch drains in its work ÷ the job workers: every seed's first batch, within the tolerance
     const B = s.batch, jw = x.predict.setup.jobWorkers, expect = B.n * B.service / jw;

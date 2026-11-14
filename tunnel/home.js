@@ -586,6 +586,56 @@ cluster-node-timeout 5000
         ["Caches", "Often the simplest fix for a hot read: keep the key in a small in-process cache on every app server for a second or two, and the shard barely sees it."],
       ],
     },
+    wt10: {
+      files: [
+        {
+          name: "page_time.py", lang: "py", run: true,
+          src: (c) => {
+            const files = c.trips * (c.cdn ? c.edgeRtt : c.rtt), page = c.api * c.rtt + 0.235 + files;
+            return `# A far user's page, as arithmetic you can run.
+${col([[`RTT = ${c.rtt}`, "Sydney to Virginia and back, s"], [`EDGE = ${c.edgeRtt}`, "to the nearest CDN edge, s"], ["SERVER = 0.235", "the server's own p99, s"], [`API, FILES = ${c.api}, ${c.trips}`, "round trips a page makes"], [`CDN = ${c.cdn ? "True" : "False"}`, "your system.yaml"]])}
+
+files = FILES * (EDGE if CDN else RTT)
+page = API * RTT + SERVER + files
+print(f"a far page takes about {page:.2f} s")
+# → a far page takes about ${page.toFixed(2)} s
+
+# the floor no money moves: light in fibre, 15,700 km
+light = 2 * 15_700 / 200_000
+print(f"light alone: {light * 1000:.0f} ms a round trip")
+# → light alone: 157 ms a round trip
+water = (API + FILES) * RTT / page
+print(f"{water:.0%} of the page is water")
+# → ${Math.round(((c.api + c.trips) * c.rtt / page) * 100)}% of the page is water`;
+          },
+        },
+        {
+          name: "cdn.conf", lang: "conf",
+          src: () => `# nginx at the origin: tell the CDN what it may keep.
+# Files with a hash in their name never change.
+location /assets/ {
+  add_header Cache-Control
+    "public, max-age=31536000, immutable";
+}
+
+# The page itself changes: the CDN may keep it for
+# 30 s (s-maxage), browsers must ask again.
+location / {
+  add_header Cache-Control "public, s-maxage=30";
+}`,
+        },
+      ],
+      check: { line: 0, metric: "p99far", tol: 0.06 },
+      try: [{ cdn: false, trips: 7 }, { cdn: false, trips: 1 }, { cdn: true, trips: 2 }],
+      watch: (c) => `Graph p99 <b>per region</b>, measured where the user is (real user monitoring), not on the server: here the servers said ${Math.round(c.service * 1000)} ms while Sydney waited seconds. Count round trips per page in the browser's network panel, watch the CDN's <b>hit ratio</b> (a miss crosses the ocean anyway), and alert on time to first byte by country.`,
+      stack: [
+        ["HTTP/2 and HTTP/3", "Many files over one connection, so a page stops paying a handshake per file. HTTP/3 (QUIC) also saves a round trip when it connects, and TLS 1.3 saves another."],
+        ["Bundlers", "Vite, esbuild and webpack turn dozens of modules into a few files with a content hash in their names: few round trips, and safe to cache for a year."],
+        ["CDNs", "CloudFront, Fastly, Cloudflare and Akamai keep copies at edges near users. They serve what your headers allow, so Cache-Control is the real config."],
+        ["Preconnect and preload", "<code>&lt;link rel=preload&gt;</code> starts fetching a file before the HTML asks for it: round trips in parallel instead of one after another."],
+        ["Data, not just files", "For dynamic pages, a read replica or edge database near the users (DynamoDB global tables, Cloudflare D1, Postgres replicas) moves reads closer; writes still travel, as in experiment 7."],
+      ],
+    },
   };
 
   root.WT = root.WT || {};
