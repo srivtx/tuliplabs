@@ -1,0 +1,90 @@
+{
+"track": "ds",
+"prelude": "import time\n\ndef timed(fn, *args):\n    \"\"\"Run fn(*args) and return (result, seconds).\"\"\"\n    t = time.perf_counter()\n    out = fn(*args)\n    return out, time.perf_counter() - t",
+"problems": [
+{
+"id": "pairs",
+"title": "Pairs that hit the target",
+"fn": "count_pairs",
+"ch": 3,
+"decoys": [
+7,
+6,
+9,
+28
+],
+"bigo": "O(n)",
+"hints": [
+"<p>Checking every pair is O(n²). For one card <code>v</code>, what value would its partner need to be?</p>",
+"<p>Its partner is <code>t - v</code>. If you remember how many times each value has appeared <i>so far</i>, you know how many partners <code>v</code> has to its left.</p>",
+"<p>Keep <code>seen = {}</code> of counts. For each <code>v</code>: add <code>seen.get(t - v, 0)</code> to the answer, then do <code>seen[v] += 1</code>. Adding before recording stops a card pairing with itself.</p>"
+],
+"tests": [
+{
+"tag": "tiny",
+"code": "assert count_pairs([], 5) == 0\nassert count_pairs([5], 10) == 0"
+},
+{
+"tag": "dups",
+"code": "assert count_pairs([3, 3, 3], 6) == 3\nassert count_pairs([1, 1, 1, 1], 2) == 6"
+},
+{
+"tag": "neg",
+"code": "assert count_pairs([-2, 7, 0, 5], 5) == 2\nassert count_pairs([0, 0], 0) == 1"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(7)\nbig = [random.randint(-1000, 1000) for _ in range(200000)]\nr, secs = timed(count_pairs, big, 17)\nfrom collections import Counter\nc = Counter(big)\nassert r == sum(c[v] * c[17 - v] for v in c if v < 17 - v)\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 cards: checking every pair is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the list be empty, or hold just one card?",
+"a": "Yes, both. With fewer than two cards there are no pairs, so return 0.",
+"tag": "tiny"
+},
+{
+"q": "Can two cards have the same value?",
+"a": "Yes, often. Count pairs of positions, so three 3s with t = 6 make 3 pairs.",
+"tag": "dups"
+},
+{
+"q": "Can a value be negative or zero?",
+"a": "Yes: refunds show up as negative cards. Any whole number.",
+"tag": "neg"
+},
+{
+"q": "Is the list sorted?",
+"a": "No, it's in the order the cards were scanned.",
+"tag": null
+},
+{
+"q": "Should I print the answer or return it?",
+"a": "Return it.",
+"tag": null
+},
+{
+"q": "Which language should I use?",
+"a": "Whichever you're comfortable in. Python is fine.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A shop sells gift cards of different values. A customer wants to spend exactly <code>t</code> using <b>two different cards</b>.</p>\n<p>Write <code>count_pairs(a, t)</code>: given the card values <code>a</code>, return how many pairs of positions <code>i &lt; j</code> have <code>a[i] + a[j] == t</code>.</p>\n<p><code>count_pairs([1, 5, 3, 3, 4], 6)</code> is <code>2</code>: 1 + 5 and 3 + 3. <code>count_pairs([2, 4, 2], 6)</code> is also <code>2</code>, because each 2 pairs with the 4.</p>",
+"examples": "assert count_pairs([1, 5, 3, 3, 4], 6) == 2\nassert count_pairs([2, 4, 2], 6) == 2",
+"starter": "def count_pairs(a, t):\n    pass",
+"solution": "def count_pairs(a, t):\n    seen = {}\n    pairs = 0\n    for v in a:\n        pairs += seen.get(t - v, 0)\n        seen[v] = seen.get(v, 0) + 1\n    return pairs",
+"brute": "def count_pairs(a, t):\n    n = len(a)\n    return sum(1 for i in range(n) for j in range(i + 1, n) if a[i] + a[j] == t)",
+"approach": "<p>Walk the list once, keeping a count of every value seen so far. Each new value <code>v</code> pairs with every earlier <code>t - v</code>, so add that count, then record <code>v</code>. One pass, O(n).</p>",
+"twist": "<p>Good. Now the customer wants a <b>difference</b>, not a sum: count pairs <code>i &lt; j</code> where <code>a[j] - a[i] == t</code> (the later card is worth exactly <code>t</code> more). Write <code>count_rises(a, t)</code>. For <code>[1, 4, 2, 5]</code> and <code>t = 3</code> that's <code>2</code>: 1 → 4 and 2 → 5.</p>",
+"twisttests": "assert count_rises([1, 4, 2, 5], 3) == 2\nassert count_rises([5, 2], 3) == 0\nassert count_rises([1, 1, 1], 0) == 3\nassert count_rises([], 1) == 0",
+"twistsolution": "def count_rises(a, t):\n    seen = {}\n    rises = 0\n    for v in a:\n        rises += seen.get(v - t, 0)\n        seen[v] = seen.get(v, 0) + 1\n    return rises"
+}
+]
+}
