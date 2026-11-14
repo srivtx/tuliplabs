@@ -16,6 +16,8 @@
   const pct = (x) => `${Math.round(x * 100)}%`;
   const pad = (s, w) => s + " ".repeat(Math.max(1, w - s.length));
   // the ways a line of code can be commented, lined up in one column
+  // ring.py's printed spread for each shard count: 10,000 accounts hashed with md5 (worked out once in Python)
+  const SPREAD = { 1: "1.00", 2: "1.01", 3: "1.01", 4: "1.02", 5: "1.01", 6: "1.02", 7: "1.05", 8: "1.03" };
   const col = (rows, w = 26) => rows.map(([code, note]) => (note ? pad(code, w) + "# " + note : code)).join("\n");
 
   const home = {
@@ -516,6 +518,72 @@ server {
         ["Node.js", "<code>express-rate-limit</code> counts in fixed windows by default: 20 a minute can become 40 across a window's edge. A token bucket has no edges."],
         ["Envoy", "The <code>local_rate_limit</code> filter takes a <code>token_bucket</code> with <code>max_tokens</code> (the burst) and <code>tokens_per_fill</code> each <code>fill_interval</code> (the rate)."],
         ["Several servers", "With 4 servers each enforcing 20 a second on its own, a customer gets up to 80. Either share the bucket (Redis) or give each server a quarter of the limit."],
+      ],
+    },
+    wt09: {
+      files: [
+        {
+          name: "ring.py", lang: "py", run: true,
+          src: (c) => {
+            // the same counts as the Python below: each of 10,000 accounts hashed with md5 onto the ring
+            return `# A hash ring, and a hot key with copies.
+import hashlib
+import random
+
+${col([[`SHARDS = ${c.shards}`, "your system.yaml"], [`COPIES = ${c.hotSplit}`, "of the viral account"]])}
+
+
+def where(key):
+    h = hashlib.md5(key.encode()).digest()
+    point = int.from_bytes(h[:4], "big") / 2**32
+    return int(point * SHARDS)  # equal arcs
+
+
+def shard_for(key, hot=("singer",)):
+    home = where(key)
+    if key in hot and COPIES > 1:
+        return (home + random.randrange(COPIES)) % SHARDS
+    return home
+
+
+# ordinary accounts spread out evenly
+counts = [0] * SHARDS
+for n in range(10_000):
+    counts[where(f"user:{n}")] += 1
+spread = max(counts) / (10_000 / SHARDS)
+print(f"busiest shard holds {spread:.2f}x its share")
+# → busiest shard holds ${SPREAD[c.shards] || "1.00"}x its share
+
+# the singer's reads land on COPIES shards
+random.seed(1)
+hits = {shard_for("singer") for _ in range(1000)}
+print(f"the singer is served by {len(hits)} shard(s)")
+# → the singer is served by ${Math.min(c.hotSplit, c.shards)} shard(s)`;
+          },
+        },
+        {
+          name: "redis.conf", lang: "conf",
+          src: (c) => `# Redis Cluster hashes each key to one of 16384
+# slots (CRC16 mod 16384), and each node owns a
+# range of slots: the same idea as the ring.
+cluster-enabled yes
+cluster-node-timeout 5000
+
+# A hot key lives in one slot on one node. Copy
+# it under ${c.hotSplit > 1 ? c.hotSplit : "a few"} suffixed names to land
+# in different slots, and read any one:
+#   SET singer:{1} ...   SET singer:{2} ...
+# The {braces} pick the part that is hashed.`,
+        },
+      ],
+      try: [{ shards: 4, hotSplit: 1 }, { shards: 6, hotSplit: 2 }, { shards: 3, hotSplit: 4 }],
+      watch: (c) => `Graph load <b>per shard</b>, never just the fleet's average: here the average said ${Math.round(c.rate / c.shards)} a second each while one shard drowned. Track the top keys by request count (Redis has <code>redis-cli --hotkeys</code>) and alert when one key's share passes a few percent: that's the moment to give it copies or a cache.`,
+      stack: [
+        ["Consistent hashing", "With <code>hash % shards</code>, adding a shard moves almost every key. On a ring with many virtual points per shard, a new shard takes over only about 1/n of the keys."],
+        ["DynamoDB", "Partitions split by key, and each has a throughput cap. A hot partition key gets throttled however much capacity the table has: add a random suffix to spread it, or put DAX (a cache) in front."],
+        ["Cassandra", "A partition key sits on its replicas round the token ring. Reads of one hot partition hit the same few nodes: denormalise, or bucket the key by time."],
+        ["Kafka", "Messages with the same key go to the same partition, in order. One busy key means one busy partition and one busy consumer: key by something finer if order allows."],
+        ["Caches", "Often the simplest fix for a hot read: keep the key in a small in-process cache on every app server for a second or two, and the shard barely sees it."],
       ],
     },
   };
