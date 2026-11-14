@@ -35,7 +35,7 @@
     return c ? c.title.replace(/\s*\(.*\)\s*$/, "") : "Chapter " + num;
   };
   // what a hidden test group is about, in words: the question it hangs on, or the big input
-  const groupName = (p, tag) => (tag === "big" ? "a big input, against the clock" : (p.clarify.find((c) => c.tag === tag) || {}).q || tag);
+  const groupName = (p, tag) => (tag === "big" ? "A big input, against the clock" : (p.clarify.find((c) => c.tag === tag) || {}).q || tag);
 
   // ------------------------------------------------------------ choose --
   // a problem you haven't sat comes first; then one that's due back; then the one you sat longest ago
@@ -59,6 +59,7 @@
       asked: [], patTries: [], costTries: [], approach: "", hints: 0, code: p.starter, mine: "", tests: null, first: null, twist: null, twistRes: null };
     save();
     draw();
+    window.scrollTo(0, 0);
   }
 
   // -------------------------------------------------------------- page --
@@ -88,9 +89,9 @@
     }));
     const body = h("div", { class: "iv-body" });
     m.append(h("div", { class: "col iv" },
-      h("div", { class: "iv-top" }, h("div", { class: "eyebrow" }, "Interview · DSA"), h("span", { class: "grow" }), clock,
+      h("div", { class: "iv-head" }, h("div", { class: "iv-top" }, h("div", { class: "eyebrow" }, "Interview · DSA"), h("span", { class: "grow" }), clock,
         h("button", { class: "iv-quit", type: "button", onclick: () => { if (confirmQuit()) { finish(); } } }, "end it here")),
-      stages, body));
+        stages), body));
     ({ clarify: stClarify, plan: stPlan, code: stCode, test: stTest, twist: stTwist })[r.stage](p, r, body);
     document.title = "Interview · " + A.cfg.pageTitle;
   }
@@ -139,7 +140,7 @@
         onclick: () => { r.patTries.push(n); save(); draw(); } }, chName(n));
     }));
     const patSay = !r.patTries.length ? null : patOk
-      ? say(`<p>Good, ${esc(chName(p.ch).toLowerCase())}. What will it cost?</p>`)
+      ? say(`<p>Good choice: <b>${esc(chName(p.ch))}</b>. What will it cost?</p>`)
       : say(`<p>Hmm. Would that stay fast at the sizes we talked about? ${p.hints[0]}</p>`);
     const costs = patOk ? h("div", { class: "opts iv-opts" }, r.costs.map((c) => {
       const tried = r.costTries.includes(c);
