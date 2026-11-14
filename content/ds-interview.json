@@ -509,6 +509,90 @@
 "twist": "<p>The dashboard changes: show the <b>k-th smallest</b> reading so far, or <code>None</code> until there are <code>k</code> readings. Write <code>running_kth(a, k)</code>.</p>",
 "twisttests": "assert running_kth([5, 2, 8, 1], 2) == [None, 5, 5, 2]\nassert running_kth([3, 1, 2], 1) == [3, 1, 1]\nassert running_kth([4, 4], 3) == [None, None]\nassert running_kth([], 1) == []",
 "twistsolution": "import heapq\n\ndef running_kth(a, k):\n    keep, out = [], []   # the k smallest so far, as a max-heap (negated)\n    for v in a:\n        heapq.heappush(keep, -v)\n        if len(keep) > k:\n            heapq.heappop(keep)\n        out.append(-keep[0] if len(keep) == k else None)\n    return out"
+},
+{
+"id": "bookings",
+"title": "Merge the bookings",
+"fn": "merge_bookings",
+"ch": 14,
+"decoys": [
+15,
+7,
+16,
+9
+],
+"bigo": "O(n log n)",
+"hints": [
+"<p>If the bookings were in start order, which booking could the next one possibly overlap with?</p>",
+"<p>Sort them. Then each booking only needs comparing with the last block you've built so far.</p>",
+"<p>For each <code>[s, e]</code> in sorted order: if <code>s &lt;= out[-1][1]</code>, set <code>out[-1][1] = max(out[-1][1], e)</code>; otherwise append <code>[s, e]</code>.</p>"
+],
+"tests": [
+{
+"tag": "touch",
+"code": "assert merge_bookings([[1, 3], [3, 5]]) == [[1, 5]]\nassert merge_bookings([[1, 2], [4, 5]]) == [[1, 2], [4, 5]]"
+},
+{
+"tag": "unsorted",
+"code": "assert merge_bookings([[8, 9], [1, 2], [5, 7], [6, 8]]) == [[1, 2], [5, 9]]"
+},
+{
+"tag": "empty",
+"code": "assert merge_bookings([]) == []"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(2)\nbig = []\nfor i in range(100000):\n    s = random.randint(0, 10**8)\n    big.append([s, s + random.randint(1, 600)])\nr, secs = timed(merge_bookings, [b[:] for b in big])\nwant = []\nfor s, e in sorted(big):\n    if want and s <= want[-1][1]:\n        want[-1][1] = max(want[-1][1], e)\n    else:\n        want.append([s, e])\nassert r == want\nassert secs < 1.5, f\"{secs:.2f} s for 100,000 bookings: comparing every pair is too slow\""
+}
+],
+"clarify": [
+{
+"q": "If one booking ends at 3 and the next starts at 3, is that one block?",
+"a": "Yes. The room is never free in between, so join them.",
+"tag": "touch"
+},
+{
+"q": "Are the bookings in time order?",
+"a": "No, they're in the order people made them.",
+"tag": "unsorted"
+},
+{
+"q": "Can the calendar be empty?",
+"a": "Yes. Return an empty list.",
+"tag": "empty"
+},
+{
+"q": "Can a booking have start equal to end?",
+"a": "No, every booking is at least one unit long.",
+"tag": null
+},
+{
+"q": "Are times whole numbers?",
+"a": "Yes, minutes since midnight.",
+"tag": null
+},
+{
+"q": "Can I sort the input in place?",
+"a": "Better not; make a sorted copy.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A meeting room's calendar is a list of bookings <code>[start, end]</code>, in no particular order. A booking holds the room from <code>start</code> up to, but not including, <code>end</code>.</p>\n<p>Write <code>merge_bookings(bs)</code>: return the times the room is busy, as a sorted list of <code>[start, end]</code> blocks where overlapping bookings are joined into one.</p>\n<p><code>merge_bookings([[5, 8], [1, 3], [2, 4]])</code> is <code>[[1, 4], [5, 8]]</code>.</p>",
+"examples": "assert merge_bookings([[5, 8], [1, 3], [2, 4]]) == [[1, 4], [5, 8]]\nassert merge_bookings([[1, 10], [2, 3]]) == [[1, 10]]",
+"starter": "def merge_bookings(bs):\n    pass",
+"solution": "def merge_bookings(bs):\n    out = []\n    for s, e in sorted(bs):\n        if out and s <= out[-1][1]:\n            out[-1][1] = max(out[-1][1], e)\n        else:\n            out.append([s, e])\n    return out",
+"brute": "def merge_bookings(bs):\n    blocks = [list(b) for b in bs]\n    changed = True\n    while changed:\n        changed = False\n        for i in range(len(blocks)):\n            for j in range(i + 1, len(blocks)):\n                a, b = blocks[i], blocks[j]\n                if a[0] <= b[1] and b[0] <= a[1]:\n                    blocks[i] = [min(a[0], b[0]), max(a[1], b[1])]\n                    del blocks[j]\n                    changed = True\n                    break\n            if changed:\n                break\n    return sorted(blocks)",
+"approach": "<p>Sort by start time. Then walk once: a booking that starts before (or exactly when) the current block ends extends it; otherwise it starts a new block. Sorting is O(n log n) and the walk is O(n).</p>",
+"twist": "<p>The office wants fewer rooms. Write <code>rooms_needed(bs)</code>: the smallest number of rooms that fits every booking, where a booking ending at 3 frees its room for one starting at 3.</p>",
+"twisttests": "assert rooms_needed([[1, 4], [2, 5], [7, 9]]) == 2\nassert rooms_needed([[1, 3], [3, 5]]) == 1\nassert rooms_needed([[1, 10], [2, 3], [4, 5], [2, 9]]) == 3\nassert rooms_needed([]) == 0",
+"twistsolution": "def rooms_needed(bs):\n    events = sorted([(s, 1) for s, e in bs] + [(e, -1) for s, e in bs])\n    busy = most = 0\n    for _, d in events:\n        busy += d\n        most = max(most, busy)\n    return most"
 }
 ]
 }

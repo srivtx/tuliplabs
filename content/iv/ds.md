@@ -583,3 +583,103 @@ def running_kth(a, k):
         out.append(-keep[0] if len(keep) == k else None)
     return out
 ```
+
+```interview
+id: bookings
+title: Merge the bookings
+fn: merge_bookings
+ch: 14
+decoys: 15, 7, 16, 9
+bigo: O(n log n)
+---prompt
+A meeting room's calendar is a list of bookings `[start, end]`, in no particular order. A booking holds the room from `start` up to, but not including, `end`.
+
+Write `merge_bookings(bs)`: return the times the room is busy, as a sorted list of `[start, end]` blocks where overlapping bookings are joined into one.
+
+`merge_bookings([[5, 8], [1, 3], [2, 4]])` is `[[1, 4], [5, 8]]`.
+---examples
+assert merge_bookings([[5, 8], [1, 3], [2, 4]]) == [[1, 4], [5, 8]]
+assert merge_bookings([[1, 10], [2, 3]]) == [[1, 10]]
+---clarify
++ touch | If one booking ends at 3 and the next starts at 3, is that one block? | Yes. The room is never free in between, so join them.
++ unsorted | Are the bookings in time order? | No, they're in the order people made them.
++ empty | Can the calendar be empty? | Yes. Return an empty list.
+- | Can a booking have start equal to end? | No, every booking is at least one unit long.
+- | Are times whole numbers? | Yes, minutes since midnight.
+- | Can I sort the input in place? | Better not; make a sorted copy.
+---test touch
+assert merge_bookings([[1, 3], [3, 5]]) == [[1, 5]]
+assert merge_bookings([[1, 2], [4, 5]]) == [[1, 2], [4, 5]]
+---test unsorted
+assert merge_bookings([[8, 9], [1, 2], [5, 7], [6, 8]]) == [[1, 2], [5, 9]]
+---test empty
+assert merge_bookings([]) == []
+---test big
+import random
+random.seed(2)
+big = []
+for i in range(100000):
+    s = random.randint(0, 10**8)
+    big.append([s, s + random.randint(1, 600)])
+r, secs = timed(merge_bookings, [b[:] for b in big])
+want = []
+for s, e in sorted(big):
+    if want and s <= want[-1][1]:
+        want[-1][1] = max(want[-1][1], e)
+    else:
+        want.append([s, e])
+assert r == want
+assert secs < 1.5, f"{secs:.2f} s for 100,000 bookings: comparing every pair is too slow"
+---starter
+def merge_bookings(bs):
+    pass
+---solution
+def merge_bookings(bs):
+    out = []
+    for s, e in sorted(bs):
+        if out and s <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], e)
+        else:
+            out.append([s, e])
+    return out
+---brute
+def merge_bookings(bs):
+    blocks = [list(b) for b in bs]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(blocks)):
+            for j in range(i + 1, len(blocks)):
+                a, b = blocks[i], blocks[j]
+                if a[0] <= b[1] and b[0] <= a[1]:
+                    blocks[i] = [min(a[0], b[0]), max(a[1], b[1])]
+                    del blocks[j]
+                    changed = True
+                    break
+            if changed:
+                break
+    return sorted(blocks)
+---approach
+Sort by start time. Then walk once: a booking that starts before (or exactly when) the current block ends extends it; otherwise it starts a new block. Sorting is O(n log n) and the walk is O(n).
+---hint
+If the bookings were in start order, which booking could the next one possibly overlap with?
+---hint
+Sort them. Then each booking only needs comparing with the last block you've built so far.
+---hint
+For each `[s, e]` in sorted order: if `s <= out[-1][1]`, set `out[-1][1] = max(out[-1][1], e)`; otherwise append `[s, e]`.
+---twist
+The office wants fewer rooms. Write `rooms_needed(bs)`: the smallest number of rooms that fits every booking, where a booking ending at 3 frees its room for one starting at 3.
+---twisttests
+assert rooms_needed([[1, 4], [2, 5], [7, 9]]) == 2
+assert rooms_needed([[1, 3], [3, 5]]) == 1
+assert rooms_needed([[1, 10], [2, 3], [4, 5], [2, 9]]) == 3
+assert rooms_needed([]) == 0
+---twistsolution
+def rooms_needed(bs):
+    events = sorted([(s, 1) for s, e in bs] + [(e, -1) for s, e in bs])
+    busy = most = 0
+    for _, d in events:
+        busy += d
+        most = max(most, busy)
+    return most
+```
