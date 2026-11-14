@@ -18,6 +18,7 @@ const MOMENTS = {
   wt04: { set: { cache: 250, rate: 160 }, run: 40 }, // the cache taking the hits
   wt05: { set: {}, run: 40 },                  // the storm, after the surge has gone
   wt06: { set: {}, run: 14 },                  // the newsletter towering in the website's own line
+  wt07: { set: { replicas: 2 }, run: 20 },     // writes copying to the replicas, and a stale read popping red
   wt08: { set: { limit: 20 }, run: 20 },       // the limiter bouncing the script's flood back as 429s
 };
 // ONLY=wt08 renders just those (comma-separated), and skips the Workbench shot
