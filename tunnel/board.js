@@ -1,12 +1,18 @@
-/* The whiteboard (tunnel/board.html#1…): system design questions on a drawing that runs.
+/* The whiteboard (tunnel/board.html#snip/1, #redis/4, …): system design units, each in two modes. Whiteboard: scope
+   it, size it, sketch it and have the sketch graded. Simulate: the design runs (tunnel/net.js, tunnel/kv.js).
    The board is an SVG on a 960 × 540 sheet. Parts are hand-drawn boxes; wires are arrows; a run of tunnel/net.js
    paints each part by how busy it was and sends dots along each wire at its real rate.
    Gestures: drag a part to move it · drag from a part's + to another part to wire them (or tap +, then the part) ·
    tap a wire to cut it · tap a part to change its size · tap or drag a part in from the tray.
-   Progress lives in vnl-code-v1: done.sd01…, and sd: {id: {stars, design}}. */
+   Kinds with their own page (scope, and the Redis labs) live in tunnel/board-kinds.js as SD.UI[kind]: the board
+   hands them its SVG layer, the brief and the tools, and they hand back what to draw.
+   Progress lives in vnl-code-v1: done[question id], and sd: {id: {stars, design}}. */
 (function () {
   "use strict";
-  const N = window.NET, BOARDS = window.SD.BOARDS, K = N.KINDS;
+  const N = window.NET, SDX = window.SD, BOARDS = SDX.BOARDS, UNITS = SDX.UNITS, PARTS = SDX.PARTS, K = N.KINDS;
+  const UI = SDX.UI || {};
+  const ICON = Object.fromEntries(Object.entries(PARTS).map(([k, v]) => [k, v.icon]));
+  const nameOf = (kind) => (PARTS[kind] || K[kind]).name;
   const $ = (q, r = document) => r.querySelector(q);
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);
@@ -60,24 +66,15 @@
 
   // --------------------------------------------------------------- sheet --
   const W = 960, H = 540, PW = 160, PH = 66;
-  const KIND_WORD = { follow: "Follow it", napkin: "Napkin math", bottleneck: "Find the bottleneck", draw: "Draw it" };
-  const KIND_GLYPH = { follow: "⤳", napkin: "✎", bottleneck: "◔", draw: "▭" };
-  // little line drawings, one per part, in a 26 × 26 box
-  const ICON = {
-    users: '<circle cx="9" cy="8" r="4"/><circle cx="18.5" cy="9.5" r="3"/><path d="M2 23c0-5.5 3-8.5 7-8.5s7 3 7 8.5M15.5 23c0-4 1.5-6.5 3.5-6.5s4.5 2.5 4.5 6.5"/>',
-    lb: '<circle cx="4.5" cy="13" r="2.6"/><path d="M7 13h5m0 0 9-8m-9 8h9m-9 0 9 8"/><path d="M18 3.5l3.4 1.6-1.4 3.4M18.4 10.6l3 2.4-3 2.4M18 22.5l3.4-1.6-1.4-3.4"/>',
-    app: '<rect x="3" y="3" width="20" height="6" rx="1.6"/><rect x="3" y="10.5" width="20" height="6" rx="1.6"/><rect x="3" y="18" width="20" height="6" rx="1.6"/><path d="M6.5 6h.1M6.5 13.5h.1M6.5 21h.1"/>',
-    cache: '<path d="M15 2 5.5 15h7l-2 9.5L20 11h-7l2-9z"/>',
-    db: '<ellipse cx="13" cy="6" rx="9" ry="3.4"/><path d="M4 6v14c0 1.9 4 3.4 9 3.4s9-1.5 9-3.4V6M4 13c0 1.9 4 3.4 9 3.4s9-1.5 9-3.4"/>',
-    replica: '<ellipse cx="10" cy="7" rx="7" ry="2.6"/><path d="M3 7v11c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V7"/><path d="M19.5 6.5c2 .5 3.5 1.3 3.5 2.3V20c0 1.4-3.1 2.6-7 2.6"/>',
-    queue: '<rect x="2" y="8" width="22" height="10" rx="2"/><path d="M7.5 8v10M13 8v10M18.5 8v10"/><path d="M1 4h7M5 1.5 8 4 5 6.5"/>',
-    worker: '<circle cx="13" cy="13" r="4"/><path d="M13 2.5v4M13 19.5v4M2.5 13h4M19.5 13h4M5.6 5.6l2.8 2.8M17.6 17.6l2.8 2.8M5.6 20.4l2.8-2.8M17.6 8.4l2.8-2.8"/>',
-  };
+  const KIND_WORD = { scope: "Scope it", napkin: "Napkin math", sketch: "Sketch it", follow: "Follow it", bottleneck: "Find the bottleneck", draw: "Draw it", evict: "Eviction lab", persist: "Crash lab", shard: "Cluster lab" };
+  const KIND_GLYPH = { scope: "▤", napkin: "✎", sketch: "✐", follow: "⤳", bottleneck: "◔", draw: "▭", evict: "⇄", persist: "⏻", shard: "◫" };
+  const MODE_WORD = { w: "Whiteboard", s: "Simulate" };
   const SIZES = { cache: Object.keys(K.cache.sizes), db: Object.keys(K.db.sizes) };
 
   // --------------------------------------------------------------- state --
   const main = $("#sd");
-  let qi = 0, B = null, D = null;   // the question, and the design on the board
+  let U = null, L = [], qi = 0, B = null, D = null;   // the unit, its questions (whiteboard then simulate), the question, the design on the board
+  let ctx = null; // a kind with its own page: the handle it draws through
   let sel = null, selW = -1, res = null, runs = 0, solvedNow = false, problems = [], busy = false;
   let F = {}; // per kind: follow {round, got, tries}; napkin {vals, marks, tries}; bottleneck {guess, steps, at, playing}
   let flows = {}, heat = {}, waits = {}, label = {}; // what the board shows from the latest run
@@ -97,9 +94,11 @@
     els.gp = s("g", { class: "sd-parts" });
     els.gd = s("g", { class: "sd-dots", "aria-hidden": "true" });
     els.go = s("g", { class: "sd-over" });
-    els.svg.append(els.gw, els.gd, els.gp, els.go);
+    els.gx = s("g", { class: "sd-x" });
+    els.svg.append(els.gw, els.gd, els.gp, els.go, els.gx);
+    els.mode = h("div", { class: "sd-modechip", "aria-hidden": "true" });
     els.score = h("div", { class: "sd-score", "aria-live": "polite" });
-    els.stage = h("div", { class: "sd-stage" }, els.svg, els.score);
+    els.stage = h("div", { class: "sd-stage" }, els.svg, els.score, els.mode);
     main.append(els.strip, h("div", { class: "sd-grid" }, els.brief, els.stage, els.tools));
     main.removeAttribute("aria-busy");
     els.svg.addEventListener("pointerdown", down);
@@ -107,43 +106,70 @@
     els.svg.addEventListener("pointerup", up);
     els.svg.addEventListener("pointercancel", () => { drag = null; wiring = null; drawOver(); });
     document.addEventListener("keydown", (e) => {
-      if (B.kind !== "draw" || /input|textarea/i.test(e.target.tagName)) return;
-      if ((e.key === "Delete" || e.key === "Backspace") && sel && part(sel).kind !== "users") { removePart(sel); e.preventDefault(); }
+      if (!editable() || /input|textarea/i.test(e.target.tagName)) return;
+      if ((e.key === "Delete" || e.key === "Backspace") && sel && !PARTS[part(sel).kind].fixed) { removePart(sel); e.preventDefault(); }
       if ((e.key === "Delete" || e.key === "Backspace") && selW >= 0) { cutWire(selW); e.preventDefault(); }
       if (e.key === "Escape") { sel = null; selW = -1; wiring = null; drawAll(); }
     });
   }
 
-  function open(i) {
-    qi = Math.max(0, Math.min(BOARDS.length - 1, i));
-    B = BOARDS[qi];
+  function open(unit, i) {
+    U = unit;
+    L = [...U.w, ...U.s];
+    qi = Math.max(0, Math.min(L.length - 1, i));
+    B = L[qi];
     const m = mine(B.id);
-    D = clone(m.design && B.kind === "draw" ? m.design : B.design);
+    D = clone(m.design && editable() ? m.design : B.design || { nodes: [], wires: [] });
     sel = null; selW = -1; res = null; runs = 0; solvedNow = false; problems = []; flows = {}; heat = {}; waits = {}; label = {}; wiring = null;
-    F = B.kind === "follow" ? { round: 0, got: [], tries: 0 } : B.kind === "napkin" ? { vals: {}, marks: {}, tries: 0 } : B.kind === "bottleneck" ? { guess: null, steps: null, at: 0 } : {};
-    document.title = `${qi + 1}. ${B.title} · Whiteboard · Tulip Labs`;
+    F = B.kind === "follow" ? { round: 0, got: [], tries: 0 } : B.kind === "napkin" ? { vals: {}, marks: {}, tries: 0 } : B.kind === "bottleneck" ? { guess: null, steps: null, at: 0 } : B.kind === "sketch" ? { tries: 0, hints: 0, G: null } : {};
+    ctx = UI[B.kind] ? makeCtx() : null;
+    els.gx.replaceChildren();
+    if (ctx) UI[B.kind].init(ctx);
+    els.stage.className = "sd-stage m-" + B.mode + (ctx ? " own k-" + B.kind : "");
+    els.mode.textContent = B.mode === "s" ? "Simulation · it runs" : "Whiteboard · draw and explain";
+    document.title = `${B.title} · ${U.name} · Whiteboard · Tulip Labs`;
     drawStrip();
     drawAll();
     drawBrief();
     if (B.kind === "bottleneck") calm();
   }
+  // what a kind with its own page gets to work with
+  function makeCtx() {
+    const c = {
+      B, F, h, s, num, tm, REDUCED, TOUCH, svg: els.svg, layer: els.gx, score: els.score, stage: els.stage,
+      pt: (e) => pt(e), flash: (t) => flash(t), solved: (n) => solved(n), stars: (n) => stars(n),
+      redraw: () => drawAll(), rebrief: () => drawBrief(), done: () => !!S.done[B.id], isNow: () => ctx === c,
+    };
+    return c;
+  }
   const part = (id) => D.nodes.find((n) => n.id === id);
-  const editable = () => B.kind === "draw";
+  const editable = () => B.kind === "draw" || B.kind === "sketch";
+  const loc = (b) => `#${b.unit}/${(b.mode === "s" ? UNITS.find((u) => u.id === b.unit).w.length : 0) + b.n}`;
 
   // ---------------------------------------------------------------- strip --
   function drawStrip() {
+    const group = (m) => {
+      const qs = U[m], first = qs.find((b) => !S.done[b.id]) || qs[0];
+      return h("div", { class: "sd-mg" + (B.mode === m ? " on" : "") },
+        h("a", { class: "sd-mode", href: loc(first), "aria-current": B.mode === m ? "true" : null }, m === "s" ? h("i", { class: "sd-lamp" }) : null, MODE_WORD[m]),
+        h("ol", {}, qs.map((b) => h("li", { class: (b === B ? "on " : "") + (S.done[b.id] ? "done" : "") },
+          h("a", { href: loc(b), title: `${b.n}. ${b.title} · ${KIND_WORD[b.kind]}`, "aria-current": b === B ? "step" : null },
+            h("i", {}, KIND_GLYPH[b.kind]), h("span", {}, b.n), stars(starsOf(b.id)))))));
+    };
     els.strip.replaceChildren(
-      h("a", { class: "sd-back", href: "./" }, "← Wind Tunnel"),
-      h("span", { class: "sd-sh" }, "Whiteboard · Snip, a link shortener"),
-      h("ol", {}, BOARDS.map((b, i) => h("li", { class: (i === qi ? "on " : "") + (S.done[b.id] ? "done" : "") },
-        h("a", { href: "#" + (i + 1), title: `${i + 1}. ${b.title} · ${KIND_WORD[b.kind]}`, "aria-current": i === qi ? "step" : null },
-          h("i", {}, KIND_GLYPH[b.kind]), h("span", {}, i + 1), stars(starsOf(b.id)))))));
+      h("a", { class: "sd-back", href: "./#ladder" }, "← Wind Tunnel"),
+      h("span", { class: "sd-sh" }, h("b", {}, U.name), ` · ${U.sub}`),
+      h("div", { class: "sd-modes" }, group("w"), group("s")));
   }
   function stars(n) { return h("span", { class: "sd-stars", "aria-label": `${n} of 3 stars` }, [1, 2, 3].map((k) => h("i", { class: k <= n ? "on" : "" }))); }
 
   // ---------------------------------------------------------------- board --
-  function drawAll() { drawWires(); drawParts(); drawOver(); drawScore(); }
+  function drawAll() {
+    if (ctx) { els.gw.replaceChildren(); els.gp.replaceChildren(); els.go.replaceChildren(); els.gd.replaceChildren(); UI[B.kind].draw(ctx); drawScore(); return; }
+    drawWires(); drawParts(); drawOver(); drawScore();
+  }
   function sub(nd) {
+    if (!K[nd.kind] || B.kind === "sketch") return PARTS[nd.kind].tag || PARTS[nd.kind].say;
     if (nd.kind === "users") { const r = B.rate || (F.steps && F.steps[F.at] ? F.steps[F.at].rate : B.ramp ? B.ramp[0] : 0); return r ? `${num(r)} clicks/s` : "clicking links"; }
     if (label[nd.id]) return label[nd.id];
     const k = K[nd.kind];
@@ -160,14 +186,14 @@
       const g = s("g", {
         class: `sd-part k-${nd.kind}${sel === nd.id ? " sel" : ""}${hot}${problems.some((p) => p.node === nd.id) ? " bad" : ""}${B.kind === "bottleneck" && F.guess === nd.id ? " guess" : ""}${follow >= 0 ? " on" : ""}`,
         transform: `translate(${nd.x - PW / 2} ${nd.y - PH / 2})`, "data-id": nd.id, tabindex: 0, role: "button",
-        "aria-label": `${K[nd.kind].name}${sub(nd) ? ", " + sub(nd) : ""}${u != null ? `, ${Math.round(u * 100)}% busy` : ""}`,
+        "aria-label": `${nameOf(nd.kind)}${sub(nd) ? ", " + sub(nd) : ""}${u != null ? `, ${Math.round(u * 100)}% busy` : ""}`,
         onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(nd.id); } },
       });
       g.append(
         s("rect", { class: "sd-fill", width: PW, height: PH, rx: 13 }),
         s("rect", { class: "sd-ink", x: 1, y: 1, width: PW - 2, height: PH - 2, rx: 13, filter: "url(#sd-sk)" }),
         s("g", { class: "sd-ic", transform: "translate(13 20)", html: ICON[nd.kind] }),
-        s("text", { class: "sd-name", x: 48, y: 29 }, K[nd.kind].name),
+        s("text", { class: "sd-name", x: 48, y: 29 }, nameOf(nd.kind)),
         s("text", { class: "sd-sub", x: 48, y: 47 }, sub(nd)));
       if (u != null && nd.kind !== "users") g.append(s("rect", { class: "sd-meter-bg", x: 12, y: PH - 9, width: PW - 24, height: 3, rx: 1.5 }), s("rect", { class: "sd-meter", x: 12, y: PH - 9, width: Math.max(2, (PW - 24) * Math.min(1, u)), height: 3, rx: 1.5 }));
       if (follow >= 0) g.append(s("circle", { class: "sd-badge", cx: PW - 6, cy: 6, r: 11 }), s("text", { class: "sd-badge-t", x: PW - 6, y: 10.5, "text-anchor": "middle" }, follow + 1));
@@ -206,7 +232,8 @@
       const A = part(a), Bn = part(b);
       if (!A || !Bn) return null;
       const d = geom(A, Bn), f = flows[a + ">" + b] || 0;
-      const p = s("path", { class: "sd-wire" + (selW === i ? " sel" : "") + (f ? " live" : ""), d, "marker-end": "url(#sd-ar)" });
+      const good = B.kind === "sketch" && F.G && F.G.items.some((it) => it.ok && it.link.some(([x, y]) => (x === A.kind && y === Bn.kind) || (x === Bn.kind && y === A.kind)));
+      const p = s("path", { class: "sd-wire" + (selW === i ? " sel" : "") + (f ? " live" : "") + (good ? " good" : ""), d, "marker-end": "url(#sd-ar)" });
       wirePaths.set(a + ">" + b, p);
       const g = s("g", { "data-wire": i, "data-k": a + ">" + b }, s("path", { class: "sd-hit", d }), p);
       if (f >= 1 && !REDUCED) { const mid = p; requestAnimationFrame(() => { try { const L = mid.getTotalLength(), pt = mid.getPointAtLength(L / 2); if (L >= 110) g.append(s("text", { class: "sd-flow", x: pt.x, y: pt.y - 8, "text-anchor": "middle" }, `${num(f)}/s`)); } catch (e) { /* not laid out */ } }); }
@@ -257,6 +284,8 @@
       const st = F.steps[F.at];
       rows.push(h("li", {}, h("i", {}, "▸"), h("span", {}, "traffic"), h("b", {}, `${num(st.rate)}/s`)));
       rows.push(h("li", { class: st.r.p99 < 0.3 ? "ok" : "no" }, h("i", {}, st.r.p99 < 0.3 ? "✓" : "✗"), h("span", {}, "p99"), h("b", {}, tm(st.r.p99))));
+    } else if (ctx && UI[B.kind].score) {
+      for (const [say, pass, shown] of UI[B.kind].score(ctx)) rows.push(h("li", { class: pass == null ? "" : pass ? "ok" : "no" }, h("i", {}, pass == null ? "·" : pass ? "✓" : "✗"), h("span", {}, say), h("b", {}, shown)));
     } else { els.score.hidden = true; return; }
     els.score.hidden = false;
     els.score.replaceChildren(h("ul", {}, rows));
@@ -269,7 +298,8 @@
   function frame(t) {
     const dt = Math.min(0.1, (t - lastT) / 1000 || 0);
     lastT = t;
-    if (!REDUCED && !document.hidden) {
+    if (ctx && UI[B.kind].frame && !document.hidden) UI[B.kind].frame(ctx, dt, t);
+    if (!REDUCED && !document.hidden && !ctx) {
       for (const [k, f] of Object.entries(flows)) {
         const p = wirePaths.get(k);
         if (!p || f <= 0) continue;
@@ -306,6 +336,7 @@
   let drag = null;
   const pt = (e) => { const p = els.svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const m = els.svg.getScreenCTM(); return m ? p.matrixTransform(m.inverse()) : { x: 0, y: 0 }; };
   function down(e) {
+    if (ctx) return;
     const t = e.target;
     const cut = t.closest("[data-cut]");
     if (cut) { cutWire(+cut.dataset.cut); return; }
@@ -319,6 +350,7 @@
     if (sel || selW >= 0) { sel = null; selW = -1; drawAll(); drawBrief(); }
   }
   function move(e) {
+    if (ctx) return;
     if (wiring && !wiring.tap) { const p = pt(e); wiring.x = p.x; wiring.y = p.y; drawOver(); return; }
     if (!drag) return;
     if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 5) return;
@@ -330,6 +362,7 @@
     drawWires(); drawParts(); drawOver();
   }
   function up(e) {
+    if (ctx) return;
     if (wiring && !wiring.tap) {
       const moved = Math.hypot(e.clientX - wiring.sx, e.clientY - wiring.sy) > 6;
       const over = document.elementFromPoint(e.clientX, e.clientY);
@@ -348,14 +381,14 @@
   }
   function tap(id) {
     if (wiring && wiring.tap) { if (id !== wiring.from) addWire(wiring.from, id); wiring = null; drawOver(); return; }
-    if (B.kind === "draw") { sel = sel === id ? null : id; selW = -1; drawAll(); drawBrief(); }
+    if (editable()) { sel = sel === id ? null : id; selW = -1; drawAll(); drawBrief(); }
     else if (B.kind === "follow") followTap(id);
     else if (B.kind === "bottleneck") guess(id);
   }
 
   // ---------------------------------------------------------------- edits --
-  function persist() { if (B.kind === "draw") { mine(B.id).design = clone(D); save(); } }
-  function changed() { res = null; flows = {}; heat = {}; waits = {}; problems = []; persist(); drawAll(); drawBrief(); }
+  function persist() { if (editable()) { mine(B.id).design = clone(D); save(); } }
+  function changed() { res = null; flows = {}; heat = {}; waits = {}; problems = []; if (F.G) F.G = null; persist(); drawAll(); drawBrief(); }
   function addWire(a, b) {
     if (D.wires.some(([x, y]) => x === a && y === b)) return;
     D.wires = D.wires.filter(([x, y]) => !(x === b && y === a));
@@ -384,14 +417,14 @@
   }
   // the tray: tap a part to drop it in a free spot, or drag it to where you want it
   function trayButton(kind) {
-    const k = K[kind], price = kind === "db" ? `from $${K.db.sizes.small[1]}` : kind === "cache" ? `from $${K.cache.sizes["1 GB"][1]}` : `$${k.price}${k.many ? " each" : ""}`;
+    const k = K[kind], price = B.kind === "sketch" ? PARTS[kind].say : kind === "db" ? `from $${K.db.sizes.small[1]} a month` : kind === "cache" ? `from $${K.cache.sizes["1 GB"][1]} a month` : `$${k.price}${k.many ? " each" : ""} a month`;
     const b = h("button", { class: "sd-tray-b k-" + kind, type: "button" },
-      h("span", { class: "sd-ti", html: `<svg viewBox="0 0 26 26" width="22" height="22" aria-hidden="true">${ICON[kind]}</svg>` }), h("b", {}, k.name), h("small", {}, price + " a month"));
+      h("span", { class: "sd-ti", html: `<svg viewBox="0 0 26 26" width="22" height="22" aria-hidden="true">${ICON[kind]}</svg>` }), h("b", {}, nameOf(kind)), h("small", {}, price));
     let ghost = null, st = null;
     b.addEventListener("pointerdown", (e) => { st = { x: e.clientX, y: e.clientY }; b.setPointerCapture(e.pointerId); });
     b.addEventListener("pointermove", (e) => {
       if (!st) return;
-      if (!ghost && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 8) { ghost = h("div", { class: "sd-ghost k-" + kind }, k.name); document.body.append(ghost); }
+      if (!ghost && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 8) { ghost = h("div", { class: "sd-ghost k-" + kind }, nameOf(kind)); document.body.append(ghost); }
       if (ghost) { ghost.style.left = e.clientX + "px"; ghost.style.top = e.clientY + "px"; }
     });
     b.addEventListener("pointerup", (e) => {
@@ -411,7 +444,10 @@
   // the inspector: the selected part's size as words you click
   function inspector() {
     const nd = sel && part(sel);
+    if (!nd && B.kind === "sketch") return h("p", { class: "sd-quiet" }, "Tap a part to see what it does. ", TOUCH ? "Tap a part's " : "Drag from a part's ", h("b", {}, "+"), TOUCH ? ", then the part to wire it to" : " to another part to wire them", "; tap a wire to cut it.");
     if (!nd) return h("p", { class: "sd-quiet" }, "Tap a part on the board to change its size. ", TOUCH ? "Tap a part's " : "Drag from a part's ", h("b", {}, "+"), TOUCH ? ", then the part to wire it to" : " to another part to wire them", "; tap a wire to cut it.");
+    if (B.kind === "sketch") return h("div", { class: "sd-insp" }, h("div", { class: "sd-ih" }, h("span", { class: "sd-ti", html: `<svg viewBox="0 0 26 26" width="20" height="20" aria-hidden="true">${ICON[nd.kind]}</svg>` }), h("b", {}, nameOf(nd.kind))),
+      h("p", { class: "sd-quiet" }, PARTS[nd.kind].say + "."), PARTS[nd.kind].fixed ? null : h("p", {}, h("button", { class: "sd-word sd-rm", onclick: () => removePart(nd.id) }, "remove it from the board")));
     const k = K[nd.kind], rows = [];
     const step = (d) => { nd.n = Math.max(1, Math.min(12, (nd.n || 1) + d)); changed(); };
     const cyc = (key, list) => { const i = list.indexOf(String(nd[key] ?? list[0])); nd[key] = typeof list[0] === "number" ? list[(i + 1) % list.length] : list[(i + 1) % list.length]; changed(); };
@@ -426,14 +462,14 @@
   // ---------------------------------------------------------------- brief --
   function drawBrief() {
     const done = S.done[B.id], kids = [
-      h("div", { class: "sd-eye" }, `Question ${qi + 1} of ${BOARDS.length} · ${KIND_WORD[B.kind]}`),
+      h("div", { class: "sd-eye" }, `${MODE_WORD[B.mode]} ${B.n} of ${U[B.mode].length} · ${KIND_WORD[B.kind]}`),
       h("h1", {}, B.title),
       h("p", { class: "sd-lede", html: B.lede }),
     ];
     if (B.kind === "follow") {
       const r = B.rounds[Math.min(F.round, B.rounds.length - 1)];
       if (F.round < B.rounds.length) kids.push(h("div", { class: "sd-ask" }, h("small", {}, `click ${F.round + 1} of ${B.rounds.length}`), h("p", { html: r.say }),
-        h("p", { class: "sd-path" }, F.got.length ? F.got.map((id, i) => [i ? h("i", {}, "→") : null, h("span", {}, K[part(id).kind].name)]) : h("span", { class: "sd-quiet" }, "Tap the users first."))));
+        h("p", { class: "sd-path" }, F.got.length ? F.got.map((id, i) => [i ? h("i", {}, "→") : null, h("span", {}, nameOf(part(id).kind))]) : h("span", { class: "sd-quiet" }, "Tap the users first."))));
     }
     const tools = [];
     if (B.kind === "napkin") tools.push(h("p", { class: "sd-quiet" }, "Type your guesses into the notes on the board."), h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: checkNapkin }, "Check the notes")));
@@ -442,6 +478,17 @@
       else if (F.steps) kids.push(rampControls());
       else kids.push(h("p", { class: "sd-quiet" }, "Turning the traffic up…"));
     }
+    if (ctx) { kids.push(...(UI[B.kind].brief(ctx) || [])); tools.push(...(UI[B.kind].tools(ctx) || [])); }
+    if (B.kind === "sketch") {
+      const G = F.G, left = G ? G.items.filter((i) => !i.ok) : [];
+      tools.push(h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: checkSketch }, "Check the drawing"), h("span", { class: "sd-runs" }, F.tries ? `${F.tries} check${F.tries > 1 ? "s" : ""}` : "")));
+      if (G) tools.push(h("ul", { class: "sd-rub" }, G.items.filter((i) => i.ok).map((i) => h("li", { class: "ok" }, h("i", {}, "✓"), i.say)),
+        left.slice(0, F.hints).map((i) => h("li", { class: "hint" }, h("i", {}, "?"), i.say)),
+        G.bad.map((b) => h("li", { class: "no" }, h("i", {}, "✗"), b.text)),
+        left.length > F.hints ? h("li", { class: "more" }, h("i", {}, "·"), `${left.length - F.hints} more link${left.length - F.hints > 1 ? "s" : ""} to find. `, h("button", { class: "sd-word", onclick: () => { F.hints++; drawBrief(); } }, "show a hint")) : null));
+      tools.push(h("div", { class: "sd-tray" }, h("div", { class: "sd-h" }, "Parts"), h("div", { class: "sd-tray-g" }, B.tray.map(trayButton))), h("div", { class: "sd-h" }, "Selected"), inspector(),
+        h("p", {}, h("button", { class: "sd-word", onclick: () => { D = clone(B.design); delete mine(B.id).design; save(); sel = null; changed(); } }, "start over")));
+    }
     if (B.kind === "draw") {
       tools.push(h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: busy, onclick: runIt }, busy ? "Running…" : `Run 30 s of traffic`),
         h("span", { class: "sd-runs" }, runs ? `${runs} run${runs > 1 ? "s" : ""}` : "")));
@@ -449,8 +496,10 @@
       tools.push(h("div", { class: "sd-tray" }, h("div", { class: "sd-h" }, "Parts"), h("div", { class: "sd-tray-g" }, B.tray.map(trayButton))), h("div", { class: "sd-h" }, "Selected"), inspector(),
         h("p", {}, h("button", { class: "sd-word", onclick: () => { D = clone(B.design); delete mine(B.id).design; save(); sel = null; changed(); } }, "start over from the brief")));
     }
-    if (solvedNow || done) kids.splice(3, 0, h("div", { class: "sd-why" + (solvedNow ? " fresh" : "") }, h("div", { class: "sd-wh" }, stars(starsOf(B.id)), h("b", {}, solvedNow ? "Solved" : "Solved before")), h("p", {}, B.why),
-      qi < BOARDS.length - 1 ? h("a", { class: "btn primary", href: "#" + (qi + 2) }, `Next: ${BOARDS[qi + 1].title} →`) : h("a", { class: "btn", href: "./" }, "Back to the Wind Tunnel →")));
+    const nx = L[qi + 1], nu = UNITS[UNITS.indexOf(U) + 1];
+    const next = nx ? h("a", { class: "btn primary", href: loc(nx) }, nx.mode !== B.mode ? `Now run it: ${nx.title} →` : `Next: ${nx.title} →`)
+      : nu ? h("a", { class: "btn primary", href: loc(nu.w[0]) }, `Next unit: ${nu.name} →`) : h("a", { class: "btn", href: "./#ladder" }, "Back to the ladder →");
+    if (solvedNow || done) kids.splice(3, 0, h("div", { class: "sd-why" + (solvedNow ? " fresh" : "") }, h("div", { class: "sd-wh" }, stars(starsOf(B.id)), h("b", {}, solvedNow ? "Solved" : "Solved before")), h("p", {}, B.why), next));
     els.brief.replaceChildren(...kids);
     els.tools.replaceChildren(...tools);
     els.tools.hidden = !tools.length;
@@ -486,7 +535,7 @@
       F.tries++;
       const g = els.gp.querySelector(`[data-id="${id}"]`);
       if (g) { g.classList.remove("nope"); void g.getBoundingClientRect(); g.classList.add("nope"); }
-      const nd = part(id), at = F.got.length ? K[part(F.got[F.got.length - 1]).kind].name : null;
+      const nd = part(id), at = F.got.length ? nameOf(part(F.got[F.got.length - 1]).kind) : null;
       flash(F.got.length === 0 ? "Every click starts with the users." : nd.kind === "db" && r.hit ? "Not this time: the cache already has it." : `Not yet. Where does the ${at} hand the click next?`);
     }
   }
@@ -557,13 +606,24 @@
   function verdict(out) {
     const right = F.guess === B.answer;
     return h("p", { class: "sd-verdict " + (right ? "ok" : "no") }, right ? "✓ Right: " : "✗ Not that one: ",
-      out ? `the ${K[part(out.id).kind].name} passed 85% busy first, at ${num(out.rate)} clicks a second.` : "");
+      out ? `the ${nameOf(part(out.id).kind)} passed 85% busy first, at ${num(out.rate)} clicks a second.` : "");
   }
   function rampControls() {
     const r = h("input", { type: "range", min: 0, max: F.steps.length - 1, step: 1, value: F.at, "aria-label": "Traffic", oninput: (e) => setStep(+e.target.value) });
-    return h("div", { class: "sd-ask" }, h("p", {}, "You picked the ", h("b", {}, K[part(F.guess).kind].name), "."),
+    return h("div", { class: "sd-ask" }, h("p", {}, "You picked the ", h("b", {}, nameOf(part(F.guess).kind)), "."),
       h("label", { class: "sd-ramp" }, h("span", {}, "traffic"), r, h("output", {}, `${num(F.steps[F.at].rate)} clicks/s`)),
       h("p", { class: "sd-verdict" }, "Turning the traffic up…"));
+  }
+
+  // --------------------------------------------------------------- sketch --
+  function checkSketch() {
+    F.tries++;
+    const G = SDX.grade(D, B.rubric, B.wrong);
+    F.G = G;
+    problems = G.bad;
+    drawAll();
+    if (G.pass) solved(Math.max(1, 3 - F.hints - (F.tries > 2 ? 1 : 0)));
+    else drawBrief();
   }
 
   // ----------------------------------------------------------------- draw --
@@ -584,7 +644,13 @@
 
   // ---------------------------------------------------------------- start --
   shell();
-  const route = () => open((parseInt(location.hash.slice(1), 10) || 1) - 1);
+  function route() {
+    const hs = decodeURIComponent(location.hash.slice(1)), m = hs.match(/^([a-z]+)\/(\d+)$/);
+    let u = m && UNITS.find((x) => x.id === m[1]), i = m ? +m[2] - 1 : 0;
+    if (!u && /^\d+$/.test(hs)) { const b = BOARDS.find((x) => x.id === SDX.OLD[+hs - 1]); if (b) { u = UNITS.find((x) => x.id === b.unit); i = [...u.w, ...u.s].indexOf(b); } }
+    if (!u) { const id = /^[a-z]+$/.test(hs) ? hs : "snip"; u = UNITS.find((x) => x.id === id) || UNITS[0]; i = 0; }
+    open(u, i);
+  }
   addEventListener("hashchange", route);
   route();
   requestAnimationFrame(frame);
