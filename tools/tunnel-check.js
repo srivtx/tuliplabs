@@ -115,6 +115,19 @@ for (const x of experiments.filter((e) => e.live)) {
     const small = Sim.measure({ ...s, rate, cache: lo, warm: true }, { span: 600 }), big = Sim.measure({ ...s, rate, cache: hi, warm: true }, { span: 600 });
     if (!(small.hit < need && small.p99 > 2)) bad.push(`${x.id} a cache of ${lo} already keeps up (hit ${small.hit.toFixed(3)}, need ${need.toFixed(3)})`);
     if (!(big.hit > need && big.errors === 0 && big.p99 < 1)) bad.push(`${x.id} a cache of ${hi} doesn't keep up (hit ${big.hit.toFixed(3)}, p99 ${ms(big.p99)})`);
+  } else if (th === "replicas") {
+    // reads (the crowd's plus each writer's read-back) spread over the replicas must fit under capacity at ~85% busy:
+    // one fewer drowns, the answer keeps p99 under 400 ms, on every seed
+    const reads = s.rate * (1 - s.writes) + s.rate * s.writes, expect = Math.ceil(reads / (cap * 0.85));
+    if (expect !== A) bad.push(`${x.id} predict answer ${A}, theory says ${expect} (reads ${reads.toFixed(0)}/s)`);
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, replicas: A - 1 }, { seed, span: 600 }), at = Sim.measure({ ...s, replicas: A }, { seed, span: 600 });
+      if (!(lo.p99 > 2)) bad.push(`${x.id} ${A - 1} replicas already cope (p99 ${ms(lo.p99)}, seed ${seed})`);
+      if (!(at.p99 < 0.4 && at.errors === 0)) bad.push(`${x.id} ${A} replicas don't cope (p99 ${ms(at.p99)}, seed ${seed})`);
+    }
+    // the stale share is the chance the lag outlasts the read-back: both exponential, so lag ÷ (lag + readAfter)
+    const st = Sim.measure({ ...s, replicas: A }, { span: 1200 }), theory = s.lag / (s.lag + s.readAfter);
+    if (Math.abs(st.staleRate - theory) > 0.04) bad.push(`${x.id} stale reads ${st.staleRate.toFixed(3)}, theory ${theory.toFixed(3)}`);
   } else if (th === "room") {
     // the most a second source can send before everyone else's p99 passes the line: under it at 0.8×, over at 1.25×,
     // and the server is busy by about what the answer implies, (everyone else + the answer) ÷ capacity
