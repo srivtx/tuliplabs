@@ -71,6 +71,10 @@
   const LIMITS = [1, 2, 5, 10, 15, 20, 25, 30, 40, 50, 100];
   const BURSTS = [1, 2, 3, 5, 10, 20, 50];
   const NOISY = [0, 5, 10, 15, 20, 25, 30, 40, 60, 100, 150, 200];
+  const MAX_REPLICAS = 4;
+  // a database experiment: the machines are a primary and its read replicas
+  const isDb = () => sim && sim.cfg.writes > 0;
+  const dbName = (i) => (i ? `replica ${i}` : "primary");
   // a step list's next value up or down from v
   const stepIn = (L, v, d) => { const i = L.findIndex((x) => x >= v); const at = i < 0 ? L.length - 1 : i; return L[Math.max(0, Math.min(L.length - 1, d > 0 ? at + (L[at] === v ? 1 : 0) : at - 1))]; };
   // knobs this experiment ever lets you turn, so the inspector shows their rows (greyed when not yet yours)
@@ -114,7 +118,7 @@
   // restart the run with the knobs as they are now: a way out when a backlog won't drain
   function restart() {
     const keep = {};
-    for (const k of ["rate", "users", "workers", "servers", "lb", "cache", "queueMax", "cancel", "retries", "backoff", "jitter", "jobWorkers", "noisy", "limit", "burst"]) keep[k] = sim.cfg[k];
+    for (const k of ["rate", "users", "workers", "servers", "lb", "cache", "queueMax", "cancel", "retries", "backoff", "jitter", "jobWorkers", "noisy", "limit", "burst", "replicas", "ryw"]) keep[k] = sim.cfg[k];
     // a surge lifts the rate for a while: restart from the rate underneath it
     if (surging()) keep.rate = sim.base;
     const b = before;
@@ -374,7 +378,7 @@
     renderBrief(); renderParts(); renderCode();
     els.hint.textContent = taskHint();
   }
-  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("limit") ? "Drag the rate limiter on, then click it to set the rate and the burst." : X.task.knobs.includes("jobWorkers") ? `Drag the email queue on, or click the ${name("server")} or the mailer to change their workers.` : X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : X.clients ? `Click the ${name("server")} or the clients to change them.` : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
+  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("ryw") ? "Click the router to choose where a writer's own reads go; drag replicas on from the right." : X.task.knobs.includes("limit") ? "Drag the rate limiter on, then click it to set the rate and the burst." : X.task.knobs.includes("jobWorkers") ? `Drag the email queue on, or click the ${name("server")} or the mailer to change their workers.` : X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : X.clients ? `Click the ${name("server")} or the clients to change them.` : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
 
   function taskBody() {
     const wrap = h("div", { class: "wt-sb" });
@@ -457,7 +461,7 @@
     for (const r of rows) {
       const li = els.goal.querySelector(`[data-k="${r.k}"]`);
       li.classList.toggle("ok", r.ok);
-      li.querySelector("b").textContent = r.k === "nTput" ? `${Math.round(r.x)}/s` : r.k === "p99" || r.k === "jobAge" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : r.k === "errors" && st.span ? `${num(r.x)} (${Math.round(st.errRate * 100)}%)` : num(r.x);
+      li.querySelector("b").textContent = r.k === "stale" ? `${num(r.x)} in ${W} s` : r.k === "nTput" ? `${Math.round(r.x)}/s` : r.k === "p99" || r.k === "jobAge" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : r.k === "errors" && st.span ? `${num(r.x)} (${Math.round(st.errRate * 100)}%)` : num(r.x);
     }
     const all = rows.every((r) => r.ok);
     els.meter.querySelector(".fill").style.width = `${Math.min(1, since / W) * 100}%`;
@@ -493,6 +497,15 @@
     L.push([0, "traffic"]);
     if (c.mode === "open") kv("arrivals", `${num(c.rate)}/s`, "random");
     else { kv("users", num(c.users)); kv("think_time", `${c.think}s`); }
+    if (c.writes > 0) {
+      kv("writes", `${Math.round(c.writes * 100)}%`, "the rest are reads");
+      kv("read_back_after", `${c.readAfter}s`, "a writer checks their post");
+      L.push([0, "replication"]);
+      kv("primary", "1", "takes every write");
+      kv("read_replicas", String(c.replicas));
+      kv("replication_lag", `${c.lag}s`, "average");
+      kv("read_your_writes", c.ryw ? `primary for ${c.rywFor}s` : "off");
+    }
     if (X.bot) {
       kv("customers", num(c.tenants), "about 1/s each");
       L.push([0, "script"]);
@@ -613,7 +626,7 @@
   // World units: x runs right-down, y left-down, z up. The crowd stands on 0..8 × 0..7; the wire runs along y ≈ 3.
   function layout(over) {
     const c = { ...sim.cfg, ...(over || {}) };
-    const n = over && over.servers ? over.servers : sim.srv.length;
+    const n = over && over.servers ? over.servers : over && over.replicas !== undefined && c.writes > 0 ? 1 + over.replicas : sim.srv.length;
     const L = { crowd: { x: 0, y: 0, w: 7.8, d: 6.9, h: 1 }, wy: 2.7, servers: [], queues: [] };
     let x = 8.4;
     if (X.bot) { L.bot = { x: 8.1, y: -3.3, w: 1.5, d: 1.5, h: 1.45 }; x += 1.9; }
@@ -888,6 +901,11 @@
     const shake = reduce ? 0 : boom > 0.35 ? Math.sin(t * 53 + i * 2) * 0.05 * boom : 0;
     const x = B.x + shake, gone = srv.gone;
     cube(x, B.y, 0, B.w, B.d, B.h, gone ? T.pad : heat(Math.max(0, (hot - 0.45) / 0.55)), gone ? 0.5 : 1);
+    // a database: disk lines on the front face; the primary's top edge is purple, so you can tell it from a replica
+    if (isDb() && !gone) {
+      for (const f of [0.3, 0.55, 0.8]) poly([iso(x, B.y + B.d, B.h * f), iso(x + B.w, B.y + B.d, B.h * f), iso(x + B.w, B.y + B.d, B.h * f - 0.05), iso(x, B.y + B.d, B.h * f - 0.05)], "rgba(0,0,0,.28)");
+      if (i === 0) poly([iso(x, B.y + B.d, B.h), iso(x + B.w, B.y + B.d, B.h), iso(x + B.w, B.y + B.d, B.h * 0.88), iso(x, B.y + B.d, B.h * 0.88)], T.cache);
+    }
     // a slow machine wears a darker band
     if (i === 0 && sim.cfg.slow > 1) poly([iso(x, B.y + B.d, B.h * 0.55), iso(x + B.w, B.y + B.d, B.h * 0.55), iso(x + B.w, B.y + B.d, B.h * 0.4), iso(x, B.y + B.d, B.h * 0.4)], "rgba(0,0,0,.35)");
     // one pad per worker on top; a busy one carries the request, shrinking as it's served
@@ -963,7 +981,20 @@
     flyers = flyers.filter((f) => (f.age += dt) < f.life);
     for (const f of flyers) {
       const p = f.age / f.life;
-      if (f.kind === "in") { const [x, y] = along(pathIn(f.srv, f.noisy), p); cube(x, y - 0.12 + f.lane * 0.24, 0.05, 0.26, 0.26, 0.22, f.noisy ? T.job : T.req); }
+      if (f.kind === "in") { const [x, y] = along(pathIn(f.srv, f.noisy), p); cube(x, y - 0.12 + f.lane * 0.24, 0.05, 0.26, 0.26, 0.22, f.noisy ? T.job : f.tint === "w" ? T.cache : f.tint === "r" ? "#ff6fb5" : T.req); }
+      else if (f.kind === "repl") {
+        // a write copied from the primary to a replica: it arrives after the lag
+        const A = LY.servers[0], B = LY.servers[Math.min(f.to, LY.servers.length - 1)]; if (!A || !B || f.to < 1) continue;
+        const x = A.x + A.w * 0.5 + (B.x - A.x) * p, y = A.y + A.d + (B.y - A.y - A.d) * p;
+        cube(x, y, A.h * 0.5 + Math.sin(p * Math.PI) * 0.7, 0.2, 0.2, 0.18, T.cache, 0.9);
+      } else if (f.kind === "stale") {
+        // a writer who can't see their own comment: a red "!" rises off the replica that answered them
+        const B = LY.servers[Math.min(f.srv, LY.servers.length - 1)]; if (!B) continue;
+        const [sx, sy] = iso(B.x + B.w * 0.5, B.y + B.d * 0.5, B.h + 0.4 + p * 1.6);
+        ctx.globalAlpha = 1 - p * 0.7; ctx.fillStyle = T.bad; ctx.beginPath(); ctx.arc(sx, sy, V.u * 0.32, 0, 7); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.font = `700 ${Math.round(V.u * 0.42)}px IBM Plex Mono, monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", sx, sy + 1);
+        ctx.globalAlpha = 1;
+      }
       else if (f.kind === "lim") {
         // to the limiter, and bounced straight back as a red 429
         const B = LY.limiter; if (!B) continue;
@@ -1057,8 +1088,8 @@
       el.classList.toggle("many", many);
       el.setAttribute("aria-label", `${cap1(name("server"))} ${i + 1}. Click to look inside`);
       const slow = i === 0 && sim.cfg.slow > 1 ? `<em>${many ? "slow" : `${sim.cfg.slow}× slower`}</em>` : "";
-      setHTML(el, srv.gone ? `${many ? i + 1 : name("server")} <small>leaving</small>` : many
-        ? `<span>${i + 1}</span> <b>${srv.busy.length}/${sim.cfg.workers}</b>${slow}`
+      setHTML(el, srv.gone ? `${many ? (isDb() ? dbName(i) : i + 1) : name("server")} <small>leaving</small>` : many
+        ? `<span>${isDb() ? (i ? "R" + i : "P") : i + 1}</span> <b>${srv.busy.length}/${sim.cfg.workers}</b>${slow}`
         : `${name("server")} <b>${srv.busy.length}/${sim.cfg.workers}</b> busy${drown ? " <i>drowning</i>" : ""}`);
       const Q = LY.queues[i], qn = srv.queue.length;
       const qt = tag("q" + i, "wt-queue");
@@ -1068,12 +1099,13 @@
       setHTML(qt, qn ? (many ? `<b>${qn}</b>` : `queue <b>${num(qn)}</b>${jn ? ` · ${num(jn)} emails` : ""}`) : "");
     });
     if (LY.lb) {
-      const el = tag("lb", "wt-lbtag", () => { if (canTurn("lb")) cycleLb(); else toggleInspect({ kind: "lb" }); });
+      const el = tag("lb", "wt-lbtag", () => { if (isDb()) { if (canTurn("ryw")) setKnob("ryw", !sim.cfg.ryw); else toggleInspect({ kind: "lb" }); } else if (canTurn("lb")) cycleLb(); else toggleInspect({ kind: "lb" }); });
       const [x, y] = iso(LY.lb.x + LY.lb.w * 0.5, LY.lb.y + LY.lb.d, 0);
       el.style.transform = `translate(${x}px, ${y}px)`;
-      el.classList.toggle("can", canTurn("lb"));
-      el.title = canTurn("lb") ? "Click to change how the balancer picks" : "The load balancer";
-      setHTML(el, `<small>balancer</small><b>${LB[sim.cfg.lb][0]}</b>${canTurn("lb") ? "<i>↻</i>" : ""}`);
+      el.classList.toggle("can", isDb() ? canTurn("ryw") : canTurn("lb"));
+      el.title = isDb() ? (canTurn("ryw") ? "Click to send a writer's own reads to the primary, or not" : "The router: writes to the primary, reads to the replicas") : canTurn("lb") ? "Click to change how the balancer picks" : "The load balancer";
+      if (isDb()) setHTML(el, `<small>router</small><b>${sim.cfg.ryw ? "your writes: primary" : "reads: replicas"}</b>${canTurn("ryw") ? "<i>↻</i>" : ""}`);
+      else setHTML(el, `<small>balancer</small><b>${LB[sim.cfg.lb][0]}</b>${canTurn("lb") ? "<i>↻</i>" : ""}`);
     }
     if (X.clients) {
       const el = tag("clients", "wt-cltag", () => toggleInspect({ kind: "clients" }));
@@ -1242,6 +1274,7 @@
   const PARTS = {
     server: { label: () => name("server"), can: () => canTurn("servers") && sim.cfg.servers < MAX_SERVERS, add: () => setKnob("servers", sim.cfg.servers + 1), slot: () => { const L = layout({ servers: sim.cfg.servers + 1 }); return { slot: L.servers[L.servers.length - 1], L }; }, note: () => `${sim.cfg.servers} of ${MAX_SERVERS}` },
     queue: { label: () => "email queue", can: () => canTurn("jobWorkers") && !(sim.cfg.jobWorkers > 0), add: () => setKnob("jobWorkers", 2), slot: () => { const L = layout({ jobWorkers: 2 }); return { slot: L.mailer, L }; }, note: () => (sim.cfg.jobWorkers > 0 ? "in place" : "2 workers") },
+    replica: { label: () => "read replica", can: () => canTurn("replicas") && sim.cfg.replicas < MAX_REPLICAS, add: () => setKnob("replicas", sim.cfg.replicas + 1), slot: () => { const L = layout({ replicas: sim.cfg.replicas + 1 }); return { slot: L.servers[L.servers.length - 1], L }; }, note: () => `${sim.cfg.replicas} of ${MAX_REPLICAS}` },
     limiter: { label: () => "rate limiter", can: () => canTurn("limit") && !(sim.cfg.limit > 0), add: () => setKnob("limit", 50), slot: () => { const L = layout({ limit: 50 }); return { slot: L.limiter, L }; }, note: () => (sim.cfg.limit > 0 ? "in place" : "50/s each") },
     cache: { label: () => "cache", can: () => canTurn("cache") && !(sim.cfg.cache > 0), add: () => setKnob("cache", 100), slot: () => { const L = layout({ cache: 100 }); return { slot: L.cache, L }; }, note: () => (sim.cfg.cache > 0 ? "in place" : "100 keys") },
   };
@@ -1319,7 +1352,7 @@
       ins = { kind: selected.kind, i: selected.i };
       const many = sim.srv.length > 1;
       if (selected.kind === "server") {
-        els.inspect.append(h("p", { class: "ih" }, many ? `${cap1(name("server"))} ${selected.i + 1}` : cap1(name("server"))));
+        els.inspect.append(h("p", { class: "ih" }, isDb() ? cap1(dbName(selected.i)) : many ? `${cap1(name("server"))} ${selected.i + 1}` : cap1(name("server"))));
         ins.w = stepper("workers", () => setWorkers(sim.cfg.workers - 1), () => setWorkers(sim.cfg.workers + 1));
         els.inspect.append(ins.w.row);
         if (knobs().has("queueMax")) {
@@ -1330,6 +1363,11 @@
         if (knobs().has("cancel")) els.inspect.append(ins.cx = h("p", { class: "pol" }));
         els.inspect.append(ins.dl = h("dl", {}));
         if (many) els.inspect.append(h("p", { class: "note" }, "Every server has the same workers."));
+      } else if (selected.kind === "lb" && isDb()) {
+        els.inspect.append(h("p", { class: "ih" }, "Router"), h("p", { class: "pol" }, "Every write goes to the primary. Reads go to the replicas in turn."));
+        ins.ry = h("p", { class: "pol" });
+        ins.s = stepper("replicas", () => setKnob("replicas", Math.max(0, sim.cfg.replicas - 1)), () => setKnob("replicas", Math.min(MAX_REPLICAS, sim.cfg.replicas + 1)));
+        els.inspect.append(ins.ry, ins.s.row, ins.dl = h("dl", {}));
       } else if (selected.kind === "lb") {
         els.inspect.append(h("p", { class: "ih" }, "Load balancer"));
         ins.pol = h("p", { class: "pol" });
@@ -1388,6 +1426,15 @@
       const wait = c.queueMax && ins.q ? `<dt>a full queue waits</dt><dd>${ms(c.queueMax * svc / c.workers)}</dd>` : "";
       ins.dl.innerHTML = `<dt>each request</dt><dd>≈ ${ms(svc)}</dd><dt>capacity</dt><dd>${Math.round(c.workers / svc)} req/s</dd>
         <dt>busy</dt><dd>${s.busy.length} of ${c.workers}</dd><dt>queue</dt><dd>${s.queue.length}${ins.q ? ` of ${num(c.queueMax)}` : ""}</dd>${wait}${sim.srv.length === 1 ? `<dt>busy, last 5 s</dt><dd>${Math.round(st.util * 100)}%</dd>` : ""}`;
+    } else if (selected.kind === "lb" && isDb()) {
+      ins.ry.innerHTML = "";
+      const w = c.ryw ? `the primary, for ${c.rywFor} s` : "the replicas, like any read";
+      ins.ry.append("A writer's own reads go to ", canTurn("ryw") ? h("button", { class: "wt-link", onclick: () => setKnob("ryw", !sim.cfg.ryw), title: "Click to change" }, w) : h("b", {}, w), ".");
+      ins.s.out.textContent = c.replicas;
+      ins.s.minus.disabled = !canTurn("replicas") || c.replicas <= 0;
+      ins.s.plus.disabled = !canTurn("replicas") || c.replicas >= MAX_REPLICAS;
+      ins.dl.innerHTML = `<dt>to the primary</dt><dd>${Math.round(st.primary)}/s</dd><dt>to the replicas</dt><dd>${Math.round(st.replicaLoad)}/s</dd>
+        <dt>replication lag</dt><dd>≈ ${ms(c.lag)}</dd><dt>own reads stale, 5 s</dt><dd>${st.stale ? `<b class="bad">${Math.round(st.staleRate * 100)}%</b>` : "none"}</dd>`;
     } else if (selected.kind === "lb") {
       const [w, d] = LB[c.lb];
       ins.pol.innerHTML = "";
@@ -1469,7 +1516,7 @@
     box("tput", X.clients ? "answered" : "served per second");
     box("lat", "wait: p50 and p99");
     box("err", "errors per second");
-    box("util", X.bot ? "the script: answered and 429s" : X.system.batch ? "emails waiting" : X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
+    box("util", X.system.writes ? "own posts read stale" : X.bot ? "the script: answered and 429s" : X.system.batch ? "emails waiting" : X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
   }
   // drag along a timeline to go back in time; the window holds still while you drag
   function scrubber(el, id) {
@@ -1651,7 +1698,8 @@
     else series("tput", [...(open ? [{ key: "offered", color: mute, dash: [3, 3], w: 1 }] : []), { key: "tput", color: acc }], 10, (s) => `${Math.round(s.tput)}/s${open ? ` of ${Math.round(s.offered)}` : ""}`);
     series("lat", [{ key: "p50", color: acc, fill: false }, { key: "p99", color: pink }], 0.3, (s) => (s.p99 == null ? "none answered" : `${ms(s.p50)} · ${ms(s.p99)}`), 12);
     series("err", [{ key: "err", color: bad }], 1, (s) => `${s.err.toFixed(s.err < 10 ? 1 : 0)}/s`);
-    if (X.bot) series("util", [{ key: "n429", color: bad, dash: [3, 3], w: 1.2 }, { key: "nTput", color: theme().job }], 10, (s) => `${Math.round(s.nTput)}/s · ${Math.round(s.n429)} 429s`);
+    if (X.system.writes) series("util", [{ key: "staleRate", color: bad }], 1, (s) => `${Math.round(s.staleRate * 100)}%`, 1);
+    else if (X.bot) series("util", [{ key: "n429", color: bad, dash: [3, 3], w: 1.2 }, { key: "nTput", color: theme().job }], 10, (s) => `${Math.round(s.nTput)}/s · ${Math.round(s.n429)} 429s`);
     else if (X.system.batch) series("util", [{ key: "backlog", color: theme().job }], 10, (s) => num(s.backlog));
     else if (X.parts && X.parts.includes("cache")) series("util", [{ key: "hit", color: css("--wt-ok") }], 1, (s) => `${Math.round(s.hit * 100)}%`, 1);
     else series("util", [{ key: "util", color: acc }], 1, (s) => `${Math.round(s.util * 100)}%`, 1);
@@ -1685,8 +1733,13 @@
         const nx = feed[i + 1], noisy = why === "n";
         if (nx && nx[0] === "lim") { trips.push({ kind: "lim", noisy }); i++; }
         else if (nx && nx[0] === "hit") { trips.push({ kind: "hit" }); i++; }
-        else if (nx && nx[0] === "route") { trips.push({ kind: "in", srv: nx[1], noisy }); lastRoute = nx[1]; routeGlow = 1; i++; }
-        else trips.push({ kind: "in", srv: 0, noisy });
+        else if (nx && nx[0] === "route") { trips.push({ kind: "in", srv: nx[1], noisy, tint: why }); lastRoute = nx[1]; routeGlow = 1; i++; }
+        else trips.push({ kind: "in", srv: 0, noisy, tint: why });
+      } else if (kind === "repl") {
+        // one copy to each replica, each taking about the lag to land (sped up past 2 s so the stage stays readable)
+        if (flyers.length < 120 && Math.random() < 0.6) for (let r = 1; r < sim.srv.length; r++) flyers.push({ kind: "repl", to: r, age: 0, life: Math.max(0.35, Math.min(2, a)) / Math.max(1, speed) * (speed < 1 ? 3 : 1), lane: 0 });
+      } else if (kind === "stale") {
+        if (flyers.length < 140) flyers.push({ kind: "stale", srv: a, age: 0, life: 1.1, lane: 0 });
       } else if (kind === "out") {
         trips.push({ kind: a ? "ok" : "bad", srv: srvI || 0 });
         if (!a) burst(srvI || 0);
@@ -1704,7 +1757,7 @@
   const clock = (t) => `t ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
   function sample(t) {
     const st = sim.stats(Math.max(0, t - 5), t), span = Math.min(5, t) || 1;
-    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate, backlog: st.backlog, n429: st.n429, nTput: st.nTput, nIn: Math.max(0, sim.cfg.noisy - st.n429) };
+    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate, backlog: st.backlog, n429: st.n429, nTput: st.nTput, nIn: Math.max(0, sim.cfg.noisy - st.n429), staleRate: st.staleRate };
     samples.push(s);
     if (samples.length > 400) samples.shift();
     const sc = scat();
