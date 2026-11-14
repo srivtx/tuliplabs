@@ -115,6 +115,17 @@ for (const x of experiments.filter((e) => e.live)) {
     const small = Sim.measure({ ...s, rate, cache: lo, warm: true }, { span: 600 }), big = Sim.measure({ ...s, rate, cache: hi, warm: true }, { span: 600 });
     if (!(small.hit < need && small.p99 > 2)) bad.push(`${x.id} a cache of ${lo} already keeps up (hit ${small.hit.toFixed(3)}, need ${need.toFixed(3)})`);
     if (!(big.hit > need && big.errors === 0 && big.p99 < 1)) bad.push(`${x.id} a cache of ${hi} doesn't keep up (hit ${big.hit.toFixed(3)}, p99 ${ms(big.p99)})`);
+  } else if (th === "room") {
+    // the most a second source can send before everyone else's p99 passes the line: under it at 0.8×, over at 1.25×,
+    // and the server is busy by about what the answer implies, (everyone else + the answer) ÷ capacity
+    const k = x.predict.axis.knob, line = x.predict.bend;
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, [k]: Math.round(A * 0.8) }, { seed, span: 600 }), hi = Sim.measure({ ...s, [k]: Math.round(A * 1.25) }, { seed, span: 600 });
+      if (!(lo.p99 < line && lo.errors === 0)) bad.push(`${x.id} at ${Math.round(A * 0.8)} p99 is already ${ms(lo.p99)} (seed ${seed})`);
+      if (!(hi.p99 > line)) bad.push(`${x.id} at ${Math.round(A * 1.25)} p99 is still ${ms(hi.p99)} (seed ${seed})`);
+    }
+    const at = Sim.measure({ ...s, [k]: A }, { span: 600 }), expect = (s.rate + A) / cap;
+    if (Math.abs(at.util - expect) > 0.03) bad.push(`${x.id} at ${A} the server is ${at.util.toFixed(2)} busy, not ${expect.toFixed(2)}`);
   } else if (th === "drain") {
     // a batch drains in its work ÷ the job workers: every seed's first batch, within the tolerance
     const B = s.batch, jw = x.predict.setup.jobWorkers, expect = B.n * B.service / jw;
