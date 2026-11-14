@@ -337,6 +337,90 @@
 "twist": "<p>The auditors now want counts: write <code>count_between(a, lo, hi)</code>, the number of amounts with <code>lo &lt;= amount &lt;= hi</code>. Same sorted ledger, same need for speed.</p>",
 "twisttests": "assert count_between([1, 2, 2, 2, 5], 2, 4) == 3\nassert count_between([1, 2, 2, 2, 5], 0, 9) == 5\nassert count_between([1, 3, 5], 6, 9) == 0\nassert count_between([], 1, 2) == 0\nassert count_between([4, 4], 4, 4) == 2",
 "twistsolution": "import bisect\n\ndef count_between(a, lo, hi):\n    if lo > hi:\n        return 0\n    return bisect.bisect_right(a, hi) - bisect.bisect_left(a, lo)"
+},
+{
+"id": "higher",
+"title": "Wait for a higher price",
+"fn": "wait_for_higher",
+"ch": 11,
+"decoys": [
+12,
+7,
+15,
+28
+],
+"bigo": "O(n)",
+"hints": [
+"<p>On a falling market every day looks ahead a long way. What work is being repeated?</p>",
+"<p>Keep the days that haven't found their answer yet. When a new price arrives, which of them does it answer?</p>",
+"<p>A stack of indices: <code>while stack and prices[stack[-1]] &lt; p:</code> pop <code>j</code> and set <code>out[j] = i - j</code>. Then push <code>i</code>.</p>"
+],
+"tests": [
+{
+"tag": "equal",
+"code": "assert wait_for_higher([2, 2, 3]) == [2, 1, 0]\nassert wait_for_higher([4, 4, 4]) == [0, 0, 0]"
+},
+{
+"tag": "never",
+"code": "assert wait_for_higher([9, 7, 5]) == [0, 0, 0]"
+},
+{
+"tag": "empty",
+"code": "assert wait_for_higher([]) == []"
+},
+{
+"tag": "big",
+"code": "big = list(range(150000, 0, -1)) + [10**6]\nr, secs = timed(wait_for_higher, big)\nassert r == [150000 - i for i in range(150000)] + [0]\nassert secs < 1.5, f\"{secs:.2f} s for 150,001 falling days: looking ahead from each day is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Does an equal price count as higher?",
+"a": "No, it must be strictly higher.",
+"tag": "equal"
+},
+{
+"q": "What if a higher price never comes?",
+"a": "Put 0 for that day.",
+"tag": "never"
+},
+{
+"q": "Can the list be empty?",
+"a": "Yes. Return an empty list.",
+"tag": "empty"
+},
+{
+"q": "Are prices whole numbers?",
+"a": "Yes, in cents.",
+"tag": null
+},
+{
+"q": "Should I change the list in place?",
+"a": "No, return a new one.",
+"tag": null
+},
+{
+"q": "How many days can there be?",
+"a": "Up to a few hundred thousand.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A trader looks at a list of daily prices. For each day they want to know: <b>how many days until the price is strictly higher</b> than today's?</p>\n<p>Write <code>wait_for_higher(prices)</code>: return a list where entry <code>i</code> is the number of days after day <code>i</code> until a strictly higher price, or <code>0</code> if it never comes.</p>\n<p><code>wait_for_higher([3, 1, 4, 2, 5])</code> is <code>[2, 1, 2, 1, 0]</code>.</p>",
+"examples": "assert wait_for_higher([3, 1, 4, 2, 5]) == [2, 1, 2, 1, 0]\nassert wait_for_higher([5, 4, 6]) == [2, 1, 0]",
+"starter": "def wait_for_higher(prices):\n    pass",
+"solution": "def wait_for_higher(prices):\n    out = [0] * len(prices)\n    waiting = []\n    for i, p in enumerate(prices):\n        while waiting and prices[waiting[-1]] < p:\n            j = waiting.pop()\n            out[j] = i - j\n        waiting.append(i)\n    return out",
+"brute": "def wait_for_higher(prices):\n    out = []\n    for i, p in enumerate(prices):\n        d = 0\n        for j in range(i + 1, len(prices)):\n            if prices[j] > p:\n                d = j - i\n                break\n        out.append(d)\n    return out",
+"approach": "<p>Keep a stack of days still waiting for a higher price; their prices only fall from bottom to top. Each new price pops every waiting day it beats and fills in their answers, then waits itself. Every day is pushed and popped once: O(n).</p>",
+"twist": "<p>The market is now a <b>loop</b>: after the last day comes the first day again. Write <code>wait_circular(prices)</code>: days until a strictly higher price, looking past the end and round to the start, or 0 if no price in the whole loop is higher.</p>",
+"twisttests": "assert wait_circular([3, 1, 4, 2, 5]) == [2, 1, 2, 1, 0]\nassert wait_circular([5, 1, 2]) == [0, 1, 1]\nassert wait_circular([2, 2]) == [0, 0]\nassert wait_circular([]) == []",
+"twistsolution": "def wait_circular(prices):\n    n = len(prices)\n    out = [0] * n\n    waiting = []\n    for k in range(2 * n):\n        i = k % n\n        while waiting and prices[waiting[-1]] < prices[i]:\n            j = waiting.pop()\n            out[j] = (i - j) % n\n        if k < n:\n            waiting.append(i)\n    return out"
 }
 ]
 }

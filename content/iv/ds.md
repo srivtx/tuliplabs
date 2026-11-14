@@ -390,3 +390,92 @@ def count_between(a, lo, hi):
         return 0
     return bisect.bisect_right(a, hi) - bisect.bisect_left(a, lo)
 ```
+
+```interview
+id: higher
+title: Wait for a higher price
+fn: wait_for_higher
+ch: 11
+decoys: 12, 7, 15, 28
+bigo: O(n)
+---prompt
+A trader looks at a list of daily prices. For each day they want to know: **how many days until the price is strictly higher** than today's?
+
+Write `wait_for_higher(prices)`: return a list where entry `i` is the number of days after day `i` until a strictly higher price, or `0` if it never comes.
+
+`wait_for_higher([3, 1, 4, 2, 5])` is `[2, 1, 2, 1, 0]`.
+---examples
+assert wait_for_higher([3, 1, 4, 2, 5]) == [2, 1, 2, 1, 0]
+assert wait_for_higher([5, 4, 6]) == [2, 1, 0]
+---clarify
++ equal | Does an equal price count as higher? | No, it must be strictly higher.
++ never | What if a higher price never comes? | Put 0 for that day.
++ empty | Can the list be empty? | Yes. Return an empty list.
+- | Are prices whole numbers? | Yes, in cents.
+- | Should I change the list in place? | No, return a new one.
+- | How many days can there be? | Up to a few hundred thousand.
+---test equal
+assert wait_for_higher([2, 2, 3]) == [2, 1, 0]
+assert wait_for_higher([4, 4, 4]) == [0, 0, 0]
+---test never
+assert wait_for_higher([9, 7, 5]) == [0, 0, 0]
+---test empty
+assert wait_for_higher([]) == []
+---test big
+big = list(range(150000, 0, -1)) + [10**6]
+r, secs = timed(wait_for_higher, big)
+assert r == [150000 - i for i in range(150000)] + [0]
+assert secs < 1.5, f"{secs:.2f} s for 150,001 falling days: looking ahead from each day is too slow"
+---starter
+def wait_for_higher(prices):
+    pass
+---solution
+def wait_for_higher(prices):
+    out = [0] * len(prices)
+    waiting = []
+    for i, p in enumerate(prices):
+        while waiting and prices[waiting[-1]] < p:
+            j = waiting.pop()
+            out[j] = i - j
+        waiting.append(i)
+    return out
+---brute
+def wait_for_higher(prices):
+    out = []
+    for i, p in enumerate(prices):
+        d = 0
+        for j in range(i + 1, len(prices)):
+            if prices[j] > p:
+                d = j - i
+                break
+        out.append(d)
+    return out
+---approach
+Keep a stack of days still waiting for a higher price; their prices only fall from bottom to top. Each new price pops every waiting day it beats and fills in their answers, then waits itself. Every day is pushed and popped once: O(n).
+---hint
+On a falling market every day looks ahead a long way. What work is being repeated?
+---hint
+Keep the days that haven't found their answer yet. When a new price arrives, which of them does it answer?
+---hint
+A stack of indices: `while stack and prices[stack[-1]] < p:` pop `j` and set `out[j] = i - j`. Then push `i`.
+---twist
+The market is now a **loop**: after the last day comes the first day again. Write `wait_circular(prices)`: days until a strictly higher price, looking past the end and round to the start, or 0 if no price in the whole loop is higher.
+---twisttests
+assert wait_circular([3, 1, 4, 2, 5]) == [2, 1, 2, 1, 0]
+assert wait_circular([5, 1, 2]) == [0, 1, 1]
+assert wait_circular([2, 2]) == [0, 0]
+assert wait_circular([]) == []
+---twistsolution
+def wait_circular(prices):
+    n = len(prices)
+    out = [0] * n
+    waiting = []
+    for k in range(2 * n):
+        i = k % n
+        while waiting and prices[waiting[-1]] < prices[i]:
+            j = waiting.pop()
+            out[j] = (i - j) % n
+        if k < n:
+            waiting.append(i)
+    return out
+```
