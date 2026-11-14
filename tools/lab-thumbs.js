@@ -20,6 +20,7 @@ const MOMENTS = {
   wt06: { set: {}, run: 14 },                  // the newsletter towering in the website's own line
   wt07: { set: { replicas: 2 }, run: 20 },     // writes copying to the replicas, and a stale read popping red
   wt08: { set: { limit: 20 }, run: 20 },       // the limiter bouncing the script's flood back as 429s
+  wt09: { set: {}, run: 20 },                  // the viral account melting one shard under the hash ring
 };
 // ONLY=wt08 renders just those (comma-separated), and skips the Workbench shot
 const ONLY = process.env.ONLY ? process.env.ONLY.split(",") : null;
