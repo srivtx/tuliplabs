@@ -636,6 +636,56 @@ location / {
         ["Data, not just files", "For dynamic pages, a read replica or edge database near the users (DynamoDB global tables, Cloudflare D1, Postgres replicas) moves reads closer; writes still travel, as in experiment 7."],
       ],
     },
+    wt11: {
+      files: [
+        {
+          name: "majority.py", lang: "py", run: true,
+          src: (c) => {
+            const each = Math.round(c.rate * (1 - c.likes / 100) * c.west / 100), cut = c.cut.for, sold = each * cut;
+            return `# Two data centres, three copies: what a cut costs.
+${col([["N = 3", "copies of every seat"], ["EAST, WEST = 2, 1", "where the copies live"], ["W = N // 2 + 1", "a write needs a majority"]])}
+print(f"a write needs {W} of {N} copies")
+# → a write needs 2 of 3 copies
+for name, have in (("east", EAST), ("west", WEST)):
+    ok = "can" if have >= W else "cannot"
+    print(f"{name} alone has {have}: it {ok} write")
+# → east alone has 2: it can write
+# → west alone has 1: it cannot write
+
+# a cut, with both sides selling the best seats left
+${col([[`CUT, EACH = ${cut}, ${each}`, "seconds down, bookings/s a side"], [`SEAT_Q = ${c.seatQ ? "True" : "False"}`, "your system.yaml"]])}
+east = EACH * CUT
+west = 0 if SEAT_Q else EACH * CUT
+refused = EACH * CUT if SEAT_Q else 0
+print(f"sold twice: up to {min(east, west)}")
+# → sold twice: up to ${c.seatQ ? 0 : sold}
+print(f"refused in the west: {refused}")
+# → refused in the west: ${c.seatQ ? sold : 0}`;
+          },
+        },
+        {
+          name: "cassandra.cql", lang: "conf",
+          src: (c) => `-- Cassandra: choose per query, as you did.
+-- Seats: a majority of the replicas, or fail.
+CONSISTENCY ${c.seatQ ? "QUORUM" : "ONE"};
+INSERT INTO seats (show, seat, owner)
+  VALUES (42, 'A1', 'ana') IF NOT EXISTS;
+
+-- Likes: any one replica will do; they add up.
+CONSISTENCY ${c.likeQ ? "QUORUM" : "ONE"};
+UPDATE likes SET n = n + 1 WHERE post = 7;`,
+        },
+      ],
+      try: [{ seatQ: false, likeQ: false }, { seatQ: true, likeQ: true }],
+      watch: () => `Alert on the link between regions itself, and graph two things that are normally zero: writes <b>refused for want of a majority</b>, per region, and <b>conflicts found when copies merge</b>. The first means the system chose to stay right; the second means it chose to stay up and someone has a mess to clean. Every dashboard here stayed green while 290 seats sold twice.`,
+      stack: [
+        ["Raft and etcd", "A leader needs a majority of the cluster to commit. Put two of three nodes in one region and that region keeps working through a cut; the other can't, by design."],
+        ["Postgres", "<code>synchronous_standby_names = 'ANY 1 (east2, west1)'</code> makes a commit wait for one standby: stay right, and slower when the link is slow."],
+        ["Spanner and CockroachDB", "Every write needs a majority of its replicas, across regions, so they choose consistency and pay a round trip on writes."],
+        ["DynamoDB global tables", "Each region accepts writes and the last writer wins when they meet: available, and two people can both think they own the seat."],
+        ["CRDTs", "Counters, sets and other data types built so that any two copies merge without conflict, like the G-counter in Build your own X. Likes are the easy case."],
+      ],
+    },
   };
 
   root.WT = root.WT || {};

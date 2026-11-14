@@ -161,6 +161,14 @@ for (const x of experiments.filter((e) => e.live)) {
       if (!(lo.p99far < line)) bad.push(`${x.id} at ${A} trips the far p99 is already ${ms(lo.p99far)} (seed ${seed})`);
       if (!(hi.p99far > line)) bad.push(`${x.id} at ${A + 1} trips the far p99 is still ${ms(hi.p99far)} (seed ${seed})`);
     }
+  } else if (th === "split") {
+    // each side sells the best seats it knows are free, so during a cut nearly every seat the slower side sells the
+    // other sold too: the smaller of two Poisson(λD) counts, about λD − √(λD/π), on average over seeds
+    const lam = s.rate * (1 - s.likes / 100) * Math.min(s.west, 100 - s.west) / 100, m = lam * s.cut.for, expect = m - Math.sqrt(m / Math.PI);
+    if (Math.abs(expect - A) > x.predict.tol / 2) bad.push(`${x.id} predict answer ${A}, theory says ${expect.toFixed(1)}`);
+    let tot = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) { const r = new Sim(s, seed); r.advance(s.cut.at + s.cut.for + 1); tot += r.stats(s.cut.at, s.cut.at + s.cut.for + 1).double; }
+    if (Math.abs(tot / 8 - expect) / expect > 0.06) bad.push(`${x.id} the sim sells ${(tot / 8).toFixed(0)} seats twice a cut, theory ${expect.toFixed(0)}`);
   } else if (th === "drain") {
     // a batch drains in its work ÷ the job workers: every seed's first batch, within the tolerance
     const B = s.batch, jw = x.predict.setup.jobWorkers, expect = B.n * B.service / jw;
