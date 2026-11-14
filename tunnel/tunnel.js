@@ -584,6 +584,12 @@
         kv("drains_a_batch_in", ms(c.batch.n * c.batch.service / c.jobWorkers));
       }
     }
+    if (c.price) {
+      L.push([0, "bill"]);
+      kv("per_worker", `$${c.price.worker}`, "a month");
+      kv("cache", `$${c.price.cache}`, "per 1,000 keys a month");
+      kv("total", `$${num(sim.bill ? new window.WTSim.Sim(c).bill() : 0)}`, "a month");
+    }
     if (c.surge) { L.push([0, "surge"]); kv("at", clock(c.surge.at).slice(2)); kv("for", `${c.surge.for}s`); kv("arrivals", `${num(c.surge.rate)}/s`); }
     return L.map(([ind, k, v, note]) => (ind ? `  ${k}: ${v}${note ? `  # ${note}` : ""}` : `${k}:`));
   }
@@ -1171,7 +1177,8 @@
     for (const el of tagEls.values()) el._seen = false;
     const [cx, cy] = iso(3.7, -0.4, 1.6);
     els.crowd.style.transform = `translate(${cx}px, ${cy}px)`;
-    setHTML(els.crowd, `<b>${fmtLoad(loadNow())}</b><small>${surging() ? "surge" : inTask() ? "fixed for the task" : "drag ↕"}</small>`);
+    const cost = sim.cfg.price ? sim.bill() : 0, cap = sim.cfg.price ? ((X.task.goal || []).find((g) => g[0] === "cost") || [])[2] : null;
+    setHTML(els.crowd, `<b>${fmtLoad(loadNow())}</b><small>${surging() ? "surge" : inTask() ? "fixed for the task" : "drag ↕"}</small>${sim.cfg.price ? `<em${cap != null && cost > cap ? ' class="over"' : ""}>bill $${num(cost)} a month${cap != null ? ` · budget $${num(cap)}` : ""}</em>` : ""}`);
     els.crowd.classList.toggle("surge", surging());
     els.crowd.classList.toggle("locked", inTask());
     const many = LY.servers.length > 1;
@@ -1560,8 +1567,13 @@
     const st = sim.stats(Math.max(0, sim.t - 5), sim.t);
     if (selected.kind === "lb" && isSplit()) {
       const word = (k) => { const w = sim.cfg[k] ? "need a majority" : "go ahead alone"; return canTurn(k) ? h("button", { class: "wt-link", onclick: () => setKnob(k, !sim.cfg[k]), title: "Click to change" }, w) : h("b", {}, w); };
-      ins.sq.innerHTML = ""; ins.sq.append("Seat bookings ", word("seatQ"), ".");
-      ins.lq.innerHTML = ""; ins.lq.append("Likes ", word("likeQ"), ".");
+      // the words are buttons: rebuilt only when what they say changes, so a click never lands on one being replaced
+      const key = [c.seatQ, c.likeQ, canTurn("seatQ"), canTurn("likeQ")].join();
+      if (ins.words !== key) {
+        ins.words = key;
+        ins.sq.innerHTML = ""; ins.sq.append("Seat bookings ", word("seatQ"), ".");
+        ins.lq.innerHTML = ""; ins.lq.append("Likes ", word("likeQ"), ".");
+      }
       ins.dl.innerHTML = `<dt>the link</dt><dd>${sim.isCut ? '<b class="bad">down</b>' : "up"}</dd><dt>sold twice, last 5 s</dt><dd>${st.double ? `<b class="bad">${st.double}</b>` : "none"}</dd>
         <dt>refused, last 5 s</dt><dd>${st.seatErr} bookings · ${st.likeErr} likes</dd>`;
       return;
