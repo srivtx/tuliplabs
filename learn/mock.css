@@ -113,3 +113,5 @@
 .mk-run{align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px}
 .mk-checks:not(:empty){margin-top:10px}
 .mk-checks .result p,.mk-feedback .result p{margin:0 0 6px}
+.mk-iv{font:400 19px/1.45 var(--f-serif);margin:-6px 0 24px}
+.mk-iv a{color:var(--ink);border-bottom:2px solid var(--pink);text-decoration:none}
