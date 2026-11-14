@@ -351,7 +351,9 @@ async function tunnel(page, browser, errors) {
     }
     if (ref.lb !== undefined) for (let i = 0; i < 3 && (await st()).cfg.lb !== ref.lb; i++) await page.locator(".wt-lbtag").click();
     if (ref.cache !== undefined) {
-      await page.locator(".wt-ctag").click();
+      // no cache yet: click it on from the parts tray first
+      if (!((await st()).cfg.cache > 0)) await page.locator(".wt-parts .ghost.cache").click();
+      await page.locator(".wt-ctag", { hasText: "cache" }).click();
       for (let i = 0; i < 12 && (await st()).cfg.cache < ref.cache; i++) await page.locator(".wt-insp .step", { hasText: "+" }).click();
     }
     if (ref.jobWorkers !== undefined) {
@@ -365,6 +367,13 @@ async function tunnel(page, browser, errors) {
       if (!((await st()).cfg.jobWorkers > 0)) bad.push(`${x.id}: dragging the email queue onto the stage didn't add it`);
       await page.locator(".wt-ctag", { hasText: "mailer" }).click();
       for (let i = 0; i < 12 && (await st()).cfg.jobWorkers < ref.jobWorkers; i++) await page.locator('.wt-insp .step[aria-label="workers: more"]').click();
+    }
+    // a CDN comes from the parts tray; a write's rule is a word in the router's panel
+    if (ref.cdn) await page.locator(".wt-parts .ghost.cdn").click();
+    for (const [k, words] of [["seatQ", "Seat bookings"], ["likeQ", "Likes"]]) {
+      if (ref[k] === undefined || (await st()).cfg[k] === ref[k]) continue;
+      if (!(await page.locator(".wt-insp p", { hasText: words }).count())) await page.locator(".wt-lbtag").click();
+      await page.locator(".wt-insp p", { hasText: words }).locator(".wt-link").click();
     }
     const got = (await st()).cfg;
     for (const k in ref) if (got[k] !== ref[k]) bad.push(`${x.id}: couldn't set ${k} to ${ref[k]} through the page (it's ${got[k]})`);

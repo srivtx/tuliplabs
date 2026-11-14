@@ -6,6 +6,7 @@
 (function (root) {
   "use strict";
   const G = typeof module === "object" && module.exports ? require("./mock-gen.js") : root.MOCKGEN;
+  const B = G.BOARDS;
 
   const pyList = (a) => "[" + a.map((x) => (typeof x === "string" ? `'${x}'` : String(x))).join(", ") + "]";
   const ints = (r, n, lo, hi) => Array.from({ length: n }, () => r.int(lo, hi));
@@ -130,6 +131,7 @@
         ch: 25, title: "Least recently used", prompt: "<p>What does it print?</p>",
         code: `from collections import OrderedDict\ncache, cap, hits = OrderedDict(), ${cap}, 0\nfor k in "${seq}":\n    if k in cache:\n        hits += 1\n        cache.move_to_end(k)\n    else:\n        cache[k] = True\n        if len(cache) > cap:\n            cache.popitem(last=False)\nprint(hits, "".join(cache))`,
         answer: `${hits} ${c.join("")}`,
+        board: B.lru(seq, cap),
         why: `<p>The OrderedDict keeps keys from least to most recently used. A hit moves the key to the end; a miss adds it at the end and, past ${cap} keys, throws out the one at the front, the key unused for longest.</p>`,
       };
     },
@@ -270,6 +272,7 @@
         ch: 50, title: "In what order does Node run it?", lang: "node", prompt: "<p>What does it print, in order?</p>",
         code: lines.join("\n"),
         answer: out.join("\n"),
+        board: B.letters("ABCDEFGHIJ".slice(0, L).split(""), out, "Tap the letters in the order they're logged."),
         why: "<p>Node runs all the plain code first. Then it empties the <b>microtask</b> queue: promise callbacks, and the rest of an <code>async</code> function after an <code>await</code>, including any microtasks those add. Only then does it take the next <b>timer</b>, and after each timer it empties the microtasks again. <code>setTimeout(…, 0)</code> means \"after everything that's already queued\", never \"now\".</p>",
       };
     },
@@ -358,6 +361,7 @@
         ch: 2, title: "Into postfix", match: "text", prompt: "<p>What does it print? (Symbols count here: type them exactly.)</p>",
         code: `expr = "${toks.join(" ")}"\nprec = {"+": 1, "-": 1, "*": 2, "/": 2}\nout, ops = [], []\nfor t in expr.split():\n    if t.isdigit():\n        out.append(t)\n    elif t == "(":\n        ops.append(t)\n    elif t == ")":\n        while ops[-1] != "(":\n            out.append(ops.pop())\n        ops.pop()\n    else:\n        while ops and ops[-1] != "(" and prec[ops[-1]] >= prec[t]:\n            out.append(ops.pop())\n        ops.append(t)\nwhile ops:\n    out.append(ops.pop())\nprint(" ".join(out))`,
         answer: out.join(" "),
+        board: B.rpn(toks),
         why: "<p>Numbers go straight out; an operator first sends out every waiting operator that binds at least as tightly (that <code>&gt;=</code> is what makes <code>-</code> and <code>/</code> group left to right); brackets fence off what's inside. Postfix needs no brackets and no precedence: a stack evaluates it in one pass.</p>",
       };
     },
@@ -504,6 +508,7 @@
         ch: 16, title: "What gets collected?", prompt: "<p><code>heap[x]</code> lists the objects x points to. What does it print?</p>",
         code: `heap = {${names.map((n) => `"${n}": ${pyList(heap[n]).replace(/'/g, '"')}`).join(", ")}}\nroots = ${pyList(roots).replace(/'/g, '"')}\nmarked = set()\ndef mark(x):\n    if x in marked:\n        return\n    marked.add(x)\n    for y in heap[x]:\n        mark(y)\nfor r in roots:\n    mark(r)\nprint(sorted(set(heap) - marked))`,
         answer: pyList(names.filter((n) => !seen.has(n))),
+        board: B.markSweep(names, heap, roots, seen),
         why: "<p>Mark: everything reachable from a root (a variable the program can still use) is live. Sweep: the rest is garbage, even objects that point at each other in a cycle, which plain reference counting would never free.</p>",
       };
     },
@@ -747,6 +752,7 @@
         ch: 47, title: "Blur the middle", prompt: "<p>What does it print?</p>",
         code: `img = ${"[" + img.map(pyList).join(", ") + "]"}\nout = [[sum(img[i + a][j + b] for a in (-1, 0, 1) for b in (-1, 0, 1)) // 9 for j in (1, 2)] for i in (1, 2)]\nprint(out)`,
         answer: "[" + out.map(pyList).join(", ") + "]",
+        board: B.blur(img, out),
         why: "<p>Each output pixel is the average of the 3 × 3 block around it, which softens sharp edges. Only the middle pixels have a full block; real editors decide what to do at the borders, like repeating the edge pixels.</p>",
       };
     },
@@ -772,6 +778,7 @@
         ch: 49, title: "How many pixels?", prompt: "<p>A pixel is filled when its centre is inside the triangle. What does it print?</p>",
         code: `A, B, C = ${pyTup(A)}, ${pyTup(B)}, ${pyTup(C)}\ndef edge(p, q, x, y):\n    return (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0])\ncount = 0\nfor y in range(7):\n    for x in range(7):\n        w = [edge(A, B, x + 0.5, y + 0.5), edge(B, C, x + 0.5, y + 0.5), edge(C, A, x + 0.5, y + 0.5)]\n        if all(e >= 0 for e in w) or all(e <= 0 for e in w):\n            count += 1\nprint(count)`,
         answer: String(count),
+        board: G.BOARDS.raster(A, B, C),
         why: "<p>Each edge function says which side of that edge a point is on. Inside means the same side of all three, whichever way round the corners are listed. GPUs and font rasterisers test millions of pixel centres like this, in parallel.</p>",
       };
     },
@@ -799,6 +806,7 @@
         ch: 1, title: "Two dice", prompt: "<p>What does it print?</p>",
         code: `from fractions import Fraction\nways = sum(1 for a in range(1, 7) for b in range(1, 7) if a + b == ${s})\nprint(ways, Fraction(ways, 36))`,
         answer: `${c} ${frac(c, 36)}`,
+        board: B.dice(s),
         why: `<p>All 36 (a, b) pairs are equally likely, and ${c} of them add up to ${s}. 7 is the most likely total, with 6 ways; 2 and 12 have one way each.</p>`,
       };
     },
@@ -935,6 +943,7 @@
         ch: 5, title: `Rule ${rule}`, prompt: "<p>The edges wrap round. What does it print?</p>",
         code: `rule, w = ${rule}, ${w}\nrow = [0] * w\nrow[4] = 1\nprint("".join(map(str, row)))\nfor step in range(${steps}):\n    row = [(rule >> (row[i - 1] * 4 + row[i] * 2 + row[(i + 1) % w])) & 1 for i in range(w)]\n    print("".join(map(str, row)))`,
         answer: rows.join("\n"),
+        board: B.automaton(rule, rows),
         why: `<p>Each cell looks at itself and its two neighbours: three bits make a number 0 to 7, and bit number <i>that</i> of ${rule} (<code>${rule.toString(2).padStart(8, "0")}</code> in binary) is the cell's next state. Python's <code>row[-1]</code> is the last cell, which is what makes the left edge wrap.</p>`,
       };
     },
@@ -948,6 +957,7 @@
         ch: 6, title: "One step of Life", prompt: "<p>Cells beyond the edge count as dead. What does it print?</p>",
         code: `${"g = [\n" + g.map((row) => "    " + pyList(row) + ",").join("\n") + "\n]"}\nn = ${n}\ndef neighbours(i, j):\n    return sum(g[a][b] for a in range(i - 1, i + 2) for b in range(j - 1, j + 2)\n               if (a, b) != (i, j) and 0 <= a < n and 0 <= b < n)\nnew = [[1 if (g[i][j] and neighbours(i, j) in (2, 3)) or (not g[i][j] and neighbours(i, j) == 3) else 0\n        for j in range(n)] for i in range(n)]\nprint(sum(map(sum, g)), sum(map(sum, new)))`,
         answer: `${before} ${after}`,
+        board: B.life(g, h, before),
         why: "<p>A live cell survives with 2 or 3 live neighbours; a dead cell comes alive with exactly 3. Every cell's next state is worked out from the <i>old</i> grid, which is why the new one is built separately.</p>",
       };
     },
@@ -962,6 +972,7 @@
         ch: 8, title: "Drop the sand", prompt: `<p>${grains} grain${grains === 1 ? " lands" : "s land"} on the middle. Any pile of 4 or more topples, sending one grain to each neighbour (grains off the edge are lost). What does it print?</p>`,
         code: "g = [\n" + g0.map((row) => "    " + pyList(row) + ",").join("\n") + `\n]\ng[1][1] += ${grains}\ntopples = 0\nwhile True:\n    unstable = [(i, j) for i in range(3) for j in range(3) if g[i][j] >= 4]\n    if not unstable:\n        break\n    for i, j in unstable:\n        if g[i][j] < 4:\n            continue\n        g[i][j] -= 4\n        topples += 1\n        for a, b in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):\n            if 0 <= a < 3 and 0 <= b < 3:\n                g[a][b] += 1\nprint(g, topples)`,
         answer: "[" + g.map(pyList).join(", ") + "] " + topples,
+        board: B.sandpile(g0, grains, g, topples),
         why: `<p>${topples ? `One topple can push a neighbour over 4, which topples in turn: an avalanche, ${topples} topple${topples === 1 ? "" : "s"} here.` : "Nothing reached 4, so nothing toppled."} The order the piles topple in doesn't change the end result: sandpiles are <i>abelian</i>. Most grains cause nothing; now and then one causes a big avalanche, which is self-organised criticality.</p>`,
       };
     },
@@ -1215,6 +1226,7 @@
         ch: 7, title: "Let it spread", prompt: "<p>The two ends are held at 0. What does it print after two steps?</p>",
         code: `c = ${pyList(c)}\nfor step in range(2):\n    c = [c[i] if i in (0, len(c) - 1) else c[i] + (c[i - 1] - 2 * c[i] + c[i + 1]) // 4 for i in range(len(c))]\nprint(c, sum(c))`,
         answer: `${pyList(c2)} ${c2.reduce((a, b) => a + b, 0)}`,
+        board: B.diffusion(c, c2),
         why: "<p>Each cell moves towards the average of its neighbours: the spike flattens and spreads, which is how heat and dye diffuse. (Floor division loses a little each step, so the total isn't exactly conserved, a real artefact of integer models.)</p>",
       };
     },
@@ -1226,6 +1238,7 @@
         ch: 9, title: "Who wants to move?", prompt: "<p>Agents live in a ring. One is unhappy if neither neighbour is its own kind. What does it print?</p>",
         code: `ring = "${ring.join("")}"\nn = len(ring)\nunhappy = [i for i in range(n) if ring[i - 1] != ring[i] and ring[(i + 1) % n] != ring[i]]\nprint(len(unhappy), unhappy)`,
         answer: `${total} ${pyList(unhappy.map((u, i) => (u ? i : -1)).filter((i) => i >= 0))}`,
+        board: B.schelling(ring, unhappy),
         why: "<p>Each agent only asks for one neighbour like itself, a mild preference. Yet when unhappy agents move, the ring sorts itself into long runs of x and o: strong segregation from weak individual preferences. <code>ring[i - 1]</code> wraps round at i = 0.</p>",
       };
     },
@@ -1269,6 +1282,46 @@
     },
   });
   function distinctSorted2(r, n, lo, hi) { const s = new Set(); while (s.size < n) s.add(r.int(lo, hi)); return [...s].sort((a, b) => a - b); }
+
+  // ---- sketch it, for other tracks: draw the line before you run it ----
+  G.add("bx", {
+    backlog(r) {
+      for (;;) {
+        const c = r.int(3, 6), a = Array.from({ length: 8 }, () => r.int(0, c + 4)), out = [];
+        let q = 0;
+        for (const x of a) { q = Math.max(0, q + x - c); out.push(q); }
+        if (Math.max(...out) < 2 || Math.max(...out) > 12) continue;
+        return {
+          ch: 37, title: "Sketch the backlog", prompt: "<p>Draw it before you run it: how long is the queue at the end of each second?</p>",
+          code: `arrivals = ${pyList(a)}   # requests in each second\nserve = ${c}   # the server finishes this many a second\nqueue, out = 0, []\nfor x in arrivals:\n    queue = max(0, queue + x - serve)\n    out.append(queue)\nprint(out)`,
+          answer: pyList(out),
+          why: "<p>The queue grows by whatever arrives beyond what the server finishes, and it can't drop below empty. A burst piles up and takes seconds to drain, so the wait outlives the burst. That's why latency stays bad after the traffic calms down.</p>",
+          board: { type: "plot", xs: a.map((_, k) => "s" + (k + 1)), lo: 0, hi: Math.max(6, ...out), yName: "queue", mode: "sketch", solve: out,
+            steps: out.map((v, k) => ({ pts: { [k]: v }, at: k, note: `Second ${k + 1}: ${a[k]} arrive, ${c} get served: the queue is ${v}.`, wait: 700 })),
+            ask: "Sketch it: drag across the chart to draw the queue at the end of each second." },
+        };
+      }
+    },
+  });
+  G.add("ps", {
+    walk(r) {
+      for (;;) {
+        const flips = Array.from({ length: 12 }, () => (r.next() < 0.5 ? "H" : "T")).join(""), out = [];
+        let x = 0;
+        for (const f of flips) { x += f === "H" ? 1 : -1; out.push(x); }
+        if (Math.max(...out.map(Math.abs)) > 6) continue;
+        return {
+          ch: 4, title: "Sketch the walk", prompt: "<p>Draw it before you run it: where does the walker stand after each flip?</p>",
+          code: `flips = "${flips}"\nx, out = 0, []\nfor f in flips:\n    x += 1 if f == "H" else -1\n    out.append(x)\nprint(out)`,
+          answer: pyList(out),
+          why: "<p>Each head steps right and each tail steps left, so the position is heads minus tails so far. After n fair flips the walker is usually about √n from the start, not n: the steps mostly cancel.</p>",
+          board: { type: "plot", xs: flips.split(""), lo: -6, hi: 6, yName: "x", mode: "sketch", solve: out,
+            steps: out.map((v, k) => ({ pts: { [k]: v }, at: k, note: `${flips[k] === "H" ? "Heads: one step up" : "Tails: one step down"}, to ${v}.`, wait: 420 })),
+            ask: "Sketch it: drag across the chart to draw the position after each flip." },
+        };
+      }
+    },
+  });
 
   if (typeof module === "object" && module.exports) module.exports = G;
 })(this);

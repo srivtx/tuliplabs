@@ -177,6 +177,11 @@ body.k-wt main.wt{padding:0;margin:0;width:100%;max-width:none}
 .wt-lbtag small{font-size:9.5px;color:var(--wt-faint);letter-spacing:.06em;text-transform:uppercase}
 .wt-lbtag b{color:var(--wt-ink);font-weight:600}
 .wt-lbtag i{position:absolute;right:-7px;top:-7px;display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--wt-acc);color:var(--wt-acc-ink);font-style:normal;font-size:10px}
+.wt-lbtag em{font-style:normal;font-size:10px;color:var(--wt-faint)}
+.wt-crowd em{display:block;margin-top:3px;font:normal 10.5px var(--f-mono);color:var(--wt-faint);white-space:nowrap}
+.wt-crowd em.over{color:var(--wt-bad);font-weight:600}
+.wt-lbtag.hot{border-color:var(--wt-bad)!important}
+.wt-lbtag.hot em{color:var(--wt-bad);font-weight:600}
 .wt-lbtag.can:hover{border-color:var(--wt-acc)!important}
 .wt-lbtag.can:hover b{color:var(--wt-acc)}
 .wt-ctag{padding:4px 9px!important;border-radius:7px;font:11px var(--f-mono)!important;color:var(--wt-mute)!important;background:color-mix(in srgb,var(--wt-bg) 80%,transparent)!important;border:1px solid var(--wt-line2)!important}

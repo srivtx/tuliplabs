@@ -23,7 +23,7 @@
   const coding = (mode) => mode === "all coding";
   const KIND_NAME = { mc: "Multiple choice", trace: "Trace it", pattern: "Which pattern fits?", out: "What does it print?", line: "Find the bug", order: "Put it in order", explain: "Explain it", code: "Code it" };
   const KIND_TEXT = {
-    mc: "Four answers, one right. From every chapter's quick-fire quizzes.", trace: "A short program with fresh numbers, made up for each test. Many are answered on a picture: tap the order, swap the tiles, write on the nodes, drag across the stretch.",
+    mc: "Four answers, one right. From every chapter's quick-fire quizzes.", trace: "A short program with fresh numbers, made up for each test. Many are answered on a picture: tap the order, swap tiles, fill a table, walk a maze, colour the groups, sketch a line before it runs, find the wrong frame in a film, or build the input that makes it print what's asked.",
     pattern: "A real interview problem, with its hints cut off. Which chapter's technique solves it?", out: "A snippet from a chapter: type exactly what it prints.",
     line: "A program with a wrong line. Click it.", order: "Scrambled lines and a couple of decoys. Build the working program.",
     explain: "A why-question. Say the answer in your own words, then hold it up against the model answer and mark yourself honestly.",
@@ -189,6 +189,7 @@
   }
 
   let GEN_CH = null;
+  const HAS_BOARD = {};
   function pick(st) {
     const scope = scopes().find((s) => s.key === st.scope) || scopes()[0];
     const inScope = new Set(scope.nums);
@@ -215,7 +216,8 @@
     const rounds = {};
     for (const q of pools.trace) (rounds[q.gen] = rounds[q.gen] || []).push(q);
     pools.trace = [];
-    for (let k = 0; k < 6; k++) pools.trace.push(...A.shuffle(Object.values(rounds).filter((r) => r[k]).map((r) => r[k])));
+    const drawn = (g) => { if (!(g in HAS_BOARD)) { try { HAS_BOARD[g] = !!MOCKGEN.make(g, 7).board; } catch (e) { HAS_BOARD[g] = false; } } return HAS_BOARD[g]; };
+    for (let k = 0; k < 6; k++) pools.trace.push(...A.shuffle(Object.values(rounds).filter((r) => r[k]).map((r) => r[k])).sort((x, y) => drawn(y.gen) - drawn(x.gen)));
     const want = {};
     const fresh = st.count - back.length;
     let left = fresh;
@@ -537,7 +539,7 @@
     else if (q.kind === "trace") {
       if (full.match !== "choice" && q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));
       box.append(h("p", {}, full.lang === "sql" ? "It returns:" : "It prints:"), h("pre", { class: "mk-code small" }, full.answer));
-      if (full.board && window.HANDS && window.HANDS.mount) box.append(window.HANDS.mount(full.board, { replay: true, autoplay: true }).el);
+      if (full.board && window.HANDS && window.HANDS.mount) box.append(window.HANDS.mount(full.board, { replay: true, autoplay: true, mine: q.hs && q.hs.s !== undefined ? q.hs.s : q.hs }).el);
       box.insertAdjacentHTML("beforeend", full.why || "");
     } else if (q.kind === "out") {
       if (q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));

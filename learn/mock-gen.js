@@ -18,6 +18,16 @@
   const pyList = (a) => "[" + a.map((x) => (typeof x === "string" ? `'${x}'` : String(x))).join(", ") + "]";
   const distinctSorted = (r, n, lo, hi) => { const s = new Set(); while (s.size < n) s.add(r.int(lo, hi)); return [...s].sort((a, b) => a - b); };
   const LETTERS = "ABCDEFGH".split("");
+  const range = (n) => Array.from({ length: n }, (_, i) => i);
+  // the board engine: lays boards out (a graph board is only kept when no edge runs through a node) and grows BSTs
+  const HB = typeof module === "object" && module.exports ? require("./hands.js") : root.HANDS;
+  const fits = (b) => (HB && HB.layout(b).cost >= 60 ? undefined : b);
+  // the swaps that turn the starting order into perm (perm[slot] is the tile that ends there)
+  function swapsTo(perm) {
+    const cur = range(perm.length), out = [];
+    for (let s = 0; s < perm.length; s++) { const j = cur.indexOf(perm[s]); if (j !== s) { out.push([s, j]); [cur[s], cur[j]] = [cur[j], cur[s]]; } }
+    return out;
+  }
 
   const GENS = {
     // ch 9: where binary search looks
@@ -112,6 +122,7 @@
         prompt: `<p>What does it print?</p>`,
         code: `parent = list(range(${n}))\ndef find(x):\n    if parent[x] != x:\n        parent[x] = find(parent[x])\n    return parent[x]\ngroups = ${n}\nfor a, b in ${pyList(pairs.map((p) => `(${p[0]}, ${p[1]})`)).replace(/'/g, "")}:\n    ra, rb = find(a), find(b)\n    if ra != rb:\n        parent[ra] = rb\n        groups -= 1\nprint(groups)`,
         answer: String(groups),
+        board: n <= 7 ? BOARDS.groups(n, pairs, false) : undefined,
         why: `<p>Start with ${n} groups. Every union that joins two different groups removes one; a union inside a group (both already share a root) changes nothing. ${k - (n - groups)} of the ${k} unions changed nothing here.</p>`,
       };
     },
@@ -291,6 +302,7 @@
         ch: 3, title: "Two numbers that add up", prompt: `<p>What does it print?</p>`,
         code: `a = ${pyList(a)}\ntarget = ${target}\nseen = {}\nfor i, x in enumerate(a):\n    if target - x in seen:\n        print(seen[target - x], i)\n        break\n    seen[x] = i`,
         answer: ans.join(" "),
+        board: BOARDS.twoSum(a, target, ans),
         why: `<p>The dict maps each number to the latest index it was seen at. At every <code>x</code> the loop asks one question: have I already seen <code>${target} - x</code>? The first yes comes at index ${ans[1]}, and its partner is at index ${ans[0]}. One pass, no inner loop.</p>`,
       };
     },
@@ -327,6 +339,7 @@
         ch: 10, title: "The smallest capacity that works", prompt: `<p>Parcels <code>w</code> ship in order, at most <code>cap</code> a day. What does it print?</p>`,
         code: `w = ${pyList(w)}\nD = ${D}\ndef days(cap):\n    n, load = 1, 0\n    for x in w:\n        if load + x > cap:\n            n += 1\n            load = 0\n        load += x\n    return n\nlo, hi = max(w), sum(w)\nwhile lo < hi:\n    mid = (lo + hi) // 2\n    if days(mid) <= D:\n        hi = mid\n    else:\n        lo = mid + 1\nprint(lo)`,
         answer: String(cap),
+        board: BOARDS.shipDays(w, D, cap),
         why: `<p>The smallest daily capacity that ships everything within ${D} days: ${cap} (it takes ${days(cap)} day${days(cap) === 1 ? "" : "s"}; ${cap - 1} would take ${days(cap - 1)}). More capacity never needs more days, so "does this capacity work?" is false, then true, and binary search finds the switch.</p>`,
       };
     },
@@ -363,6 +376,7 @@
         ch: 14, title: "Merge the overlaps", prompt: `<p>What does it print?</p>`,
         code: `iv = ${pyV(iv)}\niv.sort()\nout = []\nfor s, e in iv:\n    if out and s <= out[-1][1]:\n        out[-1][1] = max(out[-1][1], e)\n    else:\n        out.append([s, e])\nprint(out)`,
         answer: pyV(out),
+        board: out.length <= 5 ? BOARDS.merge(iv, out) : undefined,
         why: `<p>Sorted by start, an interval overlaps the merged ones only if it starts before the last merged one ends, so one comparison with <code>out[-1]</code> is enough. Touching intervals (start = end) merge too, because the test is <code>&lt;=</code>.</p>`,
       };
     },
@@ -378,6 +392,7 @@
         ch: 16, title: "Earliest finish first", prompt: `<p>What does it print?</p>`,
         code: `iv = ${tupList(iv)}\niv.sort(key=lambda p: p[1])\nend, count = -1, 0\nfor s, e in iv:\n    if s >= end:\n        count += 1\n        end = e\nprint(count)`,
         answer: String(best),
+        board: BOARDS.activities(iv),
         why: `<p>The most meetings with no two overlapping: ${best}. Taking whatever finishes first is safe: swapping it into any best answer never breaks that answer (the exchange argument), and it leaves the most room for the rest.</p>`,
       };
     },
@@ -428,6 +443,7 @@
         ch: 24, title: "One round of relaxing", prompt: `<p>Edges are one-way <code>(from, to, weight)</code>. This is a single round of Bellman-Ford, in exactly this edge order. What does it print?</p>`,
         code: `edges = ${tupList(E)}\ndist = [float("inf")] * ${n}\ndist[0] = 0\nfor u, v, w in edges:\n    if dist[u] + w < dist[v]:\n        dist[v] = dist[u] + w\nprint(dist)`,
         answer: pyV(dist),
+        board: BOARDS.bellman(n, E, dist),
         why: `<p>Each edge is tried once, in list order. An edge out of a node that hasn't been reached yet (still <code>inf</code>) does nothing, even if a later edge in the same round reaches that node. That's why Bellman-Ford repeats the round n − 1 times.</p>`,
       };
     },
@@ -445,6 +461,7 @@
         ch: 25, title: "Kruskal's total", prompt: `<p>Each edge is <code>(weight, u, v)</code>. What does it print?</p>`,
         code: `edges = ${tupList(edges)}\nparent = list(range(${n}))\ndef find(x):\n    while parent[x] != x:\n        x = parent[x]\n    return x\ntotal = 0\nfor w, u, v in sorted(edges):\n    ru, rv = find(u), find(v)\n    if ru != rv:\n        parent[ru] = rv\n        total += w\nprint(total)`,
         answer: String(total),
+        board: BOARDS.kruskal(n, edges),
         why: `<p>Cheapest edge first, skipping any edge whose ends are already joined. It keeps the weights ${used.join(" + ")} = ${total}: ${n - 1} edges, one fewer than the ${n} nodes, which is every spanning tree's size.</p>`,
       };
     },
@@ -482,6 +499,7 @@
         ch: 28, title: "No two neighbours", prompt: `<p>What does it print?</p>`,
         code: `a = ${pyList(a)}\ntake, skip = 0, 0\nfor x in a:\n    take, skip = skip + x, max(take, skip)\nprint(max(take, skip))`,
         answer: String(best),
+        board: BOARDS.robber(a),
         why: `<p>The biggest sum with no two neighbours both taken: ${best}. Two numbers carry the whole DP: the best ending with this item taken (so the previous one was skipped) and the best with it skipped (anything before).</p>`,
       };
     },
@@ -506,6 +524,7 @@
         ch: 30, title: "Cheapest way down", prompt: `<p>You may only move right or down. What does it print?</p>`,
         code: pyMatrix("g", g) + `\nR, C = len(g), len(g[0])\nfor r in range(R):\n    for c in range(C):\n        if r == 0 and c == 0:\n            continue\n        up = g[r - 1][c] if r else float("inf")\n        left = g[r][c - 1] if c else float("inf")\n        g[r][c] += min(up, left)\nprint(g[-1][-1])`,
         answer: String(best),
+        board: BOARDS.pathTable(g),
         why: `<p>The cheapest top-left to bottom-right sum: ${best}. Every cell can only be entered from above or from the left, so its cheapest cost is its own number plus the cheaper of those two, already worked out because of the row-by-row order.</p>`,
       };
     },
@@ -528,6 +547,7 @@
           ? `a, b = "${a}", "${b}"\nL = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]\nfor i in range(1, len(a) + 1):\n    for j in range(1, len(b) + 1):\n        if a[i - 1] == b[j - 1]:\n            L[i][j] = L[i - 1][j - 1] + 1\n        else:\n            L[i][j] = max(L[i - 1][j], L[i][j - 1])\nprint(L[-1][-1])`
           : `a, b = "${a}", "${b}"\nd = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]\nfor i in range(len(a) + 1):\n    for j in range(len(b) + 1):\n        if i == 0 or j == 0:\n            d[i][j] = i + j\n        elif a[i - 1] == b[j - 1]:\n            d[i][j] = d[i - 1][j - 1]\n        else:\n            d[i][j] = 1 + min(d[i - 1][j], d[i][j - 1], d[i - 1][j - 1])\nprint(d[-1][-1])`,
         answer: String(ans),
+        board: a.length * b.length <= 16 ? BOARDS.dpTable(a, b, lcs) : undefined,
         why: lcs
           ? `<p>The longest sequence of letters appearing in order in both "${a}" and "${b}" has length ${ans}. Matching last letters extend the answer for both prefixes; otherwise one of the two last letters isn't used.</p>`
           : `<p>The fewest single-letter inserts, deletes and replacements turning "${a}" into "${b}": ${ans}. The three neighbours in the table are the three edits; equal last letters cost nothing.</p>`,
@@ -766,6 +786,7 @@
         ch: 51, title: "How many strong components?", prompt: `<p>Each pair is a one-way edge. What does it print?</p>`,
         code: `n = ${n}\nedges = ${tupList(edges)}\ng = [[] for _ in range(n)]\nrg = [[] for _ in range(n)]\nfor u, v in edges:\n    g[u].append(v)\n    rg[v].append(u)\norder, seen = [], [False] * n\ndef dfs1(u):\n    seen[u] = True\n    for v in g[u]:\n        if not seen[v]:\n            dfs1(v)\n    order.append(u)\nfor u in range(n):\n    if not seen[u]:\n        dfs1(u)\ncomp = [-1] * n\ndef dfs2(u, c):\n    comp[u] = c\n    for v in rg[u]:\n        if comp[v] == -1:\n            dfs2(v, c)\nc = 0\nfor u in reversed(order):\n    if comp[u] == -1:\n        dfs2(u, c)\n        c += 1\nprint(c)`,
         answer: String(groups.size),
+        board: BOARDS.groups(n, edges, true),
         why: `<p>Kosaraju counts the groups of nodes that can all reach each other: ${groups.size}. A node on no cycle is a group on its own. The first pass orders nodes by finish time; the second walks the reversed edges from the latest finisher, and each walk collects exactly one group.</p>`,
       };
     },
@@ -786,6 +807,7 @@
         ch: 52, title: "Edges you can't lose", prompt: `<p>The edges go both ways. What does it print?</p>`,
         code: `n = ${n}\nedges = ${tupList(edges)}\ng = [[] for _ in range(n)]\nfor i, (u, v) in enumerate(edges):\n    g[u].append((v, i))\n    g[v].append((u, i))\ntin, low, t = [-1] * n, [0] * n, 0\nbridges = []\ndef dfs(u, pe):\n    global t\n    tin[u] = low[u] = t\n    t += 1\n    for v, i in g[u]:\n        if i == pe:\n            continue\n        if tin[v] == -1:\n            dfs(v, i)\n            low[u] = min(low[u], low[v])\n            if low[v] > tin[u]:\n                bridges.append(edges[i])\n        else:\n            low[u] = min(low[u], tin[v])\ndfs(0, -1)\nprint(sorted(bridges))`,
         answer: tupList(out),
+        board: BOARDS.bridges(n, edges, out),
         why: `<p>A bridge is an edge on no cycle: removing it cuts the graph in two. Here: ${tupList(out)}. In the DFS, <code>low[v]</code> is the earliest node v's subtree can reach by a back edge; if even that is below u (<code>low[v] &gt; tin[u]</code>), the edge u–v is the only way in.</p>`,
       };
     },
@@ -1032,6 +1054,7 @@ print("O(" + growth() + ")")`;
         ch: 2, title: "Zeros to the back", prompt: "<p>What does it print?</p>",
         code: `a = ${pyList(a)}\nw = 0\nfor x in a:\n    if x != 0:\n        a[w] = x\n        w += 1\nfor i in range(w, len(a)):\n    a[i] = 0\nprint(a, w)`,
         answer: `${pyList(keep.concat(Array(a.length - keep.length).fill(0)))} ${keep.length}`,
+        board: BOARDS.moveZeros(a),
         why: `<p><code>w</code> is where the next non-zero goes. It never overtakes the reading position, so nothing is overwritten before it's read. The non-zeros keep their order, and ${keep.length} of them fit before the zeros.</p>`,
       };
     },
@@ -1059,6 +1082,7 @@ print("O(" + growth() + ")")`;
         ch: 4, title: "Many updates, one pass", prompt: "<p>Each <code>(l, r, v)</code> adds v to every position from l to r. What does it print?</p>",
         code: `n = ${n}\nd = [0] * (n + 1)\nfor l, r, v in ${tupList(ups)}:\n    d[l] += v\n    d[r + 1] -= v\na, run = [], 0\nfor i in range(n):\n    run += d[i]\n    a.append(run)\nprint(a)`,
         answer: pyList(a),
+        board: BOARDS.diffSketch(n, ups, a),
         why: "<p>Each update touches only its two ends: +v where it starts and −v just after it stops. The running total turns those marks back into the real values, so any number of updates costs one pass.</p>",
       };
     },
@@ -1103,6 +1127,7 @@ print("O(" + growth() + ")")`;
         ch: 7, title: "Squash the repeats", prompt: "<p>What does it print?</p>",
         code: `a = ${pyList(a)}\nk = 1\nfor i in range(1, len(a)):\n    if a[i] != a[k - 1]:\n        a[k] = a[i]\n        k += 1\nprint(k, a[:k])`,
         answer: `${u.length} ${pyList(u)}`,
+        board: BOARDS.dedupe(a),
         why: "<p>A slow pointer <code>k</code> marks the end of the kept part; the fast one reads ahead and only copies a value that differs from the last one kept. Sorted input puts the repeats side by side, which is what makes one pass enough.</p>",
       };
     },
@@ -1190,6 +1215,7 @@ print("O(" + growth() + ")")`;
         ch: 14, title: "How many rooms?", prompt: "<p>Each meeting is <code>(start, end)</code>. What does it print?</p>",
         code: `import heapq\nmeetings = ${tupList(ms)}\nends = []\nfor s, e in meetings:\n    if ends and ends[0] <= s:\n        heapq.heapreplace(ends, e)\n    else:\n        heapq.heappush(ends, e)\nprint(len(ends))`,
         answer: String(ends.length),
+        board: BOARDS.rooms(ms),
         why: "<p>In order of start time, each meeting reuses the room that frees up first, if it's free by then, or opens a new one. The heap of end times answers \"which room frees up first?\" in O(log n). The answer is the most meetings ever happening at once.</p>",
       };
     },
@@ -1256,6 +1282,7 @@ print("O(" + growth() + ")")`;
         ch: 19, title: "Through the maze", prompt: `<p>Steps go up, down, left or right, never through <code>#</code>. How many steps from the top-left corner to row ${ti}, column ${tj} (counting from 0)?</p>`,
         code: `from collections import deque\ngrid = [\n${g.map((row) => `    "${row.join("")}",`).join("\n")}\n]\nR, C = len(grid), len(grid[0])\ndist = {(0, 0): 0}\nq = deque([(0, 0)])\nwhile q:\n    r, c = q.popleft()\n    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):\n        nr, nc = r + dr, c + dc\n        if 0 <= nr < R and 0 <= nc < C and grid[nr][nc] == "." and (nr, nc) not in dist:\n            dist[(nr, nc)] = dist[(r, c)] + 1\n            q.append((nr, nc))\nprint(dist.get((${ti}, ${tj}), -1))`,
         answer: String(ans == null ? -1 : ans),
+        board: ans != null && ans >= 3 ? BOARDS.walk(g, ti, tj) : undefined,
         why: `<p>BFS reaches every square in order of distance, so the first time it reaches (${ti}, ${tj}) is the shortest way: ${ans == null ? "here it never does, as walls cut it off, so −1" : ans + " steps"}. With no walls in the way it would be ${ti + tj}.</p>`,
       };
     },
@@ -1269,6 +1296,7 @@ print("O(" + growth() + ")")`;
         ch: 20, title: "Count the islands", prompt: "<p>Land is <code>1</code>; squares touching up, down, left or right are one island. What does it print?</p>",
         code: `grid = [list(row) for row in [\n${g.map((row) => `    "${row.join("")}",`).join("\n")}\n]]\ncount = 0\nfor r in range(5):\n    for c in range(6):\n        if grid[r][c] == "1":\n            count += 1\n            stack = [(r, c)]\n            grid[r][c] = "0"\n            while stack:\n                i, j = stack.pop()\n                for ni, nj in ((i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)):\n                    if 0 <= ni < 5 and 0 <= nj < 6 and grid[ni][nj] == "1":\n                        grid[ni][nj] = "0"\n                        stack.append((ni, nj))\nprint(count)`,
         answer: String(count),
+        board: BOARDS.islands(g),
         why: "<p>Each time the scan meets land it hasn't sunk yet, that's a new island; the DFS then sinks all of it so it isn't counted again. Diagonal neighbours don't join islands.</p>",
       };
     },
@@ -1317,6 +1345,7 @@ print("O(" + growth() + ")")`;
         ch: 24, title: "Every pair at once", prompt: "<p>Edges are one-way <code>(from, to, cost)</code>. What does it print?</p>",
         code: `INF = float("inf")\nd = [[0 if i == j else INF for j in range(4)] for i in range(4)]\nfor u, v, c in ${tupList(edges)}:\n    d[u][v] = c\nfor k in range(4):\n    for i in range(4):\n        for j in range(4):\n            if d[i][k] + d[k][j] < d[i][j]:\n                d[i][j] = d[i][k] + d[k][j]\nprint(d[0], d[3])`,
         answer: `${pyV(w[0])} ${pyV(w[3])}`,
+        board: BOARDS.floyd(w),
         why: "<p>After round k, <code>d[i][j]</code> is the cheapest path that only stops at nodes 0…k on the way. Three loops, k outermost: O(n³) for every pair. <code>inf</code> means there's no path.</p>",
       };
     },
@@ -1345,6 +1374,7 @@ print("O(" + growth() + ")")`;
         ch: 28, title: "Rising, not necessarily together", prompt: "<p>What does it print?</p>",
         code: `a = ${pyList(a)}\ndp = [1] * len(a)\nfor i in range(len(a)):\n    for j in range(i):\n        if a[j] < a[i]:\n            dp[i] = max(dp[i], dp[j] + 1)\nprint(dp, max(dp))`,
         answer: `${pyList(dp)} ${Math.max(...dp)}`,
+        board: BOARDS.lis(a, dp),
         why: "<p><code>dp[i]</code> is the longest strictly rising subsequence that <i>ends</i> at a[i]: one more than the best earlier ending on a smaller number. The answer is the best ending anywhere.</p>",
       };
     },
@@ -1367,6 +1397,7 @@ print("O(" + growth() + ")")`;
         ch: 30, title: "Right and down, cheaply", prompt: "<p>Moving only right or down from the top-left to the bottom-right, what does it print?</p>",
         code: `${pyMatrix("g", g)}\nfor i in range(4):\n    for j in range(4):\n        if i or j:\n            up = g[i - 1][j] if i else float("inf")\n            left = g[i][j - 1] if j else float("inf")\n            g[i][j] += min(up, left)\nprint(g[3][3])`,
         answer: String(d[3][3]),
+        board: BOARDS.pathTable(g),
         why: "<p>Each square's cheapest arrival is its own cost plus the cheaper of the square above and the square to its left. The table fills top-left to bottom-right, in place.</p>",
       };
     },
@@ -1391,6 +1422,7 @@ print("O(" + growth() + ")")`;
         ch: 38, title: "Sieve it", prompt: "<p>What does it print?</p>",
         code: `n = ${n}\nis_p = [True] * (n + 1)\nis_p[0] = is_p[1] = False\nfor i in range(2, int(n ** 0.5) + 1):\n    if is_p[i]:\n        for j in range(i * i, n + 1, i):\n            is_p[j] = False\nprimes = [i for i in range(n + 1) if is_p[i]]\nprint(len(primes), primes[-1])`,
         answer: `${ps.length} ${ps[ps.length - 1]}`,
+        board: n <= 60 ? BOARDS.sieve(n) : undefined,
         why: `<p>There are ${ps.length} primes up to ${n}, the biggest being ${ps[ps.length - 1]}. Crossing off starts at i², because smaller multiples of i were already crossed off by smaller primes, and stops at √${n}: any composite has a factor that small.</p>`,
       };
     },
@@ -1558,6 +1590,338 @@ print("O(" + growth() + ")")`;
     traversal(rootId, left, right, out) {
       return { type: "tree", root: rootId, left, right, mode: "seq", solve: out, ask: "Tap the nodes in the order it prints them." };
     },
+
+    // ---- more ways to answer on the picture: pick a set, colour groups, fill a table, walk a maze, book a room,
+    // set a dial, draw a line. Each still works the program out again on the picture, for the replay.
+    robber(a) {
+      // the best set with no two neighbours, read back out of the DP
+      const n = a.length, best = Array(n + 1).fill(0);
+      for (let i = 1; i <= n; i++) best[i] = Math.max(best[i - 1], (i >= 2 ? best[i - 2] : 0) + a[i - 1]);
+      const take = [];
+      for (let i = n; i >= 1;) { if (best[i] !== best[i - 1]) { take.push(i - 1); i -= 2; } else i--; }
+      take.reverse();
+      const steps = take.map((i, k) => ({ on: take.slice(0, k + 1), at: i, note: `Take ${a[i]}${k ? ", never right next to the last one" : ""}. Haul so far: ${take.slice(0, k + 1).reduce((s, j) => s + a[j], 0)}.`, wait: 800 }));
+      return { type: "array", vals: a, mode: "pick", emit: "sum", rule: "noAdj", solve: take, steps,
+        ask: "Be the robber: tap the houses that make the biggest haul, never two side by side (they'd turn red). Your answer is the total of what you took." };
+    },
+    pathTable(g) {
+      const R = g.length, C = g[0].length, d = g.map((row) => row.slice());
+      for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) if (i || j) d[i][j] += Math.min(i ? d[i - 1][j] : Infinity, j ? d[i][j - 1] : Infinity);
+      const given = {}, blank = [], solve = [], steps = [];
+      for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) {
+        const id = i * C + j;
+        if (!i || !j) { given[id] = d[i][j]; continue; }
+        blank.push(id); solve.push(String(d[i][j]));
+        steps.push({ at: [id, id - C, id - 1], set: { [id]: d[i][j] }, note: `${g[i][j]}, plus the cheaper of ${d[i - 1][j]} above and ${d[i][j - 1]} to the left: ${d[i][j]}.`, wait: 900 });
+      }
+      return { type: "grid", rows: R, cols: C, vals: g.flat(), mode: "label", given, blank, out: [R * C - 1], solve, steps,
+        ask: "The top row and left column are done: there's only one way into them. Fill in the rest: each square's own number (in its corner) plus the cheaper of the square above and the square to its left. The last square is what it prints." };
+    },
+    dpTable(a, b, lcs) {
+      const n = a.length, m = b.length, T = [];
+      for (let i = 0; i <= n; i++) {
+        T.push([]);
+        for (let j = 0; j <= m; j++) T[i][j] = lcs ? (!i || !j ? 0 : a[i - 1] === b[j - 1] ? T[i - 1][j - 1] + 1 : Math.max(T[i - 1][j], T[i][j - 1]))
+          : !i || !j ? i + j : a[i - 1] === b[j - 1] ? T[i - 1][j - 1] : 1 + Math.min(T[i - 1][j], T[i][j - 1], T[i - 1][j - 1]);
+      }
+      const C = m + 1, given = {}, blank = [], solve = [], steps = [];
+      for (let i = 0; i <= n; i++) for (let j = 0; j <= m; j++) {
+        const id = i * C + j;
+        if (!i || !j) { given[id] = T[i][j]; continue; }
+        blank.push(id); solve.push(String(T[i][j]));
+        const hit = a[i - 1] === b[j - 1];
+        steps.push({ at: hit ? [id, id - C - 1] : lcs ? [id, id - C, id - 1] : [id, id - C, id - 1, id - C - 1], set: { [id]: T[i][j] },
+          note: hit ? `"${a[i - 1]}" and "${b[j - 1]}" match: ${lcs ? "one more than" : "the same as"} the square diagonally up-left, ${T[i][j]}.` : `No match: ${lcs ? "the bigger of up and left" : "one more than the smallest of up, left and diagonal"}, ${T[i][j]}.`, wait: 800 });
+      }
+      return { type: "grid", rows: n + 1, cols: C, vals: Array((n + 1) * C).fill(null), colNames: ["", ...b], rowNames: ["", ...a], cell: 50, mode: "label", given, blank, out: [(n + 1) * C - 1], solve, steps,
+        ask: lcs ? "Fill the table. A square is the longest common subsequence of the letters up to its row and its column: a match is one more than the square diagonally up-left, otherwise the bigger of up and left. The last square is what it prints."
+          : "Fill the table. A square is the edit distance between the letters up to its row and its column: a match copies the square diagonally up-left, otherwise it's one more than the smallest of up, left and diagonal. The last square is what it prints." };
+    },
+    islands(g) {
+      const R = g.length, C = g[0].length, grp = Array(R * C).fill(-1), solve = [], steps = [];
+      let k = 0;
+      for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) if (g[i][j] === "1" && grp[i * C + j] < 0) {
+        const cells = [], st = [i * C + j];
+        grp[i * C + j] = k;
+        while (st.length) {
+          const u = st.pop(), a = Math.floor(u / C), c = u % C;
+          cells.push(u);
+          for (const [x, y] of [[a + 1, c], [a - 1, c], [a, c + 1], [a, c - 1]]) if (x >= 0 && x < R && y >= 0 && y < C && g[x][y] === "1" && grp[x * C + y] < 0) { grp[x * C + y] = k; st.push(x * C + y); }
+        }
+        solve.push(i * C + j);
+        steps.push({ at: i * C + j, tint: Object.fromEntries(cells.map((u) => [u, k])), note: `Land it hasn't sunk: island ${k + 1}. The search floods all ${cells.length} of its squares.`, wait: 1100 });
+        k++;
+      }
+      if (!k) return undefined;
+      const flat = g.flat();
+      const sea = flat.map((x, i) => (x === "1" ? -1 : i)).filter((i) => i >= 0);
+      return { type: "grid", rows: R, cols: C, vals: flat.map((x) => (x === "1" ? "" : "~")), lock: sea, water: sea,
+        mode: "pick", emit: "count", rule: "oneEach", group: grp, solve, steps,
+        ask: "The bright squares are land. Tap one square in each island (up, down, left and right join; corners don't). Two taps on one island turn red. The count is what it prints." };
+    },
+    walk(g, ti, tj) {
+      const R = g.length, C = g[0].length, prev = { 0: -1 }, q = [0];
+      while (q.length) {
+        const u = q.shift(), a = Math.floor(u / C), c = u % C;
+        for (const [x, y] of [[a + 1, c], [a - 1, c], [a, c + 1], [a, c - 1]]) if (x >= 0 && x < R && y >= 0 && y < C && g[x][y] === "." && !(x * C + y in prev)) { prev[x * C + y] = u; q.push(x * C + y); }
+      }
+      const goal = ti * C + tj;
+      if (!(goal in prev) || goal === 0) return undefined;
+      const path = [];
+      for (let u = goal; u !== -1; u = prev[u]) path.push(u);
+      path.reverse();
+      return { type: "grid", rows: R, cols: C, vals: g.flat().map((x) => (x === "#" ? "#" : "")), mode: "seq", path: true, start: 0, goal, solve: path,
+        ask: "Walk it: from the top-left square, tap one neighbouring square at a time to reach the ringed one by a shortest route. Your number of moves is your answer. Tap a square on your path to back up to it." };
+    },
+    sieve(n) {
+      const cols = 10, rows = Math.ceil((n + 1) / cols), isP = Array(n + 1).fill(true), steps = [];
+      isP[0] = isP[1] = false;
+      for (let i = 2; i * i <= n; i++) if (isP[i]) {
+        const out = {};
+        for (let j = i * i; j <= n; j += i) { if (isP[j]) out[j] = 6; isP[j] = false; }
+        steps.push({ at: i, tint: out, note: `${i} is prime: cross out its multiples from ${i * i} on.`, wait: 1100 });
+      }
+      const ps = isP.map((b, i) => (b ? i : -1)).filter((i) => i >= 0);
+      steps.push({ on: ps, note: `What's never crossed out is prime: ${ps.length} of them, the biggest ${ps[ps.length - 1]}.` });
+      return { type: "grid", rows, cols, cell: 46, vals: range(rows * cols).map((i) => (i <= n ? i : null)), voids: range(rows * cols).filter((i) => i > n), lock: [0, 1],
+        mode: "pick", emit: "countmax", solve: ps, steps, ask: "Tap every prime. It prints how many you tapped, then the biggest." };
+    },
+    lis(a, dp) {
+      const steps = a.map((x, i) => {
+        let j = -1;
+        for (let k = 0; k < i; k++) if (a[k] < x && dp[k] + 1 === dp[i]) { j = k; break; }
+        return { at: j < 0 ? i : [i, j], set: { [i]: dp[i] }, note: j < 0 ? `Nothing smaller before ${x}: dp is 1.` : `${x} extends the run ending at ${a[j]} (dp ${dp[j]}): dp is ${dp[i]}.`, wait: 900 };
+      });
+      return { type: "array", vals: a, mode: "label", solve: dp.map(String), more: [{ label: "max(dp)", solve: Math.max(...dp) }], steps,
+        ask: "Under each number, write its dp: the longest increasing run (gaps allowed) that ends on it. Then the biggest." };
+    },
+    activities(iv) {
+      const order = iv.map((_, i) => i).sort((x, y) => iv[x][1] - iv[y][1]), take = [], steps = [];
+      let end = -1;
+      for (const i of order) {
+        const ok = iv[i][0] >= end;
+        if (ok) { take.push(i); end = iv[i][1]; }
+        steps.push({ at: i, on: take.slice(), note: ok ? `${iv[i][0]}–${iv[i][1]} finishes earliest of what's left, and starts after the last one ends: book it.` : `${iv[i][0]}–${iv[i][1]} clashes with what's booked: skip it.`, wait: 900 });
+      }
+      const lo = Math.min(...iv.map((x) => x[0])), hi = Math.max(...iv.map((x) => x[1]));
+      return { type: "intervals", spans: iv, lo, hi, mode: "pick", emit: "count", rule: "noOverlap", solve: take, steps,
+        ask: "Book as many of these meetings as you can into one room: tap them. Two that overlap turn red; one may start the moment another ends. The count is what it prints." };
+    },
+    rooms(ms) {
+      const ends = [], room = [], steps = [];
+      ms.forEach(([s, e], i) => {
+        ends.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+        let k, fresh = false;
+        if (ends.length && ends[0][0] <= s) { k = ends[0][1]; ends[0][0] = e; } else { k = ends.length; ends.push([e, k]); fresh = true; }
+        room[i] = k;
+        steps.push({ at: i, put: { [i]: k }, note: fresh ? `${s}–${e}: no room is free by ${s}, so open room ${k + 1}.` : `${s}–${e}: room ${k + 1} is free by ${s}, so reuse it.`, wait: 900 });
+      });
+      const nb = Math.min(6, ends.length + 1), lo = Math.min(...ms.map((x) => x[0])), hi = Math.max(...ms.map((x) => x[1]));
+      return { type: "intervals", spans: ms, lo, hi, mode: "bins", bins: range(nb).map((k) => "R" + (k + 1)), emit: "nbins", rule: "noOverlap", solve: room, steps,
+        ask: "Give every meeting a room: tap a meeting to cycle its colour, one colour per room. Meetings in one room can't overlap (they turn red). Use as few rooms as you can: that number is what it prints." };
+    },
+    merge(iv, out) {
+      const group = iv.map(([s, e]) => out.findIndex(([a, z]) => a <= s && e <= z));
+      const order = iv.map((_, i) => i).sort((x, y) => iv[x][0] - iv[y][0] || iv[x][1] - iv[y][1]);
+      const steps = order.map((i) => ({ at: i, put: { [i]: group[i] }, note: `${iv[i][0]}–${iv[i][1]}: ${order.indexOf(i) && group[order[order.indexOf(i) - 1]] === group[i] ? "starts before the block so far ends, so it joins it." : "starts a new block."}`, wait: 900 }));
+      const lo = Math.min(...iv.map((x) => x[0])), hi = Math.max(...iv.map((x) => x[1]));
+      return { type: "intervals", spans: iv, lo, hi, mode: "bins", bins: "abcdef".split("").slice(0, Math.min(6, out.length + 1)), emit: "spans", solve: group, steps,
+        ask: "Colour the intervals so each merged block is one colour: tap one to cycle its colour. Touching counts as overlapping. Your blocks, from first to last, are what it prints." };
+    },
+    kruskal(n, edges) {
+      const E = edges.map(([w, u, v]) => [u, v, w]), parent = range(n), find = (x) => { while (parent[x] !== x) x = parent[x]; return x; };
+      const order = range(E.length).sort((x, y) => E[x][2] - E[y][2]), take = [], steps = [];
+      for (const i of order) {
+        const [u, v, w] = E[i], a = find(u), b = find(v), ok = a !== b;
+        if (ok) { parent[a] = b; take.push(i); }
+        steps.push({ at: i, on: take.slice(), note: ok ? `${w}: joins ${u} and ${v}, which weren't connected yet. Keep it.` : `${w}: ${u} and ${v} are already connected, so it would close a loop. Skip it.`, wait: 800 });
+      }
+      return fits({ type: "graph", on: "edges", nodes: range(n), edges: E, mode: "pick", emit: "sum", solve: take, steps,
+        ask: "Tap the edges Kruskal keeps: cheapest first, skipping any that would close a loop. Your answer is the total weight of what you tapped." });
+    },
+    bridges(n, edges, out) {
+      const solve = out.map(([u, v]) => edges.findIndex((e) => e[0] === u && e[1] === v));
+      const steps = solve.map((i, k) => ({ at: i, on: solve.slice(0, k + 1), note: `Cut ${edges[i][0]}–${edges[i][1]} and the graph falls in two: a bridge.`, wait: 1000 }));
+      return fits({ type: "graph", on: "edges", nodes: range(n), edges, mode: "pick", emit: "pairs", solve, steps,
+        ask: "Tap every bridge: an edge whose loss would split the graph in two. Edges on a loop are never bridges." });
+    },
+    groups(n, pairs, directed) {
+      // one node per group: union-find groups, or the strongly connected parts of a one-way graph
+      let comp;
+      if (directed) {
+        const has = new Set(pairs.map((p) => p.join())), reach = range(n).map((i) => range(n).map((j) => i === j || has.has(i + "," + j)));
+        for (let k = 0; k < n; k++) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (reach[i][k] && reach[k][j]) reach[i][j] = true;
+        const key = range(n).map((i) => range(n).map((j) => +(reach[i][j] && reach[j][i])).join("")), seen = [];
+        comp = key.map((k) => (seen.includes(k) ? seen.indexOf(k) : seen.push(k) - 1));
+      } else {
+        const p = range(n), find = (x) => (p[x] === x ? x : (p[x] = find(p[x])));
+        for (const [a, b] of pairs) p[find(a)] = find(b);
+        const roots = [];
+        comp = range(n).map((i) => (roots.includes(find(i)) ? roots.indexOf(find(i)) : roots.push(find(i)) - 1));
+      }
+      const k = Math.max(...comp) + 1, solve = range(k).map((g) => comp.indexOf(g)), seen = new Set(), edges = [];
+      for (const [a, b] of pairs) { const key = directed ? a + ">" + b : [a, b].sort().join(); if (!seen.has(key)) { seen.add(key); edges.push([a, b]); } }
+      const steps = range(k).map((g) => ({ tint: Object.fromEntries(range(n).filter((i) => comp[i] === g).map((i) => [i, g])), at: solve[g], on: solve.slice(0, g + 1),
+        note: `Group ${g + 1}: ${range(n).filter((i) => comp[i] === g).join(", ")}${range(n).filter((i) => comp[i] === g).length === 1 ? ", on its own" : ""}.`, wait: 1000 }));
+      return fits({ type: "graph", directed, nodes: range(n), edges, mode: "pick", emit: "count", rule: "oneEach", group: comp, solve, steps,
+        ask: directed ? "A group is nodes that can all reach each other along the arrows; a node on its own is a group too. Tap one node in each group: two in one group turn red. The count is what it prints."
+          : "Each line is a union. Tap one node in each group that's left; a node on its own is a group too. Two in one group turn red. The count is what it prints." });
+    },
+    twoSum(a, target, ans) {
+      const seen = [], steps = [];
+      for (let k = 0; k <= ans[1]; k++) {
+        const hit = k === ans[1];
+        steps.push({ at: hit ? [ans[0], k] : k, list: hit ? seen.slice() : seen.concat([a[k]]), note: hit ? `${a[k]} needs ${target - a[k]}, seen at ${ans[0]}: print ${ans[0]} ${k}.` : `${a[k]} needs ${target - a[k]}, not seen yet. Remember ${a[k]}.`, wait: 800 });
+        if (!hit) seen.push(a[k]);
+      }
+      return { type: "array", vals: a, mode: "pick", limit: 2, solve: ans, steps, listName: "seen",
+        ask: `Tap the two cells it prints: the first pair that adds up to ${target}, scanning left to right. Your answer is their indexes.` };
+    },
+    dedupe(a) {
+      const keep = a.map((x, i) => (!i || a[i - 1] !== x ? i : -1)).filter((i) => i >= 0);
+      return { type: "array", vals: a, mode: "pick", emit: "countvals", solve: keep, steps: keep.map((i, k) => ({ at: i, on: keep.slice(0, k + 1), note: `${a[i]} is new: it's copied down to slot ${k}.`, wait: 700 })),
+        ask: "Tap the cells it keeps: one for each different value. It prints how many, then the values." };
+    },
+    moveZeros(a) {
+      const nz = range(a.length).filter((i) => a[i] !== 0), z = range(a.length).filter((i) => a[i] === 0);
+      return { type: "array", vals: a, mode: "arrange", swaps: swapsTo(nz.concat(z)), more: [{ label: "w", solve: nz.length }],
+        ask: "Tap two tiles to swap them. Leave the list the way it prints it: the non-zeros first, still in their order, then the zeros. Then write <code>w</code>." };
+    },
+    shipDays(w, D, cap) {
+      const days = (c) => { const loads = [[]]; let load = 0; for (const x of w) { if (load + x > c) { loads.push([]); load = 0; } load += x; loads[loads.length - 1].push(x); } return loads; };
+      const lo = Math.max(...w), hi = w.reduce((s, x) => s + x, 0), peek = {};
+      for (let c = lo; c <= hi; c++) { const L = days(c); peek[c] = `Capacity ${c}: ${L.map((d) => `<span class="hb-load">${d.join(" ")}</span>`).join(" ")} → <b>${L.length} day${L.length > 1 ? "s" : ""}</b>` + (L.length <= D ? "" : ` (more than ${D})`); }
+      const steps = [];
+      let a = lo, z = hi;
+      while (a < z) { const m = (a + z) >> 1, d = days(m).length; steps.push({ val: m, note: `lo ${a}, hi ${z}, so try ${m}: ${d} day${d > 1 ? "s" : ""}, ${d <= D ? "it fits, so try smaller" : "too many, so go bigger"}.`, wait: 1200 }); if (d <= D) z = m; else a = m + 1; }
+      steps.push({ val: a, note: `lo meets hi at ${a}: the smallest capacity that ships in ${D} days.` });
+      return { type: "line", lo, hi, step: 1, mode: "dial", solve: cap, peek, steps,
+        ask: `Drag the pin to try a ship capacity, and see how the packages split into days. Find the smallest capacity that ships everything within ${D} days.` };
+    },
+    diffSketch(n, ups, a) {
+      const cur = Array(n).fill(0), steps = ups.map(([l, r, v]) => {
+        for (let i = l; i <= r; i++) cur[i] += v;
+        return { pts: Object.fromEntries(cur.map((x, i) => [i, x])), at: range(r - l + 1).map((k) => l + k), note: `Add ${v} to cells ${l} to ${r}: <code>d[${l}] += ${v}</code>, <code>d[${r + 1}] -= ${v}</code>.`, wait: 1300 };
+      });
+      return { type: "plot", xs: range(n), lo: 0, hi: Math.max(8, ...a), yName: "a[i]", mode: "sketch", solve: a, steps,
+        ask: "Draw the final array: drag across the chart to set each cell's height. Each update lifts a whole stretch." };
+    },
+    floyd(w) {
+      const row = (r) => r.map((x) => (x === Infinity ? "inf" : String(x)));
+      return { type: "grid", rows: 2, cols: 4, vals: Array(8).fill(null), colNames: [0, 1, 2, 3], rowNames: ["d[0]", "d[3]"], mode: "label", solve: row(w[0]).concat(row(w[3])),
+        ask: "Write the shortest distance from 0, and from 3, to every node: <code>inf</code> if there's no way." };
+    },
+    bellman(n, E, dist) {
+      const keys = new Set(E.map(([u, v]) => u + ">" + v));
+      if (keys.size !== E.length) return undefined;
+      const d = Array(n).fill(Infinity), steps = [];
+      d[0] = 0;
+      steps.push({ at: 0, set: { 0: 0 }, note: "Start: 0 is 0 away, everything else inf." });
+      for (const [u, v, w] of E) {
+        const ok = d[u] + w < d[v];
+        if (ok) d[v] = d[u] + w;
+        steps.push({ at: u, edges: [[u, v]], set: ok ? { [v]: d[v] } : {}, note: d[u] === Infinity ? `${u} → ${v}: ${u} isn't reached yet, so nothing.` : ok ? `${u} → ${v} (${w}): ${v} drops to ${d[v]}.` : `${u} → ${v} (${w}): no better than ${d[v]}.`, wait: 900 });
+      }
+      for (let i = 0; i < n; i++) if (d[i] === Infinity) steps[steps.length - 1].set[i] = "inf";
+      return fits({ type: "graph", directed: true, nodes: range(n), edges: E, start: 0, mode: "label", solve: dist.map((x) => (x === Infinity ? "inf" : String(x))), steps,
+        ask: "It makes <b>one</b> pass over the edges, in the listed order. Write each node's distance after that single pass, or <code>inf</code>." });
+    },
+    lru(seq, cap) {
+      const c = [], hits = [], steps = [];
+      [...seq].forEach((k, i) => {
+        const at = c.indexOf(k), hit = at >= 0;
+        if (hit) { hits.push(i); c.splice(at, 1); c.push(k); } else { c.push(k); if (c.length > cap) c.shift(); }
+        steps.push({ at: i, on: hits.slice(), list: c.slice(), note: hit ? `"${k}" is in the cache: a hit. It moves to the newest end.` : `"${k}" isn't there: a miss. It goes in${c.length === cap && !hit ? "" : ""}, and the oldest falls out if it's full.`, wait: 800 });
+      });
+      if (!hits.length) return undefined;
+      return { type: "array", vals: [...seq], mode: "pick", emit: "count", solve: hits, more: [{ label: "left in the cache", solve: c.join("") }], steps, listName: "cache, oldest first",
+        ask: `The cache holds ${cap}. Tap every access that's a hit. Then write what's left in the cache, oldest first.` };
+    },
+    markSweep(names, heap, roots, seen) {
+      const edges = [], steps = [], done = new Set();
+      for (const n of names) for (const m of heap[n]) edges.push([n, m]);
+      const go = (x, from) => { if (done.has(x)) return; done.add(x); steps.push({ at: x, edges: from ? [[from, x]] : [], tint: { [x]: 5 }, note: from ? `${x}: reached from ${from}. Mark it.` : `${x} is a root. Mark it.`, wait: 800 }); for (const y of heap[x]) go(y, x); };
+      roots.forEach((x) => go(x, null));
+      const solve = names.filter((n) => !seen.has(n));
+      if (!solve.length) return undefined;
+      steps.push({ on: solve, note: `Never marked: ${solve.join(", ")}. The sweep frees ${solve.length === 1 ? "it" : "them"}.` });
+      return fits({ type: "graph", directed: true, nodes: names, edges, roots, mode: "pick", solve, steps,
+        ask: "The ringed objects are roots. Tap every object the sweep frees: anything no root can reach by following the arrows." });
+    },
+    raster(A, B, C) {
+      const edge = (p, q, x, y) => (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]), inside = [];
+      for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
+        const w = [edge(A, B, x + 0.5, y + 0.5), edge(B, C, x + 0.5, y + 0.5), edge(C, A, x + 0.5, y + 0.5)];
+        if (w.every((e) => e >= 0) || w.every((e) => e <= 0)) inside.push(y * 7 + x);
+      }
+      if (!inside.length) return undefined;
+      return { type: "grid", rows: 7, cols: 7, cell: 44, vals: Array(49).fill(""), poly: [A, B, C], mode: "pick", emit: "count", solve: inside, steps: [{ on: inside, note: `${inside.length} pixel centres are inside (or on) the triangle.` }],
+        ask: "Tap every pixel whose centre is inside the triangle (on its edge counts). The count is what it prints." };
+    },
+    blur(img, out) {
+      const blank = [5, 6, 9, 10], flat = out.flat();
+      return { type: "grid", rows: 4, cols: 4, vals: img.flat(), mode: "label", blank, solve: flat.map(String),
+        steps: blank.map((id, k) => { const r = Math.floor(id / 4), c = id % 4, block = []; for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) block.push((r + a) * 4 + c + b); return { at: block, set: { [id]: flat[k] }, note: `Its 3 × 3 block adds up to ${block.reduce((s, i) => s + img.flat()[i], 0)}; divided by 9, rounded down: ${flat[k]}.`, wait: 1300 }; }),
+        ask: "Write each middle pixel's blurred value: the sum of its 3 × 3 block, divided by 9, rounded down." };
+    },
+    letters(vals, out, ask) {
+      return { type: "array", vals, mode: "seq", emit: "value", solve: out.map((x) => vals.indexOf(x)), ask };
+    },
+    rpn(toks) {
+      const prec = { "+": 1, "-": 1, "*": 2, "/": 2 }, out = [], ops = [], steps = [];
+      toks.forEach((t, i) => {
+        const before = out.length;
+        if (/\d/.test(t)) out.push(i);
+        else if (t === "(") ops.push(i);
+        else if (t === ")") { while (toks[ops[ops.length - 1]] !== "(") out.push(ops.pop()); ops.pop(); }
+        else { while (ops.length && toks[ops[ops.length - 1]] !== "(" && prec[toks[ops[ops.length - 1]]] >= prec[t]) out.push(ops.pop()); ops.push(i); }
+        // what comes out at this token is tapped, in order, on the replay
+        const went = out.slice(before).map((j) => toks[j]);
+        steps.push({ at: out.slice(before), list: ops.map((j) => toks[j]), note: /\d/.test(t) ? `${t}: a number goes straight out.` : t === "(" ? "( waits on the stack." : t === ")" ? `): everything back to the ( comes out${went.length ? ": " + went.join(" ") : ""}.` : went.length ? `${t}: ${went.join(" ")} ${went.length > 1 ? "are" : "is"} at least as strong, so ${went.length > 1 ? "they come" : "it comes"} out first; ${t} waits.` : `${t} waits on the stack.`, wait: 1000 });
+      });
+      const rest = [];
+      while (ops.length) { const j = ops.pop(); out.push(j); rest.push(j); }
+      steps.push({ at: rest, list: [], note: "The end: what's left on the stack comes out, top first." });
+      const parens = toks.map((t, i) => (t === "(" || t === ")" ? i : -1)).filter((i) => i >= 0);
+      return { type: "array", vals: toks, mode: "seq", emit: "value", lock: parens, solve: out, listName: "operators waiting", steps,
+        ask: "Tap the tokens in the order they come out. A number goes straight out; an operator waits on a stack until a weaker one (or a <code>)</code>) pushes it out." };
+    },
+    life(g, h, before) {
+      const n = g.length, dots = [], next = [];
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { if (g[i][j]) dots.push(i * n + j); if (h[i][j]) next.push(i * n + j); }
+      if (!next.length) return undefined;
+      return { type: "grid", rows: n, cols: n, cell: 50, vals: Array(n * n).fill(""), dots, mode: "pick", emit: "count", solve: next, more: [{ label: "alive now", solve: before, first: true }],
+        steps: [{ on: next, note: "Lit: alive next generation. A live square with 2 or 3 live neighbours lives on; an empty one with exactly 3 is born." }],
+        ask: "Dots are alive now. Tap every square that's alive in the next generation: a live one with 2 or 3 live neighbours lives on, an empty one with exactly 3 is born. Then count the dots." };
+    },
+    sandpile(g0, grains, g, topples) {
+      return { type: "grid", rows: 3, cols: 3, cell: 58, vals: g0.flat().map((x, i) => (i === 4 ? `${x}+${grains}` : x)), mode: "label", solve: g.flat().map(String), more: [{ label: "topples", solve: topples }],
+        ask: "The corner numbers are the piles before the drop. Write each pile once it's all settled (any pile of 4 or more gives one grain to each neighbour; grains off the edge are lost), then how many topples it took." };
+    },
+    automaton(rule, rows) {
+      const w = rows[0].length, on = [];
+      rows.forEach((row, r) => [...row].forEach((x, c) => { if (r && x === "1") on.push(r * w + c); }));
+      return { type: "grid", rows: rows.length, cols: w, cell: 46, vals: Array(rows.length * w).fill(""), rowNames: rows.map((_, r) => "step " + r), fixed: [...rows[0]].map((x, c) => (x === "1" ? c : -1)).filter((c) => c >= 0), lock: range(w),
+        mode: "pick", emit: "rows", solve: on, steps: rows.slice(1).map((_, k) => ({ on: on.filter((id) => id < (k + 2) * w), note: `Step ${k + 1}: each cell reads the three above it as a number from 0 to 7 and takes that bit of ${rule}.`, wait: 1200 })),
+        ask: `Step 0 is given. Tap the cells that are 1 in steps 1 to 3: each cell reads the three cells above it (wrapping round the sides) as a number n, and becomes bit n of ${rule}.` };
+    },
+    diffusion(c, c2) {
+      return { type: "array", vals: c, mode: "label", solve: c2.map(String), more: [{ label: "sum", solve: c2.reduce((a, b) => a + b, 0) }],
+        ask: "The numbers are the start. Write each cell's value after two steps (the ends never change), then the total. Watch the rounding: it's <code>//</code>." };
+    },
+    schelling(ring, unhappy) {
+      const solve = unhappy.map((u, i) => (u ? i : -1)).filter((i) => i >= 0);
+      if (!solve.length) return undefined;
+      return { type: "array", vals: ring, mode: "pick", emit: "countids", solve, steps: [{ on: solve, note: "Lit: both neighbours are the other kind." }],
+        ask: "The row wraps round: the last one sits next to the first. Tap every agent whose two neighbours are both the other kind. It prints how many, then where." };
+    },
+    dice(s) {
+      const solve = [];
+      for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) if (a + b === s) solve.push((a - 1) * 6 + b - 1);
+      return { type: "grid", rows: 6, cols: 6, cell: 44, vals: Array(36).fill(""), rowNames: [1, 2, 3, 4, 5, 6], colNames: [1, 2, 3, 4, 5, 6], mode: "pick", emit: "countfrac", over: 36, solve,
+        steps: [{ on: solve, note: `${solve.length} of the 36 rolls add up to ${s}.` }],
+        ask: `Rows are the first die, columns the second. Tap every roll that adds up to ${s}. It prints how many, then that over 36.` };
+    },
   };
   // each two-way edge once, from adjacency lists
   function undirected(adj, names) {
@@ -1599,6 +1963,246 @@ print("O(" + growth() + ")")`;
   }
   const pyGraph = (adj, names) => "{" + names.map((x) => `"${x}": ${pyList(adj[x])}`).join(", ") + "}";
 
+
+  // ---- three new kinds of question, all on pictures ----
+  //   sketch it:    draw how a number rises and falls before you see it run; then the real line draws over yours
+  //   find the slip: the run plays as a film with one frame the code would never produce; tap that frame
+  //   make it happen: the program's output is given, and you build the input that makes it (judged live)
+  // A slip's "run" program works out the true run in Python and prints the first frame where the film differs,
+  // and a build's "probes" are random inputs whose live verdict tools/mock-check.js checks against Python.
+  const firstDiff = "from itertools import zip_longest\nprint(next(i + 1 for i, (a, b) in enumerate(zip_longest(truth, shown)) if a != b))";
+  const pyTupList = (a) => "[" + a.map((t) => "(" + t.map((x) => (typeof x === "string" ? `"${x}"` : String(x))).join(", ") + ")").join(", ") + "]";
+  function bfsRun(adj, slipAt) {
+    const seen = new Set(["A"]), q = ["A"], order = [], steps = [];
+    let k = 0;
+    while (q.length) {
+      const wrong = k === slipAt && q.length >= 2, u = wrong ? q.splice(1, 1)[0] : q.shift(), found = [];
+      order.push(u);
+      for (const v of adj[u]) if (!seen.has(v)) { seen.add(v); q.push(v); found.push(v); }
+      steps.push({ at: u, list: q.slice(), edges: found.map((v) => [u, v]), note: `Visit ${u}. ${found.length ? `${found.join(" and ")} join${found.length === 1 ? "s" : ""} the back of the queue.` : "Nothing new next to it."}` });
+      k++;
+    }
+    return { order, steps };
+  }
+  const bfsPy = (adj, names) => `from collections import deque\ng = ${pyGraph(adj, names)}\nq, seen, order = deque(["A"]), {"A"}, []\nwhile q:\n    u = q.popleft()\n    order.append(u)\n    for v in g[u]:\n        if v not in seen:\n            seen.add(v)\n            q.append(v)\nprint(order)`;
+  function bsRun(a, target, slipAt) {
+    const ev = [], steps = [];
+    let lo = 0, hi = a.length - 1, k = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, x = a[mid];
+      if (x === target) { ev.push([mid, "found"]); steps.push({ at: mid, span: [lo, hi], note: `mid = ${mid}: a[${mid}] = ${x}. Found it.` }); break; }
+      let right = x < target;
+      if (k === slipAt) right = !right;
+      ev.push([mid, right ? "right" : "left"]);
+      steps.push({ at: mid, span: [lo, hi], note: `mid = ${mid}: a[${mid}] = ${x} ${x < target ? "<" : ">"} ${target}, so it looks ${right ? "right" : "left"} of mid.` });
+      if (right) lo = mid + 1; else hi = mid - 1;
+      k++;
+    }
+    if (!ev.length || ev[ev.length - 1][1] !== "found") steps.push({ span: [lo, hi], note: `lo ${lo} has passed hi ${hi}: it stops.` });
+    return { ev, steps };
+  }
+  function heapRun(xs, slipPush) {
+    // heappush, one at a time; at the slipping push it swaps once more than it should
+    const v = [], id = [], ev = [], steps = [], swaps = [];
+    xs.forEach((x, i) => {
+      v.push(x); id.push(i);
+      ev.push(["push", x]);
+      steps.push({ at: i, note: i ? `Push ${x}: it lands at the end, in spot ${i}.` : `Push ${x}: it's the root.` });
+      let j = i, extra = i === slipPush;
+      while (j > 0) {
+        const p = (j - 1) >> 1;
+        if (!(v[j] < v[p]) && !extra) break;
+        if (!(v[j] < v[p])) extra = false;
+        ev.push(["swap", v[j], v[p]]);
+        steps.push({ swap: [p, j], note: `Swap ${v[j]} up past ${v[p]}.` });
+        swaps.push([p, j]);
+        [v[p], v[j]] = [v[j], v[p]]; [id[p], id[j]] = [id[j], id[p]];
+        j = p;
+      }
+    });
+    return { ev, steps, swaps };
+  }
+  const BST_PY = `left, right = {}, {}\nroot = None\nfor k in order:\n    if root is None:\n        root = k\n        continue\n    u = root\n    while True:\n        side = left if k < u else right\n        if u not in side:\n            side[u] = k\n            break\n        u = side[u]\ndef pre(u):\n    return [] if u is None else [u] + pre(left.get(u)) + pre(right.get(u))\nprint(pre(root))`;
+  const BUBBLE_PY = `swaps = 0\nfor i in range(len(a)):\n    for j in range(len(a) - 1 - i):\n        if a[j] > a[j + 1]:\n            a[j], a[j + 1] = a[j + 1], a[j]\n            swaps += 1\nprint(swaps)`;
+  const inv = (a) => { let c = 0; for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) if (a[i] > a[j]) c++; return c; };
+  function mazeBfs(g, walls) {
+    const R = g.length, C = g[0].length, wall = new Set(walls.map(Number)), prev = { 0: -1 }, q = [0];
+    while (q.length) {
+      const u = q.shift(), a = Math.floor(u / C), c = u % C;
+      for (const [x, y] of [[a + 1, c], [a - 1, c], [a, c + 1], [a, c - 1]]) { const w = x * C + y; if (x >= 0 && x < R && y >= 0 && y < C && g[x][y] === "." && !wall.has(w) && !(w in prev)) { prev[w] = u; q.push(w); } }
+    }
+    const goal = R * C - 1;
+    if (!(goal in prev)) return null;
+    const path = [];
+    for (let u = goal; u !== -1; u = prev[u]) path.push(u);
+    return path.reverse();
+  }
+  const mazePy = (g, walls) => `from collections import deque\ngrid = [list(row) for row in [\n${g.map((row) => `    "${row.join("")}",`).join("\n")}\n]]\nwalls = ${walls}\nfor r, c in walls:\n    grid[r][c] = "#"\nR, C = len(grid), len(grid[0])\ndist = {(0, 0): 0}\nq = deque([(0, 0)])\nwhile q:\n    r, c = q.popleft()\n    for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):\n        nr, nc = r + dr, c + dc\n        if 0 <= nr < R and 0 <= nc < C and grid[nr][nc] == "." and (nr, nc) not in dist:\n            dist[(nr, nc)] = dist[(r, c)] + 1\n            q.append((nr, nc))\nprint(dist.get((R - 1, C - 1), -1))`;
+
+  Object.assign(GENS, {
+    // ------------------------------------------------------------ sketch it --
+    mountain(r) {
+      const n = r.int(10, 14), out = [];
+      let s = "", d = 0;
+      for (let i = 0; i < n; i++) { const open = d === 0 || (d < 5 && r.next() < 0.55); s += open ? "(" : ")"; d += open ? 1 : -1; out.push(d); }
+      return {
+        ch: 11, title: "The bracket mountain", prompt: "<p>Before you see what it prints, draw it: how deep is the nesting after each bracket?</p>",
+        code: `s = "${s}"\ndepth, out = 0, []\nfor ch in s:\n    depth += 1 if ch == "(" else -1\n    out.append(depth)\nprint(out)`,
+        answer: pyList(out),
+        why: "<p>Every <code>(</code> climbs a step and every <code>)</code> comes down one: the line is the height of the stack a bracket checker keeps. A string balances when the line ends on the ground and never dips below it.</p>",
+        board: { type: "plot", xs: s.split(""), lo: 0, hi: Math.max(4, ...out), yName: "depth", mode: "sketch", solve: out,
+          steps: out.map((v, k) => ({ pts: { [k]: v }, at: k, note: `<code>${s[k]}</code>: ${s[k] === "(" ? "one deeper" : "one shallower"}, so ${v}.`, wait: 480 })),
+          ask: "Sketch it: drag across the chart to draw the depth after each bracket." },
+      };
+    },
+    frontier(r) {
+      const { adj, names } = graph(r, 6, 7), seen = new Set(["A"]), q = ["A"], sizes = [], steps = [];
+      while (q.length) {
+        const u = q.shift();
+        for (const v of adj[u]) if (!seen.has(v)) { seen.add(v); q.push(v); }
+        sizes.push(q.length);
+        steps.push({ pts: { [sizes.length - 1]: q.length }, at: sizes.length - 1, list: q.slice(), note: `Visit ${u}: the queue holds ${q.length}.`, wait: 800 });
+      }
+      return {
+        ch: 19, title: "How big does the queue get?", prompt: "<p>Draw it before you run it: how many nodes wait in the queue after each visit?</p>",
+        code: `from collections import deque\ng = ${pyGraph(adj, names)}\nq, seen, sizes = deque(["A"]), {"A"}, []\nwhile q:\n    u = q.popleft()\n    for v in g[u]:\n        if v not in seen:\n            seen.add(v)\n            q.append(v)\n    sizes.append(len(q))\nprint(sizes)`,
+        answer: pyList(sizes),
+        why: "<p>The queue swells while BFS sweeps a wide layer and drains as it reaches the edges: its biggest size is the widest layer, which is BFS's memory cost.</p>",
+        board: { type: "plot", xs: sizes.map((_, k) => k + 1), lo: 0, hi: Math.max(4, ...sizes), yName: "in queue", mode: "sketch", solve: sizes, steps, listName: "queue",
+          ask: "Sketch it: drag across the chart to draw the queue's size after each visit (visit 1, 2, 3 …)." },
+      };
+    },
+
+    // ------------------------------------------------------- find the slip --
+    slipBfs(r) {
+      for (;;) {
+        const { adj, names } = graph(r, 6, 7), truth = bfsRun(adj, -1).order;
+        const ks = truth.map((_, k) => k).filter((k) => k >= 1 && bfsRun(adj, k).order[k] !== truth[k]);
+        if (!ks.length) continue;
+        const k = r.pick(ks), run = bfsRun(adj, k);
+        return {
+          ch: 19, title: "Find the slip: BFS", prompt: "<p>The film below is this BFS, one visit per frame, with the queue under it. In exactly one frame it does something this code never would. Which frame?</p>",
+          code: bfsPy(adj, names), answer: String(k + 1),
+          run: bfsPy(adj, names).replace(/\nprint\(order\)$/, "") + `\ntruth = order\nshown = ${pyList(run.order)}\n` + firstDiff,
+          why: `<p>Frame ${k + 1} visits ${run.order[k]}, but ${truth[k]} was at the front of the queue. A queue always serves its front first: that's what makes BFS go layer by layer.</p>`,
+          board: { type: "graph", nodes: names, edges: undirected(adj, names), start: "A", mode: "slip", under: "seq", slip: k, steps: run.steps, listName: "queue",
+            slipWhy: `The front of the queue was ${truth[k]}, not ${run.order[k]}.`,
+            ask: "Tap a frame to see it; play the film to watch it run. Then leave the frame where it goes wrong picked." },
+        };
+      }
+    },
+    slipSearch(r) {
+      for (;;) {
+        const a = distinctSorted(r, r.int(10, 12), 1, 60), target = r.next() < 0.75 ? r.pick(a) : r.int(1, 60);
+        const truth = bsRun(a, target, -1);
+        if (truth.ev.length < 3) continue;
+        const k = r.int(0, truth.ev.length - 2);
+        if (truth.ev[k][1] === "found") continue;
+        const run = bsRun(a, target, k);
+        const py = `a = ${pyList(a)}\ntarget = ${target}\nlo, hi = 0, len(a) - 1\nwhile lo <= hi:\n    mid = (lo + hi) // 2\n    if a[mid] == target:\n        print("found at", mid)\n        break\n    if a[mid] < target:\n        lo = mid + 1\n    else:\n        hi = mid - 1`;
+        return {
+          ch: 9, title: "Find the slip: binary search", prompt: "<p>The film below is this search, one guess per frame. In exactly one frame it goes the wrong way. Which frame?</p>",
+          code: py, answer: String(k + 1),
+          run: `a = ${pyList(a)}\ntarget = ${target}\nlo, hi = 0, len(a) - 1\ntruth = []\nwhile lo <= hi:\n    mid = (lo + hi) // 2\n    if a[mid] == target:\n        truth.append((mid, "found"))\n        break\n    truth.append((mid, "right" if a[mid] < target else "left"))\n    if a[mid] < target:\n        lo = mid + 1\n    else:\n        hi = mid - 1\nshown = ${pyTupList(run.ev)}\n` + firstDiff,
+          why: `<p>In frame ${k + 1}, <code>a[${run.ev[k][0]}] = ${a[run.ev[k][0]]}</code> is ${a[run.ev[k][0]] < target ? "less" : "more"} than ${target}, so the target can only be to the ${a[run.ev[k][0]] < target ? "right" : "left"}. Going the other way throws away the half it's in.</p>`,
+          board: { type: "array", vals: a, mode: "slip", under: "seq", slip: k, steps: run.steps,
+            slipWhy: `${a[run.ev[k][0]]} is ${a[run.ev[k][0]] < target ? "less" : "more"} than ${target}: it should look ${a[run.ev[k][0]] < target ? "right" : "left"}.`,
+            ask: "Tap a frame to see it; play the film to watch it run. Leave the frame where it goes wrong picked." },
+        };
+      }
+    },
+    slipHeap(r) {
+      for (;;) {
+        const xs = r.shuffle(distinctSorted(r, 7, 1, 50));
+        // a push that shouldn't move at all is where the slip can hide
+        const calm = [], h = [];
+        xs.forEach((x, i) => {
+          h.push(x);
+          let j = i;
+          if (i >= 2 && x > h[(i - 1) >> 1]) calm.push(i);
+          while (j > 0 && h[j] < h[(j - 1) >> 1]) { const p = (j - 1) >> 1; [h[j], h[p]] = [h[p], h[j]]; j = p; }
+        });
+        if (!calm.length) continue;
+        const p = r.pick(calm), truth = heapRun(xs, -1), run = heapRun(xs, p);
+        let k = 0;
+        while (JSON.stringify(truth.ev[k]) === JSON.stringify(run.ev[k])) k++;
+        const evPy = (ev) => "[" + ev.map((e) => "(" + e.map((x) => (typeof x === "string" ? `"${x}"` : x)).join(", ") + ")").join(", ") + "]";
+        return {
+          ch: 15, title: "Find the slip: a heap", prompt: "<p>The film below pushes these numbers onto a min-heap, one move per frame. In exactly one frame it makes a move <code>heappush</code> never would. Which frame?</p>",
+          code: `import heapq\nh = []\nfor x in ${pyList(xs)}:\n    heapq.heappush(h, x)\nprint(h)`, answer: String(k + 1),
+          run: `import heapq\nxs = ${pyList(xs)}\nh, truth = [], []\nfor x in xs:\n    h.append(x)\n    truth.append(("push", x))\n    j = len(h) - 1\n    while j > 0 and h[j] < h[(j - 1) // 2]:\n        p = (j - 1) // 2\n        truth.append(("swap", h[j], h[p]))\n        h[j], h[p] = h[p], h[j]\n        j = p\nh2 = []\nfor x in xs:\n    heapq.heappush(h2, x)\nassert h == h2\nshown = ${evPy(run.ev)}\n` + firstDiff,
+          why: `<p>In frame ${k + 1}, ${run.ev[k][1]} swaps up past ${run.ev[k][2]}, but it's bigger: a min-heap only lifts a number while it's smaller than its parent.</p>`,
+          board: { type: "tree", heap: true, vals: xs, mode: "slip", under: "arrange", slip: k, steps: run.steps,
+            slipWhy: `${run.ev[k][1]} is bigger than ${run.ev[k][2]}: it should have stayed put.`,
+            ask: "Every number starts where it's appended. Tap a frame to see it; play the film to watch it run. Leave the frame where it goes wrong picked." },
+        };
+      }
+    },
+
+    // ----------------------------------------------------- make it happen --
+    bstBuild(r) {
+      const keys = distinctSorted(r, r.int(5, 7), 1, 40), order = r.shuffle(keys.slice());
+      const pre = HB.preorder(HB.bstOf(order)), target = pyList(pre);
+      const prog = (o) => `order = ${pyList(o)}\n` + BST_PY;
+      return {
+        ch: 18, title: "Grow this tree", prompt: `<p>Choose an order for the keys ${keys.join(", ")} so that it prints <code>${target}</code>.</p>`,
+        code: `order = [?]   # the keys ${keys.join(", ")}, in an order you choose\n` + BST_PY, answer: target,
+        run: prog(order),
+        probes: [0, 1, 2].map(() => { const o = r.shuffle(keys.slice()); return { state: o.map((k) => keys.indexOf(k)), run: prog(o) }; }),
+        why: "<p>A key's place is fixed by the keys inserted before it: each walks down from the root, left when smaller, right when bigger. So the root must come first, and each key must come after its parent. Any order that keeps every parent before its children grows the same tree; that's exactly what a preorder is.</p>",
+        board: { type: "bst", keys, mode: "seq", solve: order.map((k) => keys.indexOf(k)), target, need: "Tap every key once.",
+          judge: (st) => pyList(HB.preorder(HB.bstOf(st.map((i) => keys[i])))),
+          ask: "The dashed circles are the tree to grow. Tap the keys in the order to insert them. Each new key walks down from the root, left if smaller, right if bigger, and lands green where the shape wants it, red where it doesn't. Tap a key you've used to undo back to it." },
+      };
+    },
+    inversions(r) {
+      const vals = distinctSorted(r, 6, 1, 30), K = r.int(3, 12);
+      let perm;
+      do perm = r.shuffle(range(6)); while (inv(perm) !== K);
+      const prog = (p) => `a = ${pyList(p.map((i) => vals[i]))}\n` + BUBBLE_PY;
+      return {
+        ch: 6, title: "Make bubble sort work", prompt: `<p>Put the numbers ${vals.join(", ")} in an order that makes it print <code>${K}</code>.</p>`,
+        code: `a = [?]   # ${vals.join(", ")} in an order you choose\n` + BUBBLE_PY, answer: String(K),
+        run: prog(perm),
+        probes: [0, 1, 2].map(() => { const p = r.shuffle(range(6)); return { state: p, run: prog(p) }; }),
+        why: `<p>Each swap fixes exactly one pair that's out of order (an inversion) and breaks none, so bubble sort makes exactly as many swaps as there are inversions. Any order with ${K} of them works.</p>`,
+        board: { type: "array", vals, mode: "arrange", arcs: true, swaps: swapsTo(perm), target: String(K),
+          judge: (st) => String(inv(st.map((i) => vals[i]))),
+          ask: `Swap tiles (tap two) until it prints ${K}. Each pink arc joins a pair that's out of order.` },
+      };
+    },
+    walls(r) {
+      for (;;) {
+        const R = 5, C = 6, g = Array.from({ length: R }, (_, i) => Array.from({ length: C }, (_, j) => ((i === 0 && j === 0) || (i === R - 1 && j === C - 1) || r.next() > 0.22 ? "." : "#")));
+        const base = mazeBfs(g, []);
+        if (!base) continue;
+        const open = range(R * C).filter((u) => u && u !== R * C - 1 && g[Math.floor(u / C)][u % C] === ".");
+        let best = null;
+        for (let t = 0; t < 120; t++) {
+          const a = r.pick(open), b = r.pick(open);
+          if (a === b) continue;
+          const p = mazeBfs(g, [a, b]);
+          if (p && p.length > base.length && (!best || p.length > best.len)) best = { w: [a, b].sort((x, y) => x - y), len: p.length };
+        }
+        if (!best) continue;
+        const L = best.len - 1, tup = (u) => `(${Math.floor(u / C)}, ${u % C})`;
+        const prog = (w) => mazePy(g, "[" + w.map(tup).join(", ") + "]");
+        return {
+          ch: 19, title: "Make the maze longer", prompt: `<p>Choose two squares to wall off so that it prints <code>${L}</code>.</p>`,
+          code: mazePy(g, "[(?, ?), (?, ?)]   # two squares you choose"), answer: String(L),
+          run: prog(best.w),
+          probes: [0, 1, 2].map(() => { const w = r.shuffle(open.slice()).slice(0, 2); return { state: w, run: prog(w) }; }),
+          why: `<p>BFS finds the fewest moves, so to make the way longer a wall has to block every shortest route at once: one wall on a route only works if no other route is just as short. Today it's ${base.length - 1} moves; the right two walls force ${L}.</p>`,
+          board: { type: "grid", rows: R, cols: C, vals: g.flat().map((x) => (x === "#" ? "#" : "")), mode: "pick", limit: 2, lock: [0, R * C - 1], start: 0, goal: R * C - 1, solve: best.w, target: String(L),
+            judge: (st) => { const p = mazeBfs(g, st); return String(p ? p.length - 1 : -1); },
+            route: (st) => mazeBfs(g, st),
+            need: "Tap two squares to wall off.",
+            ask: `Drop exactly two walls (tap two squares) so the shortest way from the top-left to the ringed corner takes ${L} moves. The blue line is the shortest way right now.` },
+        };
+      }
+    },
+  });
+
   // a question's track defaults to DSA and its language to Python; "run", when given, is the program the
   // checker runs instead of the one shown (for questions whose answer is a property of the code, like its growth)
   function make(gen, seed) {
@@ -1615,7 +2219,7 @@ print("O(" + growth() + ")")`;
   }
 
   // more generators (other tracks) register themselves with add(), from learn/mock-gen-x.js
-  const API = { GENS, make, correct, tokens, names: Object.keys(GENS), rng,
+  const API = { GENS, BOARDS, make, correct, tokens, names: Object.keys(GENS), rng,
     add(track, more) { for (const k in more) more[k].track = track; Object.assign(GENS, more); API.names = Object.keys(GENS); },
     of(track) { return API.names.filter((g) => (GENS[g].track || "ds") === track); } };
   if (typeof module === "object" && module.exports) module.exports = API;

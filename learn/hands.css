@@ -68,3 +68,100 @@
 .hb-word:hover,.hb-word:focus-visible{background:color-mix(in srgb,var(--pink) 16%,transparent);outline:none}
 .hb-word:disabled{opacity:.45;cursor:default}
 .hb-play{font-weight:600}
+
+/* ---- the newer pictures: grids, timelines, dials, charts you draw on, search trees you grow, films with a slip ---- */
+.hb-it.sel{background:color-mix(in srgb,var(--c2) 26%,var(--card));border-color:var(--c2);box-shadow:0 3px 0 color-mix(in srgb,var(--c2) 60%,var(--line))}
+.hb-it.fix{background:color-mix(in srgb,var(--ink) 78%,var(--card));color:var(--card);border-color:var(--ink)}
+.hb-it.lock{opacity:.5;cursor:default}
+.hb-it.lock:hover{transform:none}
+.hb-it.void{visibility:hidden}
+.hb-it.water,.hb-it.water.lock{opacity:1;background:color-mix(in srgb,var(--c3) 16%,var(--card));border-color:transparent;box-shadow:none;color:color-mix(in srgb,var(--c3) 70%,var(--muted))}
+.hb-stage svg.hb-over{z-index:2}
+.hb-it.wall{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 55%,var(--card)) 0 4px,color-mix(in srgb,var(--ink) 40%,var(--card)) 4px 8px);border-color:color-mix(in srgb,var(--ink) 60%,var(--line));cursor:default}
+.hb-it.wall:hover{transform:none}
+.hb-it.dot .hb-tx{display:none}
+.hb-it.dot::before{content:"";width:42%;aspect-ratio:1;border-radius:50%;background:var(--ink);opacity:.8}
+.hb-it.dot.sel::before{background:var(--card);box-shadow:0 0 0 2px var(--ink)}
+.hb-it.root{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--c4)}
+.hb-it.goal{outline:2.5px solid var(--pink);outline-offset:3px}
+.hb-it.lock.goal,.hb-it.lock.start{opacity:1}
+.hb-load{display:inline-block;padding:1px 6px;margin:2px 0;border-radius:6px;font:600 13px var(--f-mono);color:var(--ink);background:color-mix(in srgb,var(--c3) 22%,var(--card));border:1px solid color-mix(in srgb,var(--c3) 50%,var(--line))}
+.hb-it.start{border-color:var(--c3);border-width:2.5px}
+.hb-it.nope{animation:hb-nope .3s}
+@keyframes hb-nope{25%{translate:-56% -50%}75%{translate:-44% -50%}}
+/* a colour per bin, with the bin's name on a badge */
+.hb-it.bin{background:color-mix(in srgb,var(--bc) 30%,var(--card));border-color:var(--bc);box-shadow:0 3px 0 color-mix(in srgb,var(--bc) 60%,var(--line))}
+.hb-it[data-b]::after{content:attr(data-b);position:absolute;top:-9px;right:-9px;z-index:1;min-width:19px;height:19px;padding:0 4px;box-sizing:border-box;border-radius:10px;
+  background:var(--bc);color:#fff;font:600 10.5px/19px var(--f-mono);text-align:center;animation:hb-pop .25s cubic-bezier(.3,1.6,.5,1)}
+.hb-it.dup{background:color-mix(in srgb,var(--bad) 22%,var(--card));border-color:var(--bad)}
+
+/* grids: square cells; a table you fill keeps the cell's own number small in its corner */
+.hb-grid .hb-it{border-radius:7px;font-size:clamp(10px,2.3cqi,16px)}
+.hb-sub{position:absolute;top:3px;left:5px;font:500 clamp(8px,1.6cqi,11px)/1 var(--f-mono);color:var(--muted)}
+.hb-in.hb-in-cell{translate:-50% -42%;padding:2px 0;font-size:clamp(11px,2.2cqi,14px)}
+.hb-hd{font-weight:600;color:var(--ink)}
+.hb-rh{translate:-100% -50%}
+.hb-poly{fill:color-mix(in srgb,var(--c4) 18%,transparent);stroke:var(--c4);stroke-width:2;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+.hb-route{fill:none;stroke:var(--c2);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;opacity:.75;vector-effect:non-scaling-stroke}
+.hb-grid .hb-it.on{background:color-mix(in srgb,var(--c2) 22%,var(--card));border-color:var(--c2)}
+
+/* timelines: each meeting is a bar on its own row */
+.hb-intervals .hb-it{aspect-ratio:auto;translate:0 -50%;border-radius:7px;font-size:clamp(9.5px,2cqi,13px);min-width:6px;white-space:nowrap;overflow:visible}
+.hb-intervals .hb-it:hover{transform:translateY(-2px)}
+.hb-axis{stroke:color-mix(in srgb,var(--ink) 45%,var(--line));stroke-width:1.6;vector-effect:non-scaling-stroke}
+svg .hb-gl{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+svg .hb-faint{opacity:.5;stroke-dasharray:2 4}
+.hb-tick{stroke:color-mix(in srgb,var(--ink) 45%,var(--line));stroke-width:1.4;vector-effect:non-scaling-stroke}
+
+/* the dial: a pin on a number line */
+.hb-line .hb-it{border-radius:50% 50% 50% 8px;rotate:-45deg;background:var(--c2);border-color:var(--c2);color:#fff;box-shadow:none;transition:left .12s,transform .16s}
+.hb-line .hb-it .hb-tx{rotate:45deg}
+.hb-line .hb-it.off{background:var(--card);color:var(--muted);border-style:dashed}
+.hb-stem{stroke:var(--c2);stroke-width:2;vector-effect:non-scaling-stroke}
+.hb-pt{fill:var(--c4);stroke:var(--card);stroke-width:2}
+.hb-pl{color:var(--ink)}
+.hb-line .hb-stage,.hb-plot .hb-stage{touch-action:none;cursor:crosshair}
+
+/* a chart you draw on */
+.hb-plot .hb-it{border-radius:50%;background:var(--c2);border-color:var(--card);border-width:2px;box-shadow:none;transition:top .08s}
+.hb-plot .hb-it.off{background:var(--card);border:1.5px dashed color-mix(in srgb,var(--ink) 30%,var(--line))}
+.hb-plot .hb-it:hover{transform:scale(1.2);box-shadow:none}
+.hb-sk{fill:none;stroke:var(--c2);stroke-width:3;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.hb-mine{fill:none;stroke:var(--pink);stroke-width:2.5;stroke-dasharray:6 5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.hb-yl{translate:-100% 0}
+.hb-yn,.hb-mn{font-weight:600;white-space:nowrap}
+.hb-mn{color:var(--pink)}
+
+/* a search tree you grow: ghost circles show the shape to make; your keys drop in where they really land */
+.hb-ghost{fill:none;stroke:color-mix(in srgb,var(--ink) 30%,var(--line));stroke-width:1.6;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
+.hb-ghost-e{stroke:color-mix(in srgb,var(--ink) 22%,var(--line));stroke-width:1.4;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
+.hb-e.hb-built{stroke:var(--c2);stroke-width:2.6}
+.hb-nd{position:absolute;translate:-50% -50%;width:max(30px,6.2cqi);aspect-ratio:1;display:grid;place-items:center;border-radius:50%;box-sizing:border-box;
+  font:600 clamp(11px,2.3cqi,15px)/1 var(--f-mono);color:var(--ink);background:var(--card);border:1.5px solid color-mix(in srgb,var(--ink) 24%,var(--line));pointer-events:none}
+.hb-nd.fits{background:color-mix(in srgb,var(--ok) 24%,var(--card));border-color:var(--ok);animation:hb-drop .4s cubic-bezier(.3,1.5,.5,1)}
+.hb-nd.miss{background:color-mix(in srgb,var(--bad) 20%,var(--card));border-color:var(--bad);animation:hb-drop .4s cubic-bezier(.3,1.5,.5,1)}
+@keyframes hb-drop{from{transform:translateY(-14px);opacity:0}}
+.hb-bst .hb-it{border-radius:50%}
+.hb-it.hb-eb{border-radius:50%;font-size:12px;z-index:1}
+.hb-e.sel{stroke:var(--c2);stroke-width:4.4}
+
+/* bubble sort's work, drawn: an arc over every pair that's out of order */
+.hb-arc{fill:none;stroke:var(--pink);stroke-width:2;opacity:.7;vector-effect:non-scaling-stroke;animation:hb-arc .35s}
+@keyframes hb-arc{from{opacity:0}}
+.hb-yes{color:var(--ok);font-weight:600}
+
+/* extra boxes for the rest of the answer */
+.hb-more{display:flex;flex-wrap:wrap;gap:8px 18px;margin:10px 0 0;font-size:14.5px;color:var(--muted)}
+.hb-mo{display:inline-flex;align-items:center;gap:8px}
+.hb-in.hb-in-more{position:static;translate:none;width:78px}
+
+/* a film with one wrong frame: numbered frames to scrub and pick */
+.hb-film{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 0}
+.hb-fr{min-width:30px;height:30px;padding:0 6px;border-radius:15px;border:1.5px solid color-mix(in srgb,var(--ink) 22%,var(--line));background:var(--card);color:var(--ink);
+  font:600 12.5px var(--f-mono);cursor:pointer;transition:transform .15s,background .2s,border-color .2s}
+.hb-fr:hover{transform:translateY(-2px)}
+.hb-fr.cur{border-color:var(--c4);background:color-mix(in srgb,var(--c4) 22%,var(--card))}
+.hb-fr.mine{border-color:var(--pink);background:color-mix(in srgb,var(--pink) 26%,var(--card));box-shadow:0 0 0 3px color-mix(in srgb,var(--pink) 30%,transparent)}
+.hb-fr.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 22%,var(--card))}
+.hb-why{color:var(--bad);font-weight:600}
+.hb-slip .hb-it{cursor:default}

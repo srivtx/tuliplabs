@@ -501,6 +501,26 @@
     L.push([0, "traffic"]);
     if (c.mode === "open") kv("arrivals", `${num(c.rate)}/s`, "random");
     else { kv("users", num(c.users)); kv("think_time", `${c.think}s`); }
+    if (c.seats > 0) {
+      kv("seat_bookings", `${100 - c.likes}%`, "best seat left");
+      kv("likes", `${c.likes}%`);
+      L.push([0, "data_centres"]);
+      kv("east", "2 copies", `${100 - c.west}% of users`);
+      kv("west", "1 copy", `${c.west}% of users`);
+      if (c.cut) kv("link_down", `${c.cut.for}s every ${c.cut.every}s`);
+      L.push([0, "writes"]);
+      kv("seat_bookings", c.seatQ ? "majority" : "go_ahead", c.seatQ ? "refused if cut off" : "merged later");
+      kv("likes", c.likeQ ? "majority" : "go_ahead", c.likeQ ? "refused if cut off" : "merged later");
+    }
+    if (c.far > 0) {
+      L.push([0, "users"]);
+      kv("far_away", `${c.far}%`, `${ms(c.rtt)} round trip`);
+      kv("nearby", `${100 - c.far}%`, `${ms(c.nearRtt)} round trip`);
+      L.push([0, "page"]);
+      kv("api_round_trips", String(c.api), `to the ${name("server")}`);
+      kv("file_round_trips", String(c.trips), "one after another");
+      kv("files_from", c.cdn ? "cdn_edge" : "origin", c.cdn ? `${ms(c.edgeRtt)} away` : "across the ocean");
+    }
     if (c.shards > 0) {
       kv("viral_account", `${c.hot}%`, "of all requests");
       L.push([0, "sharding"]);
@@ -563,6 +583,12 @@
         kv("workers", String(c.jobWorkers));
         kv("drains_a_batch_in", ms(c.batch.n * c.batch.service / c.jobWorkers));
       }
+    }
+    if (c.price) {
+      L.push([0, "bill"]);
+      kv("per_worker", `$${c.price.worker}`, "a month");
+      kv("cache", `$${c.price.cache}`, "per 1,000 keys a month");
+      kv("total", `$${num(sim.bill ? new window.WTSim.Sim(c).bill() : 0)}`, "a month");
     }
     if (c.surge) { L.push([0, "surge"]); kv("at", clock(c.surge.at).slice(2)); kv("for", `${c.surge.for}s`); kv("arrivals", `${num(c.surge.rate)}/s`); }
     return L.map(([ind, k, v, note]) => (ind ? `  ${k}: ${v}${note ? `  # ${note}` : ""}` : `${k}:`));
@@ -641,6 +667,11 @@
     const L = { crowd: { x: 0, y: 0, w: 7.8, d: 6.9, h: 1 }, wy: 2.7, servers: [], queues: [] };
     let x = 8.4;
     if (X.bot) { L.bot = { x: 8.1, y: 4.7, w: 1.5, d: 1.5, h: 1.45 }; x += 1.9; }
+    if (c.far > 0) {
+      if (c.cdn) L.cdn = { x: x + 0.1, y: L.wy + 1.3, w: 1.5, d: 1.5, h: 1.05 };
+      L.ocean = { x0: x + 2, x1: x + 7.4 };
+      x += 8;
+    }
     if (c.limit > 0) { L.limiter = { x: x + 0.3, y: L.wy - 0.7, w: 1.9, d: 1.9, h: 0.75 }; x += 2.9; }
     // a sharded system's router carries the hash ring: give it room clear of the crowd
     if (c.shards > 0) x += 2.4;
@@ -682,6 +713,7 @@
     if (L.bot) box(L.bot, 1.4);
     if (L.limiter) box(L.limiter, 3.2);
     if (L.cache) box(L.cache, 1);
+    if (L.cdn) box(L.cdn, 1);
     if (L.lb) box(L.lb, 1);
     // the hash ring floats over a sharded system's router
     if (L.lb && sim.cfg.shards > 0) { const cx = L.lb.x + L.lb.w / 2, cy = L.lb.y + L.lb.d / 2; box({ x: cx - 2.1, y: cy - 2.1, w: 4.2, d: 4.2, h: L.lb.h + 2.3 }); }
@@ -788,6 +820,16 @@
       const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy) || 1, nx = (-dy / l) * w, ny = (dx / l) * w;
       poly([iso(x0 + nx, y0 + ny, 0), iso(x1 + nx, y1 + ny, 0), iso(x1 - nx, y1 - ny, 0), iso(x0 - nx, y0 - ny, 0)], col);
     };
+    if (LY.ocean) {
+      const O = LY.ocean, dark = T.bg !== "#f2f6f5";
+      poly([iso(O.x0, -3, 0), iso(O.x1, -3, 0), iso(O.x1, 9.5, 0), iso(O.x0, 9.5, 0)], dark ? "#0f3346" : "#bfe0ea");
+      ctx.strokeStyle = dark ? "rgba(134,180,255,.38)" : "rgba(15,110,140,.32)"; ctx.lineWidth = 1.3;
+      for (let k = 0; k < 10; k++) {
+        const y = -2.4 + k * 1.2, x = O.x0 + 0.3 + (((k * 0.37 + (reduce ? 0 : t * 0.06)) % 1)) * (O.x1 - O.x0 - 1.4);
+        const [a, b] = [iso(x, y, 0), iso(x + 0.9, y, 0)];
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 3, b[0], b[1]); ctx.stroke();
+      }
+    }
     const firstQ = LY.queues[0], S0 = LY.servers[0];
     const entry = LY.limiter ? LY.limiter.x : LY.cache ? LY.cache.x : LY.lb ? LY.lb.x : firstQ.x;
     strip(7.9, wy + 0.3, entry, wy + 0.3, 0.3, T.wire);
@@ -833,6 +875,14 @@
       }
       hits.push({ kind: "cache", r: rectOf(C) });
     }
+    // the CDN edge: a block on the crowd's side of the ocean, its top lit with the page's files
+    if (LY.cdn) {
+      const C = LY.cdn;
+      strip(C.x + C.w / 2, wy + 0.3, C.x + C.w / 2, C.y, 0.16, T.wire);
+      cube(C.x, C.y, 0, C.w, C.d, C.h, T.lim);
+      for (let i = 0; i < 4; i++) { const a = i % 2, b = (i / 2) | 0, x = C.x + 0.2 + a * 0.6, y = C.y + 0.2 + b * 0.6; poly([iso(x, y, C.h), iso(x + 0.45, y, C.h), iso(x + 0.45, y + 0.45, C.h), iso(x, y + 0.45, C.h)], T.lit); }
+      hits.push({ kind: "cdn", r: rectOf(C) });
+    }
     if (LY.lb) {
       const B = LY.lb;
       cube(B.x, B.y, 0, B.w, B.d, B.h, T.lb);
@@ -847,6 +897,19 @@
     // queues and servers, back to front
     const order = LY.servers.map((s, i) => i).sort((a, b) => LY.servers[a].y - LY.servers[b].y);
     for (const i of order) drawServer(i, T, dt, t);
+    if (isSplit() && LY.servers.length === 2) {
+      const [A, B] = LY.servers, cx = A.x + A.w * 0.5, a = iso(cx, A.y + A.d * 0.5, A.h + 0.05), b = iso(cx, B.y + B.d * 0.5, B.h + 0.05);
+      ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.setLineDash([]);
+      ctx.strokeStyle = sim.isCut ? T.bad : T.lb;
+      ctx.beginPath();
+      if (sim.isCut) {
+        const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], g = 0.22;
+        ctx.moveTo(a[0], a[1]); ctx.lineTo(m[0] + (a[0] - m[0]) * g, m[1] + (a[1] - m[1]) * g);
+        ctx.moveTo(m[0] + (b[0] - m[0]) * g, m[1] + (b[1] - m[1]) * g); ctx.lineTo(b[0], b[1]);
+      } else { ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+      ctx.stroke();
+      ctx.lineCap = "butt"; ctx.lineWidth = 1;
+    }
     if (LY.cron) drawJobs(T, t);
     // a ghost being dragged shows the slot it would fill
     if (ghostDrag && ghostDrag.slot) ghostBox(ghostDrag.slot, T.ghost);
@@ -1114,7 +1177,8 @@
     for (const el of tagEls.values()) el._seen = false;
     const [cx, cy] = iso(3.7, -0.4, 1.6);
     els.crowd.style.transform = `translate(${cx}px, ${cy}px)`;
-    setHTML(els.crowd, `<b>${fmtLoad(loadNow())}</b><small>${surging() ? "surge" : inTask() ? "fixed for the task" : "drag ↕"}</small>`);
+    const cost = sim.cfg.price ? sim.bill() : 0, cap = sim.cfg.price ? ((X.task.goal || []).find((g) => g[0] === "cost") || [])[2] : null;
+    setHTML(els.crowd, `<b>${fmtLoad(loadNow())}</b><small>${surging() ? "surge" : inTask() ? "fixed for the task" : "drag ↕"}</small>${sim.cfg.price ? `<em${cap != null && cost > cap ? ' class="over"' : ""}>bill $${num(cost)} a month${cap != null ? ` · budget $${num(cap)}` : ""}</em>` : ""}`);
     els.crowd.classList.toggle("surge", surging());
     els.crowd.classList.toggle("locked", inTask());
     const many = LY.servers.length > 1;
@@ -1133,7 +1197,7 @@
       el.setAttribute("aria-label", `${cap1(name("server"))} ${i + 1}. Click to look inside`);
       const slow = i === 0 && sim.cfg.slow > 1 ? `<em>${many ? "slow" : `${sim.cfg.slow}× slower`}</em>` : "";
       setHTML(el, srv.gone ? `${many ? (isDb() ? dbName(i) : i + 1) : name("server")} <small>leaving</small>` : many
-        ? `<span${isShard() ? ` style="color:${ARC[i % ARC.length]}"` : ""}>${isDb() ? (i ? "R" + i : "P") : isShard() ? "shard " + (i + 1) : i + 1}</span> <b>${srv.busy.length}/${sim.cfg.workers}</b>${slow}`
+        ? `<span${isShard() ? ` style="color:${ARC[i % ARC.length]}"` : ""}>${isDb() ? (i ? "R" + i : "P") : isSplit() ? (i ? "west" : "east") : isShard() ? "shard " + (i + 1) : i + 1}</span> <b>${srv.busy.length}/${sim.cfg.workers}</b>${slow}`
         : `${name("server")} <b>${srv.busy.length}/${sim.cfg.workers}</b> busy${drown ? " <i>drowning</i>" : ""}`);
       const Q = LY.queues[i], qn = srv.queue.length;
       const qt = tag("q" + i, "wt-queue");
@@ -1143,12 +1207,18 @@
       setHTML(qt, qn ? (many ? `<b>${qn}</b>` : `queue <b>${num(qn)}</b>${jn ? ` · ${num(jn)} emails` : ""}`) : "");
     });
     if (LY.lb) {
-      const el = tag("lb", "wt-lbtag", () => { if (isShard()) toggleInspect({ kind: "lb" }); else if (isDb()) { if (canTurn("ryw")) setKnob("ryw", !sim.cfg.ryw); else toggleInspect({ kind: "lb" }); } else if (canTurn("lb")) cycleLb(); else toggleInspect({ kind: "lb" }); });
+      const el = tag("lb", "wt-lbtag", () => { if (isShard() || isSplit()) toggleInspect({ kind: "lb" }); else if (isDb()) { if (canTurn("ryw")) setKnob("ryw", !sim.cfg.ryw); else toggleInspect({ kind: "lb" }); } else if (canTurn("lb")) cycleLb(); else toggleInspect({ kind: "lb" }); });
       const [x, y] = iso(LY.lb.x + LY.lb.w * 0.5, LY.lb.y + LY.lb.d, 0);
       el.style.transform = `translate(${x}px, ${y}px)`;
       el.classList.toggle("can", isShard() ? canTurn("hotSplit") || canTurn("hot") : isDb() ? canTurn("ryw") : canTurn("lb"));
       el.title = isDb() ? (canTurn("ryw") ? "Click to send a writer's own reads to the primary, or not" : "The router: writes to the primary, reads to the replicas") : canTurn("lb") ? "Click to change how the balancer picks" : "The load balancer";
-      if (isShard()) setHTML(el, `<small>router</small><b>hash(account)</b>${sim.cfg.hot > 0 ? `<i>★ ${sim.cfg.hot}%${sim.cfg.hotSplit > 1 ? ` on ${Math.min(sim.cfg.hotSplit, sim.srv.length)}` : ""}</i>` : ""}`);
+      if (isSplit()) {
+        // the router also says how the link between the centres is doing
+        const k = sim.cuts[sim.cuts.length - 1], C = sim.cfg.cut;
+        el.classList.toggle("hot", sim.isCut);
+        setHTML(el, `<small>router</small><b>nearest centre</b><em>${sim.isCut ? `link down · back in ${Math.max(1, Math.ceil(k.at + C.for - sim.t))} s` : C ? `link up · cut in ${Math.max(1, Math.ceil((k ? k.at + C.every : C.at) - sim.t))} s` : "link up"}</em><i>↻</i>`);
+      }
+      else if (isShard()) setHTML(el, `<small>router</small><b>hash(account)</b>${sim.cfg.hot > 0 ? `<i>★ ${sim.cfg.hot}%${sim.cfg.hotSplit > 1 ? ` on ${Math.min(sim.cfg.hotSplit, sim.srv.length)}` : ""}</i>` : ""}`);
       else if (isDb()) setHTML(el, `<small>router</small><b>${sim.cfg.ryw ? "your writes: primary" : "reads: replicas"}</b>${canTurn("ryw") ? "<i>↻</i>" : ""}`);
       else setHTML(el, `<small>balancer</small><b>${LB[sim.cfg.lb][0]}</b>${canTurn("lb") ? "<i>↻</i>" : ""}`);
     }
@@ -1205,6 +1275,24 @@
       el.classList.toggle("on", !!selected && selected.kind === "cache");
       const st = samples[samples.length - 1];
       setHTML(el, `cache <b>${num(sim.cfg.cache)}</b>${st ? ` · ${Math.round(st.hit * 100)}% hits` : ""}`);
+    }
+    if (LY.ocean) {
+      const O = LY.ocean, el = tag("ocean", "wt-ctag wt-otag");
+      const [x, y] = iso((O.x0 + O.x1) / 2, LY.wy + 3.4, 0);
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      setHTML(el, `ocean · <b>${ms(sim.cfg.rtt)}</b> there and back`);
+      const pg = tag("page", "wt-cltag", () => toggleInspect({ kind: "page" }));
+      const [gx, gy] = iso((O.x0 + O.x1) / 2, -2.2, 0);
+      pg.style.transform = `translate(${gx}px, ${gy}px)`;
+      pg.classList.toggle("on", !!selected && selected.kind === "page");
+      setHTML(pg, `a page · <b>${sim.cfg.api + sim.cfg.trips}</b> round trips${sim.cfg.cdn && sim.cfg.trips ? ` · ${sim.cfg.trips} via CDN` : ""}`);
+    }
+    if (LY.cdn) {
+      const el = tag("cdn", "wt-ctag", () => toggleInspect({ kind: "cdn" }));
+      const [x, y] = iso(LY.cdn.x + LY.cdn.w * 0.5, LY.cdn.y + LY.cdn.d, 0);
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.classList.toggle("on", !!selected && selected.kind === "cdn");
+      setHTML(el, `CDN edge · <b>${ms(sim.cfg.edgeRtt)}</b> away`);
     }
     for (const [id, el] of tagEls) if (!el._seen) { el.remove(); tagEls.delete(id); }
   }
@@ -1313,6 +1401,7 @@
     toast(`Carrying on from ${clock(T).slice(2)}. What happened after it is gone.`);
   }
 
+  const isSplit = () => sim.cfg.seats > 0;
   function cycleLb() { const K = Object.keys(LB); setKnob("lb", K[(K.indexOf(sim.cfg.lb) + 1) % K.length]); }
 
   // the parts tray: ghosts you drag onto the wire (or click) to add a server or a cache
@@ -1322,6 +1411,7 @@
     shard: { label: () => "shard", can: () => canTurn("shards") && sim.cfg.shards < MAX_SHARDS, add: () => setKnob("shards", sim.cfg.shards + 1), slot: () => { const L = layout({ shards: sim.cfg.shards + 1 }); return { slot: L.servers[L.servers.length - 1], L }; }, note: () => `${sim.cfg.shards} of ${MAX_SHARDS}` },
     replica: { label: () => "read replica", can: () => canTurn("replicas") && sim.cfg.replicas < MAX_REPLICAS, add: () => setKnob("replicas", sim.cfg.replicas + 1), slot: () => { const L = layout({ replicas: sim.cfg.replicas + 1 }); return { slot: L.servers[L.servers.length - 1], L }; }, note: () => `${sim.cfg.replicas} of ${MAX_REPLICAS}` },
     limiter: { label: () => "rate limiter", can: () => canTurn("limit") && !(sim.cfg.limit > 0), add: () => setKnob("limit", 50), slot: () => { const L = layout({ limit: 50 }); return { slot: L.limiter, L }; }, note: () => (sim.cfg.limit > 0 ? "in place" : "50/s each") },
+    cdn: { label: () => "CDN", can: () => canTurn("cdn") && !sim.cfg.cdn, add: () => setKnob("cdn", true), slot: () => { const L = layout({ cdn: true }); return { slot: L.cdn, L }; }, note: () => (sim.cfg.cdn ? "in place" : "files near users") },
     cache: { label: () => "cache", can: () => canTurn("cache") && !(sim.cfg.cache > 0), add: () => setKnob("cache", 100), slot: () => { const L = layout({ cache: 100 }); return { slot: L.cache, L }; }, note: () => (sim.cfg.cache > 0 ? "in place" : "100 keys") },
   };
   function renderParts() {
@@ -1395,6 +1485,8 @@
     if (selected.kind === "cron" && !c.batch) return closeInspect();
     if (selected.kind === "limiter" && !(c.limit > 0)) return closeInspect();
     if (selected.kind === "bot" && !X.bot) return closeInspect();
+    if (selected.kind === "cdn" && !c.cdn) return closeInspect();
+    if (selected.kind === "page" && !(c.far > 0)) return closeInspect();
     if (rebuild || !ins || ins.kind !== selected.kind || ins.i !== selected.i) {
       els.inspect.innerHTML = "";
       ins = { kind: selected.kind, i: selected.i };
@@ -1411,6 +1503,9 @@
         if (knobs().has("cancel")) els.inspect.append(ins.cx = h("p", { class: "pol" }));
         els.inspect.append(ins.dl = h("dl", {}));
         if (many) els.inspect.append(h("p", { class: "note" }, "Every server has the same workers."));
+      } else if (selected.kind === "lb" && isSplit()) {
+        els.inspect.append(h("p", { class: "ih" }, "Router"), h("p", { class: "pol" }, "Each user books at the nearer data centre. Every seat and like has three copies: two in the east, one in the west."),
+          ins.sq = h("p", { class: "pol" }), ins.lq = h("p", { class: "pol" }), ins.dl = h("dl", {}));
       } else if (selected.kind === "lb" && isShard()) {
         els.inspect.append(h("p", { class: "ih" }, "Router"), h("p", { class: "pol" }, "Each account hashes to a point on the ring; the shard whose arc it lands in holds it."));
         ins.hot = stepper("viral share", () => setKnob("hot", stepIn(HOTS, sim.cfg.hot, -1)), () => setKnob("hot", stepIn(HOTS, sim.cfg.hot, 1)));
@@ -1452,6 +1547,14 @@
         els.inspect.append(ins.l.row, ins.bu.row, ins.dl = h("dl", {}));
         ins.rm = h("button", { class: "wt-link rm", onclick: () => setKnob("limit", 0) }, "remove the limiter");
         els.inspect.append(ins.rm);
+      } else if (selected.kind === "page") {
+        els.inspect.append(h("p", { class: "ih" }, "A page"), h("p", { class: "pol" }, `${sim.cfg.api === 1 ? "One round trip asks" : sim.cfg.api + " round trips ask"} the ${name("server")} for it; the rest fetch its files, one after another.`));
+        ins.tr = stepper("file trips", () => setKnob("trips", Math.max(0, sim.cfg.trips - 1)), () => setKnob("trips", Math.min(12, sim.cfg.trips + 1)));
+        els.inspect.append(ins.tr.row, ins.dl = h("dl", {}));
+      } else if (selected.kind === "cdn") {
+        els.inspect.append(h("p", { class: "ih" }, "CDN edge"), h("p", { class: "pol" }, "Copies of the page's files, a short hop from the people far away."), ins.dl = h("dl", {}));
+        ins.rm = h("button", { class: "wt-link rm", onclick: () => setKnob("cdn", false) }, "remove the CDN");
+        els.inspect.append(ins.rm);
       } else {
         els.inspect.append(h("p", { class: "ih" }, "Cache"));
         const at = () => CACHE_SIZES.findIndex((v) => v >= sim.cfg.cache);
@@ -1462,6 +1565,32 @@
       }
     }
     const st = sim.stats(Math.max(0, sim.t - 5), sim.t);
+    if (selected.kind === "lb" && isSplit()) {
+      const word = (k) => { const w = sim.cfg[k] ? "need a majority" : "go ahead alone"; return canTurn(k) ? h("button", { class: "wt-link", onclick: () => setKnob(k, !sim.cfg[k]), title: "Click to change" }, w) : h("b", {}, w); };
+      // the words are buttons: rebuilt only when what they say changes, so a click never lands on one being replaced
+      const key = [c.seatQ, c.likeQ, canTurn("seatQ"), canTurn("likeQ")].join();
+      if (ins.words !== key) {
+        ins.words = key;
+        ins.sq.innerHTML = ""; ins.sq.append("Seat bookings ", word("seatQ"), ".");
+        ins.lq.innerHTML = ""; ins.lq.append("Likes ", word("likeQ"), ".");
+      }
+      ins.dl.innerHTML = `<dt>the link</dt><dd>${sim.isCut ? '<b class="bad">down</b>' : "up"}</dd><dt>sold twice, last 5 s</dt><dd>${st.double ? `<b class="bad">${st.double}</b>` : "none"}</dd>
+        <dt>refused, last 5 s</dt><dd>${st.seatErr} bookings · ${st.likeErr} likes</dd>`;
+      return;
+    }
+    if (selected.kind === "page") {
+      ins.tr.out.textContent = c.trips;
+      ins.tr.minus.disabled = !canTurn("trips") || c.trips <= 0;
+      ins.tr.plus.disabled = !canTurn("trips") || c.trips >= 12;
+      ins.dl.innerHTML = `<dt>far away</dt><dd>${c.far}%, ${ms(c.rtt)} a trip</dd><dt>nearby</dt><dd>${ms(c.nearRtt)} a trip</dd>
+        <dt>far p99, last 5 s</dt><dd>${st.ok ? ms(st.p99far) : "–"}</dd><dt>near p99, last 5 s</dt><dd>${st.ok ? ms(st.p99near) : "–"}</dd>`;
+      return;
+    }
+    if (selected.kind === "cdn") {
+      ins.rm.hidden = !canTurn("cdn");
+      ins.dl.innerHTML = `<dt>files from here</dt><dd>${c.trips} a page</dd><dt>each trip</dt><dd>${ms(c.edgeRtt)}, not ${ms(c.rtt)}</dd>`;
+      return;
+    }
     if (selected.kind === "server") {
       const i = selected.i, s = sim.srv[i], svc = c.service * (i === 0 ? c.slow || 1 : 1);
       ins.w.out.textContent = c.workers;
@@ -1582,7 +1711,7 @@
     box("tput", X.clients ? "answered" : "served per second");
     box("lat", "wait: p50 and p99");
     box("err", "errors per second");
-    box("util", X.system.shards ? "busiest and quietest shard" : X.system.writes ? "own posts read stale" : X.bot ? "the script: answered and 429s" : X.system.batch ? "emails waiting" : X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
+    box("util", X.system.seats ? "seats sold twice, and writes refused" : X.system.shards ? "busiest and quietest shard" : X.system.writes ? "own posts read stale" : X.bot ? "the script: answered and 429s" : X.system.batch ? "emails waiting" : X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
   }
   // drag along a timeline to go back in time; the window holds still while you drag
   function scrubber(el, id) {
@@ -1766,6 +1895,7 @@
     series("err", [{ key: "err", color: bad }], 1, (s) => `${s.err.toFixed(s.err < 10 ? 1 : 0)}/s`);
     if (X.system.shards) series("util", [{ key: "coolest", color: mute, dash: [3, 3], w: 1.2 }, { key: "hottest", color: "#ffd21f" }], 10, (s) => `${Math.round(s.hottest)}/s · ${Math.round(s.coolest)}/s`);
     else if (X.system.writes) series("util", [{ key: "staleRate", color: bad }], 1, (s) => `${Math.round(s.staleRate * 100)}%`, 1);
+    else if (X.system.seats) series("util", [{ key: "refused", color: css("--wt-amber"), dash: [3, 3], w: 1.2 }, { key: "dbl", color: bad }], 10, (s) => `${num(s.dbl)} sold twice · ${num(s.refused)} refused`);
     else if (X.bot) series("util", [{ key: "n429", color: bad, dash: [3, 3], w: 1.2 }, { key: "nTput", color: theme().job }], 10, (s) => `${Math.round(s.nTput)}/s · ${Math.round(s.n429)} 429s`);
     else if (X.system.batch) series("util", [{ key: "backlog", color: theme().job }], 10, (s) => num(s.backlog));
     else if (X.parts && X.parts.includes("cache")) series("util", [{ key: "hit", color: css("--wt-ok") }], 1, (s) => `${Math.round(s.hit * 100)}%`, 1);
@@ -1824,7 +1954,7 @@
   const clock = (t) => `t ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
   function sample(t) {
     const st = sim.stats(Math.max(0, t - 5), t), span = Math.min(5, t) || 1;
-    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate, backlog: st.backlog, n429: st.n429, nTput: st.nTput, nIn: Math.max(0, sim.cfg.noisy - st.n429), staleRate: st.staleRate, hottest: st.hottest, coolest: st.coolest };
+    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate, backlog: st.backlog, n429: st.n429, nTput: st.nTput, nIn: Math.max(0, sim.cfg.noisy - st.n429), staleRate: st.staleRate, hottest: st.hottest, coolest: st.coolest, p99far: st.ok ? st.p99far : null, dbl: st.double, refused: st.seatErr + st.likeErr };
     samples.push(s);
     if (samples.length > 400) samples.shift();
     const sc = scat();
@@ -1842,6 +1972,7 @@
     }
     // a dot only once the load and the design have been steady for the whole 5 s window, so a change doesn't smear it
     // the x of a dot: the load, a knob, or a measured number (what the script gets past the limiter)
+    if (X.predict.theory === "split" && P.phase === "explore" && !P.revealed && P.guess != null && sim.cuts.some((k) => k.at + sim.cfg.cut.for <= t)) reveal();
     const xv = sc.x === knob() ? s.load : sc.x in s ? s[sc.x] : sim.cfg[sc.x];
     const g = sim.cfg.surge, calm = !g || t >= g.at + g.for + 10;
     if (t - Math.max(lastLoadChange, lastSysChange) >= 6 && (st.ok > 3 || (sc.y === "errRate" && st.sent > 3)) && xv > 0 && calm) {
@@ -1850,7 +1981,7 @@
       if (P.phase === "explore" && !P.revealed && P.guess != null) {
         const A = X.predict.answer;
         const ok = X.predict.bend
-          ? xv >= A * 1.1 && s.p99 > X.predict.bend
+          ? xv >= A * 1.1 && (sc.y === "p99far" ? s.p99far : s.p99) > X.predict.bend
           : X.predict.lower
           ? xv <= A * 1.3 && st.errors === 0 && s.p99 < 1
           : X.predict.axis

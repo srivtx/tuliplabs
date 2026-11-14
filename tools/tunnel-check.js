@@ -150,6 +150,35 @@ for (const x of experiments.filter((e) => e.live)) {
     }
     const at = Sim.measure({ ...s, [k]: A }, { span: 600 }), expect = (s.rate + A) / cap;
     if (Math.abs(at.util - expect) > 0.03) bad.push(`${x.id} at ${A} the server is ${at.util.toFixed(2)} busy, not ${expect.toFixed(2)}`);
+  } else if (th === "trips") {
+    // every round trip pays the distance: far p99 ≈ the server's own p99 + (api + trips) × rtt, so the most file trips
+    // under the line is the whole part of (line − server p99) ÷ rtt − api; the sim is under it there and over one more
+    const alone = Sim.measure({ ...s, far: 0, nearRtt: 0, trips: 0 }, { span: 600 }).p99, line = x.predict.bend;
+    const expect = (line - alone) / s.rtt - s.api;
+    if (!(expect >= A && expect < A + 1)) bad.push(`${x.id} predict answer ${A}, theory says ${expect.toFixed(2)}`);
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, trips: A }, { seed, span: 600 }), hi = Sim.measure({ ...s, trips: A + 1 }, { seed, span: 600 });
+      if (!(lo.p99far < line)) bad.push(`${x.id} at ${A} trips the far p99 is already ${ms(lo.p99far)} (seed ${seed})`);
+      if (!(hi.p99far > line)) bad.push(`${x.id} at ${A + 1} trips the far p99 is still ${ms(hi.p99far)} (seed ${seed})`);
+    }
+  } else if (th === "split") {
+    // each side sells the best seats it knows are free, so during a cut nearly every seat the slower side sells the
+    // other sold too: the smaller of two Poisson(λD) counts, about λD − √(λD/π), on average over seeds
+    const lam = s.rate * (1 - s.likes / 100) * Math.min(s.west, 100 - s.west) / 100, m = lam * s.cut.for, expect = m - Math.sqrt(m / Math.PI);
+    if (Math.abs(expect - A) > x.predict.tol / 2) bad.push(`${x.id} predict answer ${A}, theory says ${expect.toFixed(1)}`);
+    let tot = 0;
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) { const r = new Sim(s, seed); r.advance(s.cut.at + s.cut.for + 1); tot += r.stats(s.cut.at, s.cut.at + s.cut.for + 1).double; }
+    if (Math.abs(tot / 8 - expect) / expect > 0.06) bad.push(`${x.id} the sim sells ${(tot / 8).toFixed(0)} seats twice a cut, theory ${expect.toFixed(0)}`);
+  } else if (th === "servers") {
+    // with no cache, the fewest servers whose capacity is more than the load: one fewer is at or over 100% busy and
+    // over the line, the answer is under it, on every seed
+    const expect = Math.floor(s.rate / cap) + 1;
+    if (expect !== A) bad.push(`${x.id} predict answer ${A}, theory says ${expect}`);
+    for (const seed of [1, 2, 3]) {
+      const lo = Sim.measure({ ...s, servers: A - 1 }, { seed, span: 600 }), at = Sim.measure({ ...s, servers: A }, { seed, span: 600 });
+      if (!(lo.p99 > x.predict.bend)) bad.push(`${x.id} ${A - 1} servers already cope (p99 ${ms(lo.p99)}, seed ${seed})`);
+      if (!(at.p99 < x.predict.bend && at.errors === 0)) bad.push(`${x.id} ${A} servers don't cope (p99 ${ms(at.p99)}, seed ${seed})`);
+    }
   } else if (th === "drain") {
     // a batch drains in its work ÷ the job workers: every seed's first batch, within the tolerance
     const B = s.batch, jw = x.predict.setup.jobWorkers, expect = B.n * B.service / jw;

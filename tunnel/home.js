@@ -586,6 +586,161 @@ cluster-node-timeout 5000
         ["Caches", "Often the simplest fix for a hot read: keep the key in a small in-process cache on every app server for a second or two, and the shard barely sees it."],
       ],
     },
+    wt10: {
+      files: [
+        {
+          name: "page_time.py", lang: "py", run: true,
+          src: (c) => {
+            const files = c.trips * (c.cdn ? c.edgeRtt : c.rtt), page = c.api * c.rtt + 0.235 + files;
+            return `# A far user's page, as arithmetic you can run.
+${col([[`RTT = ${c.rtt}`, "Sydney to Virginia and back, s"], [`EDGE = ${c.edgeRtt}`, "to the nearest CDN edge, s"], ["SERVER = 0.235", "the server's own p99, s"], [`API, FILES = ${c.api}, ${c.trips}`, "round trips a page makes"], [`CDN = ${c.cdn ? "True" : "False"}`, "your system.yaml"]])}
+
+files = FILES * (EDGE if CDN else RTT)
+page = API * RTT + SERVER + files
+print(f"a far page takes about {page:.2f} s")
+# → a far page takes about ${page.toFixed(2)} s
+
+# the floor no money moves: light in fibre, 15,700 km
+light = 2 * 15_700 / 200_000
+print(f"light alone: {light * 1000:.0f} ms a round trip")
+# → light alone: 157 ms a round trip
+water = (API + FILES) * RTT / page
+print(f"{water:.0%} of the page is water")
+# → ${Math.round(((c.api + c.trips) * c.rtt / page) * 100)}% of the page is water`;
+          },
+        },
+        {
+          name: "cdn.conf", lang: "conf",
+          src: () => `# nginx at the origin: tell the CDN what it may keep.
+# Files with a hash in their name never change.
+location /assets/ {
+  add_header Cache-Control
+    "public, max-age=31536000, immutable";
+}
+
+# The page itself changes: the CDN may keep it for
+# 30 s (s-maxage), browsers must ask again.
+location / {
+  add_header Cache-Control "public, s-maxage=30";
+}`,
+        },
+      ],
+      check: { line: 0, metric: "p99far", tol: 0.06 },
+      try: [{ cdn: false, trips: 7 }, { cdn: false, trips: 1 }, { cdn: true, trips: 2 }],
+      watch: (c) => `Graph p99 <b>per region</b>, measured where the user is (real user monitoring), not on the server: here the servers said ${Math.round(c.service * 1000)} ms while Sydney waited seconds. Count round trips per page in the browser's network panel, watch the CDN's <b>hit ratio</b> (a miss crosses the ocean anyway), and alert on time to first byte by country.`,
+      stack: [
+        ["HTTP/2 and HTTP/3", "Many files over one connection, so a page stops paying a handshake per file. HTTP/3 (QUIC) also saves a round trip when it connects, and TLS 1.3 saves another."],
+        ["Bundlers", "Vite, esbuild and webpack turn dozens of modules into a few files with a content hash in their names: few round trips, and safe to cache for a year."],
+        ["CDNs", "CloudFront, Fastly, Cloudflare and Akamai keep copies at edges near users. They serve what your headers allow, so Cache-Control is the real config."],
+        ["Preconnect and preload", "<code>&lt;link rel=preload&gt;</code> starts fetching a file before the HTML asks for it: round trips in parallel instead of one after another."],
+        ["Data, not just files", "For dynamic pages, a read replica or edge database near the users (DynamoDB global tables, Cloudflare D1, Postgres replicas) moves reads closer; writes still travel, as in experiment 7."],
+      ],
+    },
+    wt11: {
+      files: [
+        {
+          name: "majority.py", lang: "py", run: true,
+          src: (c) => {
+            const each = Math.round(c.rate * (1 - c.likes / 100) * c.west / 100), cut = c.cut.for, sold = each * cut;
+            return `# Two data centres, three copies: what a cut costs.
+${col([["N = 3", "copies of every seat"], ["EAST, WEST = 2, 1", "where the copies live"], ["W = N // 2 + 1", "a write needs a majority"]])}
+print(f"a write needs {W} of {N} copies")
+# → a write needs 2 of 3 copies
+for name, have in (("east", EAST), ("west", WEST)):
+    ok = "can" if have >= W else "cannot"
+    print(f"{name} alone has {have}: it {ok} write")
+# → east alone has 2: it can write
+# → west alone has 1: it cannot write
+
+# a cut, with both sides selling the best seats left
+${col([[`CUT, EACH = ${cut}, ${each}`, "seconds down, bookings/s a side"], [`SEAT_Q = ${c.seatQ ? "True" : "False"}`, "your system.yaml"]])}
+east = EACH * CUT
+west = 0 if SEAT_Q else EACH * CUT
+refused = EACH * CUT if SEAT_Q else 0
+print(f"sold twice: up to {min(east, west)}")
+# → sold twice: up to ${c.seatQ ? 0 : sold}
+print(f"refused in the west: {refused}")
+# → refused in the west: ${c.seatQ ? sold : 0}`;
+          },
+        },
+        {
+          name: "cassandra.cql", lang: "conf",
+          src: (c) => `-- Cassandra: choose per query, as you did.
+-- Seats: a majority of the replicas, or fail.
+CONSISTENCY ${c.seatQ ? "QUORUM" : "ONE"};
+INSERT INTO seats (show, seat, owner)
+  VALUES (42, 'A1', 'ana') IF NOT EXISTS;
+
+-- Likes: any one replica will do; they add up.
+CONSISTENCY ${c.likeQ ? "QUORUM" : "ONE"};
+UPDATE likes SET n = n + 1 WHERE post = 7;`,
+        },
+      ],
+      try: [{ seatQ: false, likeQ: false }, { seatQ: true, likeQ: true }],
+      watch: () => `Alert on the link between regions itself, and graph two things that are normally zero: writes <b>refused for want of a majority</b>, per region, and <b>conflicts found when copies merge</b>. The first means the system chose to stay right; the second means it chose to stay up and someone has a mess to clean. Every dashboard here stayed green while 290 seats sold twice.`,
+      stack: [
+        ["Raft and etcd", "A leader needs a majority of the cluster to commit. Put two of three nodes in one region and that region keeps working through a cut; the other can't, by design."],
+        ["Postgres", "<code>synchronous_standby_names = 'ANY 1 (east2, west1)'</code> makes a commit wait for one standby: stay right, and slower when the link is slow."],
+        ["Spanner and CockroachDB", "Every write needs a majority of its replicas, across regions, so they choose consistency and pay a round trip on writes."],
+        ["DynamoDB global tables", "Each region accepts writes and the last writer wins when they meet: available, and two people can both think they own the seat."],
+        ["CRDTs", "Counters, sets and other data types built so that any two copies merge without conflict, like the G-counter in Build your own X. Likes are the easy case."],
+      ],
+    },
+    wt12: {
+      files: [
+        {
+          name: "bill.py", lang: "py", run: true,
+          src: (c) => {
+            let hk = 0, hn = 0;
+            for (let k = 1; k <= c.keys; k++) { if (k <= c.cache) hk += 1 / k; hn += 1 / k; }
+            const hit = c.cache ? hk / hn : 0, misses = c.rate * (1 - hit), busy = misses / (c.servers * c.workers / c.service);
+            const bill = c.servers * c.workers * c.price.worker + (c.cache > 0 ? Math.ceil(c.cache / 1000) * c.price.cache : 0);
+            return `# The shortener's design, as arithmetic you can run.
+${col([[`RATE = ${c.rate}`, "redirects a second"], [`LINKS, CACHE = ${c.keys}, ${c.cache}`, "your system.yaml"], [`SERVERS, WORKERS = ${c.servers}, ${c.workers}`], ["SERVICE = 0.05", "seconds a lookup"], [`PER_WORKER, PER_1K = ${c.price.worker}, ${c.price.cache}`, "$ a month"]])}
+
+
+def h(n):
+    return sum(1 / k for k in range(1, n + 1))
+
+
+# Zipf: link k is clicked in proportion to 1/k, so the
+# best a cache of n links can do is h(n) / h(LINKS)
+hit = h(CACHE) / h(LINKS) if CACHE else 0
+print(f"a perfect cache answers {hit:.0%}")
+# → a perfect cache answers ${Math.round(hit * 100)}%
+misses = RATE * (1 - hit)
+busy = misses / (SERVERS * WORKERS / SERVICE)
+print(f"servers {busy:.0%} busy at best")
+# → servers ${Math.round(busy * 100)}% busy at best
+bill = SERVERS * WORKERS * PER_WORKER
+bill += -(-CACHE // 1000) * PER_1K
+print(f"bill: \${bill} a month")
+# → bill: $${bill} a month`;
+          },
+        },
+        {
+          name: "design.md", lang: "conf",
+          src: (c) => `# Design: URL shortener
+Target: p99 < 300 ms at ${c.rate}/s, $400/month.
+Plan: ${c.servers} servers x ${c.workers} workers` + (c.cache ? `, LRU cache
+of ${c.cache} links in front.` : ", no cache.") + `
+Evidence: a run at ${c.rate}/s for 10 minutes;
+p99, errors and the bill measured, not guessed.
+Risks: a cold cache on deploy (warm it first);
+a link that goes viral (it's one key: cache it).`,
+        },
+      ],
+      check: { line: 2, metric: "cost", tol: 0.5 },
+      try: [{ servers: 6, cache: 0 }, { servers: 2, cache: 1000 }, { servers: 1, cache: 5000 }],
+      watch: (c) => `Write the target down as an <b>SLO</b> (p99 under 300 ms for 99.9% of minutes, say) and graph how much of the month's <b>error budget</b> is left: when it runs out, the team stops shipping features and fixes reliability. Next to it, graph the <b>bill per 1,000 redirects</b> and the cache's hit rate: here ${c.cache ? "a hit rate falling" : "traffic growing"} is what would push the design over budget first.`,
+      stack: [
+        ["Capacity planning", "Measure one server's throughput at your latency target, then divide: the arithmetic in bill.py is the whole method, as long as the numbers come from runs."],
+        ["Redis and Memcached", "The usual cache in front of a lookup like this. A few GB holds millions of short links; set an eviction policy (allkeys-lru) and a memory cap."],
+        ["Autoscaling", "Kubernetes HPA or cloud autoscaling adds servers when they're busy. It reacts in minutes, so it covers the slow climb, not a viral spike or a cold cache."],
+        ["SLOs and error budgets", "Google's SRE practice: pick the target users notice, measure it, and spend the gap between it and 100% on shipping. The budget turns 'is it reliable enough?' into a number."],
+        ["Design docs", "State the target, the plan, the evidence and the risks, as design.md does. A reviewer can argue with a guess; a run is harder to argue with."],
+      ],
+    },
   };
 
   root.WT = root.WT || {};
