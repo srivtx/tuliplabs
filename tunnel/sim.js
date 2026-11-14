@@ -34,6 +34,12 @@
    every customer a token bucket: it holds up to `burst` tokens and refills at `limit` a second; a request takes a token,
    and one that finds none is refused at once with a 429 ("limited"). With a script running, stats are about everyone
    else, and say separately what the script got: nTput (answered/s) and n429 (refused/s).
+   A database with replicas (`writes` > 0): a share `writes` of requests are writes, and the machines are a primary
+   (server 1) and `replicas` read replicas behind it. Writes always go to the primary. Each write, once done, brings its
+   writer back to read it `readAfter` seconds later on average ("I posted; show me"). Reads go to the replicas in turn,
+   or to the primary when there are none. A replica sees a write `lag` seconds after the primary commits it (exponential).
+   A writer's own read served by a replica before it has seen the write is stale: stats count it (`stale`, and
+   `staleRate` of those reads). With ryw:true, a writer's reads within `rywFor` seconds of their write go to the primary.
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
@@ -85,6 +91,7 @@
     cancel: true, retries: 0, backoff: 0, jitter: false, surge: null,
     batch: null, jobWorkers: 0,
     noisy: 0, tenants: 40, limit: 0, burst: 10,
+    writes: 0, replicas: 0, lag: 1, readAfter: 1, ryw: false, rywFor: 5,
   };
 
   class Sim {
@@ -157,7 +164,7 @@
     }
     // servers that exist: more are added now; fewer means the last ones stop taking work and leave once empty
     sizeServers() {
-      const n = Math.max(1, this.cfg.servers | 0);
+      const n = this.cfg.writes > 0 ? 1 + Math.max(0, this.cfg.replicas | 0) : Math.max(1, this.cfg.servers | 0);
       this.srv.forEach((s, i) => { s.gone = i >= n; });
       while (this.srv.length < n) this.srv.push({ queue: [], busy: [], gone: false });
       this.prune();
@@ -172,7 +179,7 @@
       // a new limit or burst: every bucket keeps what it had, capped at the new size
       if (patch.limit !== undefined || patch.burst !== undefined) for (const b of this.buckets.values()) b.tok = Math.min(this.cfg.burst, b.tok);
       if (this.cfg.mode === "closed" && patch.users !== undefined && this.cfg.users > this.users) this.addUsers(this.cfg.users - this.users);
-      if (patch.servers !== undefined) { this.sizeServers(); this.logBusy(); }
+      if (patch.servers !== undefined || patch.replicas !== undefined) { this.sizeServers(); this.logBusy(); }
       if (patch.workers !== undefined) { this.srv.forEach((s, i) => this.fill(i)); this.logBusy(); }
       if (patch.cache !== undefined) this.evict();
       if (patch.jobWorkers !== undefined) {
@@ -241,9 +248,23 @@
         }
         q.hit = false;
       }
-      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : null]);
+      if (this.cfg.writes > 0 && !q.follow && q.write === undefined) q.write = this.r() < this.cfg.writes;
+      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : q.write ? "w" : null]);
       if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
-      const i = this.route();
+      const i = this.route(q);
+      q.srv = i;
+      if (this.feed && this.live() > 1) this.feed.push(["route", i]);
+      const s = this.srv[i];
+      if (s.busy.length < this.cfg.workers) this.serve(q);
+      else if (s.queue.length >= this.cfg.queueMax) this.finish(q, false, "full");
+      else s.queue.push(q);
+    }
+    sendQ(q) {
+      const sec = Math.floor(this.t);
+      this.tries[sec] = (this.tries[sec] || 0) + 1;
+      if (this.feed) this.feed.push(["in", null, "r"]);
+      if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
+      const i = this.route(q);
       q.srv = i;
       if (this.feed && this.live() > 1) this.feed.push(["route", i]);
       const s = this.srv[i];
@@ -253,9 +274,17 @@
     }
     live() { let n = 0; for (const s of this.srv) if (!s.gone) n++; return n; }
     // the load balancer: which server gets the next request
-    route() {
+    route(q) {
       const S = this.srv, n = S.length;
       if (n === 1) return 0;
+      if (this.cfg.writes > 0) {
+        // the primary takes every write, and a writer's own read while read-your-writes holds; replicas take the rest
+        if (!q || q.write || (q.follow && this.cfg.ryw && this.t - q.follow.at < this.cfg.rywFor)) return 0;
+        let L = 0; for (let i = 1; i < n; i++) if (!S[i].gone) L++;
+        if (!L) return 0;
+        for (let j = 0; j < n; j++) { const i = (this.rr + j) % n; if (i > 0 && !S[i].gone) { this.rr = (i + 1) % n; return i; } }
+        return 1;
+      }
       const ok = (i) => !S[i].gone;
       if (this.cfg.lb === "random") {
         const L = []; for (let i = 0; i < n; i++) if (ok(i)) L.push(i);
@@ -309,7 +338,7 @@
         return;
       }
       const sent = q.first ?? q.sent;
-      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit, n: q.noisy });
+      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit, n: q.noisy, own: q.ownRead, stale: q.stale, srv: q.srv || 0 });
       if (this.feed && !q.hit && why !== "limited") this.feed.push(["out", ok, why, q.srv || 0]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
@@ -330,6 +359,9 @@
           if (e.epoch !== this.epoch || this.cfg.mode !== "open") continue;
           this.send();
           this.scheduleArrival();
+        } else if (e.type === "follow") {
+          const q = { id: this.nextId++, sent: this.t, follow: e.follow, write: false };
+          this.sendQ(q);
         } else if (e.type === "noisy") {
           if (e.epoch !== this.nEpoch) continue;
           this.send(null, true);
@@ -359,6 +391,14 @@
           if (q.job) { this.jobDone(q); this.fill(i); this.prune(); continue; }
           // the answer fills the cache on its way back, even if the client already gave up
           if (q.key !== undefined && this.cfg.cache > 0) { this.lru.delete(q.key); this.lru.set(q.key, true); this.evict(); }
+          // a write that's done brings its writer back to look at it; the replicas will have it after the lag
+          if (q.write && !q.over) {
+            const at = this.t, seen = at + this.exp(this.cfg.lag);
+            if (this.feed && this.srv.length > 1) this.feed.push(["repl", seen - at]);
+            this.ev.push({ t: at + this.exp(this.cfg.readAfter), type: "follow", follow: { at, seen } });
+          }
+          // a writer's own read, answered by a replica that hasn't seen their write yet: stale
+          if (q.follow) { q.ownRead = true; q.stale = i > 0 && this.t < q.follow.seen; if (q.stale && this.feed) this.feed.push(["stale", i]); }
           // a request that already timed out still used the worker; its answer just arrives to nobody
           this.finish(q, true);
           this.fill(i);
@@ -394,13 +434,15 @@
     // numbers for requests that finished in (t0, t1]
     stats(t0, t1) {
       const lats = [], d = this.done;
-      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0;
+      let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0, own = 0, stale = 0, onPrimary = 0, onReplicas = 0;
       while (lo < hi) { const m = (lo + hi) >> 1; if (d[m].at <= t0) lo = m + 1; else hi = m; }
       for (let i = lo; i < d.length && d[i].at <= t1; i++) {
         const r = d[i];
         // the script's requests are counted on their own: every other number is about everyone else
         if (r.n) { if (r.ok) nOk++; else if (r.why === "limited") n429++; continue; }
         if (r.why === "limited") limited++;
+        if (r.own) { own++; if (r.stale) stale++; }
+        if (r.ok) { if (r.srv) onReplicas++; else onPrimary++; }
         if (r.ok) { ok++; lats.push(r.lat); } else bad++;
         if (r.hit !== undefined) { looked++; if (r.hit) hits++; }
       }
@@ -412,11 +454,14 @@
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
         hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
         nTput: nOk / span, n429: n429 / span, limited,
+        stale, staleRate: own ? stale / own : 0, primary: onPrimary / span, replicaLoad: onReplicas / span,
         ...this.jobStats(t0, t1),
       };
     }
     triesIn(t0, t1) { let n = 0; for (let i = Math.floor(t0); i < Math.ceil(t1); i++) n += this.tries[i] || 0; return n; }
     // busy workers ÷ workers that existed, over the window (whole seconds, as the page and the checks ask for)
+    // how busy one machine is right now, 0..1 (the page's per-machine numbers)
+    busyOf(i) { const s = this.srv[i]; return s ? s.busy.length / Math.max(1, this.cfg.workers) : 0; }
     util(t0, t1) {
       this.acc(Math.min(t1, this.t));
       let a = 0, c = 0;
