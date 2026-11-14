@@ -686,6 +686,61 @@ UPDATE likes SET n = n + 1 WHERE post = 7;`,
         ["CRDTs", "Counters, sets and other data types built so that any two copies merge without conflict, like the G-counter in Build your own X. Likes are the easy case."],
       ],
     },
+    wt12: {
+      files: [
+        {
+          name: "bill.py", lang: "py", run: true,
+          src: (c) => {
+            let hk = 0, hn = 0;
+            for (let k = 1; k <= c.keys; k++) { if (k <= c.cache) hk += 1 / k; hn += 1 / k; }
+            const hit = c.cache ? hk / hn : 0, misses = c.rate * (1 - hit), busy = misses / (c.servers * c.workers / c.service);
+            const bill = c.servers * c.workers * c.price.worker + (c.cache > 0 ? Math.ceil(c.cache / 1000) * c.price.cache : 0);
+            return `# The shortener's design, as arithmetic you can run.
+${col([[`RATE = ${c.rate}`, "redirects a second"], [`LINKS, CACHE = ${c.keys}, ${c.cache}`, "your system.yaml"], [`SERVERS, WORKERS = ${c.servers}, ${c.workers}`], ["SERVICE = 0.05", "seconds a lookup"], [`PER_WORKER, PER_1K = ${c.price.worker}, ${c.price.cache}`, "$ a month"]])}
+
+
+def h(n):
+    return sum(1 / k for k in range(1, n + 1))
+
+
+# Zipf: link k is clicked in proportion to 1/k, so the
+# best a cache of n links can do is h(n) / h(LINKS)
+hit = h(CACHE) / h(LINKS) if CACHE else 0
+print(f"a perfect cache answers {hit:.0%}")
+# → a perfect cache answers ${Math.round(hit * 100)}%
+misses = RATE * (1 - hit)
+busy = misses / (SERVERS * WORKERS / SERVICE)
+print(f"servers {busy:.0%} busy at best")
+# → servers ${Math.round(busy * 100)}% busy at best
+bill = SERVERS * WORKERS * PER_WORKER
+bill += -(-CACHE // 1000) * PER_1K
+print(f"bill: \${bill} a month")
+# → bill: $${bill} a month`;
+          },
+        },
+        {
+          name: "design.md", lang: "conf",
+          src: (c) => `# Design: URL shortener
+Target: p99 < 300 ms at ${c.rate}/s, $400/month.
+Plan: ${c.servers} servers x ${c.workers} workers` + (c.cache ? `, LRU cache
+of ${c.cache} links in front.` : ", no cache.") + `
+Evidence: a run at ${c.rate}/s for 10 minutes;
+p99, errors and the bill measured, not guessed.
+Risks: a cold cache on deploy (warm it first);
+a link that goes viral (it's one key: cache it).`,
+        },
+      ],
+      check: { line: 2, metric: "cost", tol: 0.5 },
+      try: [{ servers: 6, cache: 0 }, { servers: 2, cache: 1000 }, { servers: 1, cache: 5000 }],
+      watch: (c) => `Write the target down as an <b>SLO</b> (p99 under 300 ms for 99.9% of minutes, say) and graph how much of the month's <b>error budget</b> is left: when it runs out, the team stops shipping features and fixes reliability. Next to it, graph the <b>bill per 1,000 redirects</b> and the cache's hit rate: here ${c.cache ? "a hit rate falling" : "traffic growing"} is what would push the design over budget first.`,
+      stack: [
+        ["Capacity planning", "Measure one server's throughput at your latency target, then divide: the arithmetic in bill.py is the whole method, as long as the numbers come from runs."],
+        ["Redis and Memcached", "The usual cache in front of a lookup like this. A few GB holds millions of short links; set an eviction policy (allkeys-lru) and a memory cap."],
+        ["Autoscaling", "Kubernetes HPA or cloud autoscaling adds servers when they're busy. It reacts in minutes, so it covers the slow climb, not a viral spike or a cold cache."],
+        ["SLOs and error budgets", "Google's SRE practice: pick the target users notice, measure it, and spend the gap between it and 100% on shipping. The budget turns 'is it reliable enough?' into a number."],
+        ["Design docs", "State the target, the plan, the evidence and the risks, as design.md does. A reviewer can argue with a guess; a run is harder to argue with."],
+      ],
+    },
   };
 
   root.WT = root.WT || {};
