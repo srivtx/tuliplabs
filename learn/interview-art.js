@@ -21,7 +21,8 @@
     x.clearRect(0, 0, W, H);
     const st = getComputedStyle(cv);
     const v = (n, d) => (st.getPropertyValue(n) || "").trim() || d;
-    const T = { ink: v("--ink", "#1d1b17"), muted: v("--muted", "#6a655a"), line: v("--line", "#dcd5c6"), card: v("--card", "#fffdf8"), bg: v("--bg", "#efebe2"), soft: v("--soft", "#ece7dc"), ok: v("--ok", LEAF), bad: v("--bad", RED), mono: v("--f-mono", "monospace") };
+    const bgHex = v("--bg", "#efebe2"), dark = bgHex.startsWith("#") && parseInt(bgHex.slice(1, 3), 16) < 90;
+    const T = { idle: dark ? "#4a5046" : "#e2dac8", dark, ink: v("--ink", "#1d1b17"), muted: v("--muted", "#6a655a"), line: v("--line", "#dcd5c6"), card: v("--card", "#fffdf8"), bg: v("--bg", "#efebe2"), soft: v("--soft", "#ece7dc"), ok: v("--ok", LEAF), bad: v("--bad", RED), mono: v("--f-mono", "monospace") };
     return { x, W, H, T };
   }
   // run draw(t) every frame while the canvas is on the page; with reduced motion, draw once at a telling moment
@@ -202,8 +203,8 @@
     for (let i = 0; i < Math.max(0, step); i++) seen[a[i]] = (seen[a[i]] || 0) + 1;
     a.forEach((v, i) => {
       const X = R.x0 + i * (R.w + R.gap), on = how && i === step;
-      tile(x, X, y - R.w * 0.7, R.w, R.w * 1.3, on ? YEL : i < step ? PINK : T.soft);
-      text(x, String(v), X + R.w / 2, y, T.ink, 18, "center", 700);
+      tile(x, X, y - R.w * 0.7, R.w, R.w * 1.3, on ? YEL : i < step || !how ? PINK : T.idle);
+      text(x, String(v), X + R.w / 2, y, on || i < step || !how ? "#1d1b17" : T.ink, 18, "center", 700);
       // a pair found: an arc back to each earlier partner
       if (how && i < step) for (let j = 0; j < i; j++) if (a[j] + v === t) arc(x, R.x0 + j * (R.w + R.gap) + R.w / 2, X + R.w / 2, y - R.w * 0.75, 34 + (i - j) * 8, LEAF_D, 2.5);
     });
@@ -294,7 +295,7 @@
     const dist = [[0, -1, 4], [1, 2, 3], [-1, 3, 4]], front = how ? Math.floor(s * 6) : -1;
     for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) {
       const wall = g[r][q] === "#", d = dist[r][q], lit = how && d >= 0 && d <= front;
-      tile(x, ox + q * c + 2, oy + r * c + 2, c - 4, c - 4, wall ? T.muted : lit ? (d === front ? YEL : PINK) : T.soft);
+      tile(x, ox + q * c + 2, oy + r * c + 2, c - 4, c - 4, wall ? WOOD : lit ? (d === front ? YEL : PINK) : T.idle);
       if (lit) text(x, String(d), ox + q * c + c / 2, oy + r * c + c / 2, "#1d1b17", 14, "center", 700);
     }
     tile(x, ox + c * 0.3, oy + c * 0.3, c * 0.4, c * 0.4, LEAF, 2);
@@ -308,7 +309,7 @@
     for (let i = 0; i < k; i++) root[find(links[i][0])] = find(links[i][1]);
     const col = (v) => [PINK, TEAL, YEL, BLUE, LEAF][find(v)];
     links.forEach(([a, b], i) => { if (!how || i < k) { x.strokeStyle = T.muted; x.lineWidth = 2.5; x.beginPath(); x.moveTo(pos[a][0] * W, pos[a][1] * H); x.lineTo(pos[b][0] * W, pos[b][1] * H); x.stroke(); } });
-    pos.forEach(([p, q], v) => { tile(x, p * W - 14, q * H - 14, 28, 28, how ? col(v) : T.soft); text(x, String(v), p * W, q * H, "#1d1b17", 13, "center", 700); });
+    pos.forEach(([p, q], v) => { tile(x, p * W - 14, q * H - 14, 28, 28, how ? col(v) : T.idle); text(x, String(v), p * W, q * H, "#1d1b17", 13, "center", 700); });
     const groups = new Set([0, 1, 2, 3, 4].map(find)).size;
     cap(x, how ? `${groups} group${groups === 1 ? "" : "s"}: each colour is one root` : "5 people · 3 friendships", W / 2, H - 10, T, how ? PINK_D : T.muted);
   } };
@@ -317,10 +318,10 @@
     let take = 0, skip = 0;
     a.forEach((v, i) => {
       const X = R.x0 + i * (R.w + R.gap), on = how && s > 0.82 && pick.includes(i);
-      tile(x, X, y - R.w * 0.4, R.w, R.w * 0.9, on ? LEAF : i === k ? YEL : T.soft);
+      tile(x, X, y - R.w * 0.4, R.w, R.w * 0.9, on ? LEAF : i === k ? YEL : T.idle);
       // an awning on top, like a market stall
       for (let j = 0; j < 4; j++) { x.fillStyle = j % 2 ? T.card : PINK; x.fillRect(X + (j * R.w) / 4, y - R.w * 0.62, R.w / 4, R.w * 0.2); }
-      text(x, String(v), X + R.w / 2, y + 4, T.ink, 16, "center", 700);
+      text(x, String(v), X + R.w / 2, y + 4, on || i === k ? "#1d1b17" : T.ink, 16, "center", 700);
       if (i < k) [take, skip] = [skip + v, Math.max(take, skip)];
     });
     cap(x, how ? (s > 0.82 ? "2 + 9 + 1 = 12: no two neighbours" : `best if the last is taken ${take}, skipped ${skip}`) : "a row of stalls · no two neighbours", W / 2, 14, T, how ? PINK_D : T.muted);
@@ -330,8 +331,8 @@
     const n = 3, c = Math.min((H - 34) / n, (W - 40) / n), ox = (W - c * n) / 2, oy = 24, k = how ? Math.floor(s * 11) : -1;
     for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) {
       const idx = r * n + q, filled = how && idx <= k, onPath = how && k >= 9 && path.some(([pr, pq]) => pr === r && pq === q);
-      tile(x, ox + q * c + 2, oy + r * c + 2, c - 4, c - 4, onPath ? LEAF : filled ? PINK : T.soft);
-      text(x, String(g[r][q]), ox + q * c + c / 2, oy + r * c + c / 2 - (filled ? 6 : 0), T.ink, 15, "center", 700);
+      tile(x, ox + q * c + 2, oy + r * c + 2, c - 4, c - 4, onPath ? LEAF : filled ? PINK : T.idle);
+      text(x, String(g[r][q]), ox + q * c + c / 2, oy + r * c + c / 2 - (filled ? 6 : 0), filled || onPath ? "#1d1b17" : T.ink, 15, "center", 700);
       if (filled) text(x, String(best[r][q]), ox + q * c + c / 2, oy + r * c + c / 2 + 10, "#1d1b17", 10, "center", 600);
     }
     cap(x, how ? (k >= 9 ? "cheapest: 7, right, right, down, down" : "each block: its toll + the cheaper of above and left") : "tolls · only right or down", W / 2, 10, T, how ? PINK_D : T.muted);
