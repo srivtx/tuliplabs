@@ -1,0 +1,77 @@
+/* Interview mode (learn/interview.js). Builds on the mock test's styles (learn/mock.css) and the engine's tokens. */
+.iv .grow{flex:1}
+.iv .btns{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.iv-top{display:flex;align-items:center;gap:14px;margin:4px 0 6px}
+.iv-top .eyebrow{font:700 13px var(--f-display);color:var(--c2);letter-spacing:.04em}
+.iv-clock{font:600 15px var(--f-mono);letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.iv-clock.low{color:var(--bad)}
+.iv-quit{background:none;border:0;padding:0;font:500 13px var(--f-body);color:var(--muted);cursor:pointer;border-bottom:1px dashed var(--line)}
+.iv-quit:hover{color:var(--ink);border-color:var(--ink)}
+
+/* the five stages: words on one line, joined by hairlines */
+.iv-stages{display:flex;align-items:center;margin:0 0 22px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 0 7px;overflow-x:auto;scrollbar-width:none}
+.iv-stage{display:flex;align-items:center;font:400 20px var(--f-serif);color:var(--muted);opacity:.45;background:none;border:0;padding:0;white-space:nowrap}
+.iv-stage+.iv-stage::before{content:"";width:28px;height:1px;background:var(--line);margin:0 12px}
+.iv-stage.on{opacity:1;cursor:pointer}
+button.iv-stage:hover{color:var(--ink)}
+.iv-stage.cur{color:var(--ink);font-style:italic;text-decoration:underline 2px var(--pink);text-underline-offset:6px}
+
+/* the interviewer speaks in serif, against a pink rule */
+.iv-say{border-left:2px solid var(--pink);padding:2px 0 2px 14px;margin:14px 0}
+.iv-who{display:block;font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pink);margin-bottom:3px}
+.iv-say p{font:400 19px/1.45 var(--f-serif);margin:0 0 6px}
+.iv-say code{font-size:15px}
+
+.iv-prob{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 18px;margin:12px 0}
+.iv-prob summary{font:600 15px var(--f-body);cursor:pointer}
+.iv-prob .prompt{margin-top:8px;font-size:15px}
+.iv-prob .prompt p{margin:0 0 8px}
+
+.iv-qs{display:grid;gap:8px;margin:12px 0 18px}
+.iv-q .opt{display:flex;gap:10px;align-items:baseline;width:100%}
+.iv-you{font:600 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex:none}
+.iv-q.asked .opt{cursor:default;color:var(--ink);border-color:color-mix(in srgb,var(--c2) 40%,var(--line))}
+.iv-a{margin:6px 0 4px 14px;padding-left:12px;border-left:2px solid var(--pink);font:400 17px/1.45 var(--f-serif)}
+
+.iv-opts{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin:8px 0}
+.iv-opts .opt:disabled{cursor:default;color:var(--ink)}
+.iv-opts .opt:disabled:not(.right):not(.wrong){opacity:.5}
+.iv-ask{font-weight:600;margin:16px 0 4px}
+.iv-approach{width:100%;font:400 17px/1.45 var(--f-serif);margin-top:8px}
+.iv-small{font-size:13px;margin:4px 0 0}
+.iv-hint{background:none;border:0;padding:0;margin:14px 0 0;font:500 14px var(--f-body);color:var(--pink);border-bottom:1px dashed var(--pink);cursor:pointer}
+.iv-mine{width:100%;font:13.5px/1.5 var(--f-mono)}
+
+/* hidden tests: one lamp each */
+.iv-lamps{display:grid;margin-top:14px}
+.iv-lamp{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}
+.iv-lamp i{flex:none;width:11px;height:11px;margin-top:5px;background:var(--bad);box-shadow:0 0 0 3px color-mix(in srgb,var(--bad) 18%,transparent)}
+.iv-lamp.ok i{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 18%,transparent)}
+.iv-lamp b{display:block;font-weight:600}
+.iv-lamp span,.iv-lamp code{font-size:13.5px;color:var(--muted)}
+.iv-lamp code{white-space:pre-wrap;word-break:break-word}
+
+/* the scorecard */
+.iv-verdict{font:italic 400 34px var(--f-serif);margin:4px 0 0}
+.iv-verdict.v-ready{color:var(--ok)}.iv-verdict.v-almost{color:var(--pink)}.iv-verdict.v-not{color:var(--bad)}
+.iv-card{border-top:1px solid var(--ink);margin:14px 0 10px}
+.iv-row{display:grid;grid-template-columns:150px auto 1fr;gap:16px;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--line)}
+.iv-row b{font-weight:600}
+.iv-row>span:last-child{color:var(--muted);font-size:14px}
+.iv-dots{display:inline-flex;gap:5px}
+.iv-dots i{width:11px;height:11px;border:1.5px solid var(--ink);opacity:.3}
+.iv-dots i.on{background:var(--pink);border-color:var(--pink);opacity:1}
+.iv-how{list-style:none;padding:0;margin:8px 0 22px;border-top:1px solid var(--line)}
+.iv-how li{display:grid;grid-template-columns:110px 1fr;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}
+.iv-how b{font:italic 400 21px var(--f-serif)}
+.iv-how span{color:var(--muted);align-self:center}
+.iv-end{margin-top:22px}
+
+@media (max-width:640px){
+  .iv-stage{font-size:17px}
+  .iv-stage+.iv-stage::before{width:10px;margin:0 6px}
+  .iv-say p{font-size:17px}
+  .iv-row{grid-template-columns:1fr auto;gap:4px 12px}
+  .iv-row>span:last-child{grid-column:1/-1}
+  .iv-how li{grid-template-columns:1fr;gap:2px}
+}
