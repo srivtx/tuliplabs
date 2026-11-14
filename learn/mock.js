@@ -23,7 +23,7 @@
   const coding = (mode) => mode === "all coding";
   const KIND_NAME = { mc: "Multiple choice", trace: "Trace it", pattern: "Which pattern fits?", out: "What does it print?", line: "Find the bug", order: "Put it in order", explain: "Explain it", code: "Code it" };
   const KIND_TEXT = {
-    mc: "Four answers, one right. From every chapter's quick-fire quizzes.", trace: "A short program with fresh numbers: say what it prints. Made up for each test.",
+    mc: "Four answers, one right. From every chapter's quick-fire quizzes.", trace: "A short program with fresh numbers, made up for each test. Many are answered on a picture: tap the order, swap the tiles, write on the nodes, drag across the stretch.",
     pattern: "A real interview problem, with its hints cut off. Which chapter's technique solves it?", out: "A snippet from a chapter: type exactly what it prints.",
     line: "A program with a wrong line. Click it.", order: "Scrambled lines and a couple of decoys. Build the working program.",
     explain: "A why-question. Say the answer in your own words, then hold it up against the model answer and mark yourself honestly.",
@@ -346,7 +346,7 @@
     if (q.kind === "mc" || q.kind === "pattern" || (q.kind === "trace" && resolve(q).match === "choice")) return "1–4 to pick · Enter for next";
     if (q.kind === "explain") return "Write it, then show the model answer";
     if (q.kind === "code") return "Ctrl/⌘ + Enter runs the checks";
-    if (q.kind === "out" || q.kind === "trace") return "Ctrl/⌘ + Enter for next";
+    if (q.kind === "out" || q.kind === "trace") return (q.kind === "trace" && resolve(q).board ? "Answer on the picture · " : "") + "Ctrl/⌘ + Enter for next";
     return "Enter for next";
   }
   function go(k) { run.cur = Math.max(0, Math.min(run.qs.length - 1, k)); A.save(); drawTest(); window.scrollTo(0, 0); }
@@ -376,10 +376,18 @@
     } else if (q.kind === "trace" || q.kind === "out") {
       const ta = h("textarea", { class: "guess mk-type", rows: 2, placeholder: "Type exactly what it prints…", spellcheck: "false", "aria-label": "What it prints", disabled: locked });
       ta.value = q.a || "";
-      ta.oninput = () => answer(q, ta.value.trim() ? ta.value : null);
-      body.append(h("div", { class: "prompt", html: q.kind === "out" ? "<p>What does it print?</p>" : full.prompt }), code(full.code), ta,
-        q.kind === "trace" ? h("p", { class: "kbd" }, full.match === "text" ? "Type it as printed: the symbols count, the spacing doesn't." : full.lang === "sql" ? "One row per line, its values separated by spaces." : "Lists can be typed with or without brackets and commas: [1, 2] and 1 2 both count.") : "");
-      setTimeout(() => !locked && ta.focus(), 30);
+      ta.oninput = () => { q.hs = null; answer(q, ta.value.trim() ? ta.value : null); };
+      const hint = q.kind === "trace" && !(locked && full.board) ? h("p", { class: "kbd" }, full.match === "text" ? "Type it as printed: the symbols count, the spacing doesn't." : full.lang === "sql" ? "One row per line, its values separated by spaces." : "Lists can be typed with or without brackets and commas: [1, 2] and 1 2 both count.") : "";
+      const board = q.kind === "trace" && !locked && full.board && window.HANDS && window.HANDS.mount ? full.board : null;
+      if (board) {
+        const hb = window.HANDS.mount(board, { state: q.hs, onChange: (st, ans) => { q.hs = st; ta.value = ans || ""; answer(q, ans); } });
+        const typing = h("div", { class: "mk-typing" }, ta, hint);
+        const alt = h("p", { class: "mk-alt" }, "Or ", h("button", { class: "hb-word", onclick: () => { alt.replaceWith(typing); ta.focus(); } }, "type the answer instead"), ".");
+        body.append(h("div", { class: "prompt", html: full.prompt }), code(full.code), hb.el, q.a != null && q.hs == null ? typing : alt);
+      } else {
+        body.append(h("div", { class: "prompt", html: q.kind === "out" ? "<p>What does it print?</p>" : full.prompt }), code(full.code), ta, hint);
+        setTimeout(() => !locked && ta.focus(), 30);
+      }
     } else if (q.kind === "line") {
       body.append(h("p", {}, "It should pass these checks, and it doesn't:"), h("pre", { class: "mk-code small", html: hl(full.checks.join("\n")) }),
         h("p", { class: "mk-ask" }, bad.size > 1 ? "Two lines side by side are wrong. Click either one." : "One line is wrong. Click it."), code(full.code, true));
@@ -529,6 +537,7 @@
     else if (q.kind === "trace") {
       if (full.match !== "choice" && q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));
       box.append(h("p", {}, full.lang === "sql" ? "It returns:" : "It prints:"), h("pre", { class: "mk-code small" }, full.answer));
+      if (full.board && window.HANDS && window.HANDS.mount) box.append(window.HANDS.mount(full.board, { replay: true, autoplay: true }).el);
       box.insertAdjacentHTML("beforeend", full.why || "");
     } else if (q.kind === "out") {
       if (q.a != null && !q.ok) box.append(h("p", {}, "You wrote:"), h("pre", { class: "mk-code small" }, q.a));
@@ -611,7 +620,7 @@
   addEventListener("keydown", (e) => {
     if (view !== "test" || location.hash !== "#mock" || e.defaultPrevented) return; // the code editor handles its own keys first
     const q = run.qs[run.cur];
-    const typing = e.target.tagName === "TEXTAREA";
+    const typing = e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT";
     if (typing && e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); document.querySelector(".mk-nav .btn.primary")?.click(); return; }
     if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
     if (/^[1-4]$/.test(e.key)) { const b = document.querySelectorAll(".mk-card .opt")[+e.key - 1]; if (b && !b.disabled) { b.click(); e.preventDefault(); } }

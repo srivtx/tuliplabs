@@ -3,6 +3,8 @@
 //      exactly the answer the generator worked out in JavaScript. Python programs run in CPython (SQL ones
 //      through Python's sqlite3), JavaScript ones in Node, event loop and all. Choice questions must have
 //      exactly one right option, and no repeated ones.
+//      A trace question with a board (learn/hands.js) must be sound: its solution taps only what's on it,
+//      a graph's edges never run through another node, and the answer its solution gives is marked right.
 //   2. Every question bank, content/<track>-mock.json: every multiple-choice question has one right answer,
 //      every bug line points inside its code, every ordering question has lines to order, and every
 //      "explain it" question has an answer to compare with.
@@ -13,12 +15,14 @@ const os = require("os");
 const vm = require("vm");
 const { execFileSync } = require("child_process");
 const G = require("../learn/mock-gen-x.js");
+const HANDS = require("../learn/hands.js");
 
 const SEEDS = Number(process.argv[2] || 300);
 const ONLY = process.argv[3] || null;
 const problems = [];
 const cases = [];
 const skipped = new Set();
+const boards = {};
 // Express questions run with the real express package: NODE_PATH=<node_modules with express@5>
 const { createRequire } = require("module");
 const NODE_PATH = process.env.NODE_PATH || "";
@@ -37,6 +41,12 @@ for (const gen of G.names) {
       if (!q.opts.some((o) => o.ok && o.t === q.answer)) problems.push(`${gen} #${seed}: the right option isn't the answer`);
     }
     if (!String(q.answer).trim()) problems.push(`${gen} #${seed}: an empty answer`);
+    if (q.board) {
+      boards[gen] = (boards[gen] || 0) + 1;
+      for (const p of HANDS.lint(q.board)) problems.push(`${gen} #${seed}: board: ${p}`);
+      const a = HANDS.answerOf(q.board, HANDS.solveOf(q.board));
+      if (!G.correct(q, a)) problems.push(`${gen} #${seed}: the board's solution gives ${JSON.stringify(a)}, not ${JSON.stringify(q.answer)}`);
+    }
     if (q.needs === "express" && !EXPRESS) { skipped.add(gen); continue; }
     cases.push({ gen, seed, code: q.run || q.code, runs: q.lang === "node" ? "node" : "py", answer: q.answer, match: q.match, choice: q.match === "choice" });
   }
@@ -78,6 +88,7 @@ async function runNode(code, lines) {
 
 (async () => {
   for (const c of cases.filter((c) => c.runs === "node")) c.out = await runNode(c.code, c.answer.split("\n").length);
+  if (Object.keys(boards).length) console.log(`  boards: ${Object.entries(boards).map(([g, n]) => `${g} ${n}`).join(", ")}`);
   if (skipped.size) console.log(`  skipped ${[...skipped].join(", ")}: set NODE_PATH to a node_modules with express@5 to check them`);
   const tidy = (s) => s.split("\n").map((l) => l.replace(/\s+$/, "")).join("\n").replace(/\n+$/, "");
   const perGen = {};

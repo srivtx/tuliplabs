@@ -1,0 +1,70 @@
+/* Hands-on boards (learn/hands.js): tiles and nodes you answer on. Uses the engine's tokens:
+   --card, --line, --ink, --muted, --c1 to --c4, --ok, --bad, --f-mono. Tiles stand on a solid ledge, like blocks. */
+.hb{container-type:inline-size;margin:14px 0 4px}
+.hb-ask{margin:0 0 10px;font-size:15px}
+.hb-stage{position:relative;width:100%;max-width:680px;margin:0 auto;user-select:none;-webkit-user-select:none}
+.hb-stage svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.hb-e{stroke:color-mix(in srgb,var(--ink) 26%,var(--line));stroke-width:2.2;fill:none;vector-effect:non-scaling-stroke;transition:stroke .35s,stroke-width .35s}
+.hb-e.hot{stroke:var(--c4);stroke-width:3.4}
+.hb-e.now{stroke-dasharray:7 5;animation:hb-flow .6s linear infinite}
+@keyframes hb-flow{to{stroke-dashoffset:-12}}
+.hb-ah{fill:color-mix(in srgb,var(--ink) 34%,var(--line))}
+
+.hb-it{position:absolute;translate:-50% -50%;aspect-ratio:1;display:grid;place-items:center;padding:0;margin:0;
+  border:1.5px solid color-mix(in srgb,var(--ink) 24%,var(--line));background:var(--card);color:var(--ink);
+  font:600 clamp(11px,2.5cqi,17px)/1 var(--f-mono);border-radius:10px;cursor:pointer;
+  box-shadow:0 3px 0 color-mix(in srgb,var(--ink) 20%,var(--line));
+  transition:left .5s cubic-bezier(.3,1.35,.5,1),top .5s cubic-bezier(.3,1.35,.5,1),transform .16s,background .22s,border-color .22s,opacity .3s,box-shadow .16s}
+.hb-graph .hb-it,.hb-tree .hb-it{border-radius:50%}
+.hb-it:hover{transform:translateY(-2px);box-shadow:0 5px 0 color-mix(in srgb,var(--ink) 20%,var(--line))}
+.hb-it:focus-visible{outline:2px solid var(--c2);outline-offset:3px}
+.hb-it:active{transform:translateY(1px);box-shadow:0 1px 0 color-mix(in srgb,var(--ink) 20%,var(--line))}
+.hb-replay .hb-it{cursor:default}
+.hb-replay .hb-it:hover{transform:none;box-shadow:0 3px 0 color-mix(in srgb,var(--ink) 20%,var(--line))}
+
+/* tapped in order: blue, with its place in the order on a badge */
+.hb-it.on{background:color-mix(in srgb,var(--c2) 20%,var(--card));border-color:var(--c2);box-shadow:0 3px 0 color-mix(in srgb,var(--c2) 55%,var(--line))}
+.hb-it[data-n]::after{content:attr(data-n);position:absolute;top:-9px;right:-9px;z-index:1;min-width:19px;height:19px;padding:0 4px;box-sizing:border-box;border-radius:10px;
+  background:var(--c2);color:#fff;font:600 10.5px/19px var(--f-mono);text-align:center;animation:hb-pop .25s cubic-bezier(.3,1.6,.5,1)}
+@keyframes hb-pop{from{transform:scale(.2)}}
+/* in a row of cells the badge stands above its own cell, clear of the neighbours */
+.hb-array .hb-it[data-n]::after{top:auto;right:auto;left:50%;bottom:calc(100% + 5px);translate:-50% 0}
+@container (max-width:520px){.hb-it[data-n]::after{min-width:16px;height:16px;font-size:9.5px;line-height:16px;border-radius:8px;padding:0 3px}}
+/* where the replay is now: amber, lifted */
+.hb-it.hot{background:color-mix(in srgb,var(--c4) 34%,var(--card));border-color:var(--c4);transform:translateY(-4px);box-shadow:0 7px 0 color-mix(in srgb,var(--c4) 55%,var(--line))}
+.hb-it.dim{opacity:.26}
+/* picked up, waiting for the tile to swap with */
+.hb-it.pick{border-color:var(--c1);background:color-mix(in srgb,var(--c1) 16%,var(--card));transform:translateY(-8px);box-shadow:0 11px 0 color-mix(in srgb,var(--c1) 45%,var(--line))}
+/* inside a dragged stretch; a letter that repeats inside it */
+.hb-it.in{background:color-mix(in srgb,var(--c3) 24%,var(--card));border-color:var(--c3);box-shadow:0 3px 0 color-mix(in srgb,var(--c3) 55%,var(--line))}
+.hb-it.dup{background:color-mix(in srgb,var(--bad) 22%,var(--card));border-color:var(--bad);box-shadow:0 3px 0 color-mix(in srgb,var(--bad) 55%,var(--line))}
+.hb-range .hb-it{touch-action:none}
+
+.hb-ix{position:absolute;translate:-50% 0;font:500 11px var(--f-mono);color:var(--muted);pointer-events:none}
+.hb-mk{position:absolute;translate:-50% -50%;font:600 11px var(--f-mono);color:var(--c4);pointer-events:none;white-space:nowrap}
+.hb-w{position:absolute;translate:-50% -50%;font:600 11.5px/1 var(--f-mono);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:5px;padding:3px 5px;pointer-events:none}
+.hb-in{position:absolute;translate:-50% -50%;width:46px;z-index:1;box-sizing:border-box;padding:4px 2px;margin:0;font:600 13px var(--f-mono);text-align:center;color:var(--ink);
+  background:var(--card);border:1.5px dashed color-mix(in srgb,var(--ink) 30%,var(--line));border-radius:7px}
+.hb-graph .hb-in,.hb-tree .hb-in{translate:-50% 0;margin-top:calc(max(17px, 3.97cqi) + 1px);width:44px}
+@container (max-width:520px){.hb-in{font-size:12px;padding:3px 1px}.hb-graph .hb-in,.hb-tree .hb-in{width:36px}}
+.hb-in:focus{outline:none;border-style:solid;border-color:var(--c2)}
+.hb-in:not(:placeholder-shown){border-style:solid}
+.hb-replay .hb-in{border-style:solid;color:var(--c3)}
+.hb-in.set{animation:hb-set .6s}
+@keyframes hb-set{0%{background:color-mix(in srgb,var(--c4) 45%,var(--card));transform:scale(1.18)}100%{background:var(--card)}}
+
+.hb-strip{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-height:0;margin:10px 0 0}
+.hb-strip:empty{display:none}
+.hb-sn{font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+.hb-chip{min-width:28px;height:28px;padding:0 6px;box-sizing:border-box;display:inline-grid;place-items:center;border-radius:7px;font:600 13px var(--f-mono);
+  background:color-mix(in srgb,var(--c4) 20%,var(--card));border:1px solid color-mix(in srgb,var(--c4) 55%,var(--line));animation:hb-pop .25s}
+.hb-chip.empty{background:none;border-style:dashed;color:var(--muted);font-weight:500}
+.hb-note{margin:8px 0 0;min-height:1.45em;font-size:14.5px;color:var(--muted)}
+.hb-note:empty{display:none}
+.hb-foot{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-top:8px;font-size:14px;color:var(--muted)}
+.hb-foot code{color:var(--ink)}
+.hb-read:empty{display:none}
+.hb-word{font:inherit;color:var(--ink);background:none;border:0;padding:0 1px;cursor:pointer;border-bottom:2px dashed var(--pink);border-radius:0}
+.hb-word:hover,.hb-word:focus-visible{background:color-mix(in srgb,var(--pink) 16%,transparent);outline:none}
+.hb-word:disabled{opacity:.45;cursor:default}
+.hb-play{font-weight:600}

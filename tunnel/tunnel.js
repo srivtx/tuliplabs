@@ -640,7 +640,7 @@
     const n = over && over.servers ? over.servers : over && over.shards ? over.shards : over && over.replicas !== undefined && c.writes > 0 ? 1 + over.replicas : sim.srv.length;
     const L = { crowd: { x: 0, y: 0, w: 7.8, d: 6.9, h: 1 }, wy: 2.7, servers: [], queues: [] };
     let x = 8.4;
-    if (X.bot) { L.bot = { x: 8.1, y: -3.3, w: 1.5, d: 1.5, h: 1.45 }; x += 1.9; }
+    if (X.bot) { L.bot = { x: 8.1, y: 4.7, w: 1.5, d: 1.5, h: 1.45 }; x += 1.9; }
     if (c.limit > 0) { L.limiter = { x: x + 0.3, y: L.wy - 0.7, w: 1.9, d: 1.9, h: 0.75 }; x += 2.9; }
     // a sharded system's router carries the hash ring: give it room clear of the crowd
     if (c.shards > 0) x += 2.4;
@@ -791,7 +791,7 @@
     const firstQ = LY.queues[0], S0 = LY.servers[0];
     const entry = LY.limiter ? LY.limiter.x : LY.cache ? LY.cache.x : LY.lb ? LY.lb.x : firstQ.x;
     strip(7.9, wy + 0.3, entry, wy + 0.3, 0.3, T.wire);
-    if (LY.bot) { const bx = LY.bot.x + LY.bot.w / 2; strip(bx, LY.bot.y + LY.bot.d, bx, wy + 0.3, 0.2, T.wire); }
+    if (LY.bot) { const bx = LY.bot.x + LY.bot.w / 2; strip(bx, LY.bot.y, bx, wy + 0.3, 0.2, T.wire); }
     if (LY.limiter) strip(LY.limiter.x + LY.limiter.w, wy + 0.3, LY.cache ? LY.cache.x : LY.lb ? LY.lb.x : firstQ.x, wy + 0.3, 0.3, T.wire);
     if (LY.cache) strip(LY.cache.x + LY.cache.w, wy + 0.3, LY.lb ? LY.lb.x : firstQ.x, wy + 0.3, 0.3, T.wire);
     if (LY.lb) LY.queues.forEach((q, i) => strip(LY.lb.x + LY.lb.w, wy + 0.3, q.x, LY.servers[i].y + LY.servers[i].d / 2, i === lastRoute ? 0.16 : 0.11, i === lastRoute && routeGlow > 0 ? mix(T.wire.startsWith("#") ? T.wire : "#1c3a44", T.req, routeGlow * 0.6) : T.wire));
@@ -1006,7 +1006,7 @@
   }
   // a request's trip, as a path of floor points: crowd → (cache) → (balancer) → its queue
   function pathIn(srvI, noisy) {
-    const wy = LY.wy + 0.3, p = noisy && LY.bot ? [[LY.bot.x + LY.bot.w / 2, LY.bot.y + LY.bot.d], [LY.bot.x + LY.bot.w / 2, wy]] : [[7.9, wy]];
+    const wy = LY.wy + 0.3, p = noisy && LY.bot ? [[LY.bot.x + LY.bot.w / 2, LY.bot.y], [LY.bot.x + LY.bot.w / 2, wy]] : [[7.9, wy]];
     if (LY.limiter) p.push([LY.limiter.x, wy]);
     if (LY.cache) p.push([LY.cache.x, wy]);
     if (LY.lb) p.push([LY.lb.x + LY.lb.w, wy]);
@@ -1183,7 +1183,7 @@
     }
     if (LY.bot) {
       const el = tag("bot", "wt-ctag wt-jtag", () => toggleInspect({ kind: "bot" }));
-      const [x, y] = iso(LY.bot.x + LY.bot.w * 0.5, LY.bot.y, LY.bot.h + 1.1);
+      const [x, y] = iso(LY.bot.x + LY.bot.w * 0.5, LY.bot.y + LY.bot.d, 0);
       el.style.transform = `translate(${x}px, ${y}px)`;
       el.classList.toggle("on", !!selected && selected.kind === "bot");
       const st = samples[samples.length - 1];
