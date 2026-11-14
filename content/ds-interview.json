@@ -843,6 +843,89 @@
 "twist": "<p>The market moves to a <b>roundabout</b>: the stalls form a circle, so the first and the last are neighbours too. Write <code>best_picks_circle(vals)</code>.</p>",
 "twisttests": "assert best_picks_circle([2, 3, 2]) == 3\nassert best_picks_circle([1, 2, 3, 1]) == 4\nassert best_picks_circle([5]) == 5\nassert best_picks_circle([]) == 0\nassert best_picks_circle([4, 1, 1, 4]) == 5",
 "twistsolution": "def best_picks_circle(vals):\n    def line(vs):\n        take = skip = 0\n        for v in vs:\n            take, skip = skip + v, max(take, skip)\n        return max(take, skip)\n    if len(vals) <= 1:\n        return max(vals[0], 0) if vals else 0\n    return max(line(vals[1:]), line(vals[:-1]))"
+},
+{
+"id": "toll",
+"title": "The cheapest drive",
+"fn": "min_path_cost",
+"ch": 30,
+"decoys": [
+19,
+23,
+16,
+27
+],
+"bigo": "O(rows × cols)",
+"hints": [
+"<p>Trying every route branches at every block. How many ways can the van <i>arrive</i> at block (r, c)?</p>",
+"<p>Only from (r - 1, c) or (r, c - 1). If you already knew the cheapest cost to reach both, you'd know the cheapest cost to reach (r, c).</p>",
+"<p><code>best[r][c] = grid[r][c] + min(best[r - 1][c], best[r][c - 1])</code>, with the top row and the left column having only one choice. Fill in reading order.</p>"
+],
+"tests": [
+{
+"tag": "single",
+"code": "assert min_path_cost([[5]]) == 5"
+},
+{
+"tag": "line",
+"code": "assert min_path_cost([[1, 2, 3]]) == 6\nassert min_path_cost([[1], [2], [3]]) == 6"
+},
+{
+"tag": "zero",
+"code": "assert min_path_cost([[0, 0], [0, 0]]) == 0"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(8)\nn = 400\nbig = [[random.randint(0, 9) for _ in range(n)] for _ in range(n)]\nr, secs = timed(min_path_cost, big)\nbest = [0] * n\nfor i in range(n):\n    for j in range(n):\n        if i == 0 and j == 0:\n            best[j] = big[0][0]\n        elif i == 0:\n            best[j] = best[j - 1] + big[i][j]\n        elif j == 0:\n            best[j] = best[j] + big[i][j]\n        else:\n            best[j] = min(best[j], best[j - 1]) + big[i][j]\nassert r == best[-1]\nassert secs < 1.5, f\"{secs:.2f} s on a 400 × 400 city: trying every route is far too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the city be one block?",
+"a": "Yes. Then the van just pays that block's toll.",
+"tag": "single"
+},
+{
+"q": "Can the city be a single row or a single column?",
+"a": "Yes. Then there's only one way through.",
+"tag": "line"
+},
+{
+"q": "Can a toll be zero?",
+"a": "Yes, some blocks are free. No toll is negative.",
+"tag": "zero"
+},
+{
+"q": "Can the van go left or up?",
+"a": "No, only right or down.",
+"tag": null
+},
+{
+"q": "Is the grid a rectangle?",
+"a": "Yes, every row is the same length.",
+"tag": null
+},
+{
+"q": "Do I need the route itself?",
+"a": "No, only the cost.",
+"tag": null
+}
+],
+"bigos": [
+"O(rows + cols)",
+"O(rows × cols)",
+"O(rows × cols × log(rows × cols))",
+"O(2^(rows + cols))"
+],
+"prompt": "<p>A city is a grid of blocks, and <code>grid[r][c]</code> is the toll for driving through block <code>(r, c)</code>. A delivery van starts at the top-left block and must reach the bottom-right one, moving only <b>right or down</b>. It pays the toll of every block it drives through, including the first and the last.</p>\n<p>Write <code>min_path_cost(grid)</code>: return the smallest total toll.</p>\n<p>For <code>[[1, 3, 1], [1, 5, 1], [4, 2, 1]]</code> the answer is <code>7</code>: right, right, down, down.</p>",
+"examples": "assert min_path_cost([[1, 3, 1], [1, 5, 1], [4, 2, 1]]) == 7\nassert min_path_cost([[1, 2], [5, 1]]) == 4",
+"starter": "def min_path_cost(grid):\n    pass",
+"solution": "def min_path_cost(grid):\n    rows, cols = len(grid), len(grid[0])\n    best = [[0] * cols for _ in range(rows)]\n    for r in range(rows):\n        for c in range(cols):\n            if r == 0 and c == 0:\n                prev = 0\n            elif r == 0:\n                prev = best[r][c - 1]\n            elif c == 0:\n                prev = best[r - 1][c]\n            else:\n                prev = min(best[r - 1][c], best[r][c - 1])\n            best[r][c] = prev + grid[r][c]\n    return best[-1][-1]",
+"brute": "def min_path_cost(grid):\n    rows, cols = len(grid), len(grid[0])\n    def go(r, c):\n        if r == rows - 1 and c == cols - 1:\n            return grid[r][c]\n        options = []\n        if r + 1 < rows:\n            options.append(go(r + 1, c))\n        if c + 1 < cols:\n            options.append(go(r, c + 1))\n        return grid[r][c] + min(options)\n    return go(0, 0)",
+"approach": "<p>The cheapest way into a block comes either from above or from the left, so its best cost is its toll plus the smaller of those two. Fill the grid row by row: each block once, O(rows × cols).</p>",
+"twist": "<p>The dispatcher wants to know how many routes tie for cheapest. Write <code>count_cheapest(grid)</code>: the number of right/down routes whose total toll equals the minimum.</p>",
+"twisttests": "assert count_cheapest([[1, 3, 1], [1, 5, 1], [4, 2, 1]]) == 1\nassert count_cheapest([[0, 0], [0, 0]]) == 2\nassert count_cheapest([[1, 1, 1], [1, 1, 1]]) == 3\nassert count_cheapest([[7]]) == 1",
+"twistsolution": "def count_cheapest(grid):\n    rows, cols = len(grid), len(grid[0])\n    best = [[0] * cols for _ in range(rows)]\n    ways = [[0] * cols for _ in range(rows)]\n    for r in range(rows):\n        for c in range(cols):\n            if r == 0 and c == 0:\n                best[r][c], ways[r][c] = grid[0][0], 1\n                continue\n            froms = []\n            if r:\n                froms.append((best[r - 1][c], ways[r - 1][c]))\n            if c:\n                froms.append((best[r][c - 1], ways[r][c - 1]))\n            low = min(b for b, _ in froms)\n            best[r][c] = low + grid[r][c]\n            ways[r][c] = sum(w for b, w in froms if b == low)\n    return ways[-1][-1]"
 }
 ]
 }

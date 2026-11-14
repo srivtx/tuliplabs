@@ -1007,3 +1007,121 @@ def best_picks_circle(vals):
         return max(vals[0], 0) if vals else 0
     return max(line(vals[1:]), line(vals[:-1]))
 ```
+
+```interview
+id: toll
+title: The cheapest drive
+fn: min_path_cost
+ch: 30
+decoys: 19, 23, 16, 27
+bigo: O(rows × cols)
+bigos: O(rows + cols); O(rows × cols); O(rows × cols × log(rows × cols)); O(2^(rows + cols))
+---prompt
+A city is a grid of blocks, and `grid[r][c]` is the toll for driving through block `(r, c)`. A delivery van starts at the top-left block and must reach the bottom-right one, moving only **right or down**. It pays the toll of every block it drives through, including the first and the last.
+
+Write `min_path_cost(grid)`: return the smallest total toll.
+
+For `[[1, 3, 1], [1, 5, 1], [4, 2, 1]]` the answer is `7`: right, right, down, down.
+---examples
+assert min_path_cost([[1, 3, 1], [1, 5, 1], [4, 2, 1]]) == 7
+assert min_path_cost([[1, 2], [5, 1]]) == 4
+---clarify
++ single | Can the city be one block? | Yes. Then the van just pays that block's toll.
++ line | Can the city be a single row or a single column? | Yes. Then there's only one way through.
++ zero | Can a toll be zero? | Yes, some blocks are free. No toll is negative.
+- | Can the van go left or up? | No, only right or down.
+- | Is the grid a rectangle? | Yes, every row is the same length.
+- | Do I need the route itself? | No, only the cost.
+---test single
+assert min_path_cost([[5]]) == 5
+---test line
+assert min_path_cost([[1, 2, 3]]) == 6
+assert min_path_cost([[1], [2], [3]]) == 6
+---test zero
+assert min_path_cost([[0, 0], [0, 0]]) == 0
+---test big
+import random
+random.seed(8)
+n = 400
+big = [[random.randint(0, 9) for _ in range(n)] for _ in range(n)]
+r, secs = timed(min_path_cost, big)
+best = [0] * n
+for i in range(n):
+    for j in range(n):
+        if i == 0 and j == 0:
+            best[j] = big[0][0]
+        elif i == 0:
+            best[j] = best[j - 1] + big[i][j]
+        elif j == 0:
+            best[j] = best[j] + big[i][j]
+        else:
+            best[j] = min(best[j], best[j - 1]) + big[i][j]
+assert r == best[-1]
+assert secs < 1.5, f"{secs:.2f} s on a 400 × 400 city: trying every route is far too slow"
+---starter
+def min_path_cost(grid):
+    pass
+---solution
+def min_path_cost(grid):
+    rows, cols = len(grid), len(grid[0])
+    best = [[0] * cols for _ in range(rows)]
+    for r in range(rows):
+        for c in range(cols):
+            if r == 0 and c == 0:
+                prev = 0
+            elif r == 0:
+                prev = best[r][c - 1]
+            elif c == 0:
+                prev = best[r - 1][c]
+            else:
+                prev = min(best[r - 1][c], best[r][c - 1])
+            best[r][c] = prev + grid[r][c]
+    return best[-1][-1]
+---brute
+def min_path_cost(grid):
+    rows, cols = len(grid), len(grid[0])
+    def go(r, c):
+        if r == rows - 1 and c == cols - 1:
+            return grid[r][c]
+        options = []
+        if r + 1 < rows:
+            options.append(go(r + 1, c))
+        if c + 1 < cols:
+            options.append(go(r, c + 1))
+        return grid[r][c] + min(options)
+    return go(0, 0)
+---approach
+The cheapest way into a block comes either from above or from the left, so its best cost is its toll plus the smaller of those two. Fill the grid row by row: each block once, O(rows × cols).
+---hint
+Trying every route branches at every block. How many ways can the van *arrive* at block (r, c)?
+---hint
+Only from (r - 1, c) or (r, c - 1). If you already knew the cheapest cost to reach both, you'd know the cheapest cost to reach (r, c).
+---hint
+`best[r][c] = grid[r][c] + min(best[r - 1][c], best[r][c - 1])`, with the top row and the left column having only one choice. Fill in reading order.
+---twist
+The dispatcher wants to know how many routes tie for cheapest. Write `count_cheapest(grid)`: the number of right/down routes whose total toll equals the minimum.
+---twisttests
+assert count_cheapest([[1, 3, 1], [1, 5, 1], [4, 2, 1]]) == 1
+assert count_cheapest([[0, 0], [0, 0]]) == 2
+assert count_cheapest([[1, 1, 1], [1, 1, 1]]) == 3
+assert count_cheapest([[7]]) == 1
+---twistsolution
+def count_cheapest(grid):
+    rows, cols = len(grid), len(grid[0])
+    best = [[0] * cols for _ in range(rows)]
+    ways = [[0] * cols for _ in range(rows)]
+    for r in range(rows):
+        for c in range(cols):
+            if r == 0 and c == 0:
+                best[r][c], ways[r][c] = grid[0][0], 1
+                continue
+            froms = []
+            if r:
+                froms.append((best[r - 1][c], ways[r - 1][c]))
+            if c:
+                froms.append((best[r][c - 1], ways[r][c - 1]))
+            low = min(b for b, _ in froms)
+            best[r][c] = low + grid[r][c]
+            ways[r][c] = sum(w for b, w in froms if b == low)
+    return ways[-1][-1]
+```
