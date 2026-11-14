@@ -365,6 +365,81 @@ def newsletter():
         ["Kubernetes", "Run the workers as their own deployment, and scale it on the oldest job's age or the queue's depth (KEDA does this), not on CPU."],
       ],
     },
+    wt08: {
+      files: [
+        {
+          name: "limiter.py", lang: "py", run: true,
+          src: (c) => {
+            // the same arithmetic as the Python below, in the same order, so the printed numbers match exactly
+            const bucket = () => ({ tok: c.burst, last: 0 });
+            const take = (b, now) => { b.tok = Math.min(c.burst, b.tok + (now - b.last) * c.limit); b.last = now; if (b.tok >= 1) { b.tok -= 1; return true; } return false; };
+            const s = bucket();
+            let ok = 0;
+            for (let i = 0; i < 200; i++) if (take(s, i / 200)) ok++;
+            const a = bucket(), first = take(a, 5.0) ? 200 : 429, second = take(a, 5.01) ? 200 : 429;
+            return `# A token bucket per customer: a fair API.
+${col([[`RATE = ${c.limit}`, "tokens a second, your yaml"], [`BURST = ${c.burst}`, "the most a bucket holds"]])}
+
+
+class Bucket:
+    def __init__(self):
+        self.tokens, self.last = BURST, 0.0
+
+    def take(self, now):
+        gained = (now - self.last) * RATE
+        self.tokens = min(BURST, self.tokens + gained)
+        self.last = now
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        return False
+
+
+buckets = {}
+
+
+def handle(customer, now):
+    b = buckets.setdefault(customer, Bucket())
+    if not b.take(now):
+        return 429  # Too Many Requests: at once
+    return 200
+
+
+# the script: 200 requests in its first second
+codes = [handle("script", i / 200) for i in range(200)]
+print(f"script: {codes.count(200)} of 200 let in")
+# → script: ${ok} of 200 let in
+
+# a person clicks twice, 10 ms apart
+print("ana:", handle("ana", 5.0), handle("ana", 5.01))
+# → ana: ${first} ${second}`;
+          },
+        },
+        {
+          name: "nginx.conf", lang: "conf",
+          src: (c) => `# nginx: the same bucket, one per API key
+limit_req_zone $http_x_api_key
+    zone=per_key:10m rate=${c.limit}r/s;
+
+server {
+    location /api/ {
+        limit_req zone=per_key burst=${c.burst} nodelay;
+        limit_req_status 429;
+        proxy_pass http://app;
+    }
+}`,
+        },
+      ],
+      try: [{ limit: 25, burst: 10 }, { limit: 20, burst: 1 }, { limit: 5, burst: 2 }],
+      watch: (c) => `Graph <b>429s per customer</b>, not in total: one key with thousands is a script, and every key with a few means the limit is too tight for real people. Send a <code>Retry-After</code> header with each 429 so well-behaved clients wait instead of hammering. And keep the limit below what the server can carry for everyone at once: here ${n(c.limit)} a second for one customer, with ${n(c.workers / c.service)} a second of room in all.`,
+      stack: [
+        ["Go", "<code>rate.NewLimiter(20, 10)</code> from <code>golang.org/x/time/rate</code> is this bucket; keep one per key in a map, and call <code>Allow()</code>."],
+        ["Python", "In one process, a dict of buckets like the file above. Across several, the bucket has to live in Redis, updated in one Lua script so two servers can't both spend the last token."],
+        ["Node.js", "<code>express-rate-limit</code> counts in fixed windows by default: 20 a minute can become 40 across a window's edge. A token bucket has no edges."],
+        ["Envoy", "The <code>local_rate_limit</code> filter takes a <code>token_bucket</code> with <code>max_tokens</code> (the burst) and <code>tokens_per_fill</code> each <code>fill_interval</code> (the rate)."],
+        ["Several servers", "With 4 servers each enforcing 20 a second on its own, a customer gets up to 80. Either share the bucket (Redis) or give each server a quarter of the limit."],
+      ],
+    },
   };
 
   root.WT = root.WT || {};
