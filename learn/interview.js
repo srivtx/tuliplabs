@@ -89,7 +89,7 @@
     }));
     const body = h("div", { class: "iv-body" });
     m.append(h("div", { class: "col iv" },
-      h("div", { class: "iv-head" }, h("div", { class: "iv-top" }, h("div", { class: "eyebrow" }, "Interview · DSA"), h("span", { class: "grow" }), clock,
+      h("div", { class: "iv-head" }, h("div", { class: "iv-top" }, pic("iv-steps", (cv) => ART().steps(cv, STAGES.indexOf(r.stage))), h("div", { class: "eyebrow" }, "Interview · DSA"), h("span", { class: "grow" }), clock,
         h("button", { class: "iv-quit", type: "button", onclick: () => { if (confirmQuit()) { finish(); } } }, "end it here")),
         stages), body));
     ({ clarify: stClarify, plan: stPlan, code: stCode, test: stTest, twist: stTwist })[r.stage](p, r, body);
@@ -103,10 +103,15 @@
     A.toast("Click “end it here” again to stop and see your scorecard.");
     return false;
   }
+  const ART = () => window.IVART;
+  // a canvas the art module draws into, once it's on the page (it needs its own size first)
+  const pic = (cls, paint) => { const cv = A.h("canvas", { class: cls, "aria-hidden": "true" }); requestAnimationFrame(() => ART() && paint(cv)); return cv; };
   const say = (html) => A.h("div", { class: "iv-say" }, A.h("span", { class: "iv-who" }, "Interviewer"), A.h("div", { html }));
   const advance = (r, stage) => { r.stage = stage; r.reached = Math.max(r.reached, STAGES.indexOf(stage)); save(); draw(); window.scrollTo(0, 0); };
   const problemCard = (p, open) => {
-    const d = A.h("details", { class: "iv-prob", open: open ? "" : null }, A.h("summary", {}, p.title), A.h("div", { class: "prompt", html: p.prompt }));
+    const d = A.h("details", { class: "iv-prob", open: open ? "" : null }, A.h("summary", {}, p.title),
+      A.h("div", { class: "iv-prob-in" }, A.h("div", { class: "prompt", html: p.prompt }), pic("iv-pic", (cv) => ART().problem(cv, p.id, false))));
+    d.addEventListener("toggle", () => { const cv = d.querySelector(".iv-pic"); if (d.open && cv && ART()) ART().problem(cv, p.id, false); });
     return d;
   };
 
@@ -209,12 +214,13 @@
   }
 
   // -------------------------------------------------------------- test --
-  async function runHidden(p, r) {
+  async function runHidden(p, r, onEach) {
     const groups = [{ tag: "examples", code: p.examples }, ...p.tests];
     const res = [];
     for (const g of groups) {
       const x = await runReq(r.code, g.code);
       res.push({ tag: g.tag, passed: !!x.passed, timeout: !!x.timeout, failed: x.failed || "", message: x.message || x.error || "" });
+      if (onEach) onEach(res, groups.length);
     }
     return res;
   }
@@ -226,6 +232,17 @@
     ta.oninput = () => { r.mine = ta.value; save(); };
     const out = h("div", { class: "iv-lamps" });
     const go = h("button", { class: "key primary" }, r.tests ? "Run them again" : "Run my test and yours");
+    // while they run: every lamp waits dark, and each lights as its group comes back
+    const pending = (res, total, mine) => {
+      out.textContent = "";
+      out.append(h("div", { class: "iv-lamp " + (mine ? (mine.valid ? "ok" : "bad") : "wait") }, h("i"), h("div", {}, h("b", {}, "Your test"))));
+      const tags = ["examples", ...p.tests.map((g) => g.tag)];
+      tags.forEach((tag, i) => {
+        const g = res[i];
+        out.append(h("div", { class: "iv-lamp " + (g ? (g.passed ? "ok pop" : "bad pop") : i === res.length ? "wait now" : "wait") }, h("i"),
+          h("div", {}, h("b", {}, tag === "examples" ? "The examples" : groupName(p, tag)), !g && i === res.length ? h("span", {}, "running…") : null)));
+      });
+    };
     const paint = () => {
       out.textContent = "";
       if (!r.tests) return;
@@ -243,10 +260,13 @@
     go.onclick = async () => {
       go.disabled = true; go.textContent = "Running the hidden tests…";
       const own = r.mine.trim() && !/…/.test(r.mine) ? r.mine : "";
+      pending([], 0, null);
       const ref = own ? await runReq(p.solution, own) : { passed: false };
       const yours = own ? await runReq(r.code, own) : { passed: false };
-      const groups = await runHidden(p, r);
-      r.tests = { mine: { valid: !!(own && ref.passed && ref.total), yours: !!yours.passed }, groups };
+      const mine = { valid: !!(own && ref.passed && ref.total), yours: !!yours.passed };
+      pending([], 0, mine);
+      const groups = await runHidden(p, r, (res, total) => pending(res, total, mine));
+      r.tests = { mine, groups };
       if (!r.first) r.first = { groups: groups.map((g) => ({ tag: g.tag, passed: g.passed })), at: Date.now() };
       save();
       go.disabled = false; go.textContent = "Run them again";
@@ -338,7 +358,8 @@
       why: `${mine && mine.valid ? "your own test was fair" : "no fair test of your own"}${missed.length ? `; missed on the first run: ${missed.join("; ")}` : edges.length ? "; every edge case held first time" : ""}` });
     const big = groups.find((g) => g.tag === "big");
     const mins = (Math.min(Date.now(), r.ends) - r.start) / 60000;
-    rows.push({ name: "Speed", dots: clamp((big && big.passed ? 2 : 0) + (mins <= 30 ? 2 : mins <= 40 ? 1 : 0)),
+    // being quick only counts once something works: ending at once with nothing passing is not fast, it is empty
+    rows.push({ name: "Speed", dots: clamp((big && big.passed ? 2 : 0) + (passed ? (mins <= 30 ? 2 : mins <= 40 ? 1 : 0) : 0)),
       why: `${big && big.passed ? "fast enough for the big input" : "too slow for the big input, or not tested"}, in ${Math.round(mins)} of ${MINUTES} minutes` });
     const tw = r.twistRes;
     rows.push({ name: "Follow-up", dots: tw ? clamp(tw.passed ? 4 : ((tw.ok || 0) / (tw.total || 1)) * 3) : 0,
@@ -355,11 +376,14 @@
     const sol = A.Editor(p.solution, { readonly: true, lang: "py", label: "A reference solution" });
     const tw = A.Editor(p.twistsolution, { readonly: true, lang: "py", label: "A reference follow-up" });
     A.main().append(h("div", { class: "col iv" },
-      h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Interview · DSA · scorecard"), h("h1", {}, p.title),
-        h("p", { class: "iv-verdict v-" + c.verdict.split(" ")[0].toLowerCase() }, c.verdict)),
+      h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Interview · DSA · scorecard"), h("h1", {}, p.title)),
+      h("div", { class: "iv-score" },
+        h("div", { class: "iv-bloom" }, pic("iv-flower", (cv) => window.GARDEN && GARDEN.grow(cv, { id: "iv:" + p.id, kind: "tulip", stage: { Ready: 4, "Almost ready": 3 }[c.verdict] || 1, hues: ["#ff6fb5", "#ffd21f", "#c7a2ff"], ink: getComputedStyle(cv).getPropertyValue("--ink").trim() || "#1d1b17" })),
+          h("p", { class: "iv-verdict v-" + c.verdict.split(" ")[0].toLowerCase() }, c.verdict)),
+        pic("iv-radar", (cv) => ART().radar(cv, c.rows))),
       h("div", { class: "iv-card" }, c.rows.map((x) => h("div", { class: "iv-row" }, h("b", {}, x.name), dots(x.dots), h("span", {}, x.why)))),
       c.verdict === "Ready" ? null : h("p", { class: "mk-muted" }, `This problem will come back in ${COME_BACK} interviews' time.`),
-      h("h3", { class: "mk-h" }, "How I'd do it"), h("div", { class: "prompt", html: p.approach }), sol.el,
+      h("h3", { class: "mk-h" }, "How I'd do it"), h("div", { class: "iv-how-it" }, pic("iv-pic big", (cv) => ART().problem(cv, p.id, true)), h("div", { class: "prompt", html: p.approach })), sol.el,
       h("h3", { class: "mk-h" }, "The follow-up"), h("div", { class: "prompt", html: p.twist }), tw.el,
       h("div", { class: "btns iv-end" }, h("button", { class: "key primary", onclick: () => { delete st().now; save(); begin(); } }, "Another interview →"),
         h("a", { class: "btn", href: "#mock" }, "Back to the mock test"))));
@@ -373,14 +397,16 @@
     const sat = new Set(s.hist.map((x) => x.id)).size;
     const hist = s.hist.slice(-6).reverse();
     A.main().append(h("div", { class: "col iv" },
-      h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Interview · DSA"), h("h1", {}, "One problem. Forty-five minutes."),
-        h("p", { class: "tag" }, "A problem you haven't seen, with the chapter hidden, so working out the technique is part of the job. It runs the way a real interview does, and ends with a scorecard that says why.")),
+      h("div", { class: "iv-hero" },
+        h("header", { class: "ch-head" }, h("div", { class: "eyebrow" }, "Interview · DSA"), h("h1", {}, "One problem. Forty-five minutes."),
+          h("p", { class: "tag" }, "A problem you haven't seen, with the chapter hidden, so working out the technique is part of the job. It runs the way a real interview does, and ends with a scorecard that says why."),
+          h("div", { class: "btns" }, h("button", { class: "key primary", onclick: begin }, "Start the interview →"),
+            h("span", { class: "mk-muted" }, `${DATA.problems.length} problems · ${sat} sat so far`))),
+        pic("iv-room", (cv) => ART().room(cv))),
       h("ol", { class: "iv-how" },
         [["clarify", "Ask what you need to know. Each question that matters hides a test."], ["plan", "Name the technique and its cost, and say your approach, before any code."],
           ["code", "Write it. Run checks only the examples from the problem."], ["test", "Write a test of your own; then the hidden tests run, edge cases and a big input."],
-          ["twist", "A follow-up changes the problem. Adapt your code."]].map(([w, t]) => h("li", {}, h("b", {}, w), h("span", {}, t)))),
-      h("div", { class: "btns" }, h("button", { class: "key primary", onclick: begin }, "Start the interview →"),
-        h("span", { class: "mk-muted" }, `${DATA.problems.length} problems · ${sat} sat so far`)),
+          ["twist", "A follow-up changes the problem. Adapt your code."]].map(([w, t], i) => h("li", {}, pic("iv-icon", (cv) => ART().icon(cv, w)), h("b", {}, h("small", {}, String(i + 1)), w), h("span", {}, t)))),
       hist.length ? h("div", { class: "mk-hist" }, h("h3", {}, "Your last interviews"), h("table", {}, hist.map((x) => h("tr", {},
         h("td", {}, new Date(x.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })), h("td", {}, (prob(x.id) || {}).title || x.id),
         h("td", {}, h("b", {}, x.verdict)), h("td", { class: "mk-muted" }, `${Math.round(x.secs / 60)} min`))))) : null));
