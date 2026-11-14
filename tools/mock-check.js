@@ -46,6 +46,8 @@ for (const gen of G.names) {
       for (const p of HANDS.lint(q.board)) problems.push(`${gen} #${seed}: board: ${p}`);
       const a = HANDS.answerOf(q.board, HANDS.solveOf(q.board));
       if (!G.correct(q, a)) problems.push(`${gen} #${seed}: the board's solution gives ${JSON.stringify(a)}, not ${JSON.stringify(q.answer)}`);
+      // a build question judges your input live: on random inputs, its verdict must be what Python prints
+      for (const p of q.probes || []) cases.push({ gen, seed, code: p.run, runs: "py", answer: q.board.judge(p.state), match: q.match });
     }
     if (q.needs === "express" && !EXPRESS) { skipped.add(gen); continue; }
     cases.push({ gen, seed, code: q.run || q.code, runs: q.lang === "node" ? "node" : "py", answer: q.answer, match: q.match, choice: q.match === "choice" });
