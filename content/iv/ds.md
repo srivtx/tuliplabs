@@ -683,3 +683,135 @@ def rooms_needed(bs):
         most = max(most, busy)
     return most
 ```
+
+```interview
+id: maze
+title: Out of the warehouse
+fn: shortest_path
+ch: 19
+decoys: 20, 23, 30, 27
+bigo: O(rows × cols)
+bigos: O(rows + cols); O(rows × cols); O(rows × cols × log(rows × cols)); O(2^(rows × cols))
+---prompt
+A robot starts in the top-left corner of a warehouse floor and must reach the bottom-right corner. The floor is a list of strings: `.` is open floor and `#` is a shelf. The robot moves one square up, down, left or right per step.
+
+Write `shortest_path(grid)`: return the fewest steps to get from the top-left to the bottom-right, or `-1` if it can't be done.
+
+For `[".#.", "...", "#.."]` the answer is `4`.
+---examples
+assert shortest_path([".#.", "...", "#.."]) == 4
+assert shortest_path([".#", "#."]) == -1
+---clarify
++ blocked | What if the start or the end square is a shelf? | Then the robot can't do it: return -1.
++ single | Can the floor be a single square? | Yes. The robot is already there: 0 steps.
++ nodiag | Can the robot move diagonally? | No, only up, down, left and right.
+- | Is every row the same length? | Yes, the floor is a rectangle.
+- | Does it matter which path I take? | No, only how many steps.
+- | Can the robot step off the floor? | No, it stays on the grid.
+---test blocked
+assert shortest_path(["#.", ".."]) == -1
+assert shortest_path(["..", ".#"]) == -1
+---test single
+assert shortest_path(["."]) == 0
+---test nodiag
+assert shortest_path([".#", ".."]) == 2
+assert shortest_path([".#", "#."]) == -1
+---test big
+n = 301
+rows = []
+for r in range(n):
+    if r % 2 == 1:
+        rows.append(("#" * (n - 1) + ".") if r % 4 == 1 else ("." + "#" * (n - 1)))
+    else:
+        rows.append("." * n)
+r, secs = timed(shortest_path, rows)
+from collections import deque
+dist = {(0, 0): 0}
+q = deque([(0, 0)])
+while q:
+    y, x = q.popleft()
+    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        ny, nx = y + dy, x + dx
+        if 0 <= ny < n and 0 <= nx < n and rows[ny][nx] == "." and (ny, nx) not in dist:
+            dist[(ny, nx)] = dist[(y, x)] + 1
+            q.append((ny, nx))
+assert r == dist[(n - 1, n - 1)]
+assert secs < 1.5, f"{secs:.2f} s on a 301 × 301 snake: exploring every path is too slow"
+---starter
+def shortest_path(grid):
+    pass
+---solution
+from collections import deque
+
+def shortest_path(grid):
+    rows, cols = len(grid), len(grid[0])
+    if grid[0][0] == "#" or grid[-1][-1] == "#":
+        return -1
+    dist = [[-1] * cols for _ in range(rows)]
+    dist[0][0] = 0
+    q = deque([(0, 0)])
+    while q:
+        r, c = q.popleft()
+        if (r, c) == (rows - 1, cols - 1):
+            return dist[r][c]
+        for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+            if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] == "." and dist[nr][nc] < 0:
+                dist[nr][nc] = dist[r][c] + 1
+                q.append((nr, nc))
+    return -1
+---brute
+def shortest_path(grid):
+    rows, cols = len(grid), len(grid[0])
+    if grid[0][0] == "#" or grid[-1][-1] == "#":
+        return -1
+    best = [[None] * cols for _ in range(rows)]
+    changed = True
+    best[0][0] = 0
+    while changed:
+        changed = False
+        for r in range(rows):
+            for c in range(cols):
+                if grid[r][c] != "." or best[r][c] is None:
+                    continue
+                for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+                    if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] == ".":
+                        if best[nr][nc] is None or best[nr][nc] > best[r][c] + 1:
+                            best[nr][nc] = best[r][c] + 1
+                            changed = True
+    v = best[-1][-1]
+    return -1 if v is None else v
+---approach
+Breadth-first search from the start. A queue visits squares in order of distance, so the first time you reach a square is by a shortest route; mark it and never visit it again. Each square is handled once: O(rows × cols).
+---hint
+Every step costs the same. Which search reaches the squares in order of how far away they are?
+---hint
+Use a queue: start at (0, 0) with distance 0, and from each square add its open, unvisited neighbours with distance + 1.
+---hint
+`collections.deque`, a `dist` grid of -1s, and mark a square the moment you add it to the queue, not when you take it out, so nothing is queued twice.
+---twist
+The robot gets a forklift: it may **remove at most one shelf** along the way. Write `shortest_path_one_wall(grid)`: fewest steps, where stepping onto one `#` square is allowed once. The start and end squares are always open in this version.
+---twisttests
+assert shortest_path_one_wall([".#", "#."]) == 2
+assert shortest_path_one_wall([".#.", "##.", "..."]) == 4
+assert shortest_path_one_wall(["..", ".."]) == 2
+assert shortest_path_one_wall([".##", "###", "##."]) == -1
+assert shortest_path_one_wall(["."]) == 0
+---twistsolution
+from collections import deque
+
+def shortest_path_one_wall(grid):
+    rows, cols = len(grid), len(grid[0])
+    seen = {(0, 0, 0)}
+    q = deque([(0, 0, 0, 0)])
+    while q:
+        r, c, used, d = q.popleft()
+        if (r, c) == (rows - 1, cols - 1):
+            return d
+        for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+            if 0 <= nr < rows and 0 <= nc < cols:
+                nu = used + (grid[nr][nc] == "#")
+                if nu <= 1 and (nr, nc, nu) not in seen:
+                    seen.add((nr, nc, nu))
+                    q.append((nr, nc, nu, d + 1))
+    return -1
+```
