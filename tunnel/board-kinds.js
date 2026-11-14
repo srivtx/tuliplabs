@@ -697,7 +697,7 @@
   };
 
   // --------------------------------------------------------------------------------------------- dispatch --
-  const CLAIM_WORD = { check: "reads that a driver is free, marks them busy on accept", cas: "claims a driver in one step, then offers" };
+  const CLAIM_WORD = { check: "marks a driver busy only on accept", cas: "claims a driver before offering" };
   const EXP_WORD = { 0: "until the driver answers", 5: "for 5 s", 15: "for 15 s", 60: "for 60 s" };
   const NAMES = ["Dev", "Ines", "Kofi", "Mara", "Tomás", "Yuki", "Lena", "Omar", "Priya", "Sam"];
   const LX0 = 120, LX1 = 920, LANE = [176, 236];

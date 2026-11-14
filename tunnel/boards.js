@@ -58,7 +58,7 @@
     eta: { name: "ETA service", say: "minutes to reach her, by road", icon: '<path d="M8 23 11 3M18 23 15 3M13 6v2M13 12v2M13 18v2"/>' },
     trips: { name: "trip store", say: "each ride and its driver, claimed once", icon: '<path d="M6 2h14v21l-2.5-1.5L15 23l-2-1.5L11 23l-2.5-1.5L6 23z"/><path d="M9.5 8h7M9.5 12h7M9.5 16h4"/>' },
     pingdb: { name: "ping table", say: "every ping, a row on disk", icon: '<ellipse cx="13" cy="5" rx="9" ry="3"/><path d="M4 5v16c0 1.7 4 3 9 3s9-1.3 9-3V5M8 11h10M8 15h10M8 19h10"/>' },
-    scan: { name: "scan every driver", say: "measure the rider to all of them", icon: '<circle cx="13" cy="13" r="10"/><circle cx="13" cy="13" r="5"/><path d="M13 13 20 6"/>' },
+    scan: { name: "full scan", say: "measure the rider to every driver", icon: '<circle cx="13" cy="13" r="10"/><circle cx="13" cy="13" r="5"/><path d="M13 13 20 6"/>' },
   };
 
   // what a part says on the board itself, where there's room for about 18 characters
@@ -480,8 +480,8 @@
           { link: [["matcher", "trips"]], say: "It claims the driver in the trip store in one step, so no other rider can get them." },
         ],
         wrong: {
-          pingdb: "750,000 pings a second as rows on disk, then a distance query over millions of rows for every request. Matching only needs each driver's latest spot: overwrite it in memory, and send the history to a log for later.",
-          scan: "Measuring each rider against all 3 million drivers is 289 × 3 million = 867 million distance checks a second, and nearly every one of those drivers is in another city. Ask the geo index for the cells around her instead.",
+          pingdb: "750,000 pings a second as rows on disk, then a distance query over millions of rows per request. Matching needs only each driver's latest spot: keep it in memory, and log the history.",
+          scan: "289 requests a second × 3 million drivers is 867 million distance checks a second, nearly all of them in other cities. Ask the geo index for the cells around her.",
         },
         why: "Both apps hold a connection to a gateway. Driver pings flow to the location service, which overwrites each driver's spot in a geo index kept in memory. A ride request goes to the matcher, which asks the geo index for drivers in nearby cells, ranks them by ETA on real roads, and claims one in the trip store so no one else can. The pings' history goes to a log for analytics; it's never on the matching path.",
       },
