@@ -68,6 +68,11 @@
   const CACHE_SIZES = [10, 25, 50, 100, 250, 500, 1000, 1500, 2000, 3000, 5000, 10000];
   const QUEUE_SIZES = [10, 20, 40, 60, 80, 100, 120, 150, 250, 500, 1000];
   const BACKOFFS = [0, 0.1, 0.25, 0.5, 1, 2];
+  const LIMITS = [1, 2, 5, 10, 15, 20, 25, 30, 40, 50, 100];
+  const BURSTS = [1, 2, 3, 5, 10, 20, 50];
+  const NOISY = [0, 5, 10, 15, 20, 25, 30, 40, 60, 100, 150, 200];
+  // a step list's next value up or down from v
+  const stepIn = (L, v, d) => { const i = L.findIndex((x) => x >= v); const at = i < 0 ? L.length - 1 : i; return L[Math.max(0, Math.min(L.length - 1, d > 0 ? at + (L[at] === v ? 1 : 0) : at - 1))]; };
   // knobs this experiment ever lets you turn, so the inspector shows their rows (greyed when not yet yours)
   const knobs = () => new Set([...(X.free || ["workers"]), ...X.task.knobs]);
   const surging = () => { const g = sim.cfg.surge; return !!g && sim.t >= g.at && sim.t < g.at + g.for; };
@@ -109,7 +114,7 @@
   // restart the run with the knobs as they are now: a way out when a backlog won't drain
   function restart() {
     const keep = {};
-    for (const k of ["rate", "users", "workers", "servers", "lb", "cache", "queueMax", "cancel", "retries", "backoff", "jitter", "jobWorkers"]) keep[k] = sim.cfg[k];
+    for (const k of ["rate", "users", "workers", "servers", "lb", "cache", "queueMax", "cancel", "retries", "backoff", "jitter", "jobWorkers", "noisy", "limit", "burst"]) keep[k] = sim.cfg[k];
     // a surge lifts the rate for a while: restart from the rate underneath it
     if (surging()) keep.rate = sim.base;
     const b = before;
@@ -355,7 +360,7 @@
       verdict = d <= X.predict.tol ? "Spot on." : d <= X.predict.tol * 2 ? "Close." : (g < A ? lo : hi);
     }
     wrap.append(
-      h("div", { class: "cmp" }, h("span", {}, "you said ", h("b", {}, fmtAxis(g))), h("span", {}, X.predict.said ? X.predict.said + " " : X.predict.axis ? "it needs " : "it bends at ", h("b", {}, `≈ ${fmtAxis(A)}`)), h("strong", {}, verdict)),
+      h("div", { class: "cmp" }, h("span", {}, "you said ", h("b", {}, fmtAxis(g))), h("span", {}, X.predict.said ? X.predict.said + " " : X.predict.axis && !X.predict.bend ? "it needs " : "it bends at ", h("b", {}, `≈ ${fmtAxis(A)}`)), h("strong", {}, verdict)),
       h("p", { html: X.predict.reveal }),
       ...X.why.map((p) => h("p", { html: p })));
     if (P.phase === "explore") wrap.append(h("button", { class: "wt-go", onclick: startTask }, `${X.task.title} →`));
@@ -369,7 +374,7 @@
     renderBrief(); renderParts(); renderCode();
     els.hint.textContent = taskHint();
   }
-  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("jobWorkers") ? `Drag the email queue on, or click the ${name("server")} or the mailer to change their workers.` : X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : X.clients ? `Click the ${name("server")} or the clients to change them.` : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
+  const taskHint = () => `The crowd is fixed for the task. ${X.task.knobs.includes("limit") ? "Drag the rate limiter on, then click it to set the rate and the burst." : X.task.knobs.includes("jobWorkers") ? `Drag the email queue on, or click the ${name("server")} or the mailer to change their workers.` : X.task.knobs.includes("servers") ? "Drag a server on, or click a part to change it." : X.clients ? `Click the ${name("server")} or the clients to change them.` : `Click the ${X.task.knobs.includes("cache") ? "cache" : name("server")} to change it.`}`;
 
   function taskBody() {
     const wrap = h("div", { class: "wt-sb" });
@@ -452,7 +457,7 @@
     for (const r of rows) {
       const li = els.goal.querySelector(`[data-k="${r.k}"]`);
       li.classList.toggle("ok", r.ok);
-      li.querySelector("b").textContent = r.k === "p99" || r.k === "jobAge" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : r.k === "errors" && st.span ? `${num(r.x)} (${Math.round(st.errRate * 100)}%)` : num(r.x);
+      li.querySelector("b").textContent = r.k === "nTput" ? `${Math.round(r.x)}/s` : r.k === "p99" || r.k === "jobAge" ? ms(r.x) : r.k === "cache" ? `${num(r.x)} keys` : r.k === "errors" && st.span ? `${num(r.x)} (${Math.round(st.errRate * 100)}%)` : num(r.x);
     }
     const all = rows.every((r) => r.ok);
     els.meter.querySelector(".fill").style.width = `${Math.min(1, since / W) * 100}%`;
@@ -488,6 +493,18 @@
     L.push([0, "traffic"]);
     if (c.mode === "open") kv("arrivals", `${num(c.rate)}/s`, "random");
     else { kv("users", num(c.users)); kv("think_time", `${c.think}s`); }
+    if (X.bot) {
+      kv("customers", num(c.tenants), "about 1/s each");
+      L.push([0, "script"]);
+      kv("arrivals", `${num(c.noisy)}/s`, "one customer");
+    }
+    if (c.limit > 0) {
+      L.push([0, "rate_limit"]);
+      kv("per", "customer");
+      kv("rate", `${num(c.limit)}/s`);
+      kv("burst", num(c.burst));
+      kv("when_empty", "429", "Too Many Requests");
+    }
     if (c.cache > 0) {
       L.push([0, "cache"]);
       kv("holds", `${num(c.cache)} keys`, "LRU");
@@ -599,6 +616,8 @@
     const n = over && over.servers ? over.servers : sim.srv.length;
     const L = { crowd: { x: 0, y: 0, w: 7.8, d: 6.9, h: 1 }, wy: 2.7, servers: [], queues: [] };
     let x = 8.4;
+    if (X.bot) { L.bot = { x: 8.1, y: -3.3, w: 1.5, d: 1.5, h: 1.45 }; x += 1.9; }
+    if (c.limit > 0) { L.limiter = { x: x + 0.3, y: L.wy - 0.7, w: 1.9, d: 1.9, h: 0.75 }; x += 2.9; }
     if (c.cache > 0) { L.cache = { x: x + 0.3, y: L.wy - 0.5, w: 1.6, d: 1.6, h: 1.25 }; x += 2.6; }
     if (n === 1) {
       L.queues.push({ x: x + 1.4, y: 0.4, cols: 3, levels: 12 });
@@ -634,6 +653,8 @@
       }
     };
     box(L.crowd, 1.2);
+    if (L.bot) box(L.bot, 1.4);
+    if (L.limiter) box(L.limiter, 3.2);
     if (L.cache) box(L.cache, 1);
     if (L.lb) box(L.lb, 1);
     L.servers.forEach((s) => box(s, 1.6));
@@ -695,8 +716,8 @@
   }
   function themeOf(dark) {
     return dark
-      ? { bg: "#0b1418", grid: "rgba(95,224,240,.07)", ground: "#10232a", wire: "#1c3a44", text: "#a9d6de", mute: "#5f8a93", q: "#ffc94a", hot: "#ff5a4f", ok: "#5fe0a0", bad: "#ff5a6e", req: "#ffe08a", pad: "#0e2a31", smoke: "120,140,148", cache: "#c7a2ff", lb: "#86b4ff", ghost: "rgb(95,224,240)", spark: "#ffb347", lit: "#5fe0a0", job: "#ff8a5c", mailer: "#3e6f8c" }
-      : { bg: "#f2f6f5", grid: "rgba(16,90,104,.08)", ground: "#e3ecea", wire: "#c9dbd8", text: "#1d4a52", mute: "#6d8f95", q: "#e0a412", hot: "#e8453c", ok: "#1fa36a", bad: "#e23d55", req: "#e8a10f", pad: "#cfe2e0", smoke: "90,100,104", cache: "#9a6ce0", lb: "#4f7fd8", ghost: "rgb(15,139,160)", spark: "#f08a1c", lit: "#1fa36a", job: "#e2643a", mailer: "#7fa8c4" };
+      ? { bg: "#0b1418", grid: "rgba(95,224,240,.07)", ground: "#10232a", wire: "#1c3a44", text: "#a9d6de", mute: "#5f8a93", q: "#ffc94a", hot: "#ff5a4f", ok: "#5fe0a0", bad: "#ff5a6e", req: "#ffe08a", pad: "#0e2a31", smoke: "120,140,148", cache: "#c7a2ff", lb: "#86b4ff", ghost: "rgb(95,224,240)", spark: "#ffb347", lit: "#5fe0a0", job: "#ff8a5c", mailer: "#3e6f8c", lim: "#5fd4b0" }
+      : { bg: "#f2f6f5", grid: "rgba(16,90,104,.08)", ground: "#e3ecea", wire: "#c9dbd8", text: "#1d4a52", mute: "#6d8f95", q: "#e0a412", hot: "#e8453c", ok: "#1fa36a", bad: "#e23d55", req: "#e8a10f", pad: "#cfe2e0", smoke: "90,100,104", cache: "#9a6ce0", lb: "#4f7fd8", ghost: "rgb(15,139,160)", spark: "#f08a1c", lit: "#1fa36a", job: "#e2643a", mailer: "#7fa8c4", lim: "#2bab8a" };
   }
   const PEOPLE = ["#ff6fb5", "#ffc94a", "#86b4ff", "#5fd4b0", "#c7a2ff", "#ff9d7a", "#f0643c", "#9fe870"];
   // how hot a server is, 0..1: teal, then blue, magenta and red, so no step on the way is a muddy brown
@@ -740,8 +761,10 @@
       poly([iso(x0 + nx, y0 + ny, 0), iso(x1 + nx, y1 + ny, 0), iso(x1 - nx, y1 - ny, 0), iso(x0 - nx, y0 - ny, 0)], col);
     };
     const firstQ = LY.queues[0], S0 = LY.servers[0];
-    const entry = LY.cache ? LY.cache.x : LY.lb ? LY.lb.x : firstQ.x;
+    const entry = LY.limiter ? LY.limiter.x : LY.cache ? LY.cache.x : LY.lb ? LY.lb.x : firstQ.x;
     strip(7.9, wy + 0.3, entry, wy + 0.3, 0.3, T.wire);
+    if (LY.bot) { const bx = LY.bot.x + LY.bot.w / 2; strip(bx, LY.bot.y + LY.bot.d, bx, wy + 0.3, 0.2, T.wire); }
+    if (LY.limiter) strip(LY.limiter.x + LY.limiter.w, wy + 0.3, LY.cache ? LY.cache.x : LY.lb ? LY.lb.x : firstQ.x, wy + 0.3, 0.3, T.wire);
     if (LY.cache) strip(LY.cache.x + LY.cache.w, wy + 0.3, LY.lb ? LY.lb.x : firstQ.x, wy + 0.3, 0.3, T.wire);
     if (LY.lb) LY.queues.forEach((q, i) => strip(LY.lb.x + LY.lb.w, wy + 0.3, q.x, LY.servers[i].y + LY.servers[i].d / 2, i === lastRoute ? 0.16 : 0.11, i === lastRoute && routeGlow > 0 ? mix(T.wire.startsWith("#") ? T.wire : "#1c3a44", T.req, routeGlow * 0.6) : T.wire));
     if (!LY.lb) strip(firstQ.x, wy + 0.3, S0.x, wy + 0.3, 0.3, T.wire);
@@ -763,6 +786,15 @@
       cube(x, y, bob, 0.5, 0.5, 0.62, waiting ? T.req : PEOPLE[(k * 5) % PEOPLE.length], waiting ? 1 : 0.92);
       cube(x + 0.1, y + 0.1, 0.66 + bob, 0.3, 0.3, 0.3, "#f3d6c0");
     }
+    // the script: an orange box whose two eyes blink, sending its own stream down onto the wire
+    if (LY.bot) {
+      const B = LY.bot, on = reduce || Math.sin(t * 6) > -0.6;
+      cube(B.x, B.y, 0, B.w, B.d, B.h, sim.cfg.noisy > 0 ? T.job : T.pad);
+      for (const a of [0.3, 0.85]) poly([iso(B.x + a, B.y + B.d, B.h * 0.72), iso(B.x + a + 0.32, B.y + B.d, B.h * 0.72), iso(B.x + a + 0.32, B.y + B.d, B.h * 0.5), iso(B.x + a, B.y + B.d, B.h * 0.5)], on && sim.cfg.noisy > 0 ? T.req : T.pad);
+      hits.push({ kind: "bot", r: rectOf(B) });
+    }
+    // the rate limiter: a block with the script's bucket on top, a token per lit pad; it empties as the script spends them
+    if (LY.limiter) drawBucket(T, dt, t);
     // the cache: a block whose top lights up as it fills with keys
     if (LY.cache) {
       const C = LY.cache, fill = Math.min(1, sim.lru.size / Math.max(1, sim.cfg.cache));
@@ -792,6 +824,51 @@
     drawFlyers(T, dt);
     drawSparks(T, dt);
     placeTags();
+  }
+  // The rate limiter is a glass bucket you can watch. Tokens drip from a tap at the limit's pace (drawn up to 12 a
+  // second, faster drips are sped-up stand-ins) and stack inside, at most the burst. The stack is the script's own
+  // bucket: its flood takes them as fast as they land, and an empty bucket is a 429 bounced back down the wire.
+  let drips = [], dripT = 0;
+  function drawBucket(T, dt, t) {
+    const B = LY.limiter, c = sim.cfg, gh = Math.min(2.6, 1.3 + c.burst * 0.03);
+    cube(B.x, B.y, 0, B.w, B.d, B.h, T.lim);
+    // the stack: one coin per token, in rows of four, as many as the script has left
+    const have = Math.floor(sim.scriptTokens() * c.burst + 1e-9), shownN = Math.min(have, 40), rows = Math.ceil(c.burst / 4);
+    const ch = Math.max(0.05, Math.min(0.16, (gh - 0.1) / Math.max(1, rows)));
+    const gx = B.x + 0.2, gy = B.y + 0.2, gw = B.w - 0.4, gd = B.d - 0.4;
+    for (let k = 0; k < shownN; k++) {
+      const lvl = (k / 4) | 0, m = k % 4, a = m % 2, b = (m / 2) | 0;
+      cube(gx + 0.08 + a * gw / 2, gy + 0.08 + b * gd / 2, B.h + lvl * ch, gw / 2 - 0.16, gd / 2 - 0.16, ch * 0.8, T.q);
+    }
+    // drips: a token falls from the tap into the glass
+    if (!paused && !reduce) {
+      dripT += dt * speed * Math.min(c.limit, 12);
+      while (dripT >= 1 && drips.length < 30) { dripT -= 1; drips.push({ age: 0 }); }
+      dripT = Math.min(dripT, 1);
+    }
+    const tapZ = B.h + gh + 0.9, top = B.h + Math.max(ch, Math.ceil(shownN / 4) * ch);
+    drips = drips.filter((d) => (d.age += dt * Math.max(1, Math.min(speed, 3))) < 0.5);
+    for (const d of drips) { const f = d.age / 0.5, z = tapZ - (tapZ - top) * f * f; cube(B.x + B.w / 2 - 0.1, B.y + B.d / 2 - 0.1, z, 0.2, 0.2, 0.1, T.q, 1 - f * 0.3); }
+    // the tap: a short arm over the glass
+    cube(B.x + B.w / 2 - 0.12, B.y + B.d / 2 - 0.12, tapZ, 0.24, 0.24, 0.18, T.lim);
+    cube(B.x + B.w / 2 - 0.08, B.y - 0.25, tapZ + 0.08, 0.16, B.d / 2 + 0.25, 0.12, T.lim);
+    // the glass: its four edges and a faint tint, drawn over the coins
+    ctx.save();
+    ctx.globalAlpha = 0.75; ctx.lineWidth = 1.6; ctx.strokeStyle = T.text;
+    const z0 = B.h, z1 = B.h + gh, P = (x, y, z) => iso(x, y, z);
+    const corners = [[gx, gy], [gx + gw, gy], [gx + gw, gy + gd], [gx, gy + gd]];
+    for (const [x, y] of corners) { const [a1, b1] = P(x, y, z0), [a2, b2] = P(x, y, z1); ctx.beginPath(); ctx.moveTo(a1, b1); ctx.lineTo(a2, b2); ctx.stroke(); }
+    ctx.beginPath(); corners.forEach(([x, y], i) => { const [a, b] = P(x, y, z1); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); }); ctx.closePath(); ctx.stroke();
+    ctx.globalAlpha = 0.12; ctx.fillStyle = T.text;
+    poly([P(gx, gy + gd, z1), P(gx + gw, gy + gd, z1), P(gx + gw, gy + gd, z0), P(gx, gy + gd, z0)], T.text);
+    ctx.restore();
+    // empty: the glass flashes red, which is the moment a 429 goes back
+    if (!have && c.noisy > 0 && (reduce || Math.sin(t * 10) > 0)) {
+      ctx.save(); ctx.globalAlpha = 0.18;
+      poly([P(gx, gy, z0 + 0.02), P(gx + gw, gy, z0 + 0.02), P(gx + gw, gy + gd, z0 + 0.02), P(gx, gy + gd, z0 + 0.02)], T.bad);
+      ctx.restore();
+    }
+    hits.push({ kind: "limiter", r: rectOf({ ...B, h: B.h + gh }) });
   }
   function drawServer(i, T, dt, t) {
     const B = LY.servers[i], Q = LY.queues[i], srv = sim.srv[i];
@@ -866,8 +943,9 @@
     hits.push({ kind: "mailer", r: rectOf(M) });
   }
   // a request's trip, as a path of floor points: crowd → (cache) → (balancer) → its queue
-  function pathIn(srvI) {
-    const wy = LY.wy + 0.3, p = [[7.9, wy]];
+  function pathIn(srvI, noisy) {
+    const wy = LY.wy + 0.3, p = noisy && LY.bot ? [[LY.bot.x + LY.bot.w / 2, LY.bot.y + LY.bot.d], [LY.bot.x + LY.bot.w / 2, wy]] : [[7.9, wy]];
+    if (LY.limiter) p.push([LY.limiter.x, wy]);
     if (LY.cache) p.push([LY.cache.x, wy]);
     if (LY.lb) p.push([LY.lb.x + LY.lb.w, wy]);
     const Q = LY.queues[Math.min(srvI, LY.queues.length - 1)], S = LY.servers[Math.min(srvI, LY.servers.length - 1)];
@@ -885,7 +963,15 @@
     flyers = flyers.filter((f) => (f.age += dt) < f.life);
     for (const f of flyers) {
       const p = f.age / f.life;
-      if (f.kind === "in") { const [x, y] = along(pathIn(f.srv), p); cube(x, y - 0.12 + f.lane * 0.24, 0.05, 0.26, 0.26, 0.22, T.req); }
+      if (f.kind === "in") { const [x, y] = along(pathIn(f.srv, f.noisy), p); cube(x, y - 0.12 + f.lane * 0.24, 0.05, 0.26, 0.26, 0.22, f.noisy ? T.job : T.req); }
+      else if (f.kind === "lim") {
+        // to the limiter, and bounced straight back as a red 429
+        const B = LY.limiter; if (!B) continue;
+        const go = p < 0.5, k = go ? p * 2 : (1 - p) * 2;
+        const [x0, y0] = f.noisy && LY.bot ? [LY.bot.x + LY.bot.w / 2, LY.wy + 0.3] : [7.9, LY.wy + 0.3];
+        const x = x0 + (B.x - x0) * k, y = y0 + (go ? -0.1 : -0.55) + f.lane * 0.2;
+        cube(x, y, 0.05 + (go ? 0 : Math.sin(k * Math.PI) * 0.6), 0.22, 0.22, 0.2, go ? (f.noisy ? T.job : T.req) : T.bad);
+      }
       else if (f.kind === "hit") {
         // to the cache and straight back home, green
         const C = LY.cache; if (!C) continue;
@@ -1018,6 +1104,23 @@
         setHTML(mt, `mailer <b>${sim.jobBusy.length}/${sim.cfg.jobWorkers}</b> busy`);
       }
     }
+    if (LY.bot) {
+      const el = tag("bot", "wt-ctag wt-jtag", () => toggleInspect({ kind: "bot" }));
+      const [x, y] = iso(LY.bot.x + LY.bot.w * 0.5, LY.bot.y, LY.bot.h + 1.1);
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.classList.toggle("on", !!selected && selected.kind === "bot");
+      const st = samples[samples.length - 1];
+      setHTML(el, sim.cfg.noisy > 0 ? `script · <b>${num(sim.cfg.noisy)}/s</b>${st && sim.cfg.limit > 0 ? ` · ${num(st.n429)} 429s/s` : ""}` : "script · <b>off</b>");
+    }
+    if (LY.limiter) {
+      const el = tag("limiter", "wt-ctag", () => toggleInspect({ kind: "limiter" }));
+      const [x, y] = iso(LY.limiter.x + LY.limiter.w * 0.5, LY.limiter.y + LY.limiter.d, 0);
+      el.title = "A token bucket per customer: the glass is the script's";
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.classList.toggle("on", !!selected && selected.kind === "limiter");
+      const tk = Math.floor(sim.scriptTokens() * sim.cfg.burst + 1e-9);
+      setHTML(el, `limit <b>${num(sim.cfg.limit)}/s</b> each · burst ${num(sim.cfg.burst)}${sim.cfg.noisy > 0 ? ` · <i>${tk ? `${tk} left` : "empty: 429"}</i>` : ""}`);
+    }
     if (LY.cache) {
       const el = tag("cache", "wt-ctag", () => toggleInspect({ kind: "cache" }));
       const [x, y] = iso(LY.cache.x + LY.cache.w * 0.5, LY.cache.y + LY.cache.d, 0);
@@ -1139,6 +1242,7 @@
   const PARTS = {
     server: { label: () => name("server"), can: () => canTurn("servers") && sim.cfg.servers < MAX_SERVERS, add: () => setKnob("servers", sim.cfg.servers + 1), slot: () => { const L = layout({ servers: sim.cfg.servers + 1 }); return { slot: L.servers[L.servers.length - 1], L }; }, note: () => `${sim.cfg.servers} of ${MAX_SERVERS}` },
     queue: { label: () => "email queue", can: () => canTurn("jobWorkers") && !(sim.cfg.jobWorkers > 0), add: () => setKnob("jobWorkers", 2), slot: () => { const L = layout({ jobWorkers: 2 }); return { slot: L.mailer, L }; }, note: () => (sim.cfg.jobWorkers > 0 ? "in place" : "2 workers") },
+    limiter: { label: () => "rate limiter", can: () => canTurn("limit") && !(sim.cfg.limit > 0), add: () => setKnob("limit", 50), slot: () => { const L = layout({ limit: 50 }); return { slot: L.limiter, L }; }, note: () => (sim.cfg.limit > 0 ? "in place" : "50/s each") },
     cache: { label: () => "cache", can: () => canTurn("cache") && !(sim.cfg.cache > 0), add: () => setKnob("cache", 100), slot: () => { const L = layout({ cache: 100 }); return { slot: L.cache, L }; }, note: () => (sim.cfg.cache > 0 ? "in place" : "100 keys") },
   };
   function renderParts() {
@@ -1208,6 +1312,8 @@
     if (selected.kind === "clients" && !X.clients) return closeInspect();
     if (selected.kind === "mailer" && !(c.jobWorkers > 0)) return closeInspect();
     if (selected.kind === "cron" && !c.batch) return closeInspect();
+    if (selected.kind === "limiter" && !(c.limit > 0)) return closeInspect();
+    if (selected.kind === "bot" && !X.bot) return closeInspect();
     if (rebuild || !ins || ins.kind !== selected.kind || ins.i !== selected.i) {
       els.inspect.innerHTML = "";
       ins = { kind: selected.kind, i: selected.i };
@@ -1243,6 +1349,17 @@
         els.inspect.append(ins.rm);
       } else if (selected.kind === "cron") {
         els.inspect.append(h("p", { class: "ih" }, "Newsletter"), ins.dl = h("dl", {}));
+      } else if (selected.kind === "bot") {
+        els.inspect.append(h("p", { class: "ih" }, "The script"));
+        ins.n = stepper("sends", () => setKnob("noisy", stepIn(NOISY, sim.cfg.noisy, -1)), () => setKnob("noisy", stepIn(NOISY, sim.cfg.noisy, 1)));
+        els.inspect.append(ins.n.row, ins.dl = h("dl", {}));
+      } else if (selected.kind === "limiter") {
+        els.inspect.append(h("p", { class: "ih" }, "Rate limiter"), h("p", { class: "pol" }, "A token bucket for every customer, the script included."));
+        ins.l = stepper("limit", () => setKnob("limit", stepIn(LIMITS, sim.cfg.limit, -1)), () => setKnob("limit", stepIn(LIMITS, sim.cfg.limit, 1)));
+        ins.bu = stepper("burst", () => setKnob("burst", stepIn(BURSTS, sim.cfg.burst, -1)), () => setKnob("burst", stepIn(BURSTS, sim.cfg.burst, 1)));
+        els.inspect.append(ins.l.row, ins.bu.row, ins.dl = h("dl", {}));
+        ins.rm = h("button", { class: "wt-link rm", onclick: () => setKnob("limit", 0) }, "remove the limiter");
+        els.inspect.append(ins.rm);
       } else {
         els.inspect.append(h("p", { class: "ih" }, "Cache"));
         const at = () => CACHE_SIZES.findIndex((v) => v >= sim.cfg.cache);
@@ -1302,6 +1419,23 @@
       ins.dl.innerHTML = `<dt>each email</dt><dd>≈ ${ms(B.service)}</dd><dt>sends</dt><dd>${Math.round(c.jobWorkers / B.service)}/s</dd>
         <dt>a batch of ${num(B.n)}</dt><dd>${ms(B.n * B.service / c.jobWorkers)}</dd><dt>busy</dt><dd>${sim.jobBusy.length} of ${c.jobWorkers}</dd>
         <dt>waiting</dt><dd>${num(sim.jobQ.length)}</dd><dt>oldest waiting</dt><dd>${js.backlog ? ms(js.jobAge) : "none"}</dd>`;
+    } else if (selected.kind === "bot") {
+      ins.n.out.textContent = `${num(c.noisy)}/s`;
+      ins.n.minus.disabled = !canTurn("noisy") || c.noisy <= 0;
+      ins.n.plus.disabled = !canTurn("noisy") || c.noisy >= NOISY[NOISY.length - 1];
+      ins.dl.innerHTML = `<dt>sends</dt><dd>${num(c.noisy)}/s</dd><dt>answered, last 5 s</dt><dd>${Math.round(st.nTput)}/s</dd>
+        <dt>429s, last 5 s</dt><dd>${Math.round(st.n429)}/s</dd><dt>everyone else</dt><dd>${num(c.rate)}/s from ${num(c.tenants)} customers</dd>`;
+    } else if (selected.kind === "limiter") {
+      ins.l.out.textContent = `${num(c.limit)}/s`;
+      ins.l.minus.disabled = !canTurn("limit") || c.limit <= LIMITS[0];
+      ins.l.plus.disabled = !canTurn("limit") || c.limit >= LIMITS[LIMITS.length - 1];
+      ins.bu.out.textContent = num(c.burst);
+      ins.bu.minus.disabled = !canTurn("burst") || c.burst <= BURSTS[0];
+      ins.bu.plus.disabled = !canTurn("burst") || c.burst >= BURSTS[BURSTS.length - 1];
+      ins.rm.hidden = !canTurn("limit");
+      const room = c.workers / c.service;
+      ins.dl.innerHTML = `<dt>the script's bucket</dt><dd>${Math.floor(sim.scriptTokens() * c.burst)} of ${num(c.burst)} tokens</dd><dt>429s to the script</dt><dd>${Math.round(st.n429)}/s</dd>
+        <dt>429s to everyone else</dt><dd>${st.limited ? `<b class="bad">${num(st.limited)}</b> in 5 s` : "none"}</dd><dt>the server's room</dt><dd>${num(room)}/s in all</dd>`;
     } else if (selected.kind === "cron") {
       const B = c.batch, bs = sim.batches, last = bs.length ? bs[bs.length - 1].t : B.at - B.every, js = sim.jobStats(sim.t, sim.t);
       ins.dl.innerHTML = `<dt>every</dt><dd>${B.every} s</dd><dt>emails</dt><dd>${num(B.n)}, all at once</dd><dt>work in a batch</dt><dd>${num(B.n * B.service)} worker-s</dd>
@@ -1335,7 +1469,7 @@
     box("tput", X.clients ? "answered" : "served per second");
     box("lat", "wait: p50 and p99");
     box("err", "errors per second");
-    box("util", X.system.batch ? "emails waiting" : X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
+    box("util", X.bot ? "the script: answered and 429s" : X.system.batch ? "emails waiting" : X.parts && X.parts.includes("cache") ? "cache hits" : "workers busy");
   }
   // drag along a timeline to go back in time; the window holds still while you drag
   function scrubber(el, id) {
@@ -1408,7 +1542,7 @@
     if (showAns) {
       const A = X.predict.answer;
       x.strokeStyle = acc; x.beginPath(); x.moveTo(px(A), pad.t); x.lineTo(px(A), H - pad.b); x.stroke();
-      x.fillStyle = acc; x.textAlign = "right"; x.fillText(`${X.predict.axis ? "needs" : "bends"} ≈ ${num(A)}`, px(A) - 4, H - pad.b - 6);
+      x.fillStyle = acc; x.textAlign = "right"; x.fillText(`${X.predict.axis && !X.predict.bend ? "needs" : "bends"} ≈ ${num(A)}`, px(A) - 4, H - pad.b - 6);
     }
     // a dot per steady second: older ones fade
     dots.forEach((d, i) => {
@@ -1517,7 +1651,8 @@
     else series("tput", [...(open ? [{ key: "offered", color: mute, dash: [3, 3], w: 1 }] : []), { key: "tput", color: acc }], 10, (s) => `${Math.round(s.tput)}/s${open ? ` of ${Math.round(s.offered)}` : ""}`);
     series("lat", [{ key: "p50", color: acc, fill: false }, { key: "p99", color: pink }], 0.3, (s) => (s.p99 == null ? "none answered" : `${ms(s.p50)} · ${ms(s.p99)}`), 12);
     series("err", [{ key: "err", color: bad }], 1, (s) => `${s.err.toFixed(s.err < 10 ? 1 : 0)}/s`);
-    if (X.system.batch) series("util", [{ key: "backlog", color: theme().job }], 10, (s) => num(s.backlog));
+    if (X.bot) series("util", [{ key: "n429", color: bad, dash: [3, 3], w: 1.2 }, { key: "nTput", color: theme().job }], 10, (s) => `${Math.round(s.nTput)}/s · ${Math.round(s.n429)} 429s`);
+    else if (X.system.batch) series("util", [{ key: "backlog", color: theme().job }], 10, (s) => num(s.backlog));
     else if (X.parts && X.parts.includes("cache")) series("util", [{ key: "hit", color: css("--wt-ok") }], 1, (s) => `${Math.round(s.hit * 100)}%`, 1);
     else series("util", [{ key: "util", color: acc }], 1, (s) => `${Math.round(s.util * 100)}%`, 1);
   }
@@ -1547,10 +1682,11 @@
     for (let i = 0; i < feed.length; i++) {
       const [kind, a, why, srvI] = feed[i];
       if (kind === "in") {
-        const nx = feed[i + 1];
-        if (nx && nx[0] === "hit") { trips.push({ kind: "hit" }); i++; }
-        else if (nx && nx[0] === "route") { trips.push({ kind: "in", srv: nx[1] }); lastRoute = nx[1]; routeGlow = 1; i++; }
-        else trips.push({ kind: "in", srv: 0 });
+        const nx = feed[i + 1], noisy = why === "n";
+        if (nx && nx[0] === "lim") { trips.push({ kind: "lim", noisy }); i++; }
+        else if (nx && nx[0] === "hit") { trips.push({ kind: "hit" }); i++; }
+        else if (nx && nx[0] === "route") { trips.push({ kind: "in", srv: nx[1], noisy }); lastRoute = nx[1]; routeGlow = 1; i++; }
+        else trips.push({ kind: "in", srv: 0, noisy });
       } else if (kind === "out") {
         trips.push({ kind: a ? "ok" : "bad", srv: srvI || 0 });
         if (!a) burst(srvI || 0);
@@ -1561,14 +1697,14 @@
     }
     const budget = speed > 1 ? 4 : 8, step = Math.max(1, Math.ceil(trips.length / budget));
     for (let i = 0; i < trips.length && flyers.length < 140; i += step) {
-      const f = trips[i], life = speed < 1 ? 1.4 : f.kind === "hit" ? 0.6 : 0.45;
+      const f = trips[i], life = speed < 1 ? 1.4 : f.kind === "hit" || f.kind === "lim" ? 0.6 : 0.45;
       flyers.push({ ...f, age: 0, life: f.kind === "bad" ? 0.9 : life, lane: Math.random() });
     }
   }
   const clock = (t) => `t ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
   function sample(t) {
     const st = sim.stats(Math.max(0, t - 5), t), span = Math.min(5, t) || 1;
-    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate, backlog: st.backlog };
+    const s = { t, load: loadNow(), offered: sim.cfg.mode === "open" ? sim.cfg.rate : st.sent / span, tput: st.tput, p50: st.ok ? st.p50 : null, p99: st.ok ? st.p99 : null, err: st.errors / span, util: st.util, hit: st.hit, tries: st.tries, errRate: st.errRate, backlog: st.backlog, n429: st.n429, nTput: st.nTput, nIn: Math.max(0, sim.cfg.noisy - st.n429) };
     samples.push(s);
     if (samples.length > 400) samples.shift();
     const sc = scat();
@@ -1585,14 +1721,17 @@
       return;
     }
     // a dot only once the load and the design have been steady for the whole 5 s window, so a change doesn't smear it
-    const xv = sc.x === knob() ? s.load : sim.cfg[sc.x];
+    // the x of a dot: the load, a knob, or a measured number (what the script gets past the limiter)
+    const xv = sc.x === knob() ? s.load : sc.x in s ? s[sc.x] : sim.cfg[sc.x];
     const g = sim.cfg.surge, calm = !g || t >= g.at + g.for + 10;
     if (t - Math.max(lastLoadChange, lastSysChange) >= 6 && (st.ok > 3 || (sc.y === "errRate" && st.sent > 3)) && xv > 0 && calm) {
       dots.push({ t, x: xv, y: s[sc.y], load: s.load, p99: s.p99 });
       if (dots.length > 240) dots.shift();
       if (P.phase === "explore" && !P.revealed && P.guess != null) {
         const A = X.predict.answer;
-        const ok = X.predict.lower
+        const ok = X.predict.bend
+          ? xv >= A * 1.1 && s.p99 > X.predict.bend
+          : X.predict.lower
           ? xv <= A * 1.3 && st.errors === 0 && s.p99 < 1
           : X.predict.axis
           ? xv >= A / 1.3 && s.load >= (X.predict.atLoad || 0) && s.p99 < 2 && st.errors === 0
