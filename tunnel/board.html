@@ -5,7 +5,7 @@
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("vnl-theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");sessionStorage.getItem("tl-wipe")&&document.documentElement.classList.add("wipe-in")}catch(e){}</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Whiteboard · Wind Tunnel · Tulip Labs</title>
-<meta name="description" content="System design on a whiteboard that runs: follow a click, size it on a napkin, find where it gives out, then draw a design that meets its goals on a budget.">
+<meta name="description" content="System design in two modes: on a whiteboard, scope it, size it and sketch it; in simulation, the design runs. From a link shortener to a Redis of your own.">
 <meta name="theme-color" content="#1f9fb4">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges'><rect x='1' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='0' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='1' width='1' height='1' fill='%23d23f87'/><rect x='3' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='4' y='1' width='1' height='1' fill='%23d23f87'/><rect x='5' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='1' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='3' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='2' width='1' height='1' fill='%23ffd21f'/><rect x='5' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='6' y='2' width='1' height='1' fill='%23ff6fb5'/><rect x='1' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='2' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='3' y='3' width='1' height='1' fill='%23ffd21f'/><rect x='4' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='5' y='3' width='1' height='1' fill='%23ff6fb5'/><rect x='0' y='4' width='1' height='1' fill='%233faa52'/><rect x='3' y='4' width='1' height='1' fill='%2324803c'/><rect x='6' y='4' width='1' height='1' fill='%233faa52'/><rect x='0' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='5' width='1' height='1' fill='%233faa52'/><rect x='3' y='5' width='1' height='1' fill='%2324803c'/><rect x='5' y='5' width='1' height='1' fill='%233faa52'/><rect x='6' y='5' width='1' height='1' fill='%233faa52'/><rect x='1' y='6' width='1' height='1' fill='%233faa52'/><rect x='2' y='6' width='1' height='1' fill='%233faa52'/><rect x='3' y='6' width='1' height='1' fill='%2324803c'/><rect x='4' y='6' width='1' height='1' fill='%233faa52'/><rect x='5' y='6' width='1' height='1' fill='%233faa52'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,7 +24,9 @@
 </header>
 <main class="sd" id="sd" aria-busy="true"></main>
 <script src="net.js"></script>
+<script src="kv.js"></script>
 <script src="boards.js"></script>
+<script src="board-kinds.js"></script>
 <script src="board.js"></script>
 </body>
 </html>
