@@ -12,6 +12,7 @@ const path = require("path");
 const N = require(path.join(__dirname, "..", "tunnel", "net.js"));
 const SD = require(path.join(__dirname, "..", "tunnel", "boards.js"));
 const KV = require(path.join(__dirname, "..", "tunnel", "kv.js"));
+const CH = require(path.join(__dirname, "..", "tunnel", "chat.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -30,7 +31,11 @@ for (const b of BOARDS) {
     ok(!c0.problems.length, `${b.id}: the starting design doesn't compile: ${c0.problems.map((p) => p.text).join(" / ")}`);
   }
   for (const nd of (b.design || { nodes: [] }).nodes) ok(SD.PARTS[nd.kind], `${b.id}: part ${nd.id} is a ${nd.kind}, which the parts catalog doesn't know`);
-  if (b.kind === "follow") {
+  if (b.kind === "follow" && !runs) {
+    const wired = (a, z) => b.design.wires.some(([x, y]) => (x === a && y === z) || (x === z && y === a));
+    for (const r of b.rounds) ok(r.path.every((id, i) => b.design.nodes.some((n) => n.id === id) && (!i || wired(r.path[i - 1], id))), `${b.id}: "${r.say}" isn't a walk along the drawing's wires`);
+  }
+  if (b.kind === "follow" && runs) {
     for (const r of b.rounds) {
       const got = N.path(b.design, { hit: r.hit, count: !!q.count });
       ok(got.join() === r.path.join(), `${b.id}: "${r.say}" takes ${got.join(" → ")}, not ${r.path.join(" → ")}`);
@@ -149,6 +154,41 @@ for (const b of BOARDS) {
     for (const f of b.fixes) ok((after[f.id] <= 1) === (f.id === b.answer), `${b.id}: "${f.say}" leaves the busiest machine ${pc(after[f.id])}% busy`);
   }
 }
+// ----------------------------------------------------------------------------------------- WhatsApp labs --
+const nums = (text) => text.replace(/,/g, "");
+for (const b of BOARDS) {
+  if (b.kind === "conns") {
+    // only the answer's model and heartbeat fit the goals with some fleet size, and the why quotes the fleet sizes
+    const g = b.goals, fits = (m, hb) => { const n = CH.fewest(m, hb, b.sim.phones, g.under); const G = CH.gateways({ model: m, hb, boxes: n, phones: b.sim.phones }); return n <= g.boxes && G.detect <= g.detect && G.ram <= g.under && G.cpu <= g.under; };
+    for (const m of CH.MODELS) for (const hb of CH.HEARTBEATS) ok(fits(m, hb) === (m === b.answer.model && hb === b.answer.hb), `${b.id}: ${m} with a heartbeat every ${hb} s ${fits(m, hb) ? "fits" : "doesn't fit"}`);
+    for (const [m, hb] of [["threads", 30], ["loop", 30], ["loop", 10]]) { const n = CH.fewest(m, hb, b.sim.phones, g.under); ok(nums(b.why).includes(String(n)), `${b.id}: the why doesn't say ${m}/${hb} s needs ${n} machines`); }
+    const per = (m) => Math.floor((CH.GW.ram * g.under) / CH.GW.per[m]), best = CH.gateways({ model: "loop", hb: 30, boxes: CH.fewest("loop", 30), phones: b.sim.phones });
+    ok(nums(b.why).includes(String(per("threads"))) && nums(b.why).includes(String(Math.floor(best.perBox))), `${b.id}: the why doesn't quote phones per machine`);
+  }
+  if (b.kind === "offline") {
+    // every switch setting runs the same day; only all three switches lose nothing and show nothing twice, on every seed
+    for (const seed of [1, 2, 3, 4, 5]) for (const inbox of [false, true]) for (const acks of [false, true]) for (const ids of [false, true]) {
+      const d = CH.day({ inbox, acks, ids, seed }), good = !d.lost && !d.twice;
+      ok(good === (inbox && acks && ids), `${b.id} seed ${seed}: inbox ${inbox}, acks ${acks}, ids ${ids}: ${d.lost} lost, ${d.twice} twice`);
+      ok(d.sent === CH.day({ seed }).sent, `${b.id} seed ${seed}: the switches changed the day itself`);
+    }
+    const f = CH.day({ seed: b.sim.seed }), i = CH.day({ inbox: true, seed: b.sim.seed }), a = CH.day({ inbox: true, acks: true, seed: b.sim.seed });
+    ok(b.why.includes(`${Math.round((100 * f.lost) / f.sent)}%`), `${b.id}: the why doesn't say forgetting loses ${Math.round((100 * f.lost) / f.sent)}%`);
+    ok(b.why.includes(`${i.lost} lost`) && b.why.includes(`${a.twice} shown twice`), `${b.id}: the why doesn't say ${i.lost} lost / ${a.twice} shown twice`);
+  }
+  if (b.kind === "order") {
+    // on every seed: arrival order splits the phones, the sender's clock puts a reply above its question, the server sequence does neither
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const g = CH.group({ seed }).rules;
+      ok(!g.arrival.agree, `${b.id} seed ${seed}: arrival order agrees on every phone`);
+      ok(g.clock.agree && g.clock.flips > 0, `${b.id} seed ${seed}: the sender's clock never misplaces a reply`);
+      ok(g.seq.agree && !g.seq.flips, `${b.id} seed ${seed}: the server sequence goes wrong`);
+    }
+  }
+}
+// a whiteboard part with a name on it (Alice, Bob) still has a kind the catalog knows
+for (const b of BOARDS) for (const nd of (b.design || { nodes: [] }).nodes) if (nd.label) ok(SD.PARTS[nd.kind], `${b.id}: ${nd.label} has no part kind`);
+
 const ids = BOARDS.map((b) => b.id), ladder = SD.LADDER.map((u) => u.id);
 ok(new Set(ids).size === ids.length, "two questions share an id");
 ok(new Set(ladder).size === ladder.length, "two units on the ladder share an id");
