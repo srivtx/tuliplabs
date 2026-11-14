@@ -53,21 +53,22 @@ The problem card turns green once the task is done, so the arc closes where it o
 
 ## What's next, problem-first
 
-Experiments 1 to 6 are live. Experiment 6, **Queues absorb bursts**, is the newest: a newsletter job hands the website
-900 emails a minute, and the fix is a job queue with workers sized for the average, not the burst. Its sim parts
-(`batch`, `jobWorkers`, `jobStats`) and its `teeth` chart are reusable for any experiment about background work.
+Experiments 1 to 9 are live. The data layer came last (2026-11-14), each with a part you can watch:
 
-The planned experiments in `tunnel/experiments.js` are already written in this shape:
+- **7 · The database is the bottleneck.** `writes`, `replicas`, `lag`, `readAfter`, `ryw`: a primary and read replicas,
+  write copies flying across after the lag, and a red **!** for each stale read of your own write. Theory check: the
+  stale share is lag ÷ (lag + read-back).
+- **8 · Rate limits.** `noisy`, `tenants`, `limit`, `burst`: a script on its own stream, and a glass token bucket on
+  the limiter that drips at the limit and empties under the flood. Stats about "everyone else" leave the script out.
+- **9 · Sharding and hot keys.** `shards`, `hot` (a percentage), `hotSplit`: a hash ring over the router cut into
+  equal arcs, a gold star for the viral account, and copies of it on the next shards round the ring.
 
-- **7 · The database is the bottleneck.** A read replica makes reads fast, and users stop seeing their own comments.
-  The fix: route reads and writes, and read your own writes from the primary.
-- **8 · Rate limits.** One customer's script slows everyone. The fix: a token bucket per customer.
-- **9 · Sharding and hot keys.** One viral account melts one shard. The fix: spread keys evenly, then treat the hot key
-  specially.
+Still planned, in this shape:
+
 - **10 · Distance.** Idle servers, slow pages far away. The fix: fewer round trips, then data closer to the user.
 - **11 · Split brain.** A network cut sells the same seat twice. The fix: choose consistency or availability per
   operation.
 - **12 · Design review.** Three designs, each with a target and a budget, defended with runs.
 
-Experiment 8 reuses the most of what's built, so it comes next: it needs a token bucket per customer in front of the
-server, a noisy customer, and 429s with Retry-After.
+Shelf pictures: `ONLY=wt09 PW_CHANNEL=chrome NODE_PATH=<playwright>/node_modules node tools/lab-thumbs.js` renders just
+the ones you name, with the installed Chrome.
