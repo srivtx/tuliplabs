@@ -40,6 +40,10 @@
    or to the primary when there are none. A replica sees a write `lag` seconds after the primary commits it (exponential).
    A writer's own read served by a replica before it has seen the write is stale: stats count it (`stale`, and
    `staleRate` of those reads). With ryw:true, a writer's reads within `rywFor` seconds of their write go to the primary.
+   Shards (`shards` > 0): the data is split over that many machines. Each request is about one account; a hash puts the
+   account at a point on a ring, and the ring is cut into `shards` equal arcs, one per machine. A share `hot` of all
+   requests (a percentage) are about one viral account. With hotSplit > 1, that account's reads are spread over the hotSplit machines
+   that follow its arc on the ring, a copy on each.
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
@@ -92,6 +96,7 @@
     batch: null, jobWorkers: 0,
     noisy: 0, tenants: 40, limit: 0, burst: 10,
     writes: 0, replicas: 0, lag: 1, readAfter: 1, ryw: false, rywFor: 5,
+    shards: 0, hot: 0, hotSplit: 1,
   };
 
   class Sim {
@@ -164,7 +169,7 @@
     }
     // servers that exist: more are added now; fewer means the last ones stop taking work and leave once empty
     sizeServers() {
-      const n = this.cfg.writes > 0 ? 1 + Math.max(0, this.cfg.replicas | 0) : Math.max(1, this.cfg.servers | 0);
+      const n = this.cfg.shards > 0 ? this.cfg.shards | 0 : this.cfg.writes > 0 ? 1 + Math.max(0, this.cfg.replicas | 0) : Math.max(1, this.cfg.servers | 0);
       this.srv.forEach((s, i) => { s.gone = i >= n; });
       while (this.srv.length < n) this.srv.push({ queue: [], busy: [], gone: false });
       this.prune();
@@ -179,7 +184,7 @@
       // a new limit or burst: every bucket keeps what it had, capped at the new size
       if (patch.limit !== undefined || patch.burst !== undefined) for (const b of this.buckets.values()) b.tok = Math.min(this.cfg.burst, b.tok);
       if (this.cfg.mode === "closed" && patch.users !== undefined && this.cfg.users > this.users) this.addUsers(this.cfg.users - this.users);
-      if (patch.servers !== undefined || patch.replicas !== undefined) { this.sizeServers(); this.logBusy(); }
+      if (patch.servers !== undefined || patch.replicas !== undefined || patch.shards !== undefined) { this.sizeServers(); this.logBusy(); }
       if (patch.workers !== undefined) { this.srv.forEach((s, i) => this.fill(i)); this.logBusy(); }
       if (patch.cache !== undefined) this.evict();
       if (patch.jobWorkers !== undefined) {
@@ -249,7 +254,8 @@
         q.hit = false;
       }
       if (this.cfg.writes > 0 && !q.follow && q.write === undefined) q.write = this.r() < this.cfg.writes;
-      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : q.write ? "w" : null]);
+      if (this.cfg.shards > 0 && q.acct === undefined) { q.hot = this.r() * 100 < this.cfg.hot; q.acct = q.hot ? 0 : 1 + Math.floor(this.r() * this.cfg.keys); }
+      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : q.write ? "w" : q.hot ? "h" : null]);
       if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
       const i = this.route(q);
       q.srv = i;
@@ -277,6 +283,13 @@
     route(q) {
       const S = this.srv, n = S.length;
       if (n === 1) return 0;
+      if (this.cfg.shards > 0 && q && q.acct !== undefined) {
+        // the ring: an account's hash picks its arc; the viral one may be spread over the next few machines
+        const live = []; for (let i = 0; i < n; i++) if (!S[i].gone) live.push(i);
+        const home = Math.min(live.length - 1, Math.floor(ringPos(q.acct) * live.length));
+        if (!q.hot || this.cfg.hotSplit <= 1) return live[home];
+        return live[(home + Math.floor(this.r() * Math.min(this.cfg.hotSplit, live.length))) % live.length];
+      }
       if (this.cfg.writes > 0) {
         // the primary takes every write, and a writer's own read while read-your-writes holds; replicas take the rest
         if (!q || q.write || (q.follow && this.cfg.ryw && this.t - q.follow.at < this.cfg.rywFor)) return 0;
@@ -435,6 +448,7 @@
     stats(t0, t1) {
       const lats = [], d = this.done;
       let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0, own = 0, stale = 0, onPrimary = 0, onReplicas = 0;
+      const perSrv = [];
       while (lo < hi) { const m = (lo + hi) >> 1; if (d[m].at <= t0) lo = m + 1; else hi = m; }
       for (let i = lo; i < d.length && d[i].at <= t1; i++) {
         const r = d[i];
@@ -442,6 +456,7 @@
         if (r.n) { if (r.ok) nOk++; else if (r.why === "limited") n429++; continue; }
         if (r.why === "limited") limited++;
         if (r.own) { own++; if (r.stale) stale++; }
+        if (r.ok) perSrv[r.srv] = (perSrv[r.srv] || 0) + 1;
         if (r.ok) { if (r.srv) onReplicas++; else onPrimary++; }
         if (r.ok) { ok++; lats.push(r.lat); } else bad++;
         if (r.hit !== undefined) { looked++; if (r.hit) hits++; }
@@ -455,6 +470,7 @@
         hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
         nTput: nOk / span, n429: n429 / span, limited,
         stale, staleRate: own ? stale / own : 0, primary: onPrimary / span, replicaLoad: onReplicas / span,
+        hottest: Math.max(0, ...perSrv.map((x) => (x || 0) / span)), coolest: perSrv.length ? Math.min(...Array.from({ length: this.srv.length }, (_, i) => (perSrv[i] || 0) / span)) : 0,
         ...this.jobStats(t0, t1),
       };
     }
@@ -482,6 +498,13 @@
       return s.stats(warm, warm + span);
     }
   }
+  // where an account sits on the ring, 0..1: a 32-bit integer hash, the same in every engine. Account 0 is the viral one
+  function ringPos(acct) {
+    let h = (acct * 2654435761 + 0x9e3779b9) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
   function pct(sorted, p) {
     if (!sorted.length) return 0;
     const i = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
@@ -502,6 +525,6 @@
   // the share of reads the hottest n of N keys get under Zipf(s): the best any cache of n keys could do
   function zipfShare(n, N, s = 1) { const c = zipfTable(N, s); return n <= 0 ? 0 : c[Math.min(N, n) - 1]; }
 
-  root.WTSim = { Sim, erlangC, zipfShare, rng, DEFAULTS };
+  root.WTSim = { Sim, erlangC, zipfShare, rng, DEFAULTS, ringPos };
 })(typeof window !== "undefined" ? window : globalThis);
 if (typeof module !== "undefined") module.exports = globalThis.WTSim || window.WTSim;
