@@ -115,3 +115,5 @@
 .mk-checks .result p,.mk-feedback .result p{margin:0 0 6px}
 .mk-iv{font:400 19px/1.45 var(--f-serif);margin:-6px 0 24px}
 .mk-iv a{color:var(--ink);border-bottom:2px solid var(--pink);text-decoration:none}
+.mk-alt{margin:10px 0 0;font-size:14px;color:var(--muted)}
+.mk-typing{margin-top:10px}
