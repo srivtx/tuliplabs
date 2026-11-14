@@ -11,6 +11,7 @@
        evict, persist, shard   the Redis unit's labs (tunnel/kv.js; their pages are in tunnel/board-kinds.js)
        conns, offline, order   WhatsApp's labs (tunnel/chat.js)
        nearby, batch, dispatch Uber's labs (tunnel/geo.js)
+       fanout, likes, tlcache  Twitter's labs (tunnel/feed.js)
    Every number here is checked by tools/board-check.js against the simulators the page runs.
    A design: parts {id, kind, x, y, n (machines), size, batch} on a 960 × 540 board, and wires [from, to]. */
 (function (root) {
@@ -59,6 +60,12 @@
     trips: { name: "trip store", say: "each ride and its driver, claimed once", icon: '<path d="M6 2h14v21l-2.5-1.5L15 23l-2-1.5L11 23l-2.5-1.5L6 23z"/><path d="M9.5 8h7M9.5 12h7M9.5 16h4"/>' },
     pingdb: { name: "ping table", say: "every ping, a row on disk", icon: '<ellipse cx="13" cy="5" rx="9" ry="3"/><path d="M4 5v16c0 1.7 4 3 9 3s9-1.3 9-3V5M8 11h10M8 15h10M8 19h10"/>' },
     scan: { name: "full scan", say: "measure the rider to every driver", icon: '<circle cx="13" cy="13" r="10"/><circle cx="13" cy="13" r="5"/><path d="M13 13 20 6"/>' },
+    people: { name: "people", fixed: true, say: "posting and scrolling", icon: '<circle cx="13" cy="8" r="4.5"/><path d="M4 24c0-5.5 4-9 9-9s9 3.5 9 9"/>' },
+    tweets: { name: "tweet store", say: "every tweet, once, by id", icon: '<path d="M4 5h18v13H11l-5 4v-4H4z"/><path d="M8.5 10h9M8.5 13.5h6"/>' },
+    graph: { name: "follow graph", say: "who follows whom", icon: '<circle cx="6" cy="6" r="3"/><circle cx="20" cy="6" r="3"/><circle cx="13" cy="20" r="3"/><path d="M8.5 7.8 11.3 17.5M17.5 7.8l-2.8 9.7M9 6h8"/>' },
+    tlcache: { name: "timeline cache", say: "each person's latest tweet ids, in RAM", icon: '<rect x="4" y="3" width="18" height="20" rx="2"/><path d="M8 8h10M8 12h10M8 16h10"/><path d="M17 1.5 14 6h3l-2 4"/>' },
+    sqljoin: { name: "timeline query", say: "join follows and tweets on every read", icon: '<circle cx="9.5" cy="13" r="6.5"/><circle cx="16.5" cy="13" r="6.5"/>' },
+    inline: { name: "inline fan-out", say: "copy into every timeline, then reply", icon: '<path d="M3 13h7M10 13l5-7h8M10 13l5 7h8M10 13h13"/>' },
   };
 
   // what a part says on the board itself, where there's room for about 18 characters
@@ -67,7 +74,8 @@
     expiry: "keys with a TTL", evict: "frees RAM", aof: "every write", rdb: "a periodic copy", rreplica: "follows along", sql: "tables on disk", threads: "many threads",
     phone: "one open socket", gateway: "holds sockets", sessions: "who's where", chat: "routes messages", inbox: "waits for acks", push: "wakes a phone", blob: "photos, videos",
     poller: "asks every 5 s", index: "reads messages", rider: "wants a ride", driver: "pings every 4 s", locsvc: "takes pings", geoidx: "cells → drivers",
-    matcher: "pairs them up", eta: "minutes by road", trips: "one ride each", pingdb: "a row a ping", scan: "checks them all" };
+    matcher: "pairs them up", eta: "minutes by road", trips: "one ride each", pingdb: "a row a ping", scan: "checks them all",
+    people: "post and scroll", tweets: "every tweet", graph: "who follows whom", tlcache: "ids, in RAM", sqljoin: "joins on read", inline: "copies, then replies" };
   for (const k in TAGS) PARTS[k].tag = TAGS[k];
 
   // A sketch's grade: each rubric item is a link the design needs (between parts of these kinds, either way round),
@@ -520,6 +528,105 @@
     ],
   };
 
+  // --------------------------------------------------------------------------------------------- Twitter --
+  const TW_FOLLOW = {
+    nodes: [P("A", "people", 95, 140, { label: "Ada" }), P("B", "people", 95, 400, { label: "Bo" }), P("ap", "app", 285, 270), P("tw", "tweets", 475, 92), P("q", "queue", 475, 270),
+      P("w", "worker", 665, 270), P("g", "graph", 860, 150), P("tl", "tlcache", 475, 440)],
+    wires: [["A", "ap"], ["B", "ap"], ["ap", "tw"], ["ap", "q"], ["q", "w"], ["w", "g"], ["w", "tl"], ["ap", "tl"]],
+  };
+  const TW_REF = {
+    nodes: [P("pe", "people", 95, 270), P("lb", "lb", 255, 270), P("ap", "app", 415, 270), P("tw", "tweets", 590, 100), P("q", "queue", 590, 270), P("w", "worker", 760, 270),
+      P("g", "graph", 900, 120), P("tl", "tlcache", 590, 440)],
+    wires: [["pe", "lb"], ["lb", "ap"], ["ap", "tw"], ["ap", "q"], ["q", "w"], ["w", "g"], ["w", "tl"], ["ap", "tl"]],
+  };
+  const TWITTER_UNIT = {
+    id: "twitter", name: "Twitter / X", sub: "a home timeline for 250 million people a day", floor: 7, group: "Feeds and social",
+    w: [
+      {
+        id: "tw-scope", kind: "scope", title: "What is Twitter?",
+        lede: "You're designing Twitter / X. Before any boxes, pin down what it must do. Sort the cards: <b>what it does</b>, <b>how well</b>, <b>not now</b>.",
+        cards: [
+          { t: "Post a short message, with photos", bin: "does", why: "Writing: the tweet." },
+          { t: "Follow people", bin: "does", why: "The follow graph decides whose tweets you see." },
+          { t: "A home timeline: the latest from everyone you follow", bin: "does", why: "Reading: the page people open 20 times a day. Making it fast is the whole design." },
+          { t: "Opening the timeline feels instant", bin: "how", why: "A promise about read speed, and reads outnumber writes ten to one." },
+          { t: "A new tweet reaches followers within seconds", bin: "how", why: "A promise about write speed: how fast the fan-out finishes." },
+          { t: "Keep working when someone with 100 million followers posts", bin: "how", why: "The celebrity problem: one tweet, 100 million timelines." },
+          { t: "Direct messages", bin: "not", why: "Private chat is a different system: the WhatsApp unit." },
+          { t: "Search every tweet ever posted", bin: "not", why: "Search is an inverted index over billions of tweets: its own unit." },
+          { t: "The \"For you\" feed a model ranks", bin: "not", why: "Ranking by a model is the TikTok unit. This one is the timeline of people you follow, newest first." },
+        ],
+        why: "Twitter does three things: post, follow, and show a timeline. The hard parts are in \"how well\": timelines that open instantly, tweets that arrive within seconds, and a design that survives the celebrity problem, where one tweet has to reach 100 million timelines.",
+      },
+      {
+        id: "tw-napkin", kind: "napkin", title: "Size Twitter",
+        lede: "<b>500 million</b> tweets are posted a day. <b>250 million</b> people open the app each day, and open their home timeline about <b>20</b> times. An account has about <b>200</b> followers on average.",
+        q: {},
+        design: { nodes: [P("pe", "people", 95, 330), P("ap", "app", 420, 330), P("tl", "tlcache", 760, 330)], wires: [["pe", "ap"], ["ap", "tl"]] },
+        notes: [
+          { id: "w", on: "ap", dx: 0, dy: -190, label: "tweets posted a second", unit: "/s", calc: "500e6 / (24 * 3600)", hint: "a day is 86,400 seconds" },
+          { id: "r", on: "ap", dx: 0, dy: 60, label: "timelines opened a second", unit: "/s", calc: "250e6 * 20 / (24 * 3600)", hint: "people × opens each ÷ seconds in a day" },
+          { id: "f", on: "tl", dx: -10, dy: -190, label: "fan-out writes a second", unit: "/s", calc: "500e6 / (24 * 3600) * 200", hint: "tweets a second × followers each" },
+        ],
+        why: "500 million a day is 5,787 tweets a second. Timelines are opened 57,870 times a second, ten times as often. Copying every tweet into every follower's timeline is 1,157,407 writes a second: a lot, but each one is tiny, and it makes every one of those 57,870 reads a single lookup. That trade, more work on write for cheap reads, is the heart of Twitter.",
+      },
+      {
+        id: "tw-sketch", kind: "sketch", title: "Draw Twitter",
+        lede: "Draw the server side. A tweet is stored once and must reach every follower's home timeline within seconds; opening a timeline must be one quick read. Drag parts in from the tray and wire them. Two of the parts don't belong.",
+        q: {},
+        tray: ["lb", "app", "tweets", "graph", "queue", "worker", "tlcache", "sqljoin", "inline"],
+        design: { nodes: [P("pe", "people", 95, 270)], wires: [] },
+        reference: TW_REF,
+        rubric: [
+          { link: [["people", "lb"], ["people", "app"]], say: "People talk to app servers that hold no state, behind a load balancer." },
+          { link: [["app", "tweets"]], say: "A new tweet is stored once, by id, in the tweet store." },
+          { link: [["app", "queue"]], say: "Posting puts a fan-out job on a queue, so the poster hears \"posted\" at once." },
+          { link: [["queue", "worker"]], say: "Fan-out workers take the jobs from the queue." },
+          { link: [["worker", "graph"]], say: "A worker asks the follow graph who follows the poster." },
+          { link: [["worker", "tlcache"]], say: "It pushes the tweet's id onto each follower's timeline in the timeline cache." },
+          { link: [["app", "tlcache"]], say: "Opening a home timeline is one read: a list of ids from the cache, then the tweets by id." },
+        ],
+        wrong: {
+          sqljoin: "Building each timeline on read joins ~200 accounts' tweets for every one of 57,870 opens a second: 11.6 million lookups a second, while people wait. Do that work once, on write.",
+          inline: "Copying into every follower's timeline before replying makes the poster wait: for 100 million followers that's nearly a minute. Put the fan-out on a queue and reply at once.",
+        },
+        why: "A tweet is written once to the tweet store, and a fan-out job goes on a queue so the poster isn't kept waiting. Workers look up the poster's followers in the follow graph and push the tweet's id onto each follower's cached timeline. Opening a timeline is then a single read of a list of ids, plus the tweets by id. Reads outnumber writes ten to one, so the work is done on write.",
+      },
+      {
+        id: "tw-follow", kind: "follow", title: "Follow a tweet",
+        lede: "Ada posts, and Bo follows her. Tap the parts each request passes through, in order.",
+        q: {}, item: "request",
+        design: TW_FOLLOW,
+        rounds: [
+          { say: "Ada posts a tweet. Where is it kept?", path: ["A", "ap", "tw"] },
+          { say: "Now her followers' timelines need it. Start at the app servers. (On the way, the worker asks the follow graph who follows Ada.)", path: ["ap", "q", "w", "tl"] },
+          { say: "Bo opens the app. Where does his home timeline come from?", path: ["B", "ap", "tl"] },
+        ],
+        why: "The tweet itself is stored once. Its id is then copied, in the background, into every follower's timeline in the cache. Bo's home timeline is already built when he opens it: one read of a list of ids. Twitter spends writes to make reads cheap, because reads come ten times as often.",
+      },
+    ],
+    s: [
+      {
+        id: "tw-fanout", kind: "fanout", title: "The celebrity problem",
+        lede: "One minute of tweets, about <b>347,000</b> of them. Most come from accounts with a few dozen followers, but two of the biggest post this minute: <b>120 million</b> followers and <b>30 million</b>. Fan-out workers write <b>2 million</b> timeline entries a second. Draw the line: accounts at or over it are merged into each timeline when it's opened, and everyone else fans out on write. The goals: <b>99%</b> of tweets reach their followers within <b>5 s</b>, and <b>99%</b> of timelines open within <b>150 ms</b> (15 ms, plus 0.6 ms for each account merged at read time).",
+        sim: { seed: 1 }, goals: { lag: 5, read: 150 }, answer: [10e6, 1e6],
+        why: "Fanning everyone out on write, the 120-million-follower tweet alone is a minute of work for the workers, and every tweet behind it waits: 65 s at the 99th percentile. Merging everyone on read, someone who follows 2,000 accounts merges them all, and the 99th percentile timeline takes 1,027 ms. The hybrid draws a line. Above a million followers, accounts are merged on read: only 3 of this minute's tweets, yet 13% of all follows point at them, so a typical timeline merges 15 of them, and the 99th percentile opens in 133 ms. Draw the line at 100,000 and timelines take 199 ms. Twitter runs this hybrid.",
+      },
+      {
+        id: "tw-likes", kind: "likes", title: "A viral tweet's likes",
+        lede: "A tweet goes viral: likes climb to <b>40,000 a second</b>. The like count lives in database rows, and a row is locked for <b>1 ms</b> while it changes, so one row takes 1,000 likes a second. You can split the count over more rows (a like picks one; reading the count adds them up at <b>0.25 ms</b> a row), or batch likes in the <b>200</b> app servers' memory and write them now and then. The goals: a like is saved within <b>50 ms</b>, the count reads in <b>20 ms</b>, and a crashed app server loses <b>no likes</b>.",
+        sim: {}, goals: { like: 50, read: 20 }, answer: { shards: 64, batch: 0 },
+        why: "One row takes 1,000 likes a second, so at 40,000 the line of waiting likes grows to 11 million: hours behind. 16 rows take 16,000 a second, still not enough. 64 rows take 64,000, so a like is saved in 2.7 ms, and reading the count adds 64 rows: 16 ms. 256 rows make every read add 256: 64 ms. Batching in the app servers' memory spares the database, but a server that crashes loses likes it hasn't written: about 200 for every second of batch. A count split over rows is a sharded counter, the standard fix for one hot row.",
+      },
+      {
+        id: "tw-cache", kind: "tlcache", title: "Timelines in memory",
+        lede: "Home timelines are kept ready in memory: a list of tweet ids for each person, <b>16 bytes</b> an id, kept on <b>3</b> machines. There's room for <b>12 TB</b>. A timeline that isn't cached, or a scroll past its end, is rebuilt from scratch, which takes seconds. Choose who gets a cached timeline and how many ids it keeps. The goals: fit in <b>12 TB</b>, and at most <b>2%</b> of timeline opens are slow.",
+        sim: {}, goals: { tb: 12, slow: 0.02 }, answer: { who: "week", keep: 800 },
+        why: "Every account with 800 ids is 19.2 TB, over the budget. Only people active today is 9.6 TB, but 6% of opens come from people who weren't, so 6.5% are slow. People active this week, with 800 ids each, is 11.5 TB, and 1.5% of opens are slow. Keeping 400 ids would save memory, but 3% of opens scroll past 400; keeping 3,200 is 46 TB for a handful of deep scrollers. Twitter kept about 800 ids per timeline, only for active users, and rebuilt the rest on demand.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -546,7 +653,7 @@
     [6, "s3", "S3", "Erasure coding"], [6, "elastic", "Elasticsearch", "Scatter-gather"], [6, "etcd", "etcd / ZooKeeper", "Leases and fencing"],
     [6, "lb", "A load balancer", "Draining"], [6, "tsdb", "A time-series DB", "Cardinality"], [6, "gateway", "An API gateway", "Quotas and fan-out"], [6, "vectordb", "A vector database", "HNSW"],
 [7, "slack", "Slack / Discord", "Fan-out to big channels", "Talk in real time"], [7, "zoom", "Zoom", "WebRTC and SFUs", "Talk in real time"],
-    [7, "twitter", "Twitter / X", "The celebrity problem", "Feeds and social"], [7, "instagram", "Instagram", "Photos and a feed", "Feeds and social"], [7, "tiktok", "TikTok", "A feed a model makes", "Feeds and social"],
+[7, "instagram", "Instagram", "Photos and a feed", "Feeds and social"], [7, "tiktok", "TikTok", "A feed a model makes", "Feeds and social"],
     [7, "reddit", "Reddit", "Votes and hot ranking", "Feeds and social"], [7, "linkedin", "LinkedIn", "Degrees of connection", "Feeds and social"],
 [7, "yelp", "Yelp", "Nearby search", "Location"], [7, "doordash", "DoorDash", "Dispatch at dinner rush", "Location"], [7, "maps", "Google Maps", "Tiles and routing", "Location"],
     [7, "youtube", "YouTube", "Upload, transcode, stream", "Media"], [7, "netflix", "Netflix", "A CDN inside ISPs", "Media"], [7, "spotify", "Spotify", "Offline caching", "Media"],
@@ -560,13 +667,14 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
   REDIS_UNIT.cover = REDIS_REF;
   WA_UNIT.cover = WA_REF;
   UBER_UNIT.cover = UB_REF;
+  TWITTER_UNIT.cover = TW_REF;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];

@@ -776,3 +776,218 @@
   };
   const good = (c, R) => !R.doubled && !R.stuck && !R.late && R.worst <= c.B.goals.worst;
 })();
+
+/* The Twitter / X labs (tunnel/feed.js):
+     fanout   the celebrity problem: where to draw the line between fan-out on write and merging on read
+     likes    a viral tweet's like count: one hot row, split over more rows, or batched in memory
+     tlcache  timelines in memory: who gets one cached, and how many tweet ids it keeps */
+(function () {
+  "use strict";
+  const UI = window.SD.UI, FD = window.FEED;
+  const stars = (n) => (n <= 2 ? 3 : n <= 4 ? 2 : 1);
+  const big = (n) => (n >= 1e6 ? +(n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M" : n >= 1e3 ? +(n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + "k" : String(Math.round(n)));
+  const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+  const lg = Math.log10;
+
+  // ----------------------------------------------------------------------------------------------- fanout --
+  const T_WORD = (T) => (T === Infinity ? "nobody: everyone fans out on write" : T === 0 ? "everyone: every timeline is merged on read" : `${big(T)} followers`);
+  const HX0 = 60, HX1 = 560, hx = (f) => HX0 + ((lg(Math.max(10, f)) - 1) / (lg(2e8) - 1)) * (HX1 - HX0);
+  // accounts in each half-decade of followers, out of 500 million
+  const BINS = (() => { const out = []; for (let e = 1; e < 8.3; e += 0.5) { const lo = Math.pow(10, e), hi = Math.pow(10, e + 0.5); out.push({ lo, hi, n: 500e6 * (Math.pow(Math.max(lo, FD.XMIN) / FD.XMIN, -FD.ALPHA) - Math.pow(hi / FD.XMIN, -FD.ALPHA)) }); } return out; })();
+  UI.fanout = {
+    init(c) { Object.assign(c.F, { T: Infinity, res: null, anim: 0, runs: 0 }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, upto = R ? Math.min(1, F.anim) : 0, kids = [], g = c.B.goals;
+      // who has how many followers, and the line
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "Accounts by followers"), s("text", { class: "ev-sub", x: 40, y: 114 }, "500 million accounts · tap the chart to move the line"));
+      const HB = 236, HH = 100, hy = (n) => (n < 1 ? 0 : (lg(n) / lg(5e8)) * HH);
+      kids.push(s("rect", { class: "tw-hit", x: HX0 - 20, y: HB - HH - 10, width: HX1 - HX0 + 40, height: HH + 40, onclick: (e) => setT(c, e) }));
+      for (const b of BINS) { const read = b.lo >= F.T; kids.push(s("rect", { class: "tw-hb" + (read ? " read" : ""), x: hx(b.lo) + 1, y: HB - hy(b.n), width: Math.max(1, hx(b.hi) - hx(b.lo) - 2), height: hy(b.n), "pointer-events": "none" })); }
+      kids.push(s("path", { class: "ub-axis", d: `M${HX0} ${HB}H${HX1}` }));
+      for (let e = 1; e <= 8; e++) kids.push(s("text", { class: "ev-tick", x: hx(Math.pow(10, e)), y: HB + 15, "text-anchor": "middle" }, big(Math.pow(10, e))));
+      for (const [f, name] of [[120e6, "120M"], [30e6, "30M"]]) kids.push(s("text", { class: "tw-star" + (f >= F.T ? " read" : ""), x: hx(f), y: HB - 6, "text-anchor": "middle" }, "★"), s("text", { class: "ev-tick", x: hx(f), y: HB - 22, "text-anchor": "middle" }, name));
+      if (F.T !== Infinity) {
+        const x = F.T === 0 ? HX0 - 6 : hx(F.T);
+        kids.push(s("path", { class: "tw-line", d: `M${x} ${HB - HH - 8}V${HB + 4}` }), s("text", { class: "tw-lt", x: x + 6, y: HB - HH }, "merged on read →"));
+        if (F.T > 10) kids.push(s("text", { class: "tw-lt w", x: x - 6, y: HB - HH, "text-anchor": "end" }, "← fanned out on write"));
+      } else kids.push(s("text", { class: "tw-lt w", x: HX1, y: HB - HH, "text-anchor": "end" }, "everyone fans out on write"));
+      // the fan-out queue over the minute
+      const QX0 = 60, QX1 = 560, QB = 470, QH = 128, qx = (t) => QX0 + (t / 60) * (QX1 - QX0), qy = (n) => QB - (Math.max(0, lg(Math.max(1, n)) - 3) / (lg(2e8) - 3)) * QH;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 290 }, "The fan-out queue"), s("text", { class: "ev-sub", x: 40, y: 308 }, R && upto >= 1 ? `the slowest 1% of tweets reached their followers after ${R.lagP99 < 10 ? R.lagP99.toFixed(1) : Math.round(R.lagP99)} s` : "timeline entries waiting to be written (log scale)"));
+      kids.push(s("path", { class: "ub-axis", d: `M${QX0} ${QB}H${QX1}` }));
+      for (const t of [0, 15, 30, 45, 60]) kids.push(s("text", { class: "ev-tick", x: qx(t), y: QB + 15, "text-anchor": "middle" }, `${t} s`));
+      for (const n of [1e4, 1e6, 1e8]) kids.push(s("path", { class: "ub-tick", d: `M${QX0} ${qy(n)}H${QX1}` }), s("text", { class: "ev-tick", x: QX0 - 6, y: qy(n) + 3, "text-anchor": "end" }, big(n)));
+      if (R) {
+        const last = Math.floor(upto * (R.backlog.length - 1));
+        let d = `M${qx(0)} ${QB}`;
+        for (let i = 0; i <= last; i++) d += `L${qx(i / 4).toFixed(1)} ${qy(R.backlog[i]).toFixed(1)}`;
+        d += `L${qx(last / 4)} ${QB}Z`;
+        kids.push(s("path", { class: "tw-q", d }));
+        for (const x of R.big) if (x.t <= upto * 60) kids.push(s("text", { class: "tw-star" + (x.read ? " read" : ""), x: qx(x.t), y: QB - QH + 2, "text-anchor": "middle" }, "★"));
+      }
+      // opening a timeline
+      const LX0 = 620, LX1 = 920, LB = 470, LH = 120, MAX = 1300, lx = (ms) => LX0 + (Math.min(ms, MAX) / MAX) * (LX1 - LX0);
+      kids.push(s("text", { class: "ev-h", x: LX0, y: 290 }, "Opening a timeline"), s("text", { class: "ev-sub", x: LX0, y: 308 }, R && upto >= 1 ? `99% open within ${Math.round(R.readP99)} ms` : "2,000 people open theirs, in ms"));
+      kids.push(s("path", { class: "ub-axis", d: `M${LX0} ${LB}H${LX1}` }));
+      for (const ms of [0, 250, 500, 750, 1000, 1250]) kids.push(s("text", { class: "ev-tick", x: lx(ms), y: LB + 15, "text-anchor": "middle" }, String(ms)));
+      if (R) {
+        const n = Math.floor(upto * R.lat.length), bins = new Array(52).fill(0);
+        for (let i = 0; i < n; i++) bins[Math.min(51, Math.floor((Math.min(R.lat[i], MAX - 1) / MAX) * 52))]++;
+        const top = Math.max(1, ...bins), bw = (LX1 - LX0) / 52;
+        bins.forEach((v, i) => { if (v) kids.push(s("rect", { class: "tw-lb" + ((i + 1) * (MAX / 52) > g.read ? " slow" : ""), x: LX0 + i * bw + 0.5, y: LB - (Math.sqrt(v / top)) * LH, width: bw - 1, height: Math.sqrt(v / top) * LH })); });
+        if (upto >= 1) kids.push(s("path", { class: "tw-p99", d: `M${lx(R.readP99)} ${LB - LH + 8}V${LB}` }), s("text", { class: "ev-tick", x: lx(R.readP99) + 4, y: LB - LH + 16 }, "99%"));
+      }
+      kids.push(s("path", { class: "ub-goal", d: `M${lx(g.read)} ${LB - LH - 10}V${LB}` }), s("text", { class: "ev-tick", x: lx(g.read) + 4, y: LB - LH - 2 }, `${g.read} ms`));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 4));
+      c.redraw();
+      if (F.anim >= 1) { if (good(c, R)) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.lagP99 > g.lag && `the slowest tweets took ${Math.round(R.lagP99)} s to reach their followers`, R.readP99 > g.read && `the slowest timelines took ${Math.round(R.readP99)} ms to open`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Accounts right of the line (pink) are merged on read; the rest are fanned out on write. ★ marks the two celebrities who post this minute."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c;
+      return [h("div", { class: "sd-insp" }, h("p", {}, "merge on read: accounts with ", h("button", { class: "sd-word", onclick: () => { F.T = cyc(FD.THRESHOLDS, F.T); F.res = null; c.redraw(); c.rebrief(); } }, T_WORD(F.T)), F.T !== Infinity && F.T !== 0 ? " or more" : "")),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: () => { F.runs++; F.res = FD.fanout({ T: F.T, seed: c.B.sim.seed }); F.anim = 0; c.redraw(); c.rebrief(); } }, "Play the minute"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} minute${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals;
+      return [[`99% of tweets arrive in ≤ ${g.lag} s`, R ? R.lagP99 <= g.lag : null, R ? `${R.lagP99 < 10 ? R.lagP99.toFixed(1) : Math.round(R.lagP99)} s` : "run it"],
+        [`99% of timelines open in ≤ ${g.read} ms`, R ? R.readP99 <= g.read : null, R ? `${Math.round(R.readP99)} ms` : "·"]];
+    },
+  };
+  const good = (c, R) => R.lagP99 <= c.B.goals.lag && R.readP99 <= c.B.goals.read;
+  function setT(c, e) {
+    const F = c.F, pt = c.pt(e), f = Math.pow(10, 1 + ((pt.x - HX0) / (HX1 - HX0)) * (lg(2e8) - 1));
+    // the nearest threshold on the list, by orders of magnitude
+    const L = FD.THRESHOLDS.filter((t) => t > 0 && t < Infinity);
+    F.T = pt.x > HX1 + 5 ? Infinity : pt.x < HX0 ? 0 : L.reduce((b, t) => (Math.abs(lg(t) - lg(f)) < Math.abs(lg(b) - lg(f)) ? t : b), L[0]);
+    F.res = null; c.redraw(); c.rebrief();
+  }
+
+  // ------------------------------------------------------------------------------------------------ likes --
+  const SH_WORD = (n) => (n === 1 ? "one row" : `${n} rows`), B_WORD = { 0: "every like as it comes", 1: "a batch every second", 5: "a batch every 5 seconds" };
+  const dur = (ms) => (ms >= 3600e3 ? `${(ms / 3600e3).toFixed(1)} hours` : ms >= 60e3 ? `${Math.round(ms / 60e3)} min` : ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms.toFixed(ms < 10 ? 1 : 0)} ms`);
+  UI.likes = {
+    init(c) { Object.assign(c.F, { shards: 1, batch: 0, res: null, anim: 0, runs: 0 }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, upto = R ? Math.min(1, F.anim) : 0, kids = [], now = performance.now() / 1000;
+      const X0 = 60, X1 = 580, B = 280, H = 140, x = (t) => X0 + (t / 600) * (X1 - X0), y = (r) => B - (Math.min(r, 70000) / 70000) * H;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "Likes a second"), s("text", { class: "ev-sub", x: 40, y: 114 }, "ten minutes after the tweet goes viral"));
+      kids.push(s("path", { class: "ub-axis", d: `M${X0} ${B}H${X1}` }));
+      for (const r of [20000, 40000, 60000]) kids.push(s("path", { class: "ub-tick", d: `M${X0} ${y(r)}H${X1}` }), s("text", { class: "ev-tick", x: X0 - 6, y: y(r) + 3, "text-anchor": "end" }, big(r)));
+      for (let m = 0; m <= 10; m += 2) kids.push(s("text", { class: "ev-tick", x: x(m * 60), y: B + 15, "text-anchor": "middle" }, `${m} min`));
+      const cap = F.batch ? null : 1000 * F.shards, pts = [];
+      for (let t = 0; t <= 600; t += 5) pts.push([t, FD.curve(t)]);
+      kids.push(s("path", { class: "tw-rate" + (R ? "" : " ghost"), d: `M${x(0)} ${B}` + pts.map(([t, r]) => `L${x(t).toFixed(1)} ${y(r).toFixed(1)}`).join("") + `L${x(600)} ${B}Z` }));
+      if (cap) {
+        kids.push(s("path", { class: "tw-cap", d: `M${X0} ${y(cap)}H${X1}` }), s("text", { class: "ev-tick", x: X1 + 4, y: y(cap) + 3 }, cap > 70000 ? "" : `${big(cap)}/s`));
+        if (cap < 40000) kids.push(s("path", { class: "tw-over", d: `M${x(0)} ${y(cap)}` + pts.map(([t, r]) => `L${x(t).toFixed(1)} ${y(Math.max(r, cap)).toFixed(1)}`).join("") + `L${x(600)} ${y(cap)}Z` }));
+      } else kids.push(s("path", { class: "tw-cap", d: `M${X0} ${y(200 / F.batch)}H${X1}` }), s("text", { class: "ev-tick", x: X1 + 4, y: y(200 / F.batch) - 4 }, `${200 / F.batch} writes/s`));
+      if (R) kids.push(s("path", { class: "tw-now", d: `M${x(upto * 600)} ${B - H - 6}V${B}` }));
+      // likes waiting for a row
+      const QB = 470, QH = 96, qmax = 1.2e7, qy = (q) => QB - (Math.min(q, qmax) / qmax) * QH;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 334 }, "Likes waiting"), s("text", { class: "ev-sub", x: 40, y: 352 }, R && upto >= 1 ? (R.backlog > 0 ? `up to ${big(R.backlog)} likes stuck in line` : "never more than a moment's wait") : "for a locked row"));
+      kids.push(s("path", { class: "ub-axis", d: `M${X0} ${QB}H${X1}` }));
+      if (R) { const n = Math.floor(upto * (R.series.length - 1)); kids.push(s("path", { class: "tw-wait", d: `M${x(0)} ${QB}` + R.series.slice(0, n + 1).map((p) => `L${x(p.t).toFixed(1)} ${qy(p.q).toFixed(1)}`).join("") + `L${x(n)} ${QB}Z` })); }
+      // the counter's rows (and the app servers' batches)
+      const RX = 640, RW = 270, cols = Math.ceil(Math.sqrt(F.shards)), cell = Math.min(80, RW / cols), live = R ? R.series[Math.floor(upto * (R.series.length - 1))] : null;
+      kids.push(s("text", { class: "ev-h", x: RX, y: 160 }, F.shards === 1 ? "The count: one row" : `The count: ${F.shards} rows`), s("text", { class: "ev-sub", x: RX, y: 178 }, F.batch ? `200 app servers write a batch every ${F.batch === 1 ? "second" : F.batch + " s"}` : "a like locks one row for 1 ms"));
+      const heat = live ? (live.util > 1 ? " h3" : live.util > 0.8 ? " h2" : " h0") : "";
+      for (let i = 0; i < F.shards; i++) {
+        const cx = RX + (i % cols) * cell, cy = 192 + Math.floor(i / cols) * cell, beat = live && !c.REDUCED && ((now * 3 + i * 0.37) % 1) < Math.min(0.9, live.util);
+        kids.push(s("rect", { class: "tw-row" + heat + (beat ? " beat" : ""), x: cx, y: cy, width: cell - 3, height: Math.min(cell - 3, 70), rx: 3 }));
+      }
+      if (F.shards === 1 && live) kids.push(s("text", { class: "tw-heart", x: RX + 38, y: 236, "text-anchor": "middle" }, live.util > 1 ? "♥♥♥" : "♥"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R) return;
+      const moving = F.anim < 1;
+      if (moving) { F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 4.5)); if (F.anim >= 1) { if (goodL(c, R)) c.solved(stars(F.runs)); else c.rebrief(); } }
+      if (moving || !c.REDUCED) c.redraw();
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.likeMs > g.like && `a like waited ${dur(R.likeMs)}`, R.readMs > g.read && `reading the count took ${R.readMs} ms`, R.lostOnCrash && `a crashed app server loses about ${R.lostOnCrash} likes`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "The dashed line is how many likes a second the rows can take. Above it (red), likes queue up for a locked row."), miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "keep the count in ", h("button", { class: "sd-word", onclick: () => set("shards", cyc(FD.SHARDS, F.shards)) }, SH_WORD(F.shards))),
+        h("p", {}, "write ", h("button", { class: "sd-word", onclick: () => set("batch", cyc(FD.BATCH, F.batch)) }, B_WORD[F.batch]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: () => { F.runs++; F.res = FD.likes({ shards: F.shards, batch: F.batch }); F.anim = 0; c.redraw(); c.rebrief(); } }, "Go viral"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} tr${F.runs > 1 ? "ies" : "y"}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals;
+      return [[`a like is saved in ≤ ${g.like} ms`, R ? R.likeMs <= g.like : null, R ? dur(R.likeMs) : "run it"], [`the count reads in ≤ ${g.read} ms`, R ? R.readMs <= g.read : null, R ? `${R.readMs} ms` : "·"],
+        ["a crash loses no likes", R ? !R.lostOnCrash : null, R ? String(R.lostOnCrash) : "·"]];
+    },
+  };
+  const goodL = (c, R) => R.likeMs <= c.B.goals.like && R.readMs <= c.B.goals.read && !R.lostOnCrash;
+
+  // ---------------------------------------------------------------------------------------------- tlcache --
+  const WHO_WORD = { day: "people active today", week: "people active this week", month: "people active this month", dormant: "every account" };
+  const GCLS = { day: "g0", week: "g1", month: "g2", dormant: "g3" };
+  UI.tlcache = {
+    init(c) { Object.assign(c.F, { who: "dormant", keep: 400, tries: 0, tried: false }); },
+    draw(c) {
+      const { s, F } = c, r = FD.cache({ who: F.who, keep: F.keep }), g = c.B.goals, kids = [], inn = FD.WHO.slice(0, FD.WHO.indexOf(F.who) + 1);
+      // 500 squares, a million accounts each
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "500 million accounts"), s("text", { class: "ev-sub", x: 40, y: 114 }, "one square is a million; filled ones get a cached timeline"));
+      let k = 0;
+      FD.GROUPS.forEach((G) => { for (let i = 0; i < G.users / 1e6; i++, k++) kids.push(s("rect", { class: `tw-acct ${GCLS[G.id]}${inn.includes(G.id) ? " in" : ""}`, x: 40 + (k % 25) * 14, y: 130 + Math.floor(k / 25) * 14, width: 11, height: 11, rx: 2 })); });
+      FD.GROUPS.forEach((G, i) => kids.push(s("rect", { class: `tw-acct ${GCLS[G.id]} in`, x: 40, y: 426 + i * 18, width: 10, height: 10, rx: 2 }), s("text", { class: "ev-tick", x: 56, y: 435 + i * 18 }, `${G.say}: ${big(G.users)} accounts, ${+(G.opens * 100).toFixed(1)}% of opens`)));
+      // the memory
+      const MX = 450, MB = 470, MH = 340, my = (tb) => MB - (Math.min(tb, 24) / 24) * MH;
+      kids.push(s("text", { class: "ev-h", x: MX - 20, y: 96 }, "Memory"), s("text", { class: "ev-sub", x: MX - 20, y: 114 }, `${r.tb.toFixed(1)} TB of 12`));
+      kids.push(s("rect", { class: "sh-mb", x: MX, y: my(24), width: 56, height: MH, rx: 6 }), s("rect", { class: "sh-m " + (r.tb > g.tb ? "h3" : "h0"), x: MX, y: my(r.tb), width: 56, height: MB - my(r.tb), rx: 6 }),
+        s("path", { class: "ub-goal", d: `M${MX - 8} ${my(g.tb)}h72` }), s("text", { class: "ev-tick", x: MX + 64, y: my(g.tb) + 3 }, "12 TB"));
+      if (r.tb > 24) kids.push(s("text", { class: "wa-mv over", x: MX + 28, y: my(24) - 8, "text-anchor": "middle" }, `${Math.round(r.tb)} TB ↑`));
+      // how deep people scroll
+      const SX = 640, SB = 470, SH = 270, sy = (n) => SB - (lg(n) / 4) * SH;
+      kids.push(s("text", { class: "ev-h", x: SX, y: 96 }, "How far people scroll"), s("text", { class: "ev-sub", x: SX, y: 114 }, `the cache keeps ${c.num(F.keep)} tweet ids`));
+      kids.push(s("rect", { class: "tw-kept", x: SX, y: sy(F.keep), width: 40, height: SB - sy(F.keep), rx: 4 }), s("rect", { class: "tw-deep", x: SX, y: sy(1e4), width: 40, height: sy(F.keep) - sy(1e4), rx: 4 }));
+      for (const n of FD.KEEP) kids.push(s("path", { class: "ub-tick", d: `M${SX} ${sy(n)}h52` }), s("text", { class: "ev-tick" + (n === F.keep ? " on" : ""), x: SX + 58, y: sy(n) + 3 }, `${c.num(n)} tweets · ${+(FD.DEEP[n] * 100).toFixed(2)}% scroll past`));
+      kids.push(s("text", { class: "ev-tick", x: SX + 58, y: SB }, "the newest tweet"));
+      kids.push(s("text", { class: "wa-mn", x: SX, y: 160 }, "slow opens"), s("text", { class: "wa-big" + (r.slow > g.slow ? " over" : ""), x: SX + 104, y: 172 }, `${(r.slow * 100).toFixed(1)}%`));
+      c.layer.replaceChildren(...kids);
+    },
+    brief(c) {
+      const { h, F } = c, r = FD.cache({ who: F.who, keep: F.keep }), g = c.B.goals;
+      const miss = F.tried ? [r.tb > g.tb && `${r.tb.toFixed(1)} TB doesn't fit in 12`, r.slow > g.slow && `${(r.slow * 100).toFixed(1)}% of opens are slow`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Change who gets a cached timeline and how many ids it keeps, then build the cache. Slow opens are people without a cached timeline, plus people who scroll past its end."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.tried = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "cache a timeline for ", h("button", { class: "sd-word", onclick: () => set("who", cyc(FD.WHO, F.who)) }, WHO_WORD[F.who])),
+        h("p", {}, "keep ", h("button", { class: "sd-word", onclick: () => set("keep", cyc(FD.KEEP, F.keep)) }, `${c.num(F.keep)} tweet ids`), " in each")),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: () => build(c) }, "Build the cache"), h("span", { class: "sd-runs" }, F.tries ? `${F.tries} build${F.tries > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const F = c.F, r = FD.cache({ who: F.who, keep: F.keep }), g = c.B.goals;
+      return [[`fits in ${g.tb} TB`, F.tried ? r.tb <= g.tb : null, `${r.tb.toFixed(1)} TB`], [`slow opens ≤ ${g.slow * 100}%`, F.tried ? r.slow <= g.slow : null, `${(r.slow * 100).toFixed(1)}%`]];
+    },
+  };
+  function build(c) {
+    const F = c.F, r = FD.cache({ who: F.who, keep: F.keep }), g = c.B.goals;
+    F.tries++; F.tried = true;
+    c.redraw();
+    if (r.tb <= g.tb && r.slow <= g.slow) c.solved(F.tries === 1 ? 3 : F.tries <= 3 ? 2 : 1);
+    else c.rebrief();
+  }
+})();
