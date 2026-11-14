@@ -262,3 +262,41 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .sh-fixes .sd-word.on{color:var(--pink)}
 .sh-fixes .sd-word:disabled{cursor:default;opacity:.7}
 @media (prefers-reduced-motion:reduce){.sh-arc.moved,.sd-mg.on .sd-lamp,.sd-stage.m-s .sd-modechip::before{animation:none}}
+
+/* ---- WhatsApp: its parts, and its labs ---- */
+:root{--sd-phone:#2a2620;--sd-gateway:#1287a0;--sd-sessions:#7b61e8;--sd-chat:#2f8f43;--sd-inbox:#c98a06;--sd-push:#d23f87;--sd-blob:#3e63d6;--sd-poller:#6b6458;--sd-index:#6b6458;--wa-a:#d23f87;--wa-b:#1287a0;--wa-c:#c98a06}
+[data-theme="dark"]{--sd-phone:#ece8dc;--sd-gateway:#41c2dc;--sd-sessions:#a594ff;--sd-chat:#5fcf74;--sd-inbox:#f5bd3a;--sd-push:#ff7fbf;--sd-blob:#7f9dff;--sd-poller:#a39d90;--sd-index:#a39d90;--wa-a:#ff7fbf;--wa-b:#41c2dc;--wa-c:#f5bd3a}
+.k-phone{--kc:var(--sd-phone)}.k-gateway{--kc:var(--sd-gateway)}.k-sessions{--kc:var(--sd-sessions)}.k-chat{--kc:var(--sd-chat)}.k-inbox{--kc:var(--sd-inbox)}.k-push{--kc:var(--sd-push)}.k-blob{--kc:var(--sd-blob)}.k-poller{--kc:var(--sd-poller)}.k-index{--kc:var(--sd-index)}
+.wa-chip{cursor:pointer;outline:none}
+.wa-cb{fill:color-mix(in srgb,var(--sd-ink) 4%,var(--sd-paper))}
+.wa-ci{fill:none;stroke:var(--sd-ink);stroke-width:1.8;opacity:.55}
+.wa-chip:hover .wa-ci,.wa-chip:focus-visible .wa-ci{opacity:1}
+.wa-chip.on .wa-cb{fill:color-mix(in srgb,var(--sd-sim) 18%,var(--sd-paper))}
+.wa-chip.on .wa-ci{stroke:var(--sd-sim);stroke-width:2.6;opacity:1}
+.wa-ct{font:italic 400 18px var(--f-serif);fill:var(--sd-ink)}
+.wa-cs{font:10px var(--f-mono);fill:var(--sd-faint)}
+.wa-ph{fill:var(--sd-ink);opacity:.55}
+.wa-beat{fill:none;stroke:var(--sd-sim);stroke-width:1.4}
+.wa-box.h0{fill:var(--ok)}.wa-box.h2{fill:var(--sd-warm)}.wa-box.h3{fill:var(--sd-hot)}
+.wa-mn{font:italic 400 18px var(--f-serif);fill:var(--sd-ink)}
+.wa-mv{font:600 14px var(--f-mono);fill:var(--sd-ink)}
+.wa-mv.over,.wa-big.over{fill:var(--sd-hot)}
+.wa-big{font:400 44px var(--f-serif);fill:var(--sd-ink)}
+.wa-on{fill:color-mix(in srgb,var(--ok) 70%,var(--sd-paper))}
+.wa-off{fill:color-mix(in srgb,var(--sd-ink) 22%,var(--sd-paper))}
+.wa-dead{fill:var(--sd-hot);opacity:.85}
+.wa-dot{fill:var(--sd-sim);opacity:.75}
+.wa-dot.twice{fill:var(--sd-warm);opacity:1;stroke:var(--sd-paper);stroke-width:1}
+.wa-dot.dedup{fill:var(--sd-sim);opacity:1}
+.wa-arc{fill:none;stroke:var(--sd-sessions);stroke-width:1.1;opacity:.55}
+.wa-lost{stroke:var(--sd-hot);stroke-width:2;stroke-linecap:round}
+.wa-phone{fill:var(--sd-paper);stroke:var(--sd-ink);stroke-width:2;opacity:.95}
+.wa-pn{font:600 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;fill:var(--sd-faint)}
+.wa-bub{stroke:none}
+.wa-bub.p0{fill:color-mix(in srgb,var(--wa-a) 22%,var(--sd-paper))}.wa-bub.p1{fill:color-mix(in srgb,var(--wa-b) 22%,var(--sd-paper))}.wa-bub.p2{fill:color-mix(in srgb,var(--wa-c) 26%,var(--sd-paper))}
+.wa-bub.early{stroke:var(--sd-hot);stroke-width:2;stroke-dasharray:4 3}
+.wa-who{font:600 8.5px var(--f-mono);fill:var(--sd-faint);text-transform:uppercase;letter-spacing:.05em}
+.wa-bt{font:12.5px var(--f-body);fill:var(--sd-ink)}
+.wa-flag{font:700 15px var(--f-mono);fill:var(--sd-hot)}
+.wa-offc{fill:var(--sd-warm)}
+.sd-stage.k-conns .sd-score{top:auto;bottom:12px}

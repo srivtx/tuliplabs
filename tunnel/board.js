@@ -13,6 +13,8 @@
   const UI = SDX.UI || {};
   const ICON = Object.fromEntries(Object.entries(PARTS).map(([k, v]) => [k, v.icon]));
   const nameOf = (kind) => (PARTS[kind] || K[kind]).name;
+  const labelOf = (nd) => nd.label || nameOf(nd.kind);
+  const theOf = (nd) => nd.label || "the " + nameOf(nd.kind);
   const $ = (q, r = document) => r.querySelector(q);
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);
@@ -66,8 +68,8 @@
 
   // --------------------------------------------------------------- sheet --
   const W = 960, H = 540, PW = 160, PH = 66;
-  const KIND_WORD = { scope: "Scope it", napkin: "Napkin math", sketch: "Sketch it", follow: "Follow it", bottleneck: "Find the bottleneck", draw: "Draw it", evict: "Eviction lab", persist: "Crash lab", shard: "Cluster lab" };
-  const KIND_GLYPH = { scope: "▤", napkin: "✎", sketch: "✐", follow: "⤳", bottleneck: "◔", draw: "▭", evict: "⇄", persist: "⏻", shard: "◫" };
+  const KIND_WORD = { scope: "Scope it", napkin: "Napkin math", sketch: "Sketch it", follow: "Follow it", bottleneck: "Find the bottleneck", draw: "Draw it", evict: "Eviction lab", persist: "Crash lab", shard: "Cluster lab", conns: "Capacity lab", offline: "Delivery lab", order: "Ordering lab" };
+  const KIND_GLYPH = { scope: "▤", napkin: "✎", sketch: "✐", follow: "⤳", bottleneck: "◔", draw: "▭", evict: "⇄", persist: "⏻", shard: "◫", conns: "⌁", offline: "✉", order: "⇅" };
   const MODE_WORD = { w: "Whiteboard", s: "Simulate" };
   const SIZES = { cache: Object.keys(K.cache.sizes), db: Object.keys(K.db.sizes) };
 
@@ -186,14 +188,14 @@
       const g = s("g", {
         class: `sd-part k-${nd.kind}${sel === nd.id ? " sel" : ""}${hot}${problems.some((p) => p.node === nd.id) ? " bad" : ""}${B.kind === "bottleneck" && F.guess === nd.id ? " guess" : ""}${follow >= 0 ? " on" : ""}`,
         transform: `translate(${nd.x - PW / 2} ${nd.y - PH / 2})`, "data-id": nd.id, tabindex: 0, role: "button",
-        "aria-label": `${nameOf(nd.kind)}${sub(nd) ? ", " + sub(nd) : ""}${u != null ? `, ${Math.round(u * 100)}% busy` : ""}`,
+        "aria-label": `${labelOf(nd)}${sub(nd) ? ", " + sub(nd) : ""}${u != null ? `, ${Math.round(u * 100)}% busy` : ""}`,
         onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(nd.id); } },
       });
       g.append(
         s("rect", { class: "sd-fill", width: PW, height: PH, rx: 13 }),
         s("rect", { class: "sd-ink", x: 1, y: 1, width: PW - 2, height: PH - 2, rx: 13, filter: "url(#sd-sk)" }),
         s("g", { class: "sd-ic", transform: "translate(13 20)", html: ICON[nd.kind] }),
-        s("text", { class: "sd-name", x: 48, y: 29 }, nameOf(nd.kind)),
+        s("text", { class: "sd-name", x: 48, y: 29 }, labelOf(nd)),
         s("text", { class: "sd-sub", x: 48, y: 47 }, sub(nd)));
       if (u != null && nd.kind !== "users") g.append(s("rect", { class: "sd-meter-bg", x: 12, y: PH - 9, width: PW - 24, height: 3, rx: 1.5 }), s("rect", { class: "sd-meter", x: 12, y: PH - 9, width: Math.max(2, (PW - 24) * Math.min(1, u)), height: 3, rx: 1.5 }));
       if (follow >= 0) g.append(s("circle", { class: "sd-badge", cx: PW - 6, cy: 6, r: 11 }), s("text", { class: "sd-badge-t", x: PW - 6, y: 10.5, "text-anchor": "middle" }, follow + 1));
@@ -301,11 +303,12 @@
     if (ctx && UI[B.kind].frame && !document.hidden) UI[B.kind].frame(ctx, dt, t);
     if (!REDUCED && !document.hidden && !ctx) {
       for (const [k, f] of Object.entries(flows)) {
-        const p = wirePaths.get(k);
+        let p = wirePaths.get(k), rev = false;
+        if (!p) { p = wirePaths.get(k.split(">").reverse().join(">")); rev = true; }
         if (!p || f <= 0) continue;
         const v = Math.min(14, 0.8 + 2.4 * Math.log10(1 + f));
         acc[k] = (acc[k] || Math.random()) + v * dt;
-        while (acc[k] >= 1) { acc[k] -= 1; dots.push({ k, p, t: 0, kind: part(k.split(">")[0])?.kind }); }
+        while (acc[k] >= 1) { acc[k] -= 1; dots.push({ k, p, rev, t: 0, kind: part(k.split(">")[0])?.kind }); }
       }
       for (let i = dots.length - 1; i >= 0; i--) { dots[i].t += dt / 0.9; if (dots[i].t >= 1 || !dots[i].p.isConnected) dots.splice(i, 1); }
       if (dots.length > 400) dots.splice(0, dots.length - 400);
@@ -315,7 +318,7 @@
         const d = dots[i];
         if (!d) { cs[i].setAttribute("r", 0); continue; }
         try {
-          const L = d.p.getTotalLength(), pt = d.p.getPointAtLength(L * d.t);
+          const L = d.p.getTotalLength(), pt = d.p.getPointAtLength(L * (d.rev ? 1 - d.t : d.t));
           cs[i].setAttribute("cx", pt.x.toFixed(1)); cs[i].setAttribute("cy", pt.y.toFixed(1));
           cs[i].setAttribute("r", d.kind === "worker" ? 5 : d.kind === "queue" ? 2.6 : 3.2);
           cs[i].setAttribute("class", d.kind === "queue" || d.kind === "worker" ? "job" : "");
@@ -468,8 +471,8 @@
     ];
     if (B.kind === "follow") {
       const r = B.rounds[Math.min(F.round, B.rounds.length - 1)];
-      if (F.round < B.rounds.length) kids.push(h("div", { class: "sd-ask" }, h("small", {}, `click ${F.round + 1} of ${B.rounds.length}`), h("p", { html: r.say }),
-        h("p", { class: "sd-path" }, F.got.length ? F.got.map((id, i) => [i ? h("i", {}, "→") : null, h("span", {}, nameOf(part(id).kind))]) : h("span", { class: "sd-quiet" }, "Tap the users first."))));
+      if (F.round < B.rounds.length) kids.push(h("div", { class: "sd-ask" }, h("small", {}, `${B.item || "click"} ${F.round + 1} of ${B.rounds.length}`), h("p", { html: r.say }),
+        h("p", { class: "sd-path" }, F.got.length ? F.got.flatMap((id, i) => [i ? h("i", {}, "→") : null, h("span", {}, labelOf(part(id)))]) : h("span", { class: "sd-quiet" }, `Tap ${theOf(part(r.path[0]))} first.`))));
     }
     const tools = [];
     if (B.kind === "napkin") tools.push(h("p", { class: "sd-quiet" }, "Type your guesses into the notes on the board."), h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: checkNapkin }, "Check the notes")));
@@ -535,8 +538,8 @@
       F.tries++;
       const g = els.gp.querySelector(`[data-id="${id}"]`);
       if (g) { g.classList.remove("nope"); void g.getBoundingClientRect(); g.classList.add("nope"); }
-      const nd = part(id), at = F.got.length ? nameOf(part(F.got[F.got.length - 1]).kind) : null;
-      flash(F.got.length === 0 ? "Every click starts with the users." : nd.kind === "db" && r.hit ? "Not this time: the cache already has it." : `Not yet. Where does the ${at} hand the click next?`);
+      const nd = part(id), at = F.got.length ? theOf(part(F.got[F.got.length - 1])) : null, item = B.item || "click";
+      flash(F.got.length === 0 ? `This ${item} starts at ${theOf(part(r.path[0]))}.` : nd.kind === "db" && r.hit ? "Not this time: the cache already has it." : `Not yet. Where does ${at} hand the ${item} next?`);
     }
   }
   function flash(t) { const p = h("p", { class: "sd-flash", role: "status" }, t); els.brief.append(p); setTimeout(() => p.remove(), 2400); }
