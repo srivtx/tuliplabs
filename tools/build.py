@@ -447,6 +447,10 @@ def build(only=None):
     again = [t for t in mock.TRACKS if t in built]
     if again:
         mock.build(tracks=again)
+    # the DSA interview problems (tools/interview.py; prove them with python3 tools/interview.py --verify)
+    if "ds" in built:
+        import interview
+        interview.build()
     return built
 
 
