@@ -1125,3 +1125,110 @@ def count_cheapest(grid):
             ways[r][c] = sum(w for b, w in froms if b == low)
     return ways[-1][-1]
 ```
+
+```interview
+id: combos
+title: Every way to pay
+fn: combos
+ch: 27
+decoys: 29, 3, 16, 7
+bigo: O(2ⁿ) at worst, cut short by pruning
+bigos: O(n log n); O(n²); O(n × target); O(2ⁿ) at worst, cut short by pruning
+---prompt
+A vending machine takes exact change. You have a pocket of coins `nums` (each coin used at most once) and need to pay exactly `target`.
+
+Write `combos(nums, target)`: return **every different set of coins** that adds up to `target`. Each set is a sorted list, and the whole answer is sorted too. Two coins of the same value are interchangeable, so the same set must not appear twice.
+
+`combos([2, 5, 2, 1, 2], 5)` is `[[1, 2, 2], [5]]`.
+---examples
+assert combos([2, 5, 2, 1, 2], 5) == [[1, 2, 2], [5]]
+assert combos([3, 4], 2) == []
+---clarify
++ dups | Can there be several coins of the same value? | Yes. [2, 2] made from different 2-coins is still just one way.
++ zero | What if the target is 0? | Paying nothing is one way: return [[]].
++ none | What if it can't be done? | Return an empty list.
+- | Are coin values positive? | Yes, every coin is worth at least 1.
+- | Does the order of coins in a set matter? | No: sort each set.
+- | How many coins can I have? | Up to about 40.
+---test dups
+assert combos([1, 1, 1], 2) == [[1, 1]]
+assert combos([2, 2, 2, 4], 4) == [[2, 2], [4]]
+---test zero
+assert combos([3, 1], 0) == [[]]
+---test none
+assert combos([5, 6], 4) == []
+assert combos([], 3) == []
+---test big
+nums = list(range(40, 0, -1))
+r, secs = timed(combos, nums, 25)
+assert len(r) == 142 and r == sorted(r)
+assert all(sum(c) == 25 and c == sorted(c) and len(set(c)) == len(c) for c in r)
+assert secs < 1.5, f"{secs:.2f} s for 40 coins: trying every subset (2⁴⁰ of them) never finishes"
+---starter
+def combos(nums, target):
+    pass
+---solution
+def combos(nums, target):
+    nums = sorted(nums)
+    out = []
+
+    def go(start, left, picked):
+        if left == 0:
+            out.append(picked[:])
+            return
+        for i in range(start, len(nums)):
+            if i > start and nums[i] == nums[i - 1]:
+                continue          # the same value at this spot was already tried
+            if nums[i] > left:
+                break             # sorted, so everything after is too big as well
+            picked.append(nums[i])
+            go(i + 1, left - nums[i], picked)
+            picked.pop()
+
+    go(0, target, [])
+    return out
+---brute
+from itertools import combinations
+
+def combos(nums, target):
+    found = set()
+    for k in range(len(nums) + 1):
+        for c in combinations(sorted(nums), k):
+            if sum(c) == target:
+                found.add(c)
+    return sorted(list(c) for c in found)
+---approach
+Sort the coins, then backtrack: choose the next coin from left to right, recurse with what's left to pay, and undo. Stop a branch as soon as a coin is bigger than what's left, and skip a coin equal to the one just tried at the same depth, so no set appears twice.
+---hint
+Listing every subset is 2ⁿ, which is hopeless at 40 coins. How can you stop exploring a branch early?
+---hint
+Sort first. Then once a coin is bigger than what's left to pay, every coin after it is too: `break`.
+---hint
+In the loop at one depth, `if i > start and nums[i] == nums[i - 1]: continue` skips duplicate values, so `[2, 2]` is built only once.
+---twist
+The machine now gives you an endless supply of each coin **value** in `nums`. Write `combos_reuse(nums, target)`: every different multiset of those values that adds up to `target`, each sorted, the whole list sorted.
+---twisttests
+assert combos_reuse([2, 3], 6) == [[2, 2, 2], [3, 3]]
+assert combos_reuse([2, 3, 5], 8) == [[2, 2, 2, 2], [2, 3, 3], [3, 5]]
+assert combos_reuse([2, 2], 4) == [[2, 2]]
+assert combos_reuse([4], 2) == []
+assert combos_reuse([1], 0) == [[]]
+---twistsolution
+def combos_reuse(nums, target):
+    vals = sorted(set(nums))
+    out = []
+
+    def go(start, left, picked):
+        if left == 0:
+            out.append(picked[:])
+            return
+        for i in range(start, len(vals)):
+            if vals[i] > left:
+                break
+            picked.append(vals[i])
+            go(i, left - vals[i], picked)
+            picked.pop()
+
+    go(0, target, [])
+    return out
+```

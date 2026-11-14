@@ -926,6 +926,89 @@
 "twist": "<p>The dispatcher wants to know how many routes tie for cheapest. Write <code>count_cheapest(grid)</code>: the number of right/down routes whose total toll equals the minimum.</p>",
 "twisttests": "assert count_cheapest([[1, 3, 1], [1, 5, 1], [4, 2, 1]]) == 1\nassert count_cheapest([[0, 0], [0, 0]]) == 2\nassert count_cheapest([[1, 1, 1], [1, 1, 1]]) == 3\nassert count_cheapest([[7]]) == 1",
 "twistsolution": "def count_cheapest(grid):\n    rows, cols = len(grid), len(grid[0])\n    best = [[0] * cols for _ in range(rows)]\n    ways = [[0] * cols for _ in range(rows)]\n    for r in range(rows):\n        for c in range(cols):\n            if r == 0 and c == 0:\n                best[r][c], ways[r][c] = grid[0][0], 1\n                continue\n            froms = []\n            if r:\n                froms.append((best[r - 1][c], ways[r - 1][c]))\n            if c:\n                froms.append((best[r][c - 1], ways[r][c - 1]))\n            low = min(b for b, _ in froms)\n            best[r][c] = low + grid[r][c]\n            ways[r][c] = sum(w for b, w in froms if b == low)\n    return ways[-1][-1]"
+},
+{
+"id": "combos",
+"title": "Every way to pay",
+"fn": "combos",
+"ch": 27,
+"decoys": [
+29,
+3,
+16,
+7
+],
+"bigo": "O(2ⁿ) at worst, cut short by pruning",
+"hints": [
+"<p>Listing every subset is 2ⁿ, which is hopeless at 40 coins. How can you stop exploring a branch early?</p>",
+"<p>Sort first. Then once a coin is bigger than what's left to pay, every coin after it is too: <code>break</code>.</p>",
+"<p>In the loop at one depth, <code>if i &gt; start and nums[i] == nums[i - 1]: continue</code> skips duplicate values, so <code>[2, 2]</code> is built only once.</p>"
+],
+"tests": [
+{
+"tag": "dups",
+"code": "assert combos([1, 1, 1], 2) == [[1, 1]]\nassert combos([2, 2, 2, 4], 4) == [[2, 2], [4]]"
+},
+{
+"tag": "zero",
+"code": "assert combos([3, 1], 0) == [[]]"
+},
+{
+"tag": "none",
+"code": "assert combos([5, 6], 4) == []\nassert combos([], 3) == []"
+},
+{
+"tag": "big",
+"code": "nums = list(range(40, 0, -1))\nr, secs = timed(combos, nums, 25)\nassert len(r) == 142 and r == sorted(r)\nassert all(sum(c) == 25 and c == sorted(c) and len(set(c)) == len(c) for c in r)\nassert secs < 1.5, f\"{secs:.2f} s for 40 coins: trying every subset (2⁴⁰ of them) never finishes\""
+}
+],
+"clarify": [
+{
+"q": "Can there be several coins of the same value?",
+"a": "Yes. [2, 2] made from different 2-coins is still just one way.",
+"tag": "dups"
+},
+{
+"q": "What if the target is 0?",
+"a": "Paying nothing is one way: return [[]].",
+"tag": "zero"
+},
+{
+"q": "What if it can't be done?",
+"a": "Return an empty list.",
+"tag": "none"
+},
+{
+"q": "Are coin values positive?",
+"a": "Yes, every coin is worth at least 1.",
+"tag": null
+},
+{
+"q": "Does the order of coins in a set matter?",
+"a": "No: sort each set.",
+"tag": null
+},
+{
+"q": "How many coins can I have?",
+"a": "Up to about 40.",
+"tag": null
+}
+],
+"bigos": [
+"O(n log n)",
+"O(n²)",
+"O(n × target)",
+"O(2ⁿ) at worst, cut short by pruning"
+],
+"prompt": "<p>A vending machine takes exact change. You have a pocket of coins <code>nums</code> (each coin used at most once) and need to pay exactly <code>target</code>.</p>\n<p>Write <code>combos(nums, target)</code>: return <b>every different set of coins</b> that adds up to <code>target</code>. Each set is a sorted list, and the whole answer is sorted too. Two coins of the same value are interchangeable, so the same set must not appear twice.</p>\n<p><code>combos([2, 5, 2, 1, 2], 5)</code> is <code>[[1, 2, 2], [5]]</code>.</p>",
+"examples": "assert combos([2, 5, 2, 1, 2], 5) == [[1, 2, 2], [5]]\nassert combos([3, 4], 2) == []",
+"starter": "def combos(nums, target):\n    pass",
+"solution": "def combos(nums, target):\n    nums = sorted(nums)\n    out = []\n\n    def go(start, left, picked):\n        if left == 0:\n            out.append(picked[:])\n            return\n        for i in range(start, len(nums)):\n            if i > start and nums[i] == nums[i - 1]:\n                continue          # the same value at this spot was already tried\n            if nums[i] > left:\n                break             # sorted, so everything after is too big as well\n            picked.append(nums[i])\n            go(i + 1, left - nums[i], picked)\n            picked.pop()\n\n    go(0, target, [])\n    return out",
+"brute": "from itertools import combinations\n\ndef combos(nums, target):\n    found = set()\n    for k in range(len(nums) + 1):\n        for c in combinations(sorted(nums), k):\n            if sum(c) == target:\n                found.add(c)\n    return sorted(list(c) for c in found)",
+"approach": "<p>Sort the coins, then backtrack: choose the next coin from left to right, recurse with what's left to pay, and undo. Stop a branch as soon as a coin is bigger than what's left, and skip a coin equal to the one just tried at the same depth, so no set appears twice.</p>",
+"twist": "<p>The machine now gives you an endless supply of each coin <b>value</b> in <code>nums</code>. Write <code>combos_reuse(nums, target)</code>: every different multiset of those values that adds up to <code>target</code>, each sorted, the whole list sorted.</p>",
+"twisttests": "assert combos_reuse([2, 3], 6) == [[2, 2, 2], [3, 3]]\nassert combos_reuse([2, 3, 5], 8) == [[2, 2, 2, 2], [2, 3, 3], [3, 5]]\nassert combos_reuse([2, 2], 4) == [[2, 2]]\nassert combos_reuse([4], 2) == []\nassert combos_reuse([1], 0) == [[]]",
+"twistsolution": "def combos_reuse(nums, target):\n    vals = sorted(set(nums))\n    out = []\n\n    def go(start, left, picked):\n        if left == 0:\n            out.append(picked[:])\n            return\n        for i in range(start, len(vals)):\n            if vals[i] > left:\n                break\n            picked.append(vals[i])\n            go(i, left - vals[i], picked)\n            picked.pop()\n\n    go(0, target, [])\n    return out"
 }
 ]
 }
