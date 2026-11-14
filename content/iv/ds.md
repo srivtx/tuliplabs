@@ -479,3 +479,107 @@ def wait_circular(prices):
             waiting.append(i)
     return out
 ```
+
+```interview
+id: median
+title: The running middle
+fn: running_median
+ch: 15
+decoys: 6, 9, 14, 11
+bigo: O(n log n)
+---prompt
+A sensor sends readings one at a time. After **each** reading, a dashboard shows the middle value of everything seen so far.
+
+Write `running_median(a)`: return a list whose entry `i` is the median of `a[0..i]`. When there's an even number of readings, use the **lower** of the two middle values, so every answer is a reading.
+
+`running_median([5, 2, 8, 1])` is `[5, 2, 5, 2]`: after `5, 2` the middle two are 2 and 5, and the lower is 2.
+---examples
+assert running_median([5, 2, 8, 1]) == [5, 2, 5, 2]
+assert running_median([1, 2, 3]) == [1, 1, 2]
+---clarify
++ even | With an even count, which middle do I show? | The lower of the two middle values.
++ dups | Can readings repeat? | Yes, the same reading can arrive many times.
++ neg | Can readings be negative? | Yes, it's a thermometer in a freezer sometimes.
++ empty | Can there be no readings at all? | Yes. Return an empty list.
+- | Do readings arrive sorted? | No, in any order.
+- | Can I store all the readings? | Yes, memory is fine.
+---test even
+assert running_median([4, 9]) == [4, 4]
+assert running_median([9, 4, 7, 3]) == [9, 4, 7, 4]
+---test dups
+assert running_median([3, 3, 3, 1]) == [3, 3, 3, 3]
+---test neg
+assert running_median([-1, -5, 0]) == [-1, -5, -1]
+---test empty
+assert running_median([]) == []
+---test big
+import random, heapq
+random.seed(9)
+big = [random.randint(-10**6, 10**6) for _ in range(100000)]
+r, secs = timed(running_median, big)
+lo, hi, want = [], [], []
+for v in big:
+    if lo and v > -lo[0]:
+        heapq.heappush(hi, v)
+    else:
+        heapq.heappush(lo, -v)
+    if len(lo) > len(hi) + 1:
+        heapq.heappush(hi, -heapq.heappop(lo))
+    elif len(hi) > len(lo):
+        heapq.heappush(lo, -heapq.heappop(hi))
+    want.append(-lo[0])
+assert r == want
+assert secs < 1.5, f"{secs:.2f} s for 100,000 readings: sorting after every reading is too slow"
+---starter
+def running_median(a):
+    pass
+---solution
+import heapq
+
+def running_median(a):
+    low, high, out = [], [], []   # low is a max-heap (negated), high a min-heap
+    for v in a:
+        if low and v > -low[0]:
+            heapq.heappush(high, v)
+        else:
+            heapq.heappush(low, -v)
+        if len(low) > len(high) + 1:
+            heapq.heappush(high, -heapq.heappop(low))
+        elif len(high) > len(low):
+            heapq.heappush(low, -heapq.heappop(high))
+        out.append(-low[0])
+    return out
+---brute
+def running_median(a):
+    out = []
+    for i in range(len(a)):
+        s = sorted(a[:i + 1])
+        out.append(s[i // 2])
+    return out
+---approach
+Keep two heaps: a max-heap of the lower half and a min-heap of the upper half, with the lower half one bigger when the count is odd. The median is the top of the lower half. Each reading is a push and maybe one move: O(log n), so O(n log n) in all.
+---hint
+You only ever need the middle. Do you need the whole list in order to know it?
+---hint
+Split the readings into a lower half and an upper half. You need the biggest of the lower half fast, and the smallest of the upper half fast. Which structure gives you the top in O(1)?
+---hint
+Python's `heapq` is a min-heap; store negatives for the lower half. Push each reading to the right side, then move one top across if the sizes differ by more than one.
+---twist
+The dashboard changes: show the **k-th smallest** reading so far, or `None` until there are `k` readings. Write `running_kth(a, k)`.
+---twisttests
+assert running_kth([5, 2, 8, 1], 2) == [None, 5, 5, 2]
+assert running_kth([3, 1, 2], 1) == [3, 1, 1]
+assert running_kth([4, 4], 3) == [None, None]
+assert running_kth([], 1) == []
+---twistsolution
+import heapq
+
+def running_kth(a, k):
+    keep, out = [], []   # the k smallest so far, as a max-heap (negated)
+    for v in a:
+        heapq.heappush(keep, -v)
+        if len(keep) > k:
+            heapq.heappop(keep)
+        out.append(-keep[0] if len(keep) == k else None)
+    return out
+```

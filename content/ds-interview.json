@@ -421,6 +421,94 @@
 "twist": "<p>The market is now a <b>loop</b>: after the last day comes the first day again. Write <code>wait_circular(prices)</code>: days until a strictly higher price, looking past the end and round to the start, or 0 if no price in the whole loop is higher.</p>",
 "twisttests": "assert wait_circular([3, 1, 4, 2, 5]) == [2, 1, 2, 1, 0]\nassert wait_circular([5, 1, 2]) == [0, 1, 1]\nassert wait_circular([2, 2]) == [0, 0]\nassert wait_circular([]) == []",
 "twistsolution": "def wait_circular(prices):\n    n = len(prices)\n    out = [0] * n\n    waiting = []\n    for k in range(2 * n):\n        i = k % n\n        while waiting and prices[waiting[-1]] < prices[i]:\n            j = waiting.pop()\n            out[j] = (i - j) % n\n        if k < n:\n            waiting.append(i)\n    return out"
+},
+{
+"id": "median",
+"title": "The running middle",
+"fn": "running_median",
+"ch": 15,
+"decoys": [
+6,
+9,
+14,
+11
+],
+"bigo": "O(n log n)",
+"hints": [
+"<p>You only ever need the middle. Do you need the whole list in order to know it?</p>",
+"<p>Split the readings into a lower half and an upper half. You need the biggest of the lower half fast, and the smallest of the upper half fast. Which structure gives you the top in O(1)?</p>",
+"<p>Python's <code>heapq</code> is a min-heap; store negatives for the lower half. Push each reading to the right side, then move one top across if the sizes differ by more than one.</p>"
+],
+"tests": [
+{
+"tag": "even",
+"code": "assert running_median([4, 9]) == [4, 4]\nassert running_median([9, 4, 7, 3]) == [9, 4, 7, 4]"
+},
+{
+"tag": "dups",
+"code": "assert running_median([3, 3, 3, 1]) == [3, 3, 3, 3]"
+},
+{
+"tag": "neg",
+"code": "assert running_median([-1, -5, 0]) == [-1, -5, -1]"
+},
+{
+"tag": "empty",
+"code": "assert running_median([]) == []"
+},
+{
+"tag": "big",
+"code": "import random, heapq\nrandom.seed(9)\nbig = [random.randint(-10**6, 10**6) for _ in range(100000)]\nr, secs = timed(running_median, big)\nlo, hi, want = [], [], []\nfor v in big:\n    if lo and v > -lo[0]:\n        heapq.heappush(hi, v)\n    else:\n        heapq.heappush(lo, -v)\n    if len(lo) > len(hi) + 1:\n        heapq.heappush(hi, -heapq.heappop(lo))\n    elif len(hi) > len(lo):\n        heapq.heappush(lo, -heapq.heappop(hi))\n    want.append(-lo[0])\nassert r == want\nassert secs < 1.5, f\"{secs:.2f} s for 100,000 readings: sorting after every reading is too slow\""
+}
+],
+"clarify": [
+{
+"q": "With an even count, which middle do I show?",
+"a": "The lower of the two middle values.",
+"tag": "even"
+},
+{
+"q": "Can readings repeat?",
+"a": "Yes, the same reading can arrive many times.",
+"tag": "dups"
+},
+{
+"q": "Can readings be negative?",
+"a": "Yes, it's a thermometer in a freezer sometimes.",
+"tag": "neg"
+},
+{
+"q": "Can there be no readings at all?",
+"a": "Yes. Return an empty list.",
+"tag": "empty"
+},
+{
+"q": "Do readings arrive sorted?",
+"a": "No, in any order.",
+"tag": null
+},
+{
+"q": "Can I store all the readings?",
+"a": "Yes, memory is fine.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A sensor sends readings one at a time. After <b>each</b> reading, a dashboard shows the middle value of everything seen so far.</p>\n<p>Write <code>running_median(a)</code>: return a list whose entry <code>i</code> is the median of <code>a[0..i]</code>. When there's an even number of readings, use the <b>lower</b> of the two middle values, so every answer is a reading.</p>\n<p><code>running_median([5, 2, 8, 1])</code> is <code>[5, 2, 5, 2]</code>: after <code>5, 2</code> the middle two are 2 and 5, and the lower is 2.</p>",
+"examples": "assert running_median([5, 2, 8, 1]) == [5, 2, 5, 2]\nassert running_median([1, 2, 3]) == [1, 1, 2]",
+"starter": "def running_median(a):\n    pass",
+"solution": "import heapq\n\ndef running_median(a):\n    low, high, out = [], [], []   # low is a max-heap (negated), high a min-heap\n    for v in a:\n        if low and v > -low[0]:\n            heapq.heappush(high, v)\n        else:\n            heapq.heappush(low, -v)\n        if len(low) > len(high) + 1:\n            heapq.heappush(high, -heapq.heappop(low))\n        elif len(high) > len(low):\n            heapq.heappush(low, -heapq.heappop(high))\n        out.append(-low[0])\n    return out",
+"brute": "def running_median(a):\n    out = []\n    for i in range(len(a)):\n        s = sorted(a[:i + 1])\n        out.append(s[i // 2])\n    return out",
+"approach": "<p>Keep two heaps: a max-heap of the lower half and a min-heap of the upper half, with the lower half one bigger when the count is odd. The median is the top of the lower half. Each reading is a push and maybe one move: O(log n), so O(n log n) in all.</p>",
+"twist": "<p>The dashboard changes: show the <b>k-th smallest</b> reading so far, or <code>None</code> until there are <code>k</code> readings. Write <code>running_kth(a, k)</code>.</p>",
+"twisttests": "assert running_kth([5, 2, 8, 1], 2) == [None, 5, 5, 2]\nassert running_kth([3, 1, 2], 1) == [3, 1, 1]\nassert running_kth([4, 4], 3) == [None, None]\nassert running_kth([], 1) == []",
+"twistsolution": "import heapq\n\ndef running_kth(a, k):\n    keep, out = [], []   # the k smallest so far, as a max-heap (negated)\n    for v in a:\n        heapq.heappush(keep, -v)\n        if len(keep) > k:\n            heapq.heappop(keep)\n        out.append(-keep[0] if len(keep) == k else None)\n    return out"
 }
 ]
 }
