@@ -126,7 +126,7 @@
         const end = b.directed ? [z[0] - (tx / tl) * (R + 3), z[1] - (ty / tl) * (R + 3)] : z;
         return { u, v, w, a, c, end, bent: !!bend, mid: [(a[0] + 2 * c[0] + z[0]) / 4, (a[1] + 2 * c[1] + z[1]) / 4] };
       });
-      lay = { H: 52 * 2 + 196, pos, size: 54, edges, cost: best };
+      lay = { H: b.mode === "label" ? 340 : 300, pos, size: 54, edges, cost: best };
     }
     if (LAYOUTS) LAYOUTS.set(b, lay);
     return lay;
@@ -235,14 +235,14 @@
         stage.append(ix);
       }
       const mk = el("span", "hb-mk");
-      mk.style.left = px(x); mk.style.top = py(y - (b.type === "array" ? lay.cw * 0.43 + 14 : R + 14));
+      mk.style.left = px(x); mk.style.top = py(b.type === "array" ? y + lay.cw * 0.43 + 30 : y - R - 14);
       marks[id] = mk;
       stage.append(mk);
       if (b.mode === "label") {
         const inp = el("input", "hb-in");
-        inp.type = "text"; inp.autocomplete = "off"; inp.spellcheck = false;
+        inp.type = "text"; inp.autocomplete = "off"; inp.spellcheck = false; inp.placeholder = "?";
         inp.setAttribute("aria-label", `Your value for ${b.type === "array" ? "cell " + id : textOf(b, id)}`);
-        inp.style.left = px(b.type === "array" ? x : x + R + 26);
+        inp.style.left = px(x);
         inp.style.top = py(b.type === "array" ? y + lay.cw * 0.43 + 34 : y);
         if (b.type === "array") inp.style.width = px(Math.max(30, lay.cw * 0.86));
         if (replay) { inp.readOnly = true; inp.tabIndex = -1; }
