@@ -156,11 +156,11 @@
     const go = h("button", { class: "key primary", disabled: words() < 6 }, "Start coding →");
     ta.oninput = () => { r.approach = ta.value; save(); go.disabled = words() < 6; };
     go.onclick = () => advance(r, "code");
-    body.append(problemCard(p, false),
+    body.append(h("div", {}, problemCard(p, false),
       say("<p>Before any code: <b>which technique</b> do you want to use?</p>"), pats, patSay,
       costs ? h("p", { class: "iv-ask" }, "And its running time:") : null, costs, costSay,
       costOk ? h("div", {}, ta, h("p", { class: "mk-muted iv-small" }, "Say it the way you'd say it out loud. At least a sentence.")) : null,
-      costOk ? h("div", { class: "btns" }, go) : null);
+      costOk ? h("div", { class: "btns" }, go) : null));
   }
 
   // -------------------------------------------------------------- code --
