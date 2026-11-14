@@ -85,6 +85,90 @@
 "twist": "<p>Good. Now the customer wants a <b>difference</b>, not a sum: count pairs <code>i &lt; j</code> where <code>a[j] - a[i] == t</code> (the later card is worth exactly <code>t</code> more). Write <code>count_rises(a, t)</code>. For <code>[1, 4, 2, 5]</code> and <code>t = 3</code> that's <code>2</code>: 1 → 4 and 2 → 5.</p>",
 "twisttests": "assert count_rises([1, 4, 2, 5], 3) == 2\nassert count_rises([5, 2], 3) == 0\nassert count_rises([1, 1, 1], 0) == 3\nassert count_rises([], 1) == 0",
 "twistsolution": "def count_rises(a, t):\n    seen = {}\n    rises = 0\n    for v in a:\n        rises += seen.get(v - t, 0)\n        seen[v] = seen.get(v, 0) + 1\n    return rises"
+},
+{
+"id": "closest",
+"title": "The closest pair",
+"fn": "closest_sum",
+"ch": 7,
+"decoys": [
+3,
+9,
+15,
+28
+],
+"bigo": "O(n)",
+"hints": [
+"<p>The list is sorted. What does that tell you about <code>a[0] + a[-1]</code> compared with <code>a[1] + a[-1]</code>?</p>",
+"<p>Start with <code>i = 0</code> and <code>j = len(a) - 1</code>. If <code>a[i] + a[j]</code> is below <code>t</code>, no pair using <code>a[i]</code> with anything left of <code>j</code> can be closer, so move <code>i</code>.</p>",
+"<p>Loop while <code>i &lt; j</code>: record <code>abs(s - t)</code>, then <code>i += 1</code> if <code>s &lt; t</code>, <code>j -= 1</code> if <code>s &gt; t</code>, and return 0 if it's exact.</p>"
+],
+"tests": [
+{
+"tag": "tiny",
+"code": "assert closest_sum([], 4) is None\nassert closest_sum([3], 4) is None"
+},
+{
+"tag": "dups",
+"code": "assert closest_sum([5, 5], 10) == 0\nassert closest_sum([1, 4, 4, 9], 8) == 0"
+},
+{
+"tag": "neg",
+"code": "assert closest_sum([-8, -3, 1, 6], -10) == 1\nassert closest_sum([-5, -1], 0) == 6"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(3)\nbig = sorted(random.sample(range(-10**9, 10**9), 200000))\nr, secs = timed(closest_sum, big, 123456789)\nimport bisect\nbest = None\nfor i, v in enumerate(big):\n    k = bisect.bisect_left(big, 123456789 - v, i + 1)\n    for j in (k - 1, k):\n        if i < j < len(big):\n            d = abs(v + big[j] - 123456789)\n            best = d if best is None else min(best, d)\nassert r == best\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 weights: trying every pair is too slow\""
+}
+],
+"clarify": [
+{
+"q": "What if there are fewer than two weights?",
+"a": "Then there's no pair. Return None.",
+"tag": "tiny"
+},
+{
+"q": "Can two weights be equal?",
+"a": "Yes, and two equal weights are still two different weights.",
+"tag": "dups"
+},
+{
+"q": "Can weights or the target be negative?",
+"a": "Yes, they're offsets from a reference weight. Any whole numbers.",
+"tag": "neg"
+},
+{
+"q": "Is the list really sorted?",
+"a": "Yes, smallest first.",
+"tag": null
+},
+{
+"q": "Do I need to return which pair it was?",
+"a": "No, just the distance.",
+"tag": null
+},
+{
+"q": "Is there a time limit?",
+"a": "Aim for the best you can. We'll talk about cost before you code.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A lab has weights sorted from lightest to heaviest. You need two <b>different</b> weights whose total is as close as possible to a target <code>t</code>.</p>\n<p>Write <code>closest_sum(a, t)</code>: <code>a</code> is sorted in ascending order. Return the smallest possible <code>abs(a[i] + a[j] - t)</code> over pairs <code>i &lt; j</code>.</p>\n<p><code>closest_sum([1, 3, 4, 7, 10], 15)</code> is <code>1</code>: 4 + 10 = 14, which is 1 away. <code>closest_sum([2, 5, 9], 7)</code> is <code>0</code>: 2 + 5.</p>",
+"examples": "assert closest_sum([1, 3, 4, 7, 10], 15) == 1\nassert closest_sum([2, 5, 9], 7) == 0",
+"starter": "def closest_sum(a, t):\n    pass",
+"solution": "def closest_sum(a, t):\n    if len(a) < 2:\n        return None\n    i, j = 0, len(a) - 1\n    best = abs(a[i] + a[j] - t)\n    while i < j:\n        s = a[i] + a[j]\n        best = min(best, abs(s - t))\n        if s < t:\n            i += 1\n        elif s > t:\n            j -= 1\n        else:\n            return 0\n    return best",
+"brute": "def closest_sum(a, t):\n    n = len(a)\n    if n < 2:\n        return None\n    return min(abs(a[i] + a[j] - t) for i in range(n) for j in range(i + 1, n))",
+"approach": "<p>Put one finger on each end. If the pair is too small, only moving the left finger right can make it bigger; if too big, move the right finger left. Every step throws away one weight for good, so it's one pass, O(n).</p>",
+"twist": "<p>Nice. Now the weights arrive <b>unsorted</b>, straight off the scale. Change <code>closest_sum(a, t)</code> so it works for any order. What does that cost now?</p>",
+"twisttests": "assert closest_sum([10, 1, 7, 4, 3], 15) == 1\nassert closest_sum([9, 2, 5], 7) == 0\nassert closest_sum([6, -8, 1, -3], -10) == 1\nassert closest_sum([4], 4) is None",
+"twistsolution": "def closest_sum(a, t):\n    a = sorted(a)\n    if len(a) < 2:\n        return None\n    i, j = 0, len(a) - 1\n    best = abs(a[i] + a[j] - t)\n    while i < j:\n        s = a[i] + a[j]\n        best = min(best, abs(s - t))\n        if s < t:\n            i += 1\n        elif s > t:\n            j -= 1\n        else:\n            return 0\n    return best"
 }
 ]
 }

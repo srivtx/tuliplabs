@@ -84,3 +84,109 @@ def count_rises(a, t):
         seen[v] = seen.get(v, 0) + 1
     return rises
 ```
+
+```interview
+id: closest
+title: The closest pair
+fn: closest_sum
+ch: 7
+decoys: 3, 9, 15, 28
+bigo: O(n)
+---prompt
+A lab has weights sorted from lightest to heaviest. You need two **different** weights whose total is as close as possible to a target `t`.
+
+Write `closest_sum(a, t)`: `a` is sorted in ascending order. Return the smallest possible `abs(a[i] + a[j] - t)` over pairs `i < j`.
+
+`closest_sum([1, 3, 4, 7, 10], 15)` is `1`: 4 + 10 = 14, which is 1 away. `closest_sum([2, 5, 9], 7)` is `0`: 2 + 5.
+---examples
+assert closest_sum([1, 3, 4, 7, 10], 15) == 1
+assert closest_sum([2, 5, 9], 7) == 0
+---clarify
++ tiny | What if there are fewer than two weights? | Then there's no pair. Return None.
++ dups | Can two weights be equal? | Yes, and two equal weights are still two different weights.
++ neg | Can weights or the target be negative? | Yes, they're offsets from a reference weight. Any whole numbers.
+- | Is the list really sorted? | Yes, smallest first.
+- | Do I need to return which pair it was? | No, just the distance.
+- | Is there a time limit? | Aim for the best you can. We'll talk about cost before you code.
+---test tiny
+assert closest_sum([], 4) is None
+assert closest_sum([3], 4) is None
+---test dups
+assert closest_sum([5, 5], 10) == 0
+assert closest_sum([1, 4, 4, 9], 8) == 0
+---test neg
+assert closest_sum([-8, -3, 1, 6], -10) == 1
+assert closest_sum([-5, -1], 0) == 6
+---test big
+import random
+random.seed(3)
+big = sorted(random.sample(range(-10**9, 10**9), 200000))
+r, secs = timed(closest_sum, big, 123456789)
+import bisect
+best = None
+for i, v in enumerate(big):
+    k = bisect.bisect_left(big, 123456789 - v, i + 1)
+    for j in (k - 1, k):
+        if i < j < len(big):
+            d = abs(v + big[j] - 123456789)
+            best = d if best is None else min(best, d)
+assert r == best
+assert secs < 1.5, f"{secs:.2f} s for 200,000 weights: trying every pair is too slow"
+---starter
+def closest_sum(a, t):
+    pass
+---solution
+def closest_sum(a, t):
+    if len(a) < 2:
+        return None
+    i, j = 0, len(a) - 1
+    best = abs(a[i] + a[j] - t)
+    while i < j:
+        s = a[i] + a[j]
+        best = min(best, abs(s - t))
+        if s < t:
+            i += 1
+        elif s > t:
+            j -= 1
+        else:
+            return 0
+    return best
+---brute
+def closest_sum(a, t):
+    n = len(a)
+    if n < 2:
+        return None
+    return min(abs(a[i] + a[j] - t) for i in range(n) for j in range(i + 1, n))
+---approach
+Put one finger on each end. If the pair is too small, only moving the left finger right can make it bigger; if too big, move the right finger left. Every step throws away one weight for good, so it's one pass, O(n).
+---hint
+The list is sorted. What does that tell you about `a[0] + a[-1]` compared with `a[1] + a[-1]`?
+---hint
+Start with `i = 0` and `j = len(a) - 1`. If `a[i] + a[j]` is below `t`, no pair using `a[i]` with anything left of `j` can be closer, so move `i`.
+---hint
+Loop while `i < j`: record `abs(s - t)`, then `i += 1` if `s < t`, `j -= 1` if `s > t`, and return 0 if it's exact.
+---twist
+Nice. Now the weights arrive **unsorted**, straight off the scale. Change `closest_sum(a, t)` so it works for any order. What does that cost now?
+---twisttests
+assert closest_sum([10, 1, 7, 4, 3], 15) == 1
+assert closest_sum([9, 2, 5], 7) == 0
+assert closest_sum([6, -8, 1, -3], -10) == 1
+assert closest_sum([4], 4) is None
+---twistsolution
+def closest_sum(a, t):
+    a = sorted(a)
+    if len(a) < 2:
+        return None
+    i, j = 0, len(a) - 1
+    best = abs(a[i] + a[j] - t)
+    while i < j:
+        s = a[i] + a[j]
+        best = min(best, abs(s - t))
+        if s < t:
+            i += 1
+        elif s > t:
+            j -= 1
+        else:
+            return 0
+    return best
+```
