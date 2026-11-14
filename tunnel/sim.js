@@ -44,6 +44,11 @@
    account at a point on a ring, and the ring is cut into `shards` equal arcs, one per machine. A share `hot` of all
    requests (a percentage) are about one viral account. With hotSplit > 1, that account's reads are spread over the hotSplit machines
    that follow its arc on the ring, a copy on each.
+   Distance (`far` > 0): a share `far` of users (a percentage) live across an ocean, `rtt` seconds away there and back;
+   the rest are `nearRtt` away. A page takes `api` round trips that reach the servers (served once, the first one) and
+   `trips` more for its files (scripts, styles, images), one after another. With cdn:true the files come from an edge
+   server near each user, `edgeRtt` away, instead. The network adds to a page's time but never to the servers' work.
+   stats give p99far and p99near, each region's own p99.
    Sim.replay(cfg, seed, changes, T) rebuilds the run at any moment T (the page's rewind) ·
    Sim.measure(cfg, {seed, warm, span}) for a steady-state number. With one server and no cache it draws random numbers
    in exactly the same order as the one-server sim it grew from, so those experiments' numbers didn't move. */
@@ -97,6 +102,7 @@
     noisy: 0, tenants: 40, limit: 0, burst: 10,
     writes: 0, replicas: 0, lag: 1, readAfter: 1, ryw: false, rywFor: 5,
     shards: 0, hot: 0, hotSplit: 1,
+    far: 0, rtt: 0.2, nearRtt: 0, api: 1, trips: 0, cdn: false, edgeRtt: 0.02,
   };
 
   class Sim {
@@ -253,9 +259,10 @@
         }
         q.hit = false;
       }
+      if (this.cfg.far > 0 && q.far === undefined) q.far = this.r() * 100 < this.cfg.far;
       if (this.cfg.writes > 0 && !q.follow && q.write === undefined) q.write = this.r() < this.cfg.writes;
       if (this.cfg.shards > 0 && q.acct === undefined) { q.hot = this.r() * 100 < this.cfg.hot; q.acct = q.hot ? 0 : 1 + Math.floor(this.r() * this.cfg.keys); }
-      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : q.write ? "w" : q.hot ? "h" : null]);
+      if (this.feed) this.feed.push(["in", null, q.noisy ? "n" : q.write ? "w" : q.hot ? "h" : q.far ? "f" : null]);
       if (this.cfg.timeout > 0) this.ev.push({ t: this.t + this.cfg.timeout, type: "timeout", q });
       const i = this.route(q);
       q.srv = i;
@@ -351,10 +358,16 @@
         return;
       }
       const sent = q.first ?? q.sent;
-      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent, ok, why, hit: q.hit, n: q.noisy, own: q.ownRead, stale: q.stale, srv: q.srv || 0 });
+      this.done.push({ id: q.id, at: this.t, sent, lat: this.t - sent + (ok ? this.net(q) : 0), ok, why, hit: q.hit, n: q.noisy, own: q.ownRead, stale: q.stale, srv: q.srv || 0, far: q.far });
       if (this.feed && !q.hit && why !== "limited") this.feed.push(["out", ok, why, q.srv || 0]);
       if (this.done.length > 400000) this.done.splice(0, 200000);
       if (q.closed) this.rethink();
+    }
+    // the network's share of a page: every round trip pays the distance, the servers' answer is only one of them
+    net(q) {
+      const c = this.cfg;
+      if (q.far) return c.api * c.rtt + c.trips * (c.cdn ? c.edgeRtt : c.rtt);
+      return c.far > 0 || c.nearRtt ? (c.api + c.trips) * c.nearRtt : 0;
     }
     // a closed-loop user got an answer (or gave up): think again, or leave if there are now too many users
     rethink() {
@@ -446,7 +459,7 @@
     }
     // numbers for requests that finished in (t0, t1]
     stats(t0, t1) {
-      const lats = [], d = this.done;
+      const lats = [], farL = [], nearL = [], d = this.done;
       let ok = 0, bad = 0, hits = 0, looked = 0, lo = 0, hi = d.length, nOk = 0, n429 = 0, limited = 0, own = 0, stale = 0, onPrimary = 0, onReplicas = 0;
       const perSrv = [];
       while (lo < hi) { const m = (lo + hi) >> 1; if (d[m].at <= t0) lo = m + 1; else hi = m; }
@@ -458,15 +471,18 @@
         if (r.own) { own++; if (r.stale) stale++; }
         if (r.ok) perSrv[r.srv] = (perSrv[r.srv] || 0) + 1;
         if (r.ok) { if (r.srv) onReplicas++; else onPrimary++; }
-        if (r.ok) { ok++; lats.push(r.lat); } else bad++;
+        if (r.ok) { ok++; lats.push(r.lat); (r.far ? farL : nearL).push(r.lat); } else bad++;
         if (r.hit !== undefined) { looked++; if (r.hit) hits++; }
       }
       lats.sort((a, b) => a - b);
+      farL.sort((a, b) => a - b);
+      nearL.sort((a, b) => a - b);
       const span = t1 - t0, n = ok + bad;
       return {
         span, sent: n, ok, errors: bad, errRate: n ? bad / n : 0,
         tput: ok / span, mean: lats.length ? lats.reduce((s, x) => s + x, 0) / lats.length : 0,
         p50: pct(lats, 0.5), p95: pct(lats, 0.95), p99: pct(lats, 0.99), util: this.util(t0, t1),
+        p99far: pct(farL, 0.99), p99near: pct(nearL, 0.99), p50far: pct(farL, 0.5),
         hit: looked ? hits / looked : 0, misses: (looked - hits) / span, tries: this.triesIn(t0, t1) / span,
         nTput: nOk / span, n429: n429 / span, limited,
         stale, staleRate: own ? stale / own : 0, primary: onPrimary / span, replicaLoad: onReplicas / span,
