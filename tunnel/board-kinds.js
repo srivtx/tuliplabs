@@ -350,3 +350,166 @@
     c.solved(id === c.B.answer ? F.r1 : 1);
   }
 })();
+
+/* The WhatsApp labs (tunnel/chat.js):
+     conns    hold 500 million phones: how a gateway holds a connection, how often phones heartbeat, how many machines
+     offline  Bob's patchy day: an inbox, acks, message ids, until nothing is lost or shown twice
+     order    a group chat on three phones: arrival order, the sender's clock, or a server sequence */
+(function () {
+  "use strict";
+  const UI = window.SD.UI, CH = window.CHAT;
+  const pct = (x) => Math.round(x * 100) + "%";
+  const big = (n) => (n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M" : Math.round(n).toLocaleString("en-US"));
+  const MODEL_WORD = { threads: "a thread per connection", loop: "an event loop" };
+  const HB_WORD = { 10: "every 10 s", 30: "every 30 s", 60: "every 60 s", 300: "every 5 min" };
+  function chip(c, x, y, w, cls, title, sub, on) {
+    const { s } = c;
+    return s("g", { class: "wa-chip " + cls, transform: `translate(${x} ${y})`, role: "button", tabindex: 0, onclick: on, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); on(); } } },
+      s("rect", { class: "wa-cb", width: w, height: sub ? 56 : 40, rx: 11 }), s("rect", { class: "wa-ci", x: 1, y: 1, width: w - 2, height: (sub ? 56 : 40) - 2, rx: 11, filter: "url(#sd-sk)" }),
+      s("text", { class: "wa-ct", x: 14, y: sub ? 24 : 26 }, title), sub ? s("text", { class: "wa-cs", x: 14, y: 43 }, sub) : null);
+  }
+
+  // ------------------------------------------------------------------------------------------------ conns --
+  UI.conns = {
+    init(c) { Object.assign(c.F, { model: "threads", hb: 10, boxes: 300, tries: 0, seeds: (() => { const r = CH.rng(5); return Array.from({ length: 140 }, () => [r(), r(), r()]); })() }); },
+    draw(c) {
+      const { s, F } = c, G = CH.gateways({ model: F.model, hb: F.hb, boxes: F.boxes }), kids = [], now = performance.now() / 1000;
+      // the phones, each pulsing at its heartbeat
+      kids.push(s("text", { class: "ev-h", x: 40, y: 92 }, "500,000,000 phones"), s("text", { class: "ev-sub", x: 40, y: 110 }, `a heartbeat ${HB_WORD[F.hb]}`));
+      for (const [u, v, ph] of F.seeds) {
+        const x = 50 + u * 200, y = 135 + v * 330, beat = ((now / Math.min(F.hb, 30)) * 6 + ph * 6) % 1;
+        kids.push(s("circle", { class: "wa-ph", cx: x, cy: y, r: 2.6 }));
+        if (!c.REDUCED && beat < 0.25) kids.push(s("circle", { class: "wa-beat", cx: x, cy: y, r: 3 + beat * 26, opacity: 1 - beat * 4 }));
+      }
+      // the fleet: one square a machine, warm when it's over 80%, red past 100%
+      const load = Math.max(G.ram, G.cpu), heat = load > 1 ? "h3" : load > 0.8 ? "h2" : "h0", shown = Math.min(F.boxes, 600), cols = 30, sz = 10.5;
+      kids.push(s("text", { class: "ev-h", x: 290, y: 92 }, `${F.boxes} gateway machines`), s("text", { class: "ev-sub", x: 290, y: 110 }, `${big(G.perBox)} phones on each · $${c.num(G.cost)} a month`));
+      for (let i = 0; i < shown; i++) kids.push(s("rect", { class: "wa-box " + heat, x: 290 + (i % cols) * sz, y: 126 + Math.floor(i / cols) * sz, width: sz - 2.5, height: sz - 2.5, rx: 1.5 }));
+      // one machine, up close
+      const X = 650, bw = 250;
+      kids.push(s("text", { class: "ev-h", x: X, y: 92 }, "One machine"), s("text", { class: "ev-sub", x: X, y: 110 }, `64 GB · 32 cores · ${MODEL_WORD[F.model]}`));
+      [["memory", G.ram, `${F.model === "threads" ? "1 MB" : "25 KB"} a connection`], ["CPU", G.cpu, "200 µs a heartbeat"]].forEach(([name, v, why], i) => {
+        const y = 150 + i * 92;
+        kids.push(s("text", { class: "wa-mn", x: X, y }, name), s("text", { class: "wa-mv" + (v > 0.8 ? " over" : ""), x: X + bw, y, "text-anchor": "end" }, v > 9.99 ? `${c.num(v * 100)}%` : pct(v)),
+          s("rect", { class: "sh-mb", x: X, y: y + 10, width: bw, height: 16, rx: 4 }), s("rect", { class: "sh-m " + (v > 1 ? "h3" : v > 0.8 ? "h2" : "h0"), x: X, y: y + 10, width: Math.min(bw, bw * v), height: 16, rx: 4 }),
+          s("path", { class: "sh-80", d: `M${X + bw * 0.8} ${y + 6} v24` }), s("text", { class: "ev-tick", x: X, y: y + 44 }, why));
+      });
+      kids.push(s("text", { class: "wa-mn", x: X, y: 322 }, "a dropped phone is noticed in"), s("text", { class: "wa-big" + (G.detect > 60 ? " over" : ""), x: X, y: 368 }, G.detect >= 120 ? `${G.detect / 60} min` : `${G.detect} s`),
+        s("text", { class: "ev-tick", x: X, y: 388 }, "two missed heartbeats"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c) { if (!c.REDUCED) c.redraw(); },
+    brief(c) { return [c.h("div", { class: "sd-ask" }, c.h("p", { class: "sd-quiet" }, "Change the words and the machines, then roll it out."))]; },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; c.redraw(); c.rebrief(); };
+      const slider = h("input", { type: "range", min: 50, max: 600, step: 1, value: F.boxes, "aria-label": "Gateway machines", oninput: (e) => { F.boxes = +e.target.value; e.target.nextSibling.textContent = `${F.boxes} machines`; c.redraw(); } });
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "hold connections with ", h("button", { class: "sd-word", onclick: () => set("model", F.model === "threads" ? "loop" : "threads") }, MODEL_WORD[F.model])),
+        h("p", {}, "phones send a heartbeat ", h("button", { class: "sd-word", onclick: () => { const L = CH.HEARTBEATS; set("hb", L[(L.indexOf(F.hb) + 1) % L.length]); } }, HB_WORD[F.hb])),
+        h("label", { class: "sd-ramp" }, h("span", {}, "fleet"), slider, h("output", {}, `${F.boxes} machines`)),
+        h("p", {}, h("button", { class: "sd-step", "aria-label": "One fewer machine", onclick: () => set("boxes", Math.max(50, F.boxes - 1)) }, "−"), h("button", { class: "sd-step", "aria-label": "One more machine", onclick: () => set("boxes", Math.min(600, F.boxes + 1)) }, "+"), h("small", {}, " one at a time"))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: () => roll(c) }, "Roll it out"), h("span", { class: "sd-runs" }, F.tries ? `${F.tries} rollout${F.tries > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const F = c.F, G = CH.gateways({ model: F.model, hb: F.hb, boxes: F.boxes }), g = c.B.goals;
+      return [["dropped phone noticed ≤ 60 s", G.detect <= g.detect, G.detect >= 120 ? `${G.detect / 60} min` : `${G.detect} s`], ["memory ≤ 80%", G.ram <= g.under, G.ram > 9.99 ? `${c.num(G.ram * 100)}%` : pct(G.ram)],
+        ["CPU ≤ 80%", G.cpu <= g.under, pct(G.cpu)], ["at most 260 machines", F.boxes <= g.boxes, String(F.boxes)]];
+    },
+  };
+  function roll(c) {
+    const F = c.F, G = CH.gateways({ model: F.model, hb: F.hb, boxes: F.boxes }), g = c.B.goals;
+    F.tries++;
+    const miss = [G.detect > g.detect && "a dropped phone takes too long to notice", G.ram > g.under && "the machines run out of memory", G.cpu > g.under && "the heartbeats eat the CPU", F.boxes > g.boxes && "the fleet is over 260 machines"].filter(Boolean);
+    if (!miss.length) c.solved(F.tries === 1 ? 3 : F.tries <= 3 ? 2 : 1);
+    else { c.flash(`Not yet: ${miss.join(", and ")}.`); c.rebrief(); }
+  }
+
+  // ---------------------------------------------------------------------------------------------- offline --
+  const TX0 = 60, TX1 = 920, LANE = 300, MIN = 1440;
+  const tx = (m) => TX0 + (m / MIN) * (TX1 - TX0);
+  const SW = [["inbox", "keep an inbox", "hold messages while Bob's away"], ["acks", "wait for acks", "resend what Bob didn't confirm"], ["ids", "ids on messages", "Bob's phone drops copies"]];
+  UI.offline = {
+    init(c) { Object.assign(c.F, { inbox: false, acks: false, ids: false, res: null, runs: 0, anim: 0 }); },
+    draw(c) {
+      const { s, F } = c, kids = [], R = F.res, upto = R ? Math.min(1, F.anim) * MIN : 0;
+      kids.push(s("text", { class: "ev-h", x: TX0, y: 96 }, "Bob's day"), s("text", { class: "ev-sub", x: TX0, y: 114 }, R ? `Alice sent ${c.num(R.sent)} messages; Bob's phone dropped off ${R.drops} times` : "run it to see every message Alice sends"));
+      // Bob's connection: online, offline, and the dead minute when the server still thinks he's there
+      kids.push(s("text", { class: "ev-tick", x: TX0, y: LANE - 8 }, "Bob's phone"));
+      if (R) for (const p of R.periods) {
+        if (p.a > upto) break;
+        const b = Math.min(p.b, upto);
+        kids.push(s("rect", { class: p.on ? "wa-on" : "wa-off", x: tx(p.a), y: LANE, width: Math.max(0.6, tx(b) - tx(p.a)), height: 14 }));
+        if (!p.on) kids.push(s("rect", { class: "wa-dead", x: tx(p.a), y: LANE - 3, width: Math.max(1.5, tx(Math.min(b, p.a + 1)) - tx(p.a)), height: 20 }));
+      } else kids.push(s("rect", { class: "wa-off", x: TX0, y: LANE, width: TX1 - TX0, height: 14, opacity: 0.4 }));
+      for (let hh = 0; hh <= 24; hh += 6) kids.push(s("text", { class: "ev-tick", x: tx(hh * 60), y: LANE + 34, "text-anchor": hh === 0 ? "start" : hh === 24 ? "end" : "middle" }, `${hh}:00`));
+      // every message: a dot when it was sent; an arc to when it arrived; a cross if it never did; a double if Bob saw it twice
+      if (R) for (const m of R.msgs) {
+        if (m.t > upto) break;
+        const x = tx(m.t), j = ((m.t * 7.31) % 1) * 46;
+        if (m.st === "lost") kids.push(s("path", { class: "wa-lost", d: `M${x - 3.5} ${LANE + 56 + j / 3 - 3.5}l7 7m0-7l-7 7` }));
+        else if (m.st === "later" || m.st === "waiting") kids.push(s("path", { class: "wa-arc", d: m.at == null ? `M${x} ${LANE - 6}v-${20 + j / 2}` : `M${x} ${LANE - 6} Q${(x + tx(m.at)) / 2} ${LANE - 40 - Math.min(150, (tx(m.at) - x) * 0.9)} ${tx(m.at)} ${LANE - 6}` }));
+        else kids.push(s("circle", { class: "wa-dot" + (m.st === "twice" ? " twice" : m.st === "dedup" ? " dedup" : ""), cx: x, cy: LANE - 14 - j, r: m.st === "twice" ? 3.6 : 1.8 }));
+        if (m.st === "twice") kids.push(s("circle", { class: "wa-dot twice", cx: x + 5, cy: LANE - 14 - j, r: 3.6 }));
+      }
+      // the server's three switches
+      SW.forEach(([k, name, say], i) => kids.push(chip(c, 60 + i * 290, 420, 270, (F[k] ? "on" : "") + " sw", `${name}: ${F[k] ? "on" : "off"}`, say, () => { F[k] = !F[k]; F.res = null; c.redraw(); c.rebrief(); })));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (!F.res || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 2.4));
+      c.redraw();
+      if (F.anim >= 1) { if (!F.res.lost && !F.res.twice) c.solved(F.runs <= 2 ? 3 : F.runs <= 4 ? 2 : 1); else c.rebrief(); }
+    },
+    brief(c) { return [c.h("div", { class: "sd-ask" }, c.h("p", { class: "sd-quiet" }, "Tap the switches under the timeline, then run Bob's day. Dots are messages that arrived at once; arcs waited for Bob; red crosses were lost; amber pairs were shown twice."))]; },
+    tools(c) {
+      const { h, F } = c, out = [h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: () => runDay(c) }, "Run Bob's day"), h("span", { class: "sd-runs" }, F.runs ? `${F.runs} day${F.runs > 1 ? "s" : ""}` : ""))];
+      if (F.res && F.anim >= 1 && (F.res.lost || F.res.twice)) out.push(h("p", { class: "sd-verdict no" }, F.res.lost ? `✗ ${F.res.lost} message${F.res.lost > 1 ? "s" : ""} never reached Bob.` : `✗ Bob saw ${F.res.twice} message${F.res.twice > 1 ? "s" : ""} twice.`));
+      return out;
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null;
+      return [["no message lost", R ? !R.lost : null, R ? String(R.lost) : "run it"], ["none shown twice", R ? !R.twice : null, R ? String(R.twice) : "run it"], ["longest wait for Bob", null, R ? `${Math.round(R.waitMax)} min` : "·"]];
+    },
+  };
+  function runDay(c) { const F = c.F; F.runs++; F.res = CH.day({ inbox: F.inbox, acks: F.acks, ids: F.ids, seed: c.B.sim.seed }); F.anim = 0; c.redraw(); c.rebrief(); }
+
+  // ------------------------------------------------------------------------------------------------ order --
+  const RULE_WORD = { arrival: ["arrival order", "as each phone got them"], clock: ["sender's clock", "the time stamped by the sender"], seq: ["server sequence", "a number the group's server stamps"] };
+  const PW = 270, PY = 76, BH = 41;
+  UI.order = {
+    init(c) { Object.assign(c.F, { rule: "arrival", tries: 0, g: CH.group({ seed: c.B.sim.seed }) }); },
+    draw(c) {
+      const { s, F } = c, kids = [], R = F.g.rules[F.rule], seq = F.g.rules.seq.orders[0];
+      CH.RULES.forEach((r, i) => kids.push(chip(c, 330 + i * 205, 10, 195, (F.rule === r ? "on" : "") + " rule", RULE_WORD[r][0], null, () => pick(c, r))));
+      CH.PEOPLE.forEach((name, m) => {
+        const x = 30 + m * 305, o = R.orders[m], early = new Set(R.early[m]);
+        kids.push(s("rect", { class: "wa-phone", x, y: PY, width: PW, height: 452, rx: 26 }), s("text", { class: "wa-pn", x: x + PW / 2, y: PY + 28, "text-anchor": "middle" }, `${name}'s phone`));
+        o.forEach((i, k) => {
+          const msg = CH.SCRIPT[i], mine = msg.from === m, y = PY + 44 + k * BH, w = Math.min(PW - 70, 26 + msg.text.length * 7.2), bx = mine ? x + PW - 14 - w : x + 14;
+          const off = seq[k] !== i; // not where the one true order has it
+          kids.push(s("rect", { class: `wa-bub p${msg.from}${early.has(i) ? " early" : ""}`, x: bx, y, width: w, height: 32, rx: 12 }));
+          if (!mine) kids.push(s("text", { class: "wa-who", x: bx + 10, y: y + 12 }, CH.PEOPLE[msg.from]));
+          kids.push(s("text", { class: "wa-bt", x: bx + 10, y: y + (mine ? 21 : 26) }, msg.text));
+          if (early.has(i)) kids.push(s("text", { class: "wa-flag", x: mine ? bx - 6 : bx + w + 6, y: y + 21, "text-anchor": mine ? "end" : "start" }, "↯"));
+          else if (off) kids.push(s("circle", { class: "wa-offc", cx: mine ? bx - 7 : bx + w + 7, cy: y + 16, r: 3.2 }));
+        });
+      });
+      c.layer.replaceChildren(...kids);
+    },
+    brief(c) {
+      const { h, F } = c, R = F.g.rules[F.rule];
+      const say = F.tries ? h("p", { class: "sd-verdict " + (R.agree && !R.flips ? "ok" : "no") }, R.agree && !R.flips ? "✓ One chat, in the order it happened, on every phone." : !R.agree ? "✗ The phones disagree: compare them line by line." : `✗ Same order everywhere, but ${R.flips / 3} repl${R.flips / 3 > 1 ? "ies sit" : "y sits"} above the message ${R.flips / 3 > 1 ? "they answer" : "it answers"} (↯).`) : null;
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each phone shows the chat by the rule at the top of the board. Tap a rule. ↯ marks a reply shown above its question; a dot marks a message out of place."), say)];
+    },
+    tools() { return []; },
+  };
+  function pick(c, r) {
+    const F = c.F;
+    if (c.done() && F.solvedHere) { F.rule = r; c.redraw(); c.rebrief(); return; }
+    F.rule = r; F.tries++;
+    c.redraw(); c.rebrief();
+    if (r === c.B.answer) { F.solvedHere = true; c.solved(F.tries === 1 ? 3 : F.tries === 2 ? 2 : 1); }
+  }
+})();

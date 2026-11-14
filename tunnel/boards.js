@@ -39,12 +39,23 @@
     rreplica: { name: "replica", say: "a copy that follows along", icon: '<rect x="2" y="6" width="14" height="14" rx="2"/><path d="M10 2h12a2 2 0 0 1 2 2v12M6 13h6"/>' },
     sql: { name: "SQL database", say: "tables on disk", icon: '<ellipse cx="13" cy="6" rx="9" ry="3.4"/><path d="M4 6v14c0 1.9 4 3.4 9 3.4s9-1.5 9-3.4V6"/><path d="M9 14h8M9 18h8"/>' },
     threads: { name: "thread pool", say: "many threads, one table", icon: '<path d="M5 3c-3 5 3 10 0 20M13 3c-3 5 3 10 0 20M21 3c-3 5 3 10 0 20"/>' },
+    phone: { name: "phone", fixed: true, say: "an app with one connection open", icon: '<rect x="7" y="2" width="12" height="22" rx="2.5"/><path d="M11 20.5h4"/>' },
+    gateway: { name: "gateway", say: "holds millions of open connections", icon: '<rect x="3" y="8" width="20" height="10" rx="2"/><path d="M7 8V4M13 8V4M19 8V4M7 18v4M13 18v4M19 18v4"/>' },
+    sessions: { name: "sessions", say: "which gateway each phone is on", icon: '<rect x="5" y="3" width="16" height="20" rx="2"/><circle cx="13" cy="10" r="3"/><path d="M8.5 18c.8-2.5 2.5-3.5 4.5-3.5s3.7 1 4.5 3.5M3 8h3M3 13h3M3 18h3"/>' },
+    chat: { name: "chat service", say: "decides where each message goes", icon: '<path d="M4 5h18v12H11l-5 4v-4H4z"/><path d="M8.5 10h9M8.5 13h6"/>' },
+    inbox: { name: "inbox", say: "keeps messages until the phone acks", icon: '<path d="M3 14l3-9h14l3 9v7H3z"/><path d="M3 14h6l1.5 3h5L17 14h6"/>' },
+    push: { name: "push", say: "wakes an offline phone (APNs, FCM)", icon: '<path d="M6 18V11a7 7 0 0 1 14 0v7l2 2H4z"/><path d="M11 22.5h4"/>' },
+    blob: { name: "blob store", say: "photos and videos, by link", icon: '<rect x="3" y="4" width="20" height="18" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M3 19l6-6 4 4 3-3 7 7"/>' },
+    poller: { name: "poller", say: "phones ask \"anything new?\" every 5 s", icon: '<path d="M4 10a8.5 8.5 0 0 1 15-3.5l1.5 1.5M22 16a8.5 8.5 0 0 1-15 3.5L5.5 18"/><path d="M21 3v5h-5M5 23v-5h5"/>' },
+    index: { name: "message search", say: "an index of every message", icon: '<circle cx="11" cy="11" r="7"/><path d="M16 16l7 7"/>' },
   };
 
   // what a part says on the board itself, where there's room for about 18 characters
   const TAGS = { users: "clicking links", lb: "one address", app: "your code", cache: "hot links", db: "every link", replica: "read copies", queue: "work for later",
     worker: "does queued work", idgen: "next short code", cdn: "near the users", client: "send commands", loop: "one thread", keyspace: "key → value, RAM",
-    expiry: "keys with a TTL", evict: "frees RAM", aof: "every write", rdb: "a periodic copy", rreplica: "follows along", sql: "tables on disk", threads: "many threads" };
+    expiry: "keys with a TTL", evict: "frees RAM", aof: "every write", rdb: "a periodic copy", rreplica: "follows along", sql: "tables on disk", threads: "many threads",
+    phone: "one open socket", gateway: "holds sockets", sessions: "who's where", chat: "routes messages", inbox: "waits for acks", push: "wakes a phone", blob: "photos, videos",
+    poller: "asks every 5 s", index: "reads messages" };
   for (const k in TAGS) PARTS[k].tag = TAGS[k];
 
   // A sketch's grade: each rubric item is a link the design needs (between parts of these kinds, either way round),
@@ -298,6 +309,104 @@
     ],
   };
 
+
+  // --------------------------------------------------------------------------------------------- WhatsApp --
+  const WA_FOLLOW = {
+    nodes: [P("A", "phone", 95, 190, { label: "Alice" }), P("g1", "gateway", 285, 190), P("ch", "chat", 475, 270), P("se", "sessions", 475, 92), P("g2", "gateway", 665, 190),
+      P("B", "phone", 860, 190, { label: "Bob" }), P("in", "inbox", 665, 420), P("pu", "push", 860, 420)],
+    wires: [["A", "g1"], ["g1", "ch"], ["ch", "se"], ["ch", "g2"], ["g2", "B"], ["ch", "in"], ["in", "pu"], ["pu", "B"]],
+  };
+  const WA_REF = {
+    nodes: [P("ph", "phone", 95, 270), P("gw", "gateway", 285, 270), P("ch", "chat", 475, 270), P("se", "sessions", 475, 100), P("ib", "inbox", 665, 270), P("pu", "push", 860, 270), P("bl", "blob", 285, 430)],
+    wires: [["ph", "gw"], ["gw", "ch"], ["ch", "se"], ["ch", "ib"], ["ib", "pu"], ["ph", "bl"]],
+  };
+  const WA_UNIT = {
+    id: "whatsapp", name: "WhatsApp", sub: "a chat app for 2 billion people", floor: 7, group: "Talk in real time",
+    w: [
+      {
+        id: "wa-scope", kind: "scope", title: "What is WhatsApp?",
+        lede: "You're designing a chat app the size of WhatsApp. Before any boxes, pin down what it must do. Sort the cards: <b>what it does</b>, <b>how well</b>, <b>not now</b>.",
+        cards: [
+          { t: "Send a message to a friend or a group", bin: "does", why: "The whole point." },
+          { t: "Show ✓ sent, ✓✓ delivered, and blue when read", bin: "does", why: "Receipts are a feature people see, and each one is a message going the other way." },
+          { t: "Hold messages for a phone that's offline", bin: "does", why: "Phones drop off all day. Messages have to wait somewhere for them." },
+          { t: "Arrive in under a second when both phones are online", bin: "how", why: "A promise about speed, and the reason for keeping a connection open." },
+          { t: "Never lose a message, never show one twice", bin: "how", why: "Reliability: at-least-once delivery, plus ids so copies are dropped." },
+          { t: "Only the two phones can read a message", bin: "how", why: "End-to-end encryption: a promise about privacy, and it shapes everything the server can do." },
+          { t: "Video calls", bin: "not", why: "Live media is a different system with its own unit (Zoom)." },
+          { t: "Stories that vanish after 24 hours", bin: "not", why: "A different feature, more like a feed. Not this version." },
+          { t: "Search everyone's messages on the server", bin: "not", why: "With end-to-end encryption the server can't read messages, so it can't search them. Search happens on the phone." },
+        ],
+        why: "A chat app does three things: send, show receipts, hold messages for phones that are away. The \"how well\" cards are the hard part: fast, never lost, never doubled, and private. End-to-end encryption also rules things out. The server only moves sealed envelopes, so anything that needs to read messages, like server-side search, isn't on the table.",
+      },
+      {
+        id: "wa-napkin", kind: "napkin", title: "Size WhatsApp",
+        lede: "<b>2 billion</b> people send <b>100 billion</b> messages a day. At the busiest hour <b>500 million</b> phones are connected at once, and one gateway machine can hold about <b>2 million</b> open connections. A text message is about <b>100 bytes</b>.",
+        q: {},
+        design: { nodes: [P("ph", "phone", 95, 330), P("gw", "gateway", 420, 330), P("ib", "inbox", 760, 330)], wires: [["ph", "gw"], ["gw", "ib"]] },
+        notes: [
+          { id: "m", on: "gw", dx: 0, dy: -190, label: "messages a second", unit: "/s", calc: "100e9 / (24 * 3600)", hint: "a day is 86,400 seconds" },
+          { id: "g", on: "gw", dx: 0, dy: 60, label: "gateway machines", unit: "", calc: "500e6 / 2e6", hint: "phones online ÷ connections a machine holds" },
+          { id: "s", on: "ib", dx: -10, dy: -190, label: "a day of messages", unit: "TB", calc: "100e9 * 100 / 1e12", hint: "messages × bytes; 1 TB is 10¹² bytes" },
+        ],
+        why: "100 billion a day is 1,157,407 messages a second: call it 1.2 million, and evenings run hotter. 500 million open connections at 2 million a machine is 250 gateway machines just to hold the sockets. A day of messages is 10 TB, but little of it stays: a message waits only until the phone collects it, then the server can forget it.",
+      },
+      {
+        id: "wa-sketch", kind: "sketch", title: "Draw WhatsApp",
+        lede: "Draw the server side. Messages must reach an online phone at once, wait for an offline one, and photos are too big to travel inside a message. Drag parts in from the tray and wire them. Two of the parts don't belong.",
+        q: {},
+        tray: ["gateway", "chat", "sessions", "inbox", "push", "blob", "lb", "poller", "index"],
+        design: { nodes: [P("ph", "phone", 95, 270)], wires: [] },
+        reference: WA_REF,
+        rubric: [
+          { link: [["phone", "gateway"]], say: "Each phone keeps one connection open to a gateway (a WebSocket), so a message can be pushed the moment it arrives." },
+          { link: [["gateway", "chat"]], say: "Gateways hand every message to the chat service, which decides where it goes." },
+          { link: [["chat", "sessions"], ["gateway", "sessions"]], say: "A session registry records which gateway each phone is connected to, so chat knows where to send." },
+          { link: [["chat", "inbox"]], say: "Every message waits in the receiver's inbox until their phone acknowledges it." },
+          { link: [["inbox", "push"], ["chat", "push"]], say: "An offline phone gets a push notification (APNs or FCM) that wakes it to collect its messages." },
+          { link: [["phone", "blob"], ["gateway", "blob"], ["chat", "blob"]], say: "Photos and videos go to a blob store; the message carries only a link and the key to decrypt it." },
+        ],
+        wrong: {
+          poller: "Phones asking \"anything new?\" every 5 seconds: 500 million phones make 100 million requests a second, almost all answered \"no\", and batteries drain. Keep a connection open and push instead.",
+          index: "Messages are end-to-end encrypted: the server only ever sees sealed envelopes, so there's nothing it can index. Search runs on the phone.",
+        },
+        why: "Phones hold one connection each to a gateway, so the server can push. The chat service looks up the receiver's gateway in the session registry and hands the message over. Every message also lands in the receiver's inbox until their phone acknowledges it, and a push notification wakes a phone that's away. Photos travel separately through a blob store, encrypted, and the message carries the link. The server never reads a message: it moves envelopes.",
+      },
+      {
+        id: "wa-follow", kind: "follow", title: "Follow a message",
+        lede: "Alice sends Bob <b>see you at 8?</b>. On the way, the chat service asks the sessions where Bob is connected. Tap the parts the message passes through, in order.",
+        q: {}, item: "message",
+        design: WA_FOLLOW,
+        rounds: [
+          { say: "Bob's phone is online.", path: ["A", "g1", "ch", "g2", "B"] },
+          { say: "Bob's phone is switched off. Alice sends <b>hello??</b>. Where does it go, and what tells Bob?", path: ["A", "g1", "ch", "in", "pu", "B"] },
+          { say: "Bob turns his phone on and it connects. Tap the way it collects what's waiting, starting with Bob.", path: ["B", "g2", "ch", "in"] },
+        ],
+        why: "Online, a message rides connections that are already open: into Alice's gateway, through chat, out of Bob's gateway. That's a fraction of a second. Offline, it waits in Bob's inbox, and a push notification wakes his phone. When Bob reconnects, his phone asks for what's waiting and acknowledges each message, and only then does the server forget it.",
+      },
+    ],
+    s: [
+      {
+        id: "wa-conns", kind: "conns", title: "Hold 500 million phones",
+        lede: "At the busiest hour <b>500 million</b> phones each hold a connection open to a gateway. A gateway machine has <b>64 GB</b> and <b>32 cores</b> and costs <b>$500 a month</b>. Pick how a machine holds its connections and how often phones send a heartbeat, then size the fleet. Goals: notice a dropped phone within <b>60 s</b>, keep every machine under <b>80%</b> of its RAM and CPU, and use at most <b>260</b> machines.",
+        sim: { phones: 500e6 }, goals: { detect: 60, under: 0.8, boxes: 260 }, answer: { model: "loop", hb: 30 },
+        why: "A thread per connection spends about 1 MB on each, so a machine fits 51,200 phones under 80% and you'd need 9,766 machines. An event loop spends about 25 KB, so a machine holds 2,040,816: 245 machines. Heartbeats set how fast you notice a dropped phone (two missed beats) and what it costs: every 10 s needs 391 machines just for the CPU, and every 60 s takes 2 minutes to notice. Every 30 s fits, and it's kinder to batteries, since each heartbeat wakes the phone's radio.",
+      },
+      {
+        id: "wa-offline", kind: "offline", title: "Bob's patchy day",
+        lede: "Bob's phone drops off a dozen times a day: lifts, tunnels, a flat battery. When his connection dies, the server only notices <b>a minute</b> later. Alice keeps writing all day. Choose what the server does, then run Bob's day. The goal: <b>no message lost</b> and <b>none shown twice</b>.",
+        sim: { seed: 1 },
+        why: "Throwing away what Bob can't take right now loses 22% of the day's messages. An inbox saves the ones sent while the server knows he's offline, but not the ones pushed into a dead socket in the minute before it notices: 11 lost. Acks fix that, since nothing is forgotten until Bob's phone says it has it. But 1 in 100 acks never makes it back, so the server resends messages Bob already has: 6 shown twice. Ids let his phone drop the copies. At-least-once delivery plus ids is the pair every reliable system uses.",
+      },
+      {
+        id: "wa-order", kind: "order", title: "Keep the chat in order",
+        lede: "Asha, Ben and Chen are planning dinner in a group. Every message reaches each phone with its own delay, Ben's phone clock runs <b>5 s slow</b>, and Chen's runs <b>3 s fast</b>. Pick how every phone orders the chat. The goal: <b>everyone sees the same chat</b>, with <b>no reply above the message it answers</b>.",
+        sim: { seed: 1 }, answer: "seq",
+        why: "In arrival order each phone tells its own story: messages sent close together land in a different order on different phones. The sender's clock gives everyone the same order, but a wrong one: Ben's clock is 5 s slow, so his replies jump above the questions they answer. A sequence number stamped by the one server that owns the group gives a single order, and a reply is always stamped after its question, because you can only answer what has already reached you.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -323,7 +432,7 @@
     [6, "limiter", "A rate limiter", "A shared counter"], [6, "dcache", "A distributed cache", "Consistent hashing"], [6, "kafka", "Kafka", "Partitions and offsets"],
     [6, "s3", "S3", "Erasure coding"], [6, "elastic", "Elasticsearch", "Scatter-gather"], [6, "etcd", "etcd / ZooKeeper", "Leases and fencing"],
     [6, "lb", "A load balancer", "Draining"], [6, "tsdb", "A time-series DB", "Cardinality"], [6, "gateway", "An API gateway", "Quotas and fan-out"], [6, "vectordb", "A vector database", "HNSW"],
-    [7, "whatsapp", "WhatsApp", "Gateways, receipts, offline", "Talk in real time"], [7, "slack", "Slack / Discord", "Fan-out to big channels", "Talk in real time"], [7, "zoom", "Zoom", "WebRTC and SFUs", "Talk in real time"],
+[7, "slack", "Slack / Discord", "Fan-out to big channels", "Talk in real time"], [7, "zoom", "Zoom", "WebRTC and SFUs", "Talk in real time"],
     [7, "twitter", "Twitter / X", "The celebrity problem", "Feeds and social"], [7, "instagram", "Instagram", "Photos and a feed", "Feeds and social"], [7, "tiktok", "TikTok", "A feed a model makes", "Feeds and social"],
     [7, "reddit", "Reddit", "Votes and hot ranking", "Feeds and social"], [7, "linkedin", "LinkedIn", "Degrees of connection", "Feeds and social"],
     [7, "uber", "Uber", "Live locations, matching", "Location"], [7, "yelp", "Yelp", "Nearby search", "Location"], [7, "doordash", "DoorDash", "Dispatch at dinner rush", "Location"], [7, "maps", "Google Maps", "Tiles and routing", "Location"],
@@ -338,11 +447,12 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
   REDIS_UNIT.cover = REDIS_REF;
+  WA_UNIT.cover = WA_REF;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];
