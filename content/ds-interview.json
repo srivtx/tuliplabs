@@ -169,6 +169,90 @@
 "twist": "<p>Nice. Now the weights arrive <b>unsorted</b>, straight off the scale. Change <code>closest_sum(a, t)</code> so it works for any order. What does that cost now?</p>",
 "twisttests": "assert closest_sum([10, 1, 7, 4, 3], 15) == 1\nassert closest_sum([9, 2, 5], 7) == 0\nassert closest_sum([6, -8, 1, -3], -10) == 1\nassert closest_sum([4], 4) is None",
 "twistsolution": "def closest_sum(a, t):\n    a = sorted(a)\n    if len(a) < 2:\n        return None\n    i, j = 0, len(a) - 1\n    best = abs(a[i] + a[j] - t)\n    while i < j:\n        s = a[i] + a[j]\n        best = min(best, abs(s - t))\n        if s < t:\n            i += 1\n        elif s > t:\n            j -= 1\n        else:\n            return 0\n    return best"
+},
+{
+"id": "distinct",
+"title": "Longest stretch with few kinds",
+"fn": "longest_k_kinds",
+"ch": 8,
+"decoys": [
+3,
+7,
+11,
+31
+],
+"bigo": "O(n)",
+"hints": [
+"<p>If a stretch has too many kinds, any longer stretch containing it does too. So once it breaks, you never need to look further right with the same start.</p>",
+"<p>Keep a window <code>s[left:right + 1]</code> and a dict of letter counts inside it. Move <code>right</code> every step; move <code>left</code> only when there are too many kinds.</p>",
+"<p>After adding <code>s[right]</code>, <code>while len(count) &gt; k:</code> take one off <code>count[s[left]]</code> (deleting it at zero) and step <code>left</code>. Then the window length <code>right - left + 1</code> is a candidate.</p>"
+],
+"tests": [
+{
+"tag": "empty",
+"code": "assert longest_k_kinds(\"\", 2) == 0"
+},
+{
+"tag": "kzero",
+"code": "assert longest_k_kinds(\"aaa\", 0) == 0"
+},
+{
+"tag": "bigk",
+"code": "assert longest_k_kinds(\"abcab\", 10) == 5\nassert longest_k_kinds(\"z\", 1) == 1"
+},
+{
+"tag": "big",
+"code": "import random\nrandom.seed(11)\nbig = \"\".join(\"d\" if i % 60000 == 59999 else random.choice(\"abc\") for i in range(200000))\nr, secs = timed(longest_k_kinds, big, 3)\nfrom collections import Counter\nc, i, want = Counter(), 0, 0\nfor j, ch in enumerate(big):\n    c[ch] += 1\n    while len(c) > 3:\n        c[big[i]] -= 1\n        if not c[big[i]]:\n            del c[big[i]]\n        i += 1\n    want = max(want, j - i + 1)\nassert r == want\nassert secs < 1.5, f\"{secs:.2f} s for 200,000 birds: restarting from every position is too slow\""
+}
+],
+"clarify": [
+{
+"q": "Can the log be empty?",
+"a": "Yes. Then the answer is 0.",
+"tag": "empty"
+},
+{
+"q": "Can k be 0?",
+"a": "Yes. No letters are allowed, so the answer is 0.",
+"tag": "kzero"
+},
+{
+"q": "What if k is more than the number of kinds in the log?",
+"a": "Then the whole log counts.",
+"tag": "bigk"
+},
+{
+"q": "Are the letters only lowercase?",
+"a": "Yes, a to z. It won't matter much.",
+"tag": null
+},
+{
+"q": "Should I return the substring itself?",
+"a": "Just its length.",
+"tag": null
+},
+{
+"q": "Can I use extra memory?",
+"a": "Yes, within reason.",
+"tag": null
+}
+],
+"bigos": [
+"O(log n)",
+"O(n)",
+"O(n log n)",
+"O(n²)",
+"O(2ⁿ)"
+],
+"prompt": "<p>A bird watcher logs one letter per bird they see, in order, like <code>\"aabcbbd\"</code>. They want the longest <b>unbroken</b> stretch of the log that has at most <code>k</code> different kinds of bird.</p>\n<p>Write <code>longest_k_kinds(s, k)</code>: return the length of the longest substring of <code>s</code> with at most <code>k</code> distinct letters.</p>\n<p><code>longest_k_kinds(\"aabcbbd\", 2)</code> is <code>4</code>: <code>\"bcbb\"</code>. <code>longest_k_kinds(\"abc\", 3)</code> is <code>3</code>.</p>",
+"examples": "assert longest_k_kinds(\"aabcbbd\", 2) == 4\nassert longest_k_kinds(\"abc\", 3) == 3",
+"starter": "def longest_k_kinds(s, k):\n    pass",
+"solution": "def longest_k_kinds(s, k):\n    count = {}\n    left = best = 0\n    for right, ch in enumerate(s):\n        count[ch] = count.get(ch, 0) + 1\n        while len(count) > k:\n            out = s[left]\n            count[out] -= 1\n            if count[out] == 0:\n                del count[out]\n            left += 1\n        best = max(best, right - left + 1)\n    return best",
+"brute": "def longest_k_kinds(s, k):\n    best = 0\n    for i in range(len(s)):\n        kinds = set()\n        for j in range(i, len(s)):\n            kinds.add(s[j])\n            if len(kinds) > k:\n                break\n            best = max(best, j - i + 1)\n    return best",
+"approach": "<p>Slide a window over the log. Grow it on the right one letter at a time, keeping a count per letter; whenever it holds more than <code>k</code> kinds, shrink it from the left until it's legal again. Each letter enters and leaves once: O(n).</p>",
+"twist": "<p>The watcher changes their mind: they want stretches with <b>exactly</b> <code>k</code> kinds. Write <code>longest_exactly_k(s, k)</code>, and return 0 if no stretch has exactly <code>k</code> kinds.</p>",
+"twisttests": "assert longest_exactly_k(\"aabcbbd\", 2) == 4\nassert longest_exactly_k(\"aab\", 3) == 0\nassert longest_exactly_k(\"abcab\", 3) == 5\nassert longest_exactly_k(\"\", 1) == 0\nassert longest_exactly_k(\"aaab\", 1) == 3",
+"twistsolution": "def longest_exactly_k(s, k):\n    count = {}\n    left = best = 0\n    for right, ch in enumerate(s):\n        count[ch] = count.get(ch, 0) + 1\n        while len(count) > k:\n            out = s[left]\n            count[out] -= 1\n            if count[out] == 0:\n                del count[out]\n            left += 1\n        if len(count) == k:\n            best = max(best, right - left + 1)\n    return best"
 }
 ]
 }

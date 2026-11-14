@@ -190,3 +190,111 @@ def closest_sum(a, t):
             return 0
     return best
 ```
+
+```interview
+id: distinct
+title: Longest stretch with few kinds
+fn: longest_k_kinds
+ch: 8
+decoys: 3, 7, 11, 31
+bigo: O(n)
+---prompt
+A bird watcher logs one letter per bird they see, in order, like `"aabcbbd"`. They want the longest **unbroken** stretch of the log that has at most `k` different kinds of bird.
+
+Write `longest_k_kinds(s, k)`: return the length of the longest substring of `s` with at most `k` distinct letters.
+
+`longest_k_kinds("aabcbbd", 2)` is `4`: `"bcbb"`. `longest_k_kinds("abc", 3)` is `3`.
+---examples
+assert longest_k_kinds("aabcbbd", 2) == 4
+assert longest_k_kinds("abc", 3) == 3
+---clarify
++ empty | Can the log be empty? | Yes. Then the answer is 0.
++ kzero | Can k be 0? | Yes. No letters are allowed, so the answer is 0.
++ bigk | What if k is more than the number of kinds in the log? | Then the whole log counts.
+- | Are the letters only lowercase? | Yes, a to z. It won't matter much.
+- | Should I return the substring itself? | Just its length.
+- | Can I use extra memory? | Yes, within reason.
+---test empty
+assert longest_k_kinds("", 2) == 0
+---test kzero
+assert longest_k_kinds("aaa", 0) == 0
+---test bigk
+assert longest_k_kinds("abcab", 10) == 5
+assert longest_k_kinds("z", 1) == 1
+---test big
+import random
+random.seed(11)
+big = "".join("d" if i % 60000 == 59999 else random.choice("abc") for i in range(200000))
+r, secs = timed(longest_k_kinds, big, 3)
+from collections import Counter
+c, i, want = Counter(), 0, 0
+for j, ch in enumerate(big):
+    c[ch] += 1
+    while len(c) > 3:
+        c[big[i]] -= 1
+        if not c[big[i]]:
+            del c[big[i]]
+        i += 1
+    want = max(want, j - i + 1)
+assert r == want
+assert secs < 1.5, f"{secs:.2f} s for 200,000 birds: restarting from every position is too slow"
+---starter
+def longest_k_kinds(s, k):
+    pass
+---solution
+def longest_k_kinds(s, k):
+    count = {}
+    left = best = 0
+    for right, ch in enumerate(s):
+        count[ch] = count.get(ch, 0) + 1
+        while len(count) > k:
+            out = s[left]
+            count[out] -= 1
+            if count[out] == 0:
+                del count[out]
+            left += 1
+        best = max(best, right - left + 1)
+    return best
+---brute
+def longest_k_kinds(s, k):
+    best = 0
+    for i in range(len(s)):
+        kinds = set()
+        for j in range(i, len(s)):
+            kinds.add(s[j])
+            if len(kinds) > k:
+                break
+            best = max(best, j - i + 1)
+    return best
+---approach
+Slide a window over the log. Grow it on the right one letter at a time, keeping a count per letter; whenever it holds more than `k` kinds, shrink it from the left until it's legal again. Each letter enters and leaves once: O(n).
+---hint
+If a stretch has too many kinds, any longer stretch containing it does too. So once it breaks, you never need to look further right with the same start.
+---hint
+Keep a window `s[left:right + 1]` and a dict of letter counts inside it. Move `right` every step; move `left` only when there are too many kinds.
+---hint
+After adding `s[right]`, `while len(count) > k:` take one off `count[s[left]]` (deleting it at zero) and step `left`. Then the window length `right - left + 1` is a candidate.
+---twist
+The watcher changes their mind: they want stretches with **exactly** `k` kinds. Write `longest_exactly_k(s, k)`, and return 0 if no stretch has exactly `k` kinds.
+---twisttests
+assert longest_exactly_k("aabcbbd", 2) == 4
+assert longest_exactly_k("aab", 3) == 0
+assert longest_exactly_k("abcab", 3) == 5
+assert longest_exactly_k("", 1) == 0
+assert longest_exactly_k("aaab", 1) == 3
+---twistsolution
+def longest_exactly_k(s, k):
+    count = {}
+    left = best = 0
+    for right, ch in enumerate(s):
+        count[ch] = count.get(ch, 0) + 1
+        while len(count) > k:
+            out = s[left]
+            count[out] -= 1
+            if count[out] == 0:
+                del count[out]
+            left += 1
+        if len(count) == k:
+            best = max(best, right - left + 1)
+    return best
+```
