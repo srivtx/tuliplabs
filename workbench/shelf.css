@@ -20,6 +20,9 @@
 .la-sketch .b rect{fill:color-mix(in srgb,var(--a) 14%,var(--b));stroke:var(--a);stroke-width:5}
 .la-sketch .w path{fill:none;stroke:color-mix(in srgb,var(--a) 70%,#fff);stroke-width:4;stroke-dasharray:2 10;stroke-linecap:round;opacity:.8}
 .la-plot:hover .la-sketch{transform:translate(-3%,-2%)}
+/* a system design unit: one clay object, centred, with room around it; it lifts a little on hover */
+.la-clay{position:absolute;z-index:1;left:10%;top:34px;width:80%;height:calc(100% - 44px);object-fit:contain;filter:drop-shadow(0 12px 16px rgba(0,0,0,.38));transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+.la-plot:hover .la-clay{transform:translateY(-5px) scale(1.05)}
 /* planned: the question it will answer, in serif */
 .la-ask{position:absolute;z-index:1;left:16px;right:58px;top:38px;margin:0;font:400 30px/1.02 var(--f-serif);color:var(--a);letter-spacing:-.005em}
 

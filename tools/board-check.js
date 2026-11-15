@@ -15,6 +15,7 @@ const KV = require(path.join(__dirname, "..", "tunnel", "kv.js"));
 const CH = require(path.join(__dirname, "..", "tunnel", "chat.js"));
 const GEO = require(path.join(__dirname, "..", "tunnel", "geo.js"));
 const FD = require(path.join(__dirname, "..", "tunnel", "feed.js"));
+const VD = require(path.join(__dirname, "..", "tunnel", "video.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -272,6 +273,48 @@ for (const b of BOARDS) {
       ok(says(b.why, x), `${b.id}: the why doesn't say "${x}"`);
   }
 }
+
+// ------------------------------------------------------------------------------------------ YouTube labs --
+for (const b of BOARDS) {
+  if (b.kind === "transcode") {
+    // on the page's seed only the answer passes; on four more seeds the answer still passes and its rivals still fail
+    const g = b.goals, pass = (r) => r.watchable <= g.watch && r.overhead <= g.waste, at = {};
+    for (const order of VD.ORDERS) for (const seg of VD.SEGS) { const r = (at[order + seg] = VD.transcode({ seg, order, seed: b.sim.seed })); ok(pass(r) === (seg === b.answer.seg && order === b.answer.order), `${b.id}: ${seg} s pieces, ${order}: watchable ${r.watchable.toFixed(1)} s, ${(r.overhead * 100).toFixed(1)}% start-up`); }
+    for (const seed of [2, 3, 4, 5]) {
+      ok(pass(VD.transcode({ seg: 10, order: "low", seed })), `${b.id} seed ${seed}: the answer failed`);
+      ok(!pass(VD.transcode({ seg: 60, order: "low", seed })) && !pass(VD.transcode({ seg: 10, order: "piece", seed })) && !pass(VD.transcode({ seg: 2, order: "low", seed })), `${b.id} seed ${seed}: a rival passed`);
+    }
+    // the work adds up: every task's encode plus its start-up
+    const a = at.low10;
+    ok(Math.abs(VD.RENDS.reduce((x, r) => x + r.cost, 0) * 3600 - a.ideal) < 1e-6 && a.tasks.length === 360 * 4, `${b.id}: the 10-second pieces don't make 1,440 tasks`);
+    ok(a.tasks.every((t) => t.end - t.start > 0) && new Set(a.tasks.map((t) => t.w)).size === 200, `${b.id}: the 200 workers weren't all used`);
+    const m = (o, sg) => at[o + sg];
+    for (const x of [`${Math.round(m("piece", 3600).watchable / 60)} min`, `${Math.round(m("piece", 600).watchable / 60)} min`, `${c(a.tasks.length)} tasks`, `${Math.round(m("piece", 10).watchable)} s`, `after ${Math.round(a.watchable)} s`,
+      `${(a.overhead * 100).toFixed(1)}%`, `after ${(a.all / 60).toFixed(1)} min`, `${Math.round(m("low", 60).watchable)} s`, `${(m("low", 2).overhead * 100).toFixed(1)}%`, `${Math.round(m("piece", 3600).ready[3] / 3600)} hours`])
+      ok(says(b.why, x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "abr") {
+    const g = b.goals, pass = (r) => r.stallShare <= g.stall && r.avg >= g.avg && r.wasted <= g.waste, isAns = (rule, ahead) => b.answer.some((x) => x.rule === rule && x.ahead === ahead), at = {};
+    for (const rule of VD.RULES) for (const ahead of VD.AHEAD) { const r = (at[rule + ahead] = VD.abr({ rule, ahead, seed: b.sim.seed })); ok(pass(r) === isAns(rule, ahead), `${b.id}: ${rule}, ${ahead} s ahead: stalled ${(r.stallShare * 100).toFixed(2)}%, ${r.avg.toFixed(2)} Mb/s, ${r.wasted.toFixed(1)} MB`); }
+    for (const seed of [2, 3, 4, 5]) for (const rule of VD.RULES) for (const ahead of VD.AHEAD) ok(pass(VD.abr({ rule, ahead, seed })) === isAns(rule, ahead), `${b.id} seed ${seed}: ${rule}, ${ahead} s ahead came out differently`);
+    // the player never plays what it hasn't fetched, and every second watched is accounted for
+    for (const k in at) { const r = at[k]; ok(r.trace.every((p) => p[1] >= -1e-9) && Math.abs(r.trace[r.trace.length - 1][2] - 480) < 1e-6, `${b.id}: ${k}'s buffer went negative or the playhead missed 8 minutes`); }
+    for (const x of [`${Math.round(at.top30.stallShare * 100)}% of the time`, `${at.low30.avg.toFixed(1)} on average`, `${(at.rate10.stallShare * 100).toFixed(1)}% of the time`, `averages ${at.rate30.avg.toFixed(2)}`, `averages ${at.buffer30.avg.toFixed(2)}`,
+      `${Math.round(at.buffer30.wasted)} MB thrown away`, `${Math.round(Math.min(at.rate120.wasted, at.buffer120.wasted))} MB or more`])
+      ok(says(b.why, x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "premiere") {
+    const g = b.goals, pass = (r) => r.originPeak <= g.peak && r.waitP99 <= g.wait, at = {};
+    for (const collapse of [false, true]) for (const shield of [false, true]) { const r = (at[+collapse + "" + +shield] = VD.premiere({ collapse, shield, seed: b.sim.seed })); ok(pass(r) === (collapse === b.answer.collapse && shield === b.answer.shield), `${b.id}: collapse ${collapse}, shield ${shield}: peak ${Math.round(r.originPeak)}/s, p99 ${r.waitP99.toFixed(2)} s`); }
+    for (const seed of [2, 3]) ok(pass(VD.premiere({ collapse: true, shield: true, seed })) && !pass(VD.premiere({ collapse: true, shield: false, seed })), `${b.id} seed ${seed}: the answer and its rival came out differently`);
+    const A = at["11"], E = at["10"], N0 = at["00"], S = at["01"];
+    ok(Math.abs(A.hist.reduce((a, x) => a + x, 0) - 1) < 1e-6 && Math.abs(N0.hist.reduce((a, x) => a + x, 0) - 1) < 1e-6, `${b.id}: the waits don't add up to every viewer`);
+    ok(E.originTotal === VD.EDGES * E.pieces && A.originTotal === VD.REGIONS * A.pieces, `${b.id}: collapsing doesn't send one request per edge (or per region) for each piece`);
+    for (const x of [`${(N0.originPeak / 1e6).toFixed(1)} million times`, `${(N0.failed * 100).toFixed(1)}% of requests`, `${Math.round(S.failed * 100)}% give up`, `${VD.EDGES} at once`, `${E.waitP99.toFixed(2)} s`, `hears ${VD.REGIONS} requests`, `within ${A.waitP99.toFixed(2)} s`])
+      ok(says(b.why, x), `${b.id}: the why doesn't say "${x}"`);
+  }
+}
+function c(n) { return n.toLocaleString("en-US").replace(/,/g, ""); }
 
 const ids = BOARDS.map((b) => b.id), ladder = SD.LADDER.map((u) => u.id);
 ok(new Set(ids).size === ids.length, "two questions share an id");

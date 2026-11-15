@@ -12,6 +12,7 @@
        conns, offline, order   WhatsApp's labs (tunnel/chat.js)
        nearby, batch, dispatch Uber's labs (tunnel/geo.js)
        fanout, likes, tlcache  Twitter's labs (tunnel/feed.js)
+       transcode, abr, premiere  YouTube's labs (tunnel/video.js)
    Every number here is checked by tools/board-check.js against the simulators the page runs.
    A design: parts {id, kind, x, y, n (machines), size, batch} on a 960 × 540 board, and wires [from, to]. */
 (function (root) {
@@ -66,6 +67,10 @@
     tlcache: { name: "timeline cache", say: "each person's latest tweet ids, in RAM", icon: '<rect x="4" y="3" width="18" height="20" rx="2"/><path d="M8 8h10M8 12h10M8 16h10"/><path d="M17 1.5 14 6h3l-2 4"/>' },
     sqljoin: { name: "timeline query", say: "join follows and tweets on every read", icon: '<circle cx="9.5" cy="13" r="6.5"/><circle cx="16.5" cy="13" r="6.5"/>' },
     inline: { name: "inline fan-out", say: "copy into every timeline, then reply", icon: '<path d="M3 13h7M10 13l5-7h8M10 13l5 7h8M10 13h13"/>' },
+    upload: { name: "upload service", say: "takes a video in chunks that can resume", icon: '<path d="M13 17V4M8 9l5-5 5 5"/><path d="M4 15v6h18v-6"/>' },
+    vstore: { name: "video store", say: "every quality, in pieces a few seconds long", icon: '<rect x="3" y="4" width="20" height="18" rx="2"/><path d="M8 4v18M18 4v18M3 9h5M3 13h5M3 17h5M18 9h5M18 13h5M18 17h5"/>' },
+    appstream: { name: "video via app servers", say: "app servers send the video bytes", icon: '<rect x="3" y="3" width="20" height="8" rx="1.6"/><path d="M10 14.5v8.5l7-4.25z"/>' },
+    onefile: { name: "one 1080p file", say: "a single MP4 for every screen", icon: '<path d="M6 3h10l4 4v16H6z"/><path d="M11 11.5v7l5.5-3.5z"/>' },
   };
 
   // what a part says on the board itself, where there's room for about 18 characters
@@ -75,7 +80,8 @@
     phone: "one open socket", gateway: "holds sockets", sessions: "who's where", chat: "routes messages", inbox: "waits for acks", push: "wakes a phone", blob: "photos, videos",
     poller: "asks every 5 s", index: "reads messages", rider: "wants a ride", driver: "pings every 4 s", locsvc: "takes pings", geoidx: "cells → drivers",
     matcher: "pairs them up", eta: "minutes by road", trips: "one ride each", pingdb: "a row a ping", scan: "checks them all",
-    people: "post and scroll", tweets: "every tweet", graph: "who follows whom", tlcache: "ids, in RAM", sqljoin: "joins on read", inline: "copies, then replies" };
+    people: "post and scroll", tweets: "every tweet", graph: "who follows whom", tlcache: "ids, in RAM", sqljoin: "joins on read", inline: "copies, then replies",
+    upload: "chunks, resumable", vstore: "every quality", appstream: "bytes via app", onefile: "one size for all" };
   for (const k in TAGS) PARTS[k].tag = TAGS[k];
 
   // A sketch's grade: each rubric item is a link the design needs (between parts of these kinds, either way round),
@@ -627,6 +633,108 @@
     ],
   };
 
+  // --------------------------------------------------------------------------------------------- YouTube --
+  const YT_FOLLOW = {
+    nodes: [P("M", "people", 95, 110, { label: "Mia" }), P("L", "people", 95, 420, { label: "Leo" }), P("up", "upload", 290, 110), P("bl", "blob", 480, 50), P("q", "queue", 480, 190),
+      P("w", "worker", 670, 190, { label: "transcoders" }), P("vs", "vstore", 860, 300), P("ap", "app", 290, 300), P("db", "sql", 480, 300, { label: "video info" }), P("cdn", "cdn", 480, 430)],
+    wires: [["M", "up"], ["up", "bl"], ["up", "q"], ["q", "w"], ["w", "bl"], ["w", "vs"], ["L", "ap"], ["ap", "db"], ["L", "cdn"], ["cdn", "vs"]],
+  };
+  const YT_REF = {
+    nodes: [P("pe", "people", 95, 270), P("up", "upload", 260, 110), P("bl", "blob", 450, 50), P("q", "queue", 450, 170), P("w", "worker", 640, 170, { label: "transcoders" }),
+      P("vs", "vstore", 850, 280), P("lb", "lb", 260, 290), P("ap", "app", 450, 300), P("db", "sql", 640, 290, { label: "video info" }), P("cdn", "cdn", 450, 450)],
+    wires: [["pe", "up"], ["up", "bl"], ["up", "q"], ["q", "w"], ["w", "bl"], ["w", "vs"], ["pe", "lb"], ["lb", "ap"], ["ap", "db"], ["pe", "cdn"], ["cdn", "vs"]],
+  };
+  const YOUTUBE_UNIT = {
+    id: "youtube", name: "YouTube", sub: "500 hours uploaded a minute, a billion hours watched a day", floor: 7, group: "Media",
+    w: [
+      {
+        id: "yt-scope", kind: "scope", title: "What is YouTube?",
+        lede: "You're designing YouTube. Before any boxes, pin down what it must do. Sort the cards: <b>what it does</b>, <b>how well</b>, <b>not now</b>.",
+        cards: [
+          { t: "Upload a video of any length", bin: "does", why: "Writing: one big file, which has to become something every screen can play." },
+          { t: "Watch it on a phone, a laptop or a TV", bin: "does", why: "Reading: the same video at many qualities, picked for each screen and each connection." },
+          { t: "A video page: title, views, likes", bin: "does", why: "The small data around the video, kept in an ordinary database." },
+          { t: "Playback starts fast and rarely stalls, even on a train", bin: "how", why: "A promise about the player and the network, and the reason video comes in pieces at several qualities." },
+          { t: "A new upload is watchable within minutes", bin: "how", why: "A promise about the transcoding pipeline: how fast an hour of video becomes playable." },
+          { t: "Survive a premiere: millions pressing play at once", bin: "how", why: "The thundering herd: every edge misses at the same moment." },
+          { t: "Live streaming", bin: "not", why: "Live video has seconds, not minutes, to transcode and deliver: a pipeline of its own." },
+          { t: "Recommendations: what to watch next", bin: "not", why: "Ranking millions of videos for one person is the recommender unit." },
+          { t: "Search every video by its words", bin: "not", why: "An inverted index over titles and transcripts is the search unit." },
+        ],
+        why: "YouTube does three things: take an upload, play it anywhere, and show the page around it. The hard parts are in \"how well\": playback that starts fast and doesn't stall on a bad connection, uploads that become watchable within minutes, and a CDN that survives millions of people pressing play at the same moment.",
+      },
+      {
+        id: "yt-napkin", kind: "napkin", title: "Size YouTube",
+        lede: "<b>500 hours</b> of video are uploaded every minute. Every rendition of an hour of video, together, takes about <b>3 GB</b>. People watch <b>1 billion hours</b> a day, at about <b>2.5 megabits a second</b> on average.",
+        q: {},
+        design: { nodes: [P("pe", "people", 95, 330), P("up", "upload", 420, 200), P("vs", "vstore", 760, 330), P("cdn", "cdn", 420, 440)], wires: [["pe", "up"], ["up", "vs"], ["pe", "cdn"], ["cdn", "vs"]] },
+        notes: [
+          { id: "h", on: "up", dx: -40, dy: -160, label: "hours uploaded a day", unit: "hours", calc: "500 * 60 * 24", hint: "a day is 60 × 24 minutes" },
+          { id: "s", on: "vs", dx: -10, dy: -200, label: "new storage a day", unit: "TB", calc: "500 * 60 * 24 * 3 / 1000", hint: "hours a day × 3 GB, then 1 TB = 1,000 GB" },
+          { id: "e", on: "cdn", dx: 160, dy: -20, label: "video going out", unit: "Tbps", calc: "1e9 / 24 * 2.5e6 / 1e12", hint: "hours a day ÷ 24 is how many streams play at once; × 2.5 megabits; 1 Tbps = 10¹² bits a second" },
+        ],
+        why: "500 hours a minute is 720,000 hours of new video a day. At 3 GB an hour that's 2,160 TB, about 2 petabytes of new storage every day, so video lives in a blob store, never in a database. A billion hours a day means about 42 million streams playing at any moment; at 2.5 megabits each that's 104 terabits a second going out. No single data centre can send that: it has to come from caches near the viewers.",
+      },
+      {
+        id: "yt-sketch", kind: "sketch", title: "Draw YouTube",
+        lede: "Draw the server side. An upload must become every quality, in short pieces; a viewer must get those pieces from somewhere close; the video page needs its title and views. Drag parts in from the tray and wire them. Two of the parts don't belong.",
+        q: {},
+        tray: ["lb", "app", "sql", "upload", "blob", "queue", "worker", "vstore", "cdn", "appstream", "onefile"],
+        design: { nodes: [P("pe", "people", 95, 270)], wires: [] },
+        reference: YT_REF,
+        rubric: [
+          { link: [["people", "upload"]], say: "Uploads go to an upload service that takes the file in chunks, so a dropped connection picks up where it stopped." },
+          { link: [["upload", "blob"]], say: "The raw file is kept, as it came, in a blob store." },
+          { link: [["upload", "queue"]], say: "A finished upload puts a transcode job on a queue." },
+          { link: [["queue", "worker"]], say: "Transcode workers take the job, piece by piece." },
+          { link: [["worker", "vstore"]], say: "They write every quality, cut into pieces a few seconds long, to the video store." },
+          { link: [["people", "cdn"]], say: "Viewers fetch the pieces from a CDN edge near them." },
+          { link: [["cdn", "vstore"]], say: "An edge that doesn't have a piece fetches it from the video store, then keeps it." },
+          { link: [["people", "lb"], ["people", "app"]], say: "The video page comes from app servers behind a load balancer." },
+          { link: [["app", "sql"]], say: "Its title, views and list of pieces are in a database." },
+        ],
+        wrong: {
+          appstream: "Sending the video itself through app servers puts 104 terabits a second through machines built to answer page requests, mostly far from the viewer. Video comes from a CDN edge nearby.",
+          onefile: "One 1080p file stalls on a phone on a train and can't give a TV 4K. Keep every quality, in short pieces, so the player can switch quality piece by piece.",
+        },
+        why: "An upload lands in chunks at an upload service, and the raw file goes to a blob store. A job on a queue sends it to transcode workers, which write every quality, in pieces a few seconds long, to the video store. Viewers get those pieces from a CDN edge near them; the edge fetches from the video store only on a miss. The page around the video, its title, views and list of pieces, comes from app servers and a database. The video bytes never touch an app server.",
+      },
+      {
+        id: "yt-follow", kind: "follow", title: "Follow a video",
+        lede: "Mia uploads a video, and Leo watches it. Tap the parts each step passes through, in order.",
+        q: {}, item: "step",
+        design: YT_FOLLOW,
+        rounds: [
+          { say: "Mia uploads an hour-long video. Where does the raw file land?", path: ["M", "up", "bl"] },
+          { say: "Now it has to become 360p to 4K, in pieces. Start at the upload service. (On the way, the transcoders read the raw file from the blob store.)", path: ["up", "q", "w", "vs"] },
+          { say: "Leo opens the video page. Its title, views and list of pieces: where do they come from?", path: ["L", "ap", "db"] },
+          { say: "He presses play, the first in his city to watch it. Where do the pieces come from?", path: ["L", "cdn", "vs"] },
+        ],
+        why: "The upload is a write that happens once: the raw file is kept, and transcoders turn it into every quality in short pieces. Watching is a read that happens millions of times: the page comes from app servers and a database, and the pieces come from a CDN edge. Only the first viewer near an edge makes it go to the video store; everyone after is served from the edge.",
+      },
+    ],
+    s: [
+      {
+        id: "yt-transcode", kind: "transcode", title: "The upload",
+        lede: "A creator uploads an <b>hour-long</b> video. It has to become four qualities, 360p, 720p, 1080p and 4K, and <b>200 workers</b> are free to encode it; 4K is 16 times the work of 360p. Cut the video into pieces: each piece in each quality is one task, but every task spends <b>4 s</b> starting up (fetch the piece, find a keyframe, warm up the encoder). The goals: the whole video can be watched in 360p within <b>30 s</b>, and start-up wastes at most <b>20%</b> of the work.",
+        sim: { seed: 1 }, goals: { watch: 30, waste: 0.2 }, answer: { seg: 10, order: "low" },
+        why: "As one piece, the 360p encode alone is half an hour of one worker's time: the video isn't watchable for 35 min, and 4K takes nearly 8 hours while 199 workers sit idle. 10-minute pieces still take 6 min. Cut into 10-second pieces there are 1,440 tasks, but done piece by piece, the 4K tasks hog the workers and the last of the 360p isn't done until 241 s. Do every piece's 360p first and the whole hour plays after 20 s, with start-up costing 12.3% of the work, and everything, 4K included, is done after 5.1 min. 1-minute pieces only get to 43 s, and 2-second pieces spend 61.5% of the work starting up. YouTube cuts uploads into short pieces at keyframes, encodes them in parallel, and does the low qualities first.",
+      },
+      {
+        id: "yt-abr", kind: "abr", title: "The train ride",
+        lede: "Leo watches on a train. The video comes in <b>2-second</b> pieces at five qualities, from 240p (0.4 megabits a second) to 1080p (6), and the signal swings: fast in the city, almost nothing in a tunnel, patchy in open country and at a crowded station. He watches <b>8 minutes</b>, then gets off. Choose how the player picks each piece's quality, and how far ahead it fetches. The goals: stalled under <b>1%</b> of the time, at least <b>3 megabits a second</b> on average (720p), and at most <b>25 MB</b> fetched and never watched.",
+        sim: { seed: 1 }, goals: { stall: 0.01, avg: 3, waste: 25 }, answer: [{ rule: "rate", ahead: 30 }, { rule: "buffer", ahead: 30 }],
+        why: "Always 1080p needs 6 megabits a second, which the tunnel, the country and the station can't give: stalled 19% of the time. Always 360p never stalls, but it looks it: 0.8 on average. Fetching only 10 s ahead, the tunnel empties the buffer before the player can react: stalled 3.2% of the time. 30 s ahead, both rules that adapt make it: matching the last download's speed averages 3.93 megabits a second, and picking by how full the buffer is averages 4.02, with 21 MB thrown away when Leo gets off. Two minutes ahead never stalls either, but throws away 55 MB or more of video nobody sees. This is adaptive bitrate streaming, as in HLS and DASH: every piece comes at several qualities, and the player picks, piece by piece.",
+      },
+      {
+        id: "yt-premiere", kind: "premiere", title: "The premiere",
+        lede: "A huge channel premieres a video: <b>3 million</b> people press play together, on <b>200</b> CDN edges in <b>10</b> regions. Every <b>4 s</b> a new piece goes live and everyone asks for it within about a second, so every edge misses at once. The origin can answer <b>120</b> requests a second, and a request that waits over <b>2 s</b> gives up. Choose what an edge does on a miss, and whom it asks. The goals: the origin is never asked more than <b>120</b> times in a second, and 99% of viewers get each piece within <b>1 s</b>.",
+        sim: { seed: 1 }, goals: { peak: 120, wait: 1 }, answer: { collapse: true, shield: true },
+        why: "When every miss goes on to the origin, it's asked 2.3 million times in a second and 99.6% of requests give up. Shields alone don't help: each one still passes on every miss, and 96% give up. Collapsing at the edges sends one request per edge for each piece, but that's 200 at once, more than the origin can answer in a second, so the last edges wait and the slowest 1% of viewers wait 1.63 s. Collapse at the edges and at the shields, and the origin hears 10 requests a piece, one per region, and 99% of viewers get each piece within 0.24 s. Request collapsing behind an origin shield is how a CDN survives a thundering herd.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -656,7 +764,7 @@
 [7, "instagram", "Instagram", "Photos and a feed", "Feeds and social"], [7, "tiktok", "TikTok", "A feed a model makes", "Feeds and social"],
     [7, "reddit", "Reddit", "Votes and hot ranking", "Feeds and social"], [7, "linkedin", "LinkedIn", "Degrees of connection", "Feeds and social"],
 [7, "yelp", "Yelp", "Nearby search", "Location"], [7, "doordash", "DoorDash", "Dispatch at dinner rush", "Location"], [7, "maps", "Google Maps", "Tiles and routing", "Location"],
-    [7, "youtube", "YouTube", "Upload, transcode, stream", "Media"], [7, "netflix", "Netflix", "A CDN inside ISPs", "Media"], [7, "spotify", "Spotify", "Offline caching", "Media"],
+    [7, "netflix", "Netflix", "A CDN inside ISPs", "Media"], [7, "spotify", "Spotify", "Offline caching", "Media"],
     [7, "dropbox", "Dropbox", "Chunks, dedupe, sync", "Files and documents"], [7, "gdocs", "Google Docs", "OT vs CRDT", "Files and documents"], [7, "pastebin", "Pastebin", "Blobs and expiry", "Files and documents"],
     [7, "amazon", "Amazon checkout", "Inventory and sagas", "Money and commerce"], [7, "ticketmaster", "Ticketmaster", "100k people, 1k seats", "Money and commerce"],
     [7, "airbnb", "Airbnb", "No double booking", "Money and commerce"], [7, "stripe", "Stripe", "Idempotency, a ledger", "Money and commerce"],
@@ -667,7 +775,7 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
@@ -675,6 +783,7 @@
   WA_UNIT.cover = WA_REF;
   UBER_UNIT.cover = UB_REF;
   TWITTER_UNIT.cover = TW_REF;
+  YOUTUBE_UNIT.cover = YT_REF;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];

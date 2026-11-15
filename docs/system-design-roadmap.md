@@ -144,7 +144,7 @@ Grouped by the hard part, so similar apps teach each other.
 ### Media
 | App | The hard part | Simulate |
 |---|---|---|
-| **YouTube** (upload and watch) | Chunked upload, transcode DAG, adaptive bitrate, view counts | Transcode queue on a busy day; bitrate on a bad network |
+| **YouTube** (upload and watch) ✓ | Chunked upload, transcode DAG, adaptive bitrate, the premiere herd | Built: an hour-long upload on 200 transcoders (piece size, low qualities first); a train ride for the player (quality rule, how far ahead); a premiere on 200 CDN edges (request collapsing behind regional shields). Still to add: view counts |
 | **Netflix** (streaming) | Putting the CDN inside ISPs, prefetching, global failover | Evening peak: edge hit rate vs origin |
 | **Spotify** (music) | Small files, offline caching, playlists | Cache hits on a phone with little space |
 
@@ -233,7 +233,7 @@ Each principle is **taught** in one first-principles unit and **reused** in the 
    - Snip gets scope and sketch;
    - the whole Redis unit.
 2. **Floors 0–1:** the start of the beginner path. Each unit links to the Wind Tunnel experiment that already covers it.
-3. **The apps people ask about most:** WhatsApp ✓ (scope, napkin, sketch, follow a message; then hold 500M connections, Bob's patchy day, keep a group chat in order), Uber ✓ (scope, napkin, sketch, follow a ride; then find the nearest drivers, match a busy evening, one driver for one rider), Twitter/X ✓ (scope, napkin, sketch, follow a tweet; then the celebrity problem, a viral tweet's likes, timelines in memory), then YouTube, Ticketmaster, Stripe. Their first-principles units on floors 2–4 come just before them.
+3. **The apps people ask about most:** WhatsApp ✓ (scope, napkin, sketch, follow a message; then hold 500M connections, Bob's patchy day, keep a group chat in order), Uber ✓ (scope, napkin, sketch, follow a ride; then find the nearest drivers, match a busy evening, one driver for one rider), Twitter/X ✓ (scope, napkin, sketch, follow a tweet; then the celebrity problem, a viral tweet's likes, timelines in memory), YouTube ✓ (scope, napkin, sketch, follow a video; then the upload, the train ride, the premiere), then Ticketmaster, Stripe. Their first-principles units on floors 2–4 come just before them.
 4. **New whiteboard kinds** `api`, `data` and `tradeoff`, added to the units already built.
 5. **A system design mock:** one unseen app, 45 minutes, whiteboard first and then simulate, with a scorecard. It follows the DSA interview mode.
 6. **The rest of the apps**, then the frontier.

@@ -372,3 +372,34 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .tw-acct:not(.in){fill:none;stroke:var(--sd-ink);stroke-opacity:.35}
 .tw-kept{fill:color-mix(in srgb,var(--sd-sim) 55%,var(--sd-paper))}
 .tw-deep{fill:color-mix(in srgb,var(--sd-hot) 18%,var(--sd-paper));stroke:var(--sd-hot);stroke-dasharray:3 3;stroke-width:1}
+
+/* YouTube labs */
+.yt-cell{fill:var(--qc)}.q0{--qc:var(--sd-sim)}.q1{--qc:var(--sd-sessions)}.q2{--qc:var(--sd-warm)}.q3{--qc:var(--pink)}
+.yt-cut{stroke:var(--sd-paper);stroke-width:2}
+.yt-busy{fill:color-mix(in srgb,var(--qc) 70%,var(--sd-paper));stroke:var(--qc);stroke-width:1}
+.yt-mark{stroke:var(--ok);stroke-width:2.2}
+.yt-lt{font:600 10.5px var(--f-mono);fill:var(--ok)}
+.yt-chip{fill:none;stroke:var(--sd-ink);stroke-opacity:.35;stroke-width:1.2;stroke-dasharray:3 3}
+.yt-chip.on{fill:color-mix(in srgb,var(--qc) 25%,var(--sd-paper));stroke:var(--qc);stroke-opacity:1;stroke-dasharray:none}
+.yt-ct{font:600 11px var(--f-mono);fill:var(--sd-faint)}.yt-ct.on{fill:var(--sd-ink)}
+.yt-sec{fill:color-mix(in srgb,var(--sd-ink) 3%,transparent)}.yt-sec.dark{fill:color-mix(in srgb,var(--sd-ink) 13%,transparent)}
+.yt-bw{fill:color-mix(in srgb,var(--sd-sim) 25%,transparent);stroke:var(--sd-sim);stroke-width:1.2}
+.yt-bw.ghost{opacity:.35}
+.yt-pick{fill:none;stroke:var(--pink);stroke-width:2.4}
+.yt-buf{fill:color-mix(in srgb,var(--sd-worker) 30%,transparent);stroke:var(--sd-worker);stroke-width:1.4}
+.yt-stall{fill:var(--sd-hot)}
+.yt-px.sky{fill:#9fd3e6}.yt-px.sky2{fill:#c4e5ee}.yt-px.sun{fill:#ffd166}.yt-px.pk{fill:#e8579b}.yt-px.pk2{fill:#f48fbd}.yt-px.st{fill:#3f9b4f}.yt-px.gr{fill:#6cbf5a}.yt-px.gr2{fill:#57a948}
+.yt-frame{fill:none;stroke:var(--sd-ink);stroke-width:2}
+.yt-dim{fill:rgba(0,0,0,.45)}
+.yt-spin{fill:none;stroke:#fff;stroke-width:3;stroke-dasharray:60 30;stroke-linecap:round}
+.yt-wire{stroke:var(--sd-cdn);stroke-opacity:.28;stroke-linecap:round}
+.yt-wire.up{stroke:var(--sd-sessions);stroke-opacity:.45}
+.yt-wire.lit{stroke-opacity:.8}
+.yt-edge{fill:var(--sd-cdn)}
+.yt-shield{fill:color-mix(in srgb,var(--sd-sessions) 30%,var(--sd-paper));stroke:var(--sd-sessions);stroke-width:1.6}
+.yt-origin{fill:color-mix(in srgb,var(--sd-blob) 22%,var(--sd-paper));stroke:var(--sd-blob);stroke-width:2}
+.yt-origin.hot{fill:color-mix(in srgb,var(--sd-hot) 40%,var(--sd-paper));stroke:var(--sd-hot)}
+.yt-ot{font:600 11px var(--f-mono);fill:var(--sd-ink)}
+.yt-ob{fill:var(--sd-sim)}.yt-ob.over{fill:var(--sd-hot)}
+.yt-wb{fill:var(--ok)}.yt-wb.slow{fill:var(--sd-hot)}
+.yt-halo{paint-order:stroke;stroke:var(--sd-paper);stroke-width:4px;stroke-linejoin:round}
