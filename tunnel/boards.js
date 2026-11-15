@@ -71,6 +71,12 @@
     vstore: { name: "video store", say: "every quality, in pieces a few seconds long", icon: '<rect x="3" y="4" width="20" height="18" rx="2"/><path d="M8 4v18M18 4v18M3 9h5M3 13h5M3 17h5M18 9h5M18 13h5M18 17h5"/>' },
     appstream: { name: "video via app servers", say: "app servers send the video bytes", icon: '<rect x="3" y="3" width="20" height="8" rx="1.6"/><path d="M10 14.5v8.5l7-4.25z"/>' },
     onefile: { name: "one 1080p file", say: "a single MP4 for every screen", icon: '<path d="M6 3h10l4 4v16H6z"/><path d="M11 11.5v7l5.5-3.5z"/>' },
+    waitroom: { name: "waiting room", say: "a line in front of the site, letting fans in as there's room", icon: '<rect x="17" y="3" width="7" height="20" rx="1"/><path d="M21.5 13h.1"/><circle cx="4.5" cy="10" r="2.2"/><circle cx="11" cy="10" r="2.2"/><path d="M1.5 19c0-3 1.3-5.5 3-5.5s3 2.5 3 5.5M8 19c0-3 1.3-5.5 3-5.5s3 2.5 3 5.5"/>' },
+    holds: { name: "seat holds", say: "seats kept for a shopper, each with an expiry", icon: '<path d="M3 7h20v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4z"/><circle cx="13" cy="13" r="3.4"/><path d="M13 11.3V13l1.2.8"/>' },
+    payment: { name: "payments", say: "a payment provider that charges the card", icon: '<rect x="2" y="6" width="22" height="15" rx="2"/><path d="M2 11h22M6 16.5h5"/>' },
+    mapcache: { name: "seat-map copy", say: "the free seats, copied from the database every second", icon: '<path d="M6 3.5h14"/><path d="M4 9h3M9.5 9h3M15 9h3M20.5 9h1.5M4 14h3M9.5 14h3M15 14h3M20.5 14h1.5M4 19h3M9.5 19h3M15 19h3M20.5 19h1.5"/>' },
+    paylock: { name: "lock until paid", say: "a database lock on the seats while they pay", icon: '<rect x="5" y="11" width="16" height="12" rx="2"/><path d="M9 11V7a4 4 0 0 1 8 0v4M13 15.5v3"/>' },
+    localseats: { name: "seats in app memory", say: "each app server keeps its own list of free seats", icon: '<rect x="2" y="4" width="6" height="18" rx="1"/><rect x="10" y="4" width="6" height="18" rx="1"/><rect x="18" y="4" width="6" height="18" rx="1"/><path d="M4 9h2M12 9h2M20 9h2M4 13h2M12 13h2M20 13h2"/>' },
   };
 
   // what a part says on the board itself, where there's room for about 18 characters
@@ -81,7 +87,8 @@
     poller: "asks every 5 s", index: "reads messages", rider: "wants a ride", driver: "pings every 4 s", locsvc: "takes pings", geoidx: "cells → drivers",
     matcher: "pairs them up", eta: "minutes by road", trips: "one ride each", pingdb: "a row a ping", scan: "checks them all",
     people: "post and scroll", tweets: "every tweet", graph: "who follows whom", tlcache: "ids, in RAM", sqljoin: "joins on read", inline: "copies, then replies",
-    upload: "chunks, resumable", vstore: "every quality", appstream: "bytes via app", onefile: "one size for all" };
+    upload: "chunks, resumable", vstore: "every quality", appstream: "bytes via app", onefile: "one size for all",
+    waitroom: "lets fans in", holds: "with an expiry", payment: "charges cards", mapcache: "copied every 1 s", paylock: "locks while paying", localseats: "own seat list" };
   for (const k in TAGS) PARTS[k].tag = TAGS[k];
 
   // A sketch's grade: each rubric item is a link the design needs (between parts of these kinds, either way round),
@@ -735,6 +742,106 @@
     ],
   };
 
+  // ----------------------------------------------------------------------------------------- Ticketmaster --
+  const TM_FOLLOW = {
+    nodes: [P("N", "people", 95, 270, { label: "Nia", tag: "wants two seats" }), P("wr", "waitroom", 270, 270), P("ap", "app", 460, 270, { label: "booking", tag: "picks and sells" }), P("mc", "mapcache", 460, 100),
+      P("hd", "holds", 690, 140), P("db", "sql", 690, 300, { label: "seats & orders" }), P("pay", "payment", 690, 450)],
+    wires: [["N", "wr"], ["wr", "ap"], ["ap", "mc"], ["mc", "db"], ["ap", "hd"], ["ap", "db"], ["ap", "pay"]],
+  };
+  const TM_REF = {
+    nodes: [P("pe", "people", 95, 280, { tag: "a million fans" }), P("wr", "waitroom", 250, 280), P("lb", "lb", 400, 280), P("ap", "app", 560, 280, { label: "booking" }), P("mc", "mapcache", 560, 100),
+      P("hd", "holds", 780, 150), P("db", "sql", 780, 300, { label: "seats & orders" }), P("pay", "payment", 780, 450)],
+    wires: [["pe", "wr"], ["wr", "lb"], ["lb", "ap"], ["ap", "mc"], ["mc", "db"], ["ap", "hd"], ["ap", "db"], ["ap", "pay"]],
+  };
+  const TICKET_UNIT = {
+    id: "ticketmaster", name: "Ticketmaster", sub: "100,000 fans, 20,000 seats, on sale at 10:00", floor: 7, group: "Money and commerce",
+    w: [
+      {
+        id: "tm-scope", kind: "scope", title: "What is Ticketmaster?",
+        lede: "You're designing Ticketmaster. Before any boxes, pin down what it must do. Sort the cards: <b>what it does</b>, <b>how well</b>, <b>not now</b>.",
+        cards: [
+          { t: "Show an event and a map of its seats", bin: "does", why: "Reading: the event page, and which seats are still free." },
+          { t: "Hold the seats you picked while you pay", bin: "does", why: "Nobody else can take them for a few minutes, and then they go back." },
+          { t: "Buy tickets and get them on your phone", bin: "does", why: "Writing: the seats become yours, once, and the card is charged." },
+          { t: "Survive a million fans at exactly 10:00", bin: "how", why: "The onsale: every fan arrives in the same minute, for a site that can serve a few thousand at a time." },
+          { t: "Never sell one seat twice", bin: "how", why: "Two fans clicking the same seat in the same second: exactly one gets it." },
+          { t: "Fair to fans, not to bots", bin: "how", why: "Being first, or having a thousand tabs, mustn't be the way to get tickets." },
+          { t: "Fans reselling tickets to each other", bin: "not", why: "Resale is a marketplace of its own, with its own prices and transfers." },
+          { t: "Search events by artist and city", bin: "not", why: "Search is an index over every event: the search unit." },
+          { t: "Recommend shows you might like", bin: "not", why: "Ranking events for one person is the recommender unit." },
+        ],
+        why: "Ticketmaster does three things: show the seats, hold some for you, and sell them to you. The hard parts are all in \"how well\": a sale where everyone arrives in the same minute, a seat that can only ever be sold once however many people click it, and a line that's fair to people rather than to whoever has the most tabs.",
+      },
+      {
+        id: "tm-napkin", kind: "napkin", title: "Size an onsale",
+        lede: "<b>2 million</b> fans want tickets for a stadium show with <b>50,000</b> seats, <b>2</b> each. Without a waiting room, each would refresh the page every <b>5 s</b>. The booking servers can hold <b>4,000</b> shoppers at once, and a shopper takes about <b>5 minutes</b> to pick seats and pay.",
+        q: {},
+        design: { nodes: [P("pe", "people", 95, 330, { tag: "2 million fans" }), P("wr", "waitroom", 420, 330), P("ap", "app", 760, 330, { label: "booking", tag: "4,000 at once" })], wires: [["pe", "wr"], ["wr", "ap"]] },
+        notes: [
+          { id: "r", on: "wr", dx: 0, dy: -190, label: "refreshes a second, with no waiting room", unit: "/s", calc: "2e6 / 5", hint: "fans ÷ seconds between refreshes" },
+          { id: "b", on: "ap", dx: -10, dy: -190, label: "shoppers through a minute", unit: "/min", calc: "4000 / 5", hint: "shoppers at once ÷ minutes each" },
+          { id: "m", on: "ap", dx: -10, dy: 60, label: "minutes to sell out", unit: "min", calc: "50000 / 2 / (4000 / 5)", hint: "buyers (seats ÷ 2) ÷ shoppers a minute" },
+        ],
+        why: "2 million fans refreshing every 5 s is 400,000 requests a second at a site that can hold 4,000 shoppers. Only 25,000 of them can buy, 2 seats each, and 4,000 shoppers taking 5 minutes is 800 a minute, so even if every shopper buys, it sells out in about 31 minutes. Everyone else is going to wait, and lose. The only question is whether they wait in an orderly line or by hammering the site: so the first part of the design is a waiting room that lets 800 a minute through and keeps everyone else off the booking servers.",
+      },
+      {
+        id: "tm-sketch", kind: "sketch", title: "Draw Ticketmaster",
+        lede: "Draw the server side. A million fans arrive at 10:00 for a few thousand places; a shopper's seats must be kept for them while they pay, and given back if they don't; a seat can only be sold once. Drag parts in from the tray and wire them. Two of the parts don't belong.",
+        q: {},
+        tray: ["waitroom", "lb", "app", "mapcache", "holds", "sql", "payment", "paylock", "localseats"],
+        design: { nodes: [P("pe", "people", 95, 280, { tag: "a million fans" })], wires: [] },
+        reference: TM_REF,
+        rubric: [
+          { link: [["people", "waitroom"]], say: "Fans line up in a waiting room in front of the site, not at the booking servers." },
+          { link: [["waitroom", "lb"], ["waitroom", "app"]], say: "The waiting room lets a fan through each time a shopper leaves, so the booking servers never get more than they can hold." },
+          { link: [["app", "holds"]], say: "Picking seats puts a hold on them that runs out after 10 minutes, so nobody else takes them while you pay." },
+          { link: [["app", "sql"]], say: "Seats and orders live in one database, and a sale is one conditional write: these seats, to you, only if they're still yours." },
+          { link: [["app", "payment"]], say: "A payment provider charges the card, with no database lock held while it does." },
+          { link: [["app", "mapcache"]], say: "The seat map comes from a copy made every second, not from the database on every refresh." },
+          { link: [["mapcache", "sql"]], say: "The copy reads the free seats from the database, once a second." },
+        ],
+        wrong: {
+          paylock: "Locking the seats in the database until the card is charged keeps a transaction open for every shopper for minutes: 2,000 shoppers, a few hundred connections, and everyone else gets an error page. A shopper who walks away keeps the lock too. Hold the seats with an expiry instead.",
+          localseats: "If each app server keeps its own list of free seats, forty servers have forty lists, and the same seat is sold twice. Seats live in one place, and a sale is one conditional write.",
+        },
+        why: "Fans wait in a waiting room in front of the site, which lets them through as fast as the booking servers can hold them. Picking seats puts a hold on them with an expiry, so they're yours while you pay and go back by themselves if you don't. The sale itself is one conditional write in the database that keeps seats and orders, after the payment provider charges the card. The seat map that everyone keeps refreshing is read from a copy made every second, so the database answers once a second instead of thousands of times.",
+      },
+      {
+        id: "tm-follow", kind: "follow", title: "Follow a ticket",
+        lede: "Nia wants two tickets. Tap the parts each step passes through, in order.",
+        q: {}, item: "step",
+        design: TM_FOLLOW,
+        rounds: [
+          { say: "Nia opens the sale at 9:50. Where does she wait?", path: ["N", "wr"] },
+          { say: "At 10:12 it's her turn, and she taps two seats. Where are they kept for her? Start at the waiting room.", path: ["wr", "ap", "hd"] },
+          { say: "She pays. Who charges her card?", path: ["ap", "pay"] },
+          { say: "The charge goes through. Where is the sale written, for good?", path: ["ap", "db"] },
+        ],
+        why: "Nia spends most of her time in the waiting room, which is cheap: a page that says where she is in line. Once she's in, her seats are held with an expiry while she pays, so nobody can take them and nothing is locked in the database. The payment provider charges her card, and only then is the sale written, once, in the database of seats and orders.",
+      },
+    ],
+    s: [
+      {
+        id: "tm-onsale", kind: "onsale", title: "10:00",
+        lede: "A big show goes on sale at 10:00. <b>100,000</b> fans want <b>20,000</b> seats, two each. The booking servers can hold <b>2,000</b> shoppers at once; one more gets an error page, and tries again a minute later. The waiting room opened at 9:30: <b>1,500</b> bots joined in its first second, people over the half hour, and more keep arriving after 10:00. Choose how the waiting room lets people through, and in what order it puts everyone already waiting at 10:00. The goals: no error pages, sold out within <b>an hour</b>, and bots get at most <b>5%</b> of the seats.",
+        sim: { seed: 1 }, goals: { errors: 0, sold: 3600, bots: 0.05 }, answer: { door: "swap", line: "shuffle" },
+        why: "Let everyone in at once and 471,029 error pages go out; 93,584 fans give up after their fifth. 50 a second fills the booking servers in 40 s, and then 108,693 error pages. 3 a second never errors, but it's slower than people leave, and the show sells out after 87.5 min. Letting one in each time a shopper leaves keeps exactly 2,000 inside, and it sells out after 41.1 min. And the order: in the order they came, the bots are at the front, because they joined at 9:30:00, and they get 15.0% of the seats. Shuffle everyone who was waiting at 10:00 and the bots get 3.3%: being first is worth nothing, so there's no prize for camping. Ticketmaster's waiting room does this: a random place for everyone there before the sale, then in as fast as the site can hold them.",
+      },
+      {
+        id: "tm-hold", kind: "hold", title: "While you pay",
+        lede: "The same onsale, through a waiting room that works. A shopper picks two seats, and they're kept for them while they pay: most pay within 2 or 3 minutes, a few take much longer, and about a third walk away without paying. Choose how the seats are kept, and for how long. The database has <b>400</b> connections. The goals: no error pages, at most <b>1%</b> of buyers lose their seats while paying, and <b>19,000</b> of the 20,000 seats sold within <b>an hour</b>.",
+        sim: { seed: 1 }, goals: { errors: 0, kick: 0.01, by: 3600 }, answer: { keep: "hold", mins: 10 },
+        why: "A database lock keeps a transaction open for every shopper until they pay: 2,000 shoppers, 400 connections, and 556,215 error pages. A hold with an expiry costs the database nothing while it waits. 2 minutes is shorter than most people take to pay: 63.6% of buyers lose their seats mid-payment. 5 minutes still takes them from 10.0%. 10 minutes takes them from only 0.51%, and 19,000 seats are sold after 48.2 min. 30 minutes is safe for every buyer, but seats held by people who walked away pile up to 3,922, and an hour in only 14,548 are sold. Ticketmaster holds seats for a few minutes, with a countdown on the page, and the hold runs out on its own.",
+      },
+      {
+        id: "tm-seatmap", kind: "seatmap", title: "Those seats were just taken",
+        lede: "Ten minutes into the onsale, the best seats are going. <b>1,000</b> shoppers are inside, and the seat map on each one's screen refreshes every <b>2 s</b>. Reading the map from the database reads all 20,000 seats, and the database can afford <b>5</b> of those a second. Choose where the map comes from, and how a shopper picks. The goals: at most <b>5</b> seat-map reads a second reach the database, and at most <b>5%</b> of tries end in \"sorry, those seats were just taken\".",
+        sim: { seed: 1 }, goals: { reads: 5, clash: 0.05 }, answer: { map: 1, pick: "best" },
+        why: "Reading the map from the database on every refresh is 82 reads a second while people click seats, and 13 while they pick sections: more than it can afford. A copy made every second costs 1 read a second and shows nothing older than the screen already did. Clicking seats, 72.4% of tries clash even on a live map: everyone sees the same best seats, takes 9 s to choose, and someone gets there first. From a copy 30 s old, 97.1% clash. Choose a section and let the server find the best two free seats in it, and only 3.0% of tries clash; from a 30 s copy, 43.2% pick sections that have already gone. This is why Ticketmaster offers \"best available\": the server picks from the live seats, in one write.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -766,7 +873,7 @@
 [7, "yelp", "Yelp", "Nearby search", "Location"], [7, "doordash", "DoorDash", "Dispatch at dinner rush", "Location"], [7, "maps", "Google Maps", "Tiles and routing", "Location"],
     [7, "netflix", "Netflix", "A CDN inside ISPs", "Media"], [7, "spotify", "Spotify", "Offline caching", "Media"],
     [7, "dropbox", "Dropbox", "Chunks, dedupe, sync", "Files and documents"], [7, "gdocs", "Google Docs", "OT vs CRDT", "Files and documents"], [7, "pastebin", "Pastebin", "Blobs and expiry", "Files and documents"],
-    [7, "amazon", "Amazon checkout", "Inventory and sagas", "Money and commerce"], [7, "ticketmaster", "Ticketmaster", "100k people, 1k seats", "Money and commerce"],
+    [7, "amazon", "Amazon checkout", "Inventory and sagas", "Money and commerce"],
     [7, "airbnb", "Airbnb", "No double booking", "Money and commerce"], [7, "stripe", "Stripe", "Idempotency, a ledger", "Money and commerce"],
     [7, "exchange", "A stock exchange", "An order book", "Money and commerce"], [7, "wallet", "A digital wallet", "Exactly-once transfers", "Money and commerce"],
     [7, "google", "Google Search", "Crawl, index, rank", "Search and discovery"], [7, "typeahead", "Typeahead", "Top-k in a trie", "Search and discovery"], [7, "crawler", "A web crawler", "Politeness and traps", "Search and discovery"],
@@ -775,7 +882,7 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
@@ -784,6 +891,7 @@
   UBER_UNIT.cover = UB_REF;
   TWITTER_UNIT.cover = TW_REF;
   YOUTUBE_UNIT.cover = YT_REF;
+  TICKET_UNIT.cover = TM_REF;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];

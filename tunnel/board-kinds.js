@@ -1266,3 +1266,232 @@
   };
   const goodP = (c, R) => R.originPeak <= c.B.goals.peak && R.waitP99 <= c.B.goals.wait;
 })();
+
+/* The Ticketmaster labs (tunnel/tix.js):
+     onsale   10:00: how the waiting room lets fans through, and in what order
+     hold     while you pay: how a shopper's seats are kept, and for how long
+     seatmap  those seats were just taken: where the seat map comes from, and how a shopper picks */
+(function () {
+  "use strict";
+  const UI = window.SD.UI, TX = window.TIX;
+  const stars = (n) => (n <= 2 ? 3 : n <= 4 ? 2 : 1);
+  const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+  const lg = Math.log10;
+  const clock = (t) => { const m = Math.floor(t / 60); return `${10 + Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`; };
+  const pc = (x, d = 1) => `${(x * 100).toFixed(x > 0 && x < 0.01 ? 2 : d)}%`;
+  // the house: 1,000 blocks of 20 seats, best first; a block fills pink as its seats sell (built once, then recoloured)
+  function house(c, F, x0, y0, step) {
+    if (!F.blocks) {
+      const want = TX.venue(1), rank = want.map((_, b) => b).sort((a, b) => want[b] - want[a]);
+      F.rankOf = new Array(rank.length); rank.forEach((b, i) => (F.rankOf[b] = i));
+      F.blocks = want.map((_, b) => c.s("rect", { class: "tm-seat", x: x0 + (b % TX.COLS) * step, y: y0 + Math.floor(b / TX.COLS) * step, width: step - 1, height: step - 1, rx: 1 }));
+      F.stage = c.s("rect", { class: "tm-stage", x: x0 + step * 8, y: y0 - 12, width: step * 24 - 1, height: 6, rx: 3 });
+    }
+    return F.blocks;
+  }
+  // a time axis for the onsale charts: 10:00 to 11:30
+  const MM = 5400, TX0 = 70, TX1 = 560, tx = (t) => TX0 + (Math.min(t, MM) / MM) * (TX1 - TX0);
+  const timeAxis = (s, kids, y) => { for (const t of [0, 900, 1800, 2700, 3600, 4500, 5400]) kids.push(s("text", { class: "ev-tick", x: tx(t), y: y + 14, "text-anchor": "middle" }, clock(t))); };
+  const at19k = (R) => (R.series.find((p) => p[1] >= 19000) || [null])[0];
+
+  // ------------------------------------------------------------------------------------------------ onsale --
+  const DOOR_WORD = { all: "everyone at once", 50: "50 a second", 3: "3 a second", swap: "one in each time a shopper leaves" };
+  const LINE_WORD = { came: "in the order they came", shuffle: "shuffled" };
+  UI.onsale = {
+    init(c) { Object.assign(c.F, { door: "all", line: "came", res: null, anim: 0, runs: 0, memo: {}, lines: {} }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, kids = [], g = c.B.goals;
+      const last = R ? R.series[R.series.length - 1][0] : 0, span = Math.min(MM, last), now = R ? Math.min(1, F.anim) * span : 0;
+      const upto = R ? R.series.filter((p) => p[0] <= now) : [], cur = upto[upto.length - 1];
+      // the front of the line at 10:00: 400 places, bots in violet
+      const order = R ? R.order : (F.lines[F.line] = F.lines[F.line] || TX.onsale({ door: "swap", line: F.line, seed: c.B.sim.seed, end: 0 }).order);
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "The front of the line at 10:00"), s("text", { class: "ev-sub", x: 40, y: 114 }, `the first 400 places · ${order.filter(Boolean).length} of them bots, in violet`));
+      order.forEach((b, i) => kids.push(s("rect", { class: "tm-dot" + (b ? " bot" : ""), x: 40 + (i % 50) * 10.4, y: 128 + Math.floor(i / 50) * 10.4, width: 8, height: 8, rx: 4 })));
+      // shoppers inside, against what the servers hold; error pages as red ticks under the axis
+      const IB = 338, IH = 70, iy = (n) => IB - (Math.min(n, 2500) / 2500) * IH;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 242 }, "Shoppers inside"), s("text", { class: "ev-sub", x: 40, y: 260 }, R ? (cur && cur[4] ? `${c.num(cur[4])} error pages so far` : "no error pages yet") : "the booking servers hold 2,000; one more is an error page"));
+      kids.push(s("path", { class: "ub-axis", d: `M${TX0} ${IB}H${TX1}` }), s("path", { class: "tw-cap", d: `M${TX0} ${iy(2000)}H${TX1}` }), s("text", { class: "ev-tick yt-halo", x: TX1, y: iy(2000) - 5, "text-anchor": "end" }, "the servers hold 2,000"));
+      if (upto.length > 1) {
+        kids.push(s("path", { class: "tm-in", d: `M${tx(0)} ${IB}` + upto.map((p) => `L${tx(p[0]).toFixed(1)} ${iy(p[1]).toFixed(1)}`).join("") + `L${tx(upto[upto.length - 1][0])} ${IB}Z` }));
+        for (let i = 1; i < upto.length; i++) { const de = upto[i][4] - upto[i - 1][4]; if (de > 0) kids.push(s("rect", { class: "tm-err", x: tx(upto[i][0]) - 1, y: IB + 2, width: 2.2, height: Math.min(14, 3 + 3 * lg(de)) })); }
+      }
+      // seats sold
+      const SB = 490, SH = 72, sy = (n) => SB - (n / 20000) * SH;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 392 }, "Seats sold"), s("text", { class: "ev-sub", x: 40, y: 410 }, R && cur ? `${c.num(cur[3])} of 20,000 by ${clock(now)}` : "of 20,000, from 10:00"));
+      kids.push(s("path", { class: "ub-axis", d: `M${TX0} ${SB}H${TX1}` }), s("path", { class: "ub-goal", d: `M${tx(g.sold)} ${SB - SH - 8}V${SB}` }), s("text", { class: "ev-tick yt-halo", x: tx(g.sold) + 4, y: SB - SH - 2 }, "goal: sold out by 11:00"));
+      if (upto.length > 1) kids.push(s("path", { class: "tm-sold", d: `M${tx(0)} ${SB}` + upto.map((p) => `L${tx(p[0]).toFixed(1)} ${sy(p[3]).toFixed(1)}`).join("") + `L${tx(upto[upto.length - 1][0])} ${SB}Z` }));
+      timeAxis(s, kids, SB);
+      if (R) kids.push(s("path", { class: "tw-now", d: `M${tx(now)} ${IB - IH - 8}V${SB}` }));
+      // the house, filling as it sells
+      const blocks = house(c, F, 640, 132, 7);
+      const n = cur ? Math.floor(cur[3] / TX.PER) : 0;
+      blocks.forEach((el, b) => el.setAttribute("class", "tm-seat" + (F.rankOf[b] < n ? " sold" : "")));
+      kids.push(s("text", { class: "ev-sub", x: 640, y: 108 }, "the house · 20,000 seats, the best go first"), F.stage, ...blocks);
+      // the numbers
+      const done = R && F.anim >= 1, NX = 640;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 342 }, "error pages"), s("text", { class: "wa-big" + (done && R.errors > g.errors ? " over" : ""), x: NX, y: 380 }, done ? c.num(R.errors) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 412 }, "sold out at"), s("text", { class: "wa-big" + (done && (R.soldOut == null || R.soldOut > g.sold) ? " over" : ""), x: NX, y: 450 }, done ? (R.soldOut == null ? "not by noon" : clock(R.soldOut)) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 482 }, "bots got"), s("text", { class: "wa-big" + (done && R.botShare > g.bots ? " over" : ""), x: NX, y: 520 }, done ? pc(R.botShare) : "–"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 6));
+      c.redraw();
+      if (F.anim >= 1) { if (goodO(c, R)) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.errors > g.errors && `${c.num(R.errors)} error pages went out`, (R.soldOut == null || R.soldOut > g.sold) && (R.soldOut == null ? "it hadn't sold out by noon" : `it took until ${clock(R.soldOut)} to sell out`), R.botShare > g.bots && `bots got ${pc(R.botShare)} of the seats`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "The dots are the front of the line when the sale opens. The charts run from 10:00: who's inside the booking servers, with red ticks for error pages, and the seats as they sell."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.door}:${F.line}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = TX.onsale({ door: F.door, line: F.line, seed: c.B.sim.seed })); F.anim = 0; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "let fans through ", h("button", { class: "sd-word", onclick: () => set("door", cyc(TX.DOORS, F.door)) }, DOOR_WORD[F.door])),
+        h("p", {}, "put everyone waiting at 10:00 ", h("button", { class: "sd-word", onclick: () => set("line", cyc(TX.LINES, F.line)) }, LINE_WORD[F.line]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: run }, "Open the sale"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} sale${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals;
+      return [["no error pages", R ? R.errors <= g.errors : null, R ? c.num(R.errors) : "run it"], ["sold out by 11:00", R ? R.soldOut != null && R.soldOut <= g.sold : null, R ? (R.soldOut == null ? "no" : clock(R.soldOut)) : "·"],
+        [`bots get ≤ ${g.bots * 100}% of seats`, R ? R.botShare <= g.bots : null, R ? pc(R.botShare) : "·"]];
+    },
+  };
+  const goodO = (c, R) => R.errors <= c.B.goals.errors && R.soldOut != null && R.soldOut <= c.B.goals.sold && R.botShare <= c.B.goals.bots;
+
+  // -------------------------------------------------------------------------------------------------- hold --
+  const KEEP_WORD = { lock: "with a database lock, until they pay", hold: "with a hold that runs out" };
+  const MIN_WORD = { 2: "2 minutes", 5: "5 minutes", 10: "10 minutes", 30: "30 minutes" };
+  const PX0 = 70, PX1 = 560, PMAX = 900, px = (t) => PX0 + (Math.min(t, PMAX) / PMAX) * (PX1 - PX0);
+  UI.hold = {
+    init(c) { Object.assign(c.F, { keep: "lock", mins: 2, res: null, anim: 0, runs: 0, memo: {} }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, kids = [], g = c.B.goals, lim = F.mins * 60;
+      // how long buyers take to pay: the same people whatever you choose, so it's drawn before the sale
+      if (!F.payBins) {
+        const pays = TX.crowd(c.B.sim.seed).filter((f) => f.buy && !f.bot).map((f) => f.pay), bins = new Array(30).fill(0);
+        for (const p of pays) bins[Math.min(29, Math.floor(p / 30))]++;
+        F.payBins = bins.map((n) => n / pays.length);
+      }
+      const HB = 230, HH = 90, mx = Math.max(...F.payBins), late = F.payBins.reduce((a, v, i) => a + (i * 30 >= lim ? v : 0), 0);
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "How long buyers take to pay"), s("text", { class: "ev-sub", x: 40, y: 114 }, `the seats are kept for ${MIN_WORD[F.mins]} · ${pc(late)} of buyers take longer`));
+      F.payBins.forEach((v, i) => { const hh = Math.max(v > 0 ? 1 : 0, (v / mx) * HH); kids.push(s("rect", { class: "tm-pay" + (i * 30 >= lim ? " late" : ""), x: px(i * 30) + 0.5, y: HB - hh, width: (PX1 - PX0) / 30 - 1, height: hh })); });
+      kids.push(s("path", { class: "ub-axis", d: `M${PX0} ${HB}H${PX1}` }), s("path", { class: "tw-now", d: `M${px(lim)} ${HB - HH - 10}V${HB}` }), s("text", { class: "ev-tick yt-halo", x: px(lim) + 5, y: HB - HH - 2 }, "time's up"));
+      for (const t of [0, 120, 300, 600, 900]) kids.push(s("text", { class: "ev-tick", x: px(t), y: HB + 14, "text-anchor": "middle" }, t === 900 ? "15 min+" : `${t / 60} min`));
+      // the seats over the sale: sold, held for someone paying, held for someone who walked away
+      const span = R ? Math.min(MM, R.series[R.series.length - 1][0]) : 0, now = R ? Math.min(1, F.anim) * span : 0, upto = R ? R.series.filter((p) => p[0] <= now) : [], cur = upto[upto.length - 1];
+      const SB = 490, SH = 150, sy = (n) => SB - (n / 20000) * SH;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 294 }, "The 20,000 seats"), s("text", { class: "ev-sub", x: 40, y: 312 }, R && cur ? `${c.num(cur[1])} sold · ${c.num(cur[2])} held for people paying · ${c.num(cur[3])} for people who left` : "pink sold · amber held for someone paying · grey held for someone who left"));
+      kids.push(s("path", { class: "ub-axis", d: `M${TX0} ${SB}H${TX1}` }), s("path", { class: "ub-goal", d: `M${tx(g.by)} ${SB - SH - 6}V${SB}` }), s("path", { class: "ub-tick", d: `M${TX0} ${sy(19000)}H${TX1}` }), s("text", { class: "ev-tick", x: tx(g.by), y: SB + 28, "text-anchor": "middle" }, "goal: 19,000 by 11:00"));
+      if (upto.length > 1) {
+        const band = (lo, hi, cls) => kids.push(s("path", { class: cls, d: "M" + upto.map((p) => `${tx(p[0]).toFixed(1)} ${sy(hi(p)).toFixed(1)}`).join("L") + "L" + upto.slice().reverse().map((p) => `${tx(p[0]).toFixed(1)} ${sy(lo(p)).toFixed(1)}`).join("L") + "Z" }));
+        band(() => 0, (p) => p[1], "tm-sold");
+        band((p) => p[1], (p) => p[1] + p[2], "tm-held");
+        band((p) => p[1] + p[2], (p) => p[1] + p[2] + p[3], "tm-idle");
+        kids.push(s("path", { class: "tw-now", d: `M${tx(now)} ${SB - SH - 8}V${SB}` }));
+      }
+      timeAxis(s, kids, SB);
+      // the database's connections, and the numbers
+      const NX = 640, done = R && F.anim >= 1, open = cur ? cur[4] : 0;
+      kids.push(s("text", { class: "ev-sub", x: NX, y: 108 }, "the database's 400 connections"));
+      for (let i = 0; i < 40; i++) kids.push(s("rect", { class: "tm-conn" + (i < Math.round((open / 400) * 40) ? " on" : ""), x: NX + (i % 20) * 13.5, y: 120 + Math.floor(i / 20) * 16, width: 11, height: 12, rx: 2 }));
+      kids.push(s("text", { class: "ev-tick", x: NX, y: 172 }, F.keep === "lock" ? `${c.num(open)} held open by shoppers paying` : "a hold doesn't keep one open"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 236 }, "error pages"), s("text", { class: "wa-big" + (done && R.errors > g.errors ? " over" : ""), x: NX, y: 274 }, done ? c.num(R.errors) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 318 }, "lost their seats paying"), s("text", { class: "wa-big" + (done && R.kickShare > g.kick ? " over" : ""), x: NX, y: 356 }, done ? pc(R.kickShare, 2) : "–"), s("text", { class: "ev-tick", x: NX, y: 374 }, done ? `${c.num(R.kicked)} of ${c.num(R.payers)} buyers` : "of buyers"));
+      const at19 = R ? at19k(R) : null;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 418 }, "19,000 sold at"), s("text", { class: "wa-big" + (done && (at19 == null || at19 > g.by) ? " over" : ""), x: NX, y: 456 }, done ? (at19 == null ? "never" : clock(at19)) : "–"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 6));
+      c.redraw();
+      if (F.anim >= 1) { if (goodH(c, R)) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals, at19 = R ? at19k(R) : null;
+      const miss = R ? [R.errors > g.errors && `${c.num(R.errors)} error pages went out`, R.kickShare > g.kick && `${pc(R.kickShare, 2)} of buyers lost their seats while paying`, (at19 == null || at19 > g.by) && (at19 == null ? "19,000 seats were never sold" : `19,000 seats weren't sold until ${clock(at19)}`)].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Top: how long buyers take to pay; the red bars are the ones still paying when time's up. Below: the seats through the sale: pink sold, amber held for someone paying, grey held for someone who walked away."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.keep}:${F.mins}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = TX.hold({ keep: F.keep, mins: F.mins, seed: c.B.sim.seed })); F.anim = 0; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "keep a shopper's seats ", h("button", { class: "sd-word", onclick: () => set("keep", cyc(TX.KEEPS, F.keep)) }, KEEP_WORD[F.keep])),
+        h("p", {}, "for ", h("button", { class: "sd-word", onclick: () => set("mins", cyc(TX.MINS, F.mins)) }, MIN_WORD[F.mins]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: run }, "Open the sale"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} sale${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals, at19 = R ? at19k(R) : null;
+      return [["no error pages", R ? R.errors <= g.errors : null, R ? c.num(R.errors) : "run it"], [`≤ ${g.kick * 100}% lose seats paying`, R ? R.kickShare <= g.kick : null, R ? pc(R.kickShare, 2) : "·"],
+        ["19,000 sold by 11:00", R ? at19 != null && at19 <= g.by : null, R ? (at19 == null ? "never" : clock(at19)) : "·"]];
+    },
+  };
+  const goodH = (c, R) => { const at19 = at19k(R); return R.errors <= c.B.goals.errors && R.kickShare <= c.B.goals.kick && at19 != null && at19 <= c.B.goals.by; };
+
+  // ----------------------------------------------------------------------------------------------- seatmap --
+  const MAP_WORD = { live: "the database, on every refresh", 1: "a copy made every second", 30: "a copy made every 30 s" };
+  const PICK_WORD = { click: "clicks two seats", best: "picks a section; the server finds the best two" };
+  const MX0 = 60, MY0 = 156, MS = 13;
+  UI.seatmap = {
+    init(c) { Object.assign(c.F, { map: "live", pick: "click", res: null, anim: 0, runs: 0, memo: {} }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, kids = [], g = c.B.goals, now = R ? Math.min(1, F.anim) * R.secs : 0;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "The seat map"), s("text", { class: "ev-sub", x: 40, y: 114 }, R ? `minute ${Math.floor(now / 60)} of 10 · red is a clash: someone else got there first` : "a square is 20 seats; the pinker, the fewer left"));
+      // the house as it is now: start from the beginning and replay the seats taken so far
+      const start = R ? R.start : (F.start0 = F.start0 || TX.seatmap({ seed: c.B.sim.seed, secs: 0 }).start), free = start.slice();
+      if (R) for (const [t, b] of R.takes) { if (t > now) break; free[b] -= 2; }
+      kids.push(s("rect", { class: "tm-stage", x: MX0 + MS * 8, y: MY0 - 18, width: MS * 24 - 2, height: 8, rx: 4 }), s("text", { class: "ev-tick", x: MX0 + MS * 20, y: MY0 - 23, "text-anchor": "middle" }, "stage"));
+      for (let b = 0; b < free.length; b++) kids.push(s("rect", { class: "tm-blk", x: MX0 + (b % TX.COLS) * MS, y: MY0 + Math.floor(b / TX.COLS) * MS, width: MS - 2, height: MS - 2, rx: 2, "fill-opacity": (0.12 + 0.88 * (1 - free[b] / TX.PER)).toFixed(2) }));
+      if (F.pick === "best") for (let r = 0; r < TX.ROWS / TX.SEC_H; r++) for (let q = 0; q < TX.COLS / TX.SEC_W; q++) kids.push(s("rect", { class: "tm-sec", x: MX0 + q * TX.SEC_W * MS - 1.5, y: MY0 + r * TX.SEC_H * MS - 1.5, width: TX.SEC_W * MS + 1, height: TX.SEC_H * MS + 1, rx: 3 }));
+      if (R) for (const [t, b] of R.misses) { if (t > now) break; if (now - t < 2.5 && b >= 0) kids.push(s("rect", { class: "tm-miss", x: MX0 + (b % TX.COLS) * MS - 1.5, y: MY0 + Math.floor(b / TX.COLS) * MS - 1.5, width: MS + 1, height: MS + 1, rx: 3, "stroke-opacity": (1 - (now - t) / 2.5).toFixed(2) })); }
+      // the numbers
+      const NX = 640, done = R && F.anim >= 1, k = R ? R.perSec.filter((p) => p[0] <= now) : [], cur = k[k.length - 1];
+      const tries = done ? R.tries : cur ? cur[1] : 0, clashes = done ? R.clashes : cur ? cur[2] : 0, share = tries ? clashes / tries : 0;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 150 }, "tries that clashed"), s("text", { class: "wa-big" + (done && share > g.clash ? " over" : ""), x: NX, y: 190 }, R ? pc(share) : "–"), s("text", { class: "ev-tick", x: NX, y: 208 }, R ? `${c.num(clashes)} of ${c.num(tries)} tries` : "\"sorry, those seats were just taken\""));
+      const rate = done ? R.readsPerSec : cur ? cur[3] : 0;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 262 }, "seat-map reads a second"), s("text", { class: "wa-big" + (done && rate > g.reads ? " over" : ""), x: NX, y: 302 }, R ? (rate >= 10 ? String(Math.round(rate)) : rate.toFixed(rate > 0 && rate < 1 ? 2 : 1)) : "–"));
+      // a gauge: what the database can afford, on a scale to 100
+      const GW = 260, gx = (r) => NX + (Math.min(r, 100) / 100) * GW;
+      kids.push(s("rect", { class: "tm-gauge", x: NX, y: 318, width: GW, height: 10, rx: 5 }), s("rect", { class: "tm-gfill" + (rate > g.reads ? " over" : ""), x: NX, y: 318, width: Math.max(0, gx(rate) - NX), height: 10, rx: 5 }), s("path", { class: "tw-cap", d: `M${gx(g.reads)} 312V334` }), s("text", { class: "ev-tick", x: gx(g.reads) + 4, y: 346 }, `it can afford ${g.reads}`));
+      const got = done ? R.got : R ? R.takes.filter((x) => x[0] <= now).length : 0;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 400 }, "seats taken"), s("text", { class: "wa-big", x: NX, y: 440 }, R ? c.num(got * 2) : "–"), s("text", { class: "ev-tick", x: NX, y: 458 }, "in these ten minutes"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 7));
+      c.redraw();
+      if (F.anim >= 1) { if (goodS(c, R)) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.readsPerSec > g.reads && `the database was asked for the map ${Math.round(R.readsPerSec)} times a second`, R.clashShare > g.clash && `${pc(R.clashShare)} of tries clashed`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "The stage is at the top; the best seats are near it and in the middle. Each square goes pinker as its 20 seats are taken, and flashes red when someone tries for seats that have just gone."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.map}:${F.pick}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = TX.seatmap({ map: F.map, pick: F.pick, seed: c.B.sim.seed })); F.anim = 0; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "the seat map comes from ", h("button", { class: "sd-word", onclick: () => set("map", cyc(TX.MAPS, F.map)) }, MAP_WORD[F.map])),
+        h("p", {}, "a shopper ", h("button", { class: "sd-word", onclick: () => set("pick", cyc(TX.PICKS, F.pick)) }, PICK_WORD[F.pick]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: run }, "Run ten minutes"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals;
+      return [[`≤ ${g.reads} map reads a second`, R ? R.readsPerSec <= g.reads : null, R ? (R.readsPerSec >= 10 ? String(Math.round(R.readsPerSec)) : R.readsPerSec.toFixed(2)) : "run it"], [`≤ ${g.clash * 100}% of tries clash`, R ? R.clashShare <= g.clash : null, R ? pc(R.clashShare) : "·"]];
+    },
+  };
+  const goodS = (c, R) => R.readsPerSec <= c.B.goals.reads && R.clashShare <= c.B.goals.clash;
+})();

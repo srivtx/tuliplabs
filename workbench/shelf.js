@@ -219,7 +219,7 @@
   }
   const SD_KIND = { follow: "Follow it", napkin: "Napkin math", bottleneck: "Find the bottleneck", draw: "Draw it" };
   // units with a picture of their own in tunnel/shots/sd-<id>.webp: one soft clay object each; the rest show their drawing
-  const SD_ART = ["snip", "redis", "whatsapp", "uber", "twitter", "youtube"];
+  const SD_ART = ["snip", "redis", "whatsapp", "uber", "twitter", "youtube", "ticketmaster"];
   function sketch(d) {
     const box = (n) => `<rect x="${n.x - 80}" y="${n.y - 33}" width="160" height="66" rx="14"/>`;
     const at = (id) => d.nodes.find((n) => n.id === id);

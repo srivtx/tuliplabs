@@ -159,7 +159,7 @@ Grouped by the hard part, so similar apps teach each other.
 | App | The hard part | Simulate |
 |---|---|---|
 | **Amazon** (cart and checkout) | Inventory, carts, a checkout saga | A flash sale: overselling vs locking |
-| **Ticketmaster** | 100k people and 1k seats: holds, queues, fairness | A virtual waiting room vs a free-for-all |
+| **Ticketmaster** (the onsale) ✓ | 100,000 fans for 20,000 seats: a waiting room, seat holds, fairness | Built: 10:00 through a waiting room (how fast to let people in, shuffle the line against bots); seats kept while people pay (a hold that expires vs a database lock, and for how long); shoppers clashing on the seat map (a copy made every second, best available in a section). Still to add: resale, payment retries |
 | **Airbnb / hotel booking** | Availability calendars, double booking | Two guests book the same nights |
 | **Stripe** (payments) | Idempotency keys, a double-entry ledger, reconciliation | A timeout mid-charge: charged twice or not at all |
 | **Robinhood / a stock exchange** | A matching engine, an order book, low latency | Orders per second against one sequencer |
@@ -233,7 +233,7 @@ Each principle is **taught** in one first-principles unit and **reused** in the 
    - Snip gets scope and sketch;
    - the whole Redis unit.
 2. **Floors 0–1:** the start of the beginner path. Each unit links to the Wind Tunnel experiment that already covers it.
-3. **The apps people ask about most:** WhatsApp ✓ (scope, napkin, sketch, follow a message; then hold 500M connections, Bob's patchy day, keep a group chat in order), Uber ✓ (scope, napkin, sketch, follow a ride; then find the nearest drivers, match a busy evening, one driver for one rider), Twitter/X ✓ (scope, napkin, sketch, follow a tweet; then the celebrity problem, a viral tweet's likes, timelines in memory), YouTube ✓ (scope, napkin, sketch, follow a video; then the upload, the train ride, the premiere), then Ticketmaster, Stripe. Their first-principles units on floors 2–4 come just before them.
+3. **The apps people ask about most:** WhatsApp ✓ (scope, napkin, sketch, follow a message; then hold 500M connections, Bob's patchy day, keep a group chat in order), Uber ✓ (scope, napkin, sketch, follow a ride; then find the nearest drivers, match a busy evening, one driver for one rider), Twitter/X ✓ (scope, napkin, sketch, follow a tweet; then the celebrity problem, a viral tweet's likes, timelines in memory), YouTube ✓ (scope, napkin, sketch, follow a video; then the upload, the train ride, the premiere), Ticketmaster ✓ (scope, napkin, sketch, follow a ticket; then 10:00, while you pay, those seats were just taken), then Stripe. Their first-principles units on floors 2–4 come just before them.
 4. **New whiteboard kinds** `api`, `data` and `tradeoff`, added to the units already built.
 5. **A system design mock:** one unseen app, 45 minutes, whiteboard first and then simulate, with a scorecard. It follows the DSA interview mode.
 6. **The rest of the apps**, then the frontier.
