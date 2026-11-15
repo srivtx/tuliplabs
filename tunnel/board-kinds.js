@@ -2339,3 +2339,471 @@
   };
   const goodF = (c, R) => R.db <= c.B.goals.db && R.stale <= c.B.goals.stale;
 })();
+
+// ---------------------------------------------------------------------------------------- Splitting data --
+// The Splitting data unit's own kinds; tunnel/split.js does the working out.
+(function () {
+  "use strict";
+  const UI = window.SD.UI, SP = window.SPLIT;
+  const lg = Math.log10;
+  const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+  const fmtN = (n) => Math.round(n).toLocaleString("en-US");
+  const pc = (x, d = 0) => (x * 100).toFixed(d) + "%";
+  const ran = (n) => (n <= 2 ? 3 : n <= 4 ? 2 : 1);
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
+  function dragger(c, on) {
+    c.svg.addEventListener("pointermove", (e) => { if (c.isNow() && c.F.drag) on(c.pt(e)); });
+    const up = () => { if (c.isNow() && c.F.drag) { c.F.drag = false; c.redraw(); } };
+    c.svg.addEventListener("pointerup", up);
+    c.svg.addEventListener("pointercancel", up);
+  }
+  const grab = (c, on) => (e) => { c.F.drag = true; try { c.svg.setPointerCapture(e.pointerId); } catch (err) {} on(c.pt(e)); e.preventDefault(); e.stopPropagation(); };
+
+  // keys round a ring: the first ND keys as dots, three rows deep, each in its server's colour. A dot is a zero-length
+  // line with round ends, and every dot of one colour goes in one path, so hundreds of them redraw cheaply.
+  const ND = 720;
+  const dotXY = (p, i, cx, cy, R, out = 0) => { const a = 2 * Math.PI * p - Math.PI / 2, r = R + ((i % 3) - 1) * 8 + out; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  function paint(s, groups, base) {
+    const out = [];
+    for (const [k, xs] of Object.entries(groups)) {
+      let d = "";
+      for (let j = 0; j < xs.length; j += 2) d += `M${xs[j].toFixed(1)} ${xs[j + 1].toFixed(1)}h0`;
+      out.push(s("path", { class: `${base} ${k}`, d }));
+    }
+    return out;
+  }
+  const put = (g, k, x, y) => (g[k] = g[k] || []).push(x, y);
+  // a ring's points: one marker per server when there's one each, a fine tick per point when there are 200
+  function marks(s, n, v, cx, cy, R, fresh) {
+    const kids = [], pts = SP.points(n, v);
+    if (v === 1) {
+      for (const q of pts) {
+        const a = 2 * Math.PI * q.p - Math.PI / 2, x = cx + (R + 30) * Math.cos(a), y = cy + (R + 30) * Math.sin(a);
+        kids.push(s("path", { class: "sp-spoke s" + q.s, d: `M${cx + (R + 14) * Math.cos(a)} ${cy + (R + 14) * Math.sin(a)}L${x} ${y}` }),
+          s("circle", { class: "sp-mark s" + q.s + (fresh && q.s === n - 1 ? " in" : ""), cx: x, cy: y, r: 8 }),
+          s("text", { class: "sp-mk yt-halo", x: cx + (R + 50) * Math.cos(a), y: cy + (R + 50) * Math.sin(a) + 4, "text-anchor": "middle" }, String(q.s + 1)));
+      }
+      return kids;
+    }
+    const by = {};
+    for (const q of pts) {
+      const a = 2 * Math.PI * q.p - Math.PI / 2, c0 = Math.cos(a), s0 = Math.sin(a);
+      by[q.s] = (by[q.s] || "") + `M${(cx + (R + 15) * c0).toFixed(1)} ${(cy + (R + 15) * s0).toFixed(1)}L${(cx + (R + 24) * c0).toFixed(1)} ${(cy + (R + 24) * s0).toFixed(1)}`;
+    }
+    for (const [k, d] of Object.entries(by)) kids.push(s("path", { class: "sp-tick s" + k + (fresh && +k === n - 1 ? " in" : ""), d }));
+    return kids;
+  }
+
+  // ---------------------------------------------------------------------------------------------- add a server --
+  const RCX = 236, RCY = 300, RR = 142;
+  const RX0 = 520, RX1 = 900, RY = 474;
+  const rx = (g) => RX0 + clamp(g) * (RX1 - RX0), rxi = (x) => clamp((x - RX0) / (RX1 - RX0));
+  const truthR = (r) => (r.ask === "move" ? SP.moved(r.scheme, r.v, 4, 5).all : SP.fullest("ring", 5, r.v));
+  const closeR = (r, g) => Math.abs(g - truthR(r)) <= 0.07;
+  const END = { ask: "end", scheme: "ring", v: 200 };
+  UI.ring = {
+    init(c) {
+      Object.assign(c.F, { round: 0, guess: 0.5, checked: false, rights: [], picks: [], drag: false, t: 0 });
+      if (c.done()) { c.F.round = c.B.rounds.length; c.F.rights = c.B.rounds.map(() => true); c.F.picks = c.B.rounds.map(truthR); c.F.t = 9; }
+      dragger(c, (p) => moveR(c, p));
+    },
+    draw(c) {
+      const { s, F, B } = c, kids = [], R = B.rounds, over = F.round >= R.length, r = over ? END : R[F.round];
+      const isMove = r.ask === "move", ph = isMove ? (F.checked ? ease((F.t - 0.2) / 2.2) : 0) : 1;
+      const A = SP.layout(r.scheme, isMove ? 4 : 5, r.v), L5 = SP.layout(r.scheme, 5, r.v), { KP } = SP.keys();
+      const n = isMove && ph < 0.5 && !F.checked ? 4 : 5;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, `100,000 keys on ${n === 4 ? "4" : "5"} servers`),
+        s("text", { class: "ev-sub", x: 40, y: 94 }, r.scheme === "mod" ? "each dot is a key, in its server's colour" : `each server sits at ${r.v === 1 ? "one point" : r.v + " points"} round the ring`));
+      // the keys
+      const g = {};
+      for (let i = 0; i < ND; i++) {
+        const a = A.own[i], b = L5.own[i], mv = a !== b, own = mv && ph >= 0.5 ? b : a;
+        const [x, y] = dotXY(KP[i], i, RCX, RCY, RR, mv ? Math.sin(Math.PI * ph) * 20 : 0);
+        put(g, "s" + own + (mv && ph > 0 && ph < 1 ? " mv" : ""), x, y);
+      }
+      kids.push(...paint(s, g, "sp-dot"));
+      // the servers: a ring's points, or the rule in the middle
+      if (r.scheme === "ring") kids.push(...marks(s, n, r.v, RCX, RCY, RR, isMove && F.checked));
+      const mvShare = isMove ? SP.moved(r.scheme, r.v, 4, 5).all : 0;
+      if (r.scheme === "mod") kids.push(s("text", { class: "sp-rule", x: RCX, y: RCY - 4, "text-anchor": "middle" }, `hash % ${n}`));
+      else kids.push(s("text", { class: "sp-rule sm", x: RCX, y: RCY - 10, "text-anchor": "middle" }, "a key goes to"), s("text", { class: "sp-rule sm", x: RCX, y: RCY + 8, "text-anchor": "middle" }, "the next point clockwise"));
+      if (isMove && F.checked) kids.push(s("text", { class: "sp-moved yt-halo", x: RCX, y: RCY + 36, "text-anchor": "middle" }, `${fmtN(Math.round(mvShare * 1e5 * ph))} keys moved`));
+      // the keys on each server
+      kids.push(s("text", { class: "ev-h", x: RX0, y: 140 }, "Keys on each server"));
+      for (let i = 0; i < 5; i++) {
+        const y = 158 + i * 34, sh = (A.share[i] || 0) * (1 - ph) + L5.share[i] * ph, ghost = i === 4 && n === 4;
+        kids.push(s("text", { class: "sp-sn s" + i + (ghost ? " ghost" : ""), x: RX0, y: y + 12 }, `cache-${i + 1}`), s("rect", { class: "ln-bt" + (ghost ? " sp-ghost" : ""), x: RX0 + 74, y, width: 240, height: 16, rx: 4 }));
+        if (ghost) kids.push(s("text", { class: "cc-sm", x: RX0 + 82, y: y + 12 }, "joins when you check"));
+        else kids.push(s("rect", { class: "sp-bar s" + i, x: RX0 + 74, y, width: Math.max(2, (sh / 0.4) * 240), height: 16, rx: 4 }), s("text", { class: "cc-sm", x: RX0 + 322, y: y + 12 }, pc(sh, 1)));
+      }
+      kids.push(s("path", { class: "ub-goal", d: `M${RX0 + 74 + 120} 152V${158 + 5 * 34 - 10}` }), s("text", { class: "ev-tick", x: RX0 + 74 + 124, y: 158 + 5 * 34 + 2 }, "20%, a fair share of 5"));
+      // the ruler
+      if (!over) {
+        kids.push(s("text", { class: "cc-given", x: RX0, y: RY - 40 }, r.ask === "move" ? "the share of keys that move" : "the fullest server's share"));
+        kids.push(s("path", { class: "ub-axis", d: `M${RX0} ${RY}H${RX1}` }));
+        for (let k = 0; k <= 10; k++) kids.push(s("path", { class: "cc-grid sp-rt", d: `M${rx(k / 10)} ${RY - (k % 5 ? 4 : 8)}V${RY + 4}` }));
+        for (let k = 0; k <= 10; k += 2) kids.push(s("text", { class: "ev-tick", x: rx(k / 10), y: RY + 18, "text-anchor": "middle" }, k * 10 + "%"));
+        if (!F.checked) {
+          const x = rx(F.guess);
+          kids.push(s("rect", { class: "cc-hit", x: RX0 - 24, y: RY - 34, width: RX1 - RX0 + 48, height: 60, onpointerdown: grab(c, (p) => moveR(c, p)) }));
+          kids.push(s("path", { class: "cc-stem", d: `M${x} ${RY - 14}V${RY + 6}` }), s("circle", { class: "cc-pin" + (F.drag ? " drag" : ""), cx: x, cy: RY - 14, r: 9 }));
+          kids.push(s("text", { class: "cc-read yt-halo", x, y: RY - 30, "text-anchor": "middle" }, pc(F.guess) + "?"));
+        } else {
+          const t = truthR(r), ok = F.rights[F.round];
+          kids.push(s("path", { class: "cc-miss" + (ok ? " ok" : ""), d: `M${rx(F.guess)} ${RY - 14}L${rx(t)} ${RY - 14}` }), s("circle", { class: "cc-pin was" + (ok ? " ok" : " no"), cx: rx(F.guess), cy: RY - 14, r: 6 }),
+            s("circle", { class: "cc-true", cx: rx(t), cy: RY - 14, r: 7 }), s("text", { class: "cc-tl yt-halo", x: rx(t), y: RY - 30, "text-anchor": "middle" }, pc(t)));
+        }
+      } else {
+        const sh = L5.share;
+        kids.push(s("text", { class: "cc-tl", x: RX0, y: RY - 24 }, `200 points each: every server holds ${pc(Math.min(...sh))} to ${pc(Math.max(...sh))}`),
+          s("text", { class: "cc-tl", x: RX0, y: RY - 6 }, `and adding one moved ${pc(SP.moved("ring", 200, 4, 5).all)}, the least it could`), c.rx("trophy", RX1 - 70, RY - 112, 70, "pop"));
+      }
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (!F.checked || F.t >= 3) return;
+      F.t = Math.min(3, F.t + dt * (c.REDUCED ? 20 : 1));
+      c.redraw();
+    },
+    brief(c) {
+      const { h, F, B } = c, R = B.rounds;
+      if (F.round >= R.length) return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, `${F.rights.filter(Boolean).length} of ${R.length} guesses close. Lots of points per server: few keys move, and every server gets its share.`))];
+      const r = R[F.round], t = truthR(r);
+      return [h("div", { class: "sd-ask" }, h("small", {}, `guess ${F.round + 1} of ${R.length}`), h("p", { html: r.say }),
+        !F.checked ? h("p", { class: "sd-quiet" }, "Drag the pin along the ruler.") :
+          h("p", { class: "sd-verdict " + (F.rights[F.round] ? "ok" : "no") }, (F.rights[F.round] ? "✓ Close. " : "✗ Not quite. ") + (r.ask === "move" ? `${pc(t)} of the keys move.` : `The fullest holds ${pc(t)}, and the emptiest ${pc(Math.min(...SP.layout("ring", 5, 1).share))}.`)))];
+    },
+    tools(c) {
+      const { h, F, B } = c, R = B.rounds;
+      if (F.round >= R.length) return [];
+      if (!F.checked) return [h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: () => checkR(c) }, R[F.round].ask === "move" ? "Check, and add the 5th" : "Check my guess"))];
+      return [h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: () => nextR(c) }, F.round === R.length - 1 ? "Give them 200 points each" : "Next guess →"))];
+    },
+  };
+  function moveR(c, p) { const F = c.F; if (F.round >= c.B.rounds.length || F.checked) return; F.guess = rxi(p.x); c.redraw(); }
+  function checkR(c) { const F = c.F, r = c.B.rounds[F.round]; F.checked = true; F.t = 0; F.rights[F.round] = closeR(r, F.guess); F.picks[F.round] = F.guess; c.redraw(); c.rebrief(); }
+  function nextR(c) {
+    const F = c.F, R = c.B.rounds;
+    F.round++; F.checked = false; F.guess = 0.5; F.t = 0;
+    if (F.round >= R.length) { const n = F.rights.filter(Boolean).length; c.solved(n === R.length ? 3 : n >= R.length - 1 ? 2 : 1); }
+    c.redraw(); c.rebrief();
+  }
+
+  // -------------------------------------------------------------------------------------------------- which key --
+  const KEY_WORD = {
+    time: ["a range of time", "each partition holds a stretch of time; the newest is the last"],
+    idrange: ["a range of van ids", "a–c, d–f, g–i … v–z"],
+    hashread: ["a hash of each reading", "each reading goes wherever its hash says"],
+    hashvan: ["a hash of the van id", "and each van's readings in time order inside"],
+  };
+  const PX0 = 446, PW = 42, PG = 12, PB = 380, PS = 110 / 2500, PMAX = 220;
+  const pcx = (i) => PX0 + i * (PW + PG) + PW / 2;
+  const PLAB = { time: ["…", "…", "…", "…", "…", "…", "…", "now"], idrange: ["a–c", "d–f", "g–i", "j–l", "m–o", "p–r", "s–u", "v–z"] };
+  const plab = (k, i) => (PLAB[k] ? PLAB[k][i] : "#" + i);
+  const FALL = 160;
+  UI.pkey = {
+    init(c) {
+      Object.assign(c.F, { R: SP.pkey(), pick: null, picks: [], t: 0 });
+      if (c.done()) Object.assign(c.F, { pick: c.B.answer, picks: [c.B.answer], t: 99, won: true });
+    },
+    draw(c) {
+      const { s, h, F, B } = c, kids = [], R = F.R;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "The partition key"), s("text", { class: "ev-sub", x: 40, y: 94 }, F.pick ? "tap another to try it" : "tap the one you'd pick"));
+      SP.KEYS_P.forEach((id, i) => {
+        const seen = F.picks.includes(id), cur = F.pick === id, r = R[id];
+        const card = h("button", { class: "cc-ord sp-card" + (cur ? " cur" : "") + (seen ? (id === B.answer ? " best" : " bad") : ""), xmlns: "http://www.w3.org/1999/xhtml", onclick: () => pickK(c, id) },
+          h("b", {}, KEY_WORD[id][0]), h("small", {}, seen ? `busiest ${fmtN(r.busiest)} a second · one van's hour: ${r.one === 1 ? "1 partition" : "all " + r.one}` : KEY_WORD[id][1]));
+        kids.push(s("foreignObject", { x: 36, y: 108 + i * 78, width: 336, height: 70, class: "sc-fo" }, card));
+      });
+      kids.push(s("text", { class: "ev-h", x: PX0, y: 76 }, "8 partitions, one second"), s("text", { class: "ev-sub", x: PX0, y: 94 }, "each dot is a reading; amber ones are Acme's vans"));
+      // the cap, and the columns filling
+      const capY = PB - 2500 * PS, right = PX0 + 8 * (PW + PG) - PG;
+      kids.push(s("path", { class: "ub-goal", d: `M${PX0 - 8} ${capY}H${right + 8}` }), s("text", { class: "ev-tick", x: PX0 - 12, y: capY + 4, "text-anchor": "end" }, "2,500"));
+      kids.push(s("path", { class: "ub-axis", d: `M${PX0 - 8} ${PB}H${right + 8}` }));
+      const k = F.pick, r = k ? R[k] : null, fr = k ? ease(F.t / 2.4) : 0;
+      for (let i = 0; i < 8; i++) {
+        const x = PX0 + i * (PW + PG), n = r ? r.counts[i] * fr : 0, hh = Math.min(PMAX, n * PS), over = r && r.counts[i] > 2500;
+        kids.push(s("rect", { class: "sp-col", x, y: PB - PMAX, width: PW, height: PMAX, rx: 5 }));
+        if (hh > 0) kids.push(s("rect", { class: "sp-fill" + (over ? " over" : ""), x, y: PB - hh, width: PW, height: hh, rx: 5 }));
+        if (r && fr > 0.05) kids.push(s("text", { class: "sp-cnt" + (over ? " over" : ""), x: x + PW / 2, y: PB - hh - 7, "text-anchor": "middle" }, (n * PS > PMAX ? "▲ " : "") + fmtN(n)));
+        kids.push(s("text", { class: "cc-sm", x: x + PW / 2, y: PB + 15, "text-anchor": "middle" }, plab(k || "hashvan", i)));
+        if (over && fr >= 1) kids.push(c.rx("flame", x + PW / 2 - 16, PB - hh - 50, 32));
+      }
+      // a few vans' readings falling into place
+      if (r && F.t < 3.2) {
+        const FL = SP.fleet(), g = {};
+        for (let j = 0; j < FALL; j++) {
+          const at = j * 0.012, e = (F.t - at) / 0.5;
+          if (e <= 0 || e >= 1) continue;
+          const vi = FL.order[j], part = SP.partOf(k, FL.ids[vi]), x = pcx(part) + (((j * 37) % 26) - 13), y0 = 112, y1 = PB - Math.min(PMAX, r.counts[part] * PS * fr);
+          put(g, FL.who[vi] === 0 ? "acme" : "van", x, y0 + (y1 - y0) * e * e);
+        }
+        kids.push(...paint(s, g, "sp-fall"));
+      }
+      // one van's last hour: the partitions it asks
+      if (r && F.t > 2.4) {
+        const hub = [PX0 + 4 * (PW + PG) - PG / 2, 452], q = SP.fleet().ids[7], parts = new Set();
+        for (let t = 0; t < 3600; t += 1) parts.add(SP.partOf(k, q, 1763200000 - t));
+        for (const p of parts) kids.push(s("path", { class: "sp-ask", d: `M${hub[0]} ${hub[1]}L${pcx(p)} ${PB + 24}` }));
+        kids.push(s("circle", { class: "sp-hub", cx: hub[0], cy: hub[1], r: 6 }), s("text", { class: "cc-tl yt-halo", x: hub[0], y: hub[1] + 24, "text-anchor": "middle" }, `one van's last hour asks ${parts.size === 1 ? "1 partition" : "all " + parts.size}`));
+      }
+      if (r && F.t > 2.4) {
+        const good = r.busiest <= 2500 && r.one === 1;
+        kids.push(s("text", { class: "cc-sm", x: 40, y: 446 }, "the busiest partition"), s("text", { class: "sp-num" + (r.busiest > 2500 ? " over" : ""), x: 40, y: 472 }, `${fmtN(r.busiest)} a second`));
+        kids.push(c.rx(good ? "thumbs" : r.busiest > 2500 ? "flame" : "snail", 290, 424, 56, "pop"));
+      }
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (!F.pick || F.t >= 4) return;
+      F.t = Math.min(4, F.t + dt * (c.REDUCED ? 20 : 1));
+      c.redraw();
+    },
+    brief(c) {
+      const { h, F, B } = c;
+      if (!F.pick) return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each card is a way to choose which partition a reading goes to. The columns are the 8 partitions, and the dashed line is the most one can take."))];
+      const r = F.R[F.pick], ok = F.pick === B.answer;
+      const why = r.busiest > 2500 ? `one partition gets ${fmtN(r.busiest)} writes a second` : `one van's hour is spread over all ${r.one} partitions`;
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-verdict " + (ok ? "ok" : "no") }, ok ? "✓ Even writes, and a van's hour in one place." : `✗ ${why[0].toUpperCase() + why.slice(1)}.${F.picks.includes(B.answer) ? "" : " Try another key."}`))];
+    },
+    tools() { return []; },
+  };
+  function pickK(c, id) {
+    const F = c.F;
+    if (!F.picks.includes(id)) F.picks.push(id);
+    F.pick = id; F.t = 0;
+    if (id === c.B.answer && !F.won) { F.won = true; c.solved(F.picks.length === 1 ? 3 : F.picks.length === 2 ? 2 : 1); }
+    c.redraw(); c.rebrief();
+  }
+
+  // --------------------------------------------------------------------------------------------- grow the cache --
+  const SC_WORD = { mod: "hash % N", ring1: "a ring, one point per server", ring200: "a ring, 200 points per server" };
+  const HOW_WORD = { now: "switch it on at once", copy: "copy its keys over first, then switch it on" };
+  const GCX = 210, GCY = 266, GR0 = 118;
+  const VX = 470, VW = 30, VG = 14, VB = 340, VH = 150;
+  const TX0 = 40, TX1 = 700, TB = 506, TH = 56;
+  UI.grow = {
+    init(c) { Object.assign(c.F, { scheme: "mod", how: "now", res: null, dots: null, anim: 0, runs: 0, memo: {}, shown: false }); },
+    draw(c) {
+      const { s, F, B } = c, R = F.res, G = SP.GR, g = B.goals, kids = [];
+      const now = R ? playG(R, F.anim) : 0, bi = R ? Math.min(R.bins.length - 1, Math.floor(now / G.bin)) : 0, b = R ? R.bins[bi] : null;
+      const after = R && now >= R.cut, copying = R && now >= G.at && now < R.cut, n = after ? 5 : 4;
+      const [sc, v] = F.scheme === "mod" ? ["mod", 0] : ["ring", F.scheme === "ring1" ? 1 : 200];
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, `1,000,000 sessions on ${n} servers`),
+        s("text", { class: "ev-sub", x: 40, y: 94 }, !R ? "add the 5th server to watch them" : copying ? "copying the 5th server's keys over" : after ? `${Math.floor(now)} s · ${R.cold0 ? "grey keys are missing, waiting for a read to fill them" : "every key was already on its new server"}` : `${Math.floor(now)} s · the peak; the 5th server is coming`));
+      // the keys
+      const D = F.dots || SP.growDots(F.scheme, ND), cold = R && R.cold0 > 0 && b ? b.cold / R.cold0 : 0, gg = {};
+      D.forEach((d, i) => {
+        const mv = d.a !== d.b, [x, y] = dotXY(d.p, i, GCX, GCY, GR0);
+        let k = "s" + d.a;
+        if (R && mv) {
+          if (copying && d.b === 4) k = "s4 mv";
+          else if (after) k = (F.how === "now" || d.b !== 4) && d.q < cold ? "gone" : "s" + d.b;
+        }
+        put(gg, k, x, y);
+      });
+      kids.push(...paint(s, gg, "sp-dot"));
+      if (sc === "ring") kids.push(...marks(s, after || copying ? 5 : 4, v, GCX, GCY, GR0, copying || (after && now - R.cut < 1.5)));
+      if (sc === "mod") kids.push(s("text", { class: "sp-rule", x: GCX, y: GCY + 6, "text-anchor": "middle" }, `hash % ${n}`));
+      else kids.push(s("text", { class: "sp-rule sm", x: GCX, y: GCY - 4, "text-anchor": "middle" }, "next point"), s("text", { class: "sp-rule sm", x: GCX, y: GCY + 14, "text-anchor": "middle" }, "clockwise"));
+      // how busy each server is
+      const load = !R ? SP.layout(sc, 4, v).share.map((x) => x * G.rate) : after ? R.after : R.before;
+      kids.push(s("text", { class: "ev-h", x: VX - 10, y: 140 }, "Each server"), s("text", { class: "ev-sub", x: VX - 10, y: 158 }, "how busy, of the 60,000 reads a second each takes"));
+      for (let i = 0; i < 5; i++) {
+        const x = VX + i * (VW + VG), l = load[i] || 0, f = l / G.cap, hh = Math.min(VH * 1.2, f * VH);
+        kids.push(s("rect", { class: "sp-col", x, y: VB - VH * 1.2, width: VW, height: VH * 1.2, rx: 4 }));
+        if (hh > 0) kids.push(s("rect", { class: "sp-bar s" + i + (f > 1 ? " over" : ""), x, y: VB - hh, width: VW, height: hh, rx: 4 }));
+        kids.push(s("text", { class: "sp-sn s" + i + (i === 4 && !after ? " ghost" : ""), x: x + VW / 2, y: VB + 16, "text-anchor": "middle" }, String(i + 1)));
+        if (l > 0) kids.push(s("text", { class: "cc-sm", x: x + VW / 2, y: VB - hh - 6, "text-anchor": "middle" }, pc(f)));
+        if (f > 1) kids.push(c.rx("flame", x - 1, VB - hh - 52, 32));
+      }
+      const gx1 = VX + 5 * (VW + VG) - VG;
+      kids.push(s("path", { class: "ub-goal", d: `M${VX - 6} ${VB - g.busy * VH}H${gx1 + 6}` }), s("text", { class: "ev-tick", x: gx1 + 10, y: VB - g.busy * VH + 4 }, "goal 80%"));
+      kids.push(s("path", { class: "sp-full", d: `M${VX - 6} ${VB - VH}H${gx1 + 6}` }), s("text", { class: "ev-tick", x: gx1 + 10, y: VB - VH + 4 }, "full"));
+      // the database's misses over the minute
+      kids.push(s("text", { class: "ev-sub", x: TX0, y: TB - TH - 12 }, "misses a second asking the database (taller is ten times more); past the dashed line they fail"));
+      kids.push(s("path", { class: "ub-axis", d: `M${TX0} ${TB}H${TX1}` }));
+      const top = lg(200000), ly = (q) => TB - (lg(1 + q) / top) * TH;
+      kids.push(s("path", { class: "ub-goal", d: `M${TX0} ${ly(G.db)}H${TX1}` }), s("text", { class: "ev-tick", x: TX1 + 6, y: ly(G.db) + 4 }, "20,000"));
+      for (let t = 0; t <= G.T; t += 10) kids.push(s("text", { class: "ev-tick", x: TX0 + (t / G.T) * (TX1 - TX0), y: TB + 16, "text-anchor": "middle" }, t + " s"));
+      if (R) {
+        const bw = (TX1 - TX0) / R.bins.length;
+        R.bins.forEach((x, i) => { if (i > bi || !x.miss) return; const hh = Math.max(2, (lg(1 + x.miss) / top) * TH); kids.push(s("rect", { class: "cc-tq" + (x.miss > G.db ? " err" : ""), x: TX0 + i * bw, y: TB - hh, width: Math.max(1.4, bw - 0.4), height: hh })); });
+        const ax = TX0 + (G.at / G.T) * (TX1 - TX0);
+        kids.push(s("path", { class: "sp-at", d: `M${ax} ${TB - TH - 4}V${TB}` }), s("path", { class: "tw-now", d: `M${TX0 + (now / G.T) * (TX1 - TX0)} ${TB - TH - 4}V${TB}` }));
+      }
+      // the numbers
+      const NX = 760, done = R && F.shown, errs = R ? sumG(R, bi) : 0, busy = R ? Math.max(...(after ? R.after : R.before)) / G.cap : 0;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 152 }, "failed reads"), s("text", { class: "wa-big" + (errs > g.errors ? " over" : ""), x: NX, y: 192 }, R ? fmtN(errs) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 244 }, "the busiest server"), s("text", { class: "wa-big" + (busy > g.busy ? " over" : ""), x: NX, y: 284 }, R ? pc(busy) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 336 }, "keys that moved"), s("text", { class: "cc-big", x: NX, y: 368 }, R && now >= G.at ? pc(R.moved.all) : "–"));
+      if (done) kids.push(c.rx(goodG(c, R) ? "rocket" : R.dbErr > 0 ? "flame" : "snail", NX + 70, 390, 64, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.3 : 8));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodG(c, R)) c.solved(ran(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.shown ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.errors > g.errors && `${fmtN(R.errors)} reads failed`, R.busiest > g.busy * SP.GR.cap && `the busiest server is ${pc(R.busiest / SP.GR.cap)} busy`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "The dots are 720 of the sessions, round the ring of hashes. At 10 s the 5th server joins; a grey dot has moved and isn't on its new server yet."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; F.shown = false; if (k === "scheme") F.dots = SP.growDots(v, ND); c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.scheme}:${F.how}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = prepG(SP.grow({ scheme: F.scheme, how: F.how }))); F.dots = SP.growDots(F.scheme, ND); F.anim = 0; F.shown = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "a key finds its server by ", h("button", { class: "sd-word", onclick: () => set("scheme", cyc(SP.SCHEMES, F.scheme)) }, SC_WORD[F.scheme])),
+        h("p", {}, "the 5th server joins: ", h("button", { class: "sd-word", onclick: () => set("how", cyc(SP.HOWS, F.how)) }, HOW_WORD[F.how]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Add the 5th server"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [["no failed reads", R ? R.errors <= g.errors : null, R ? fmtN(R.errors) : "run it"], [`no server over ${pc(g.busy)}`, R ? R.busiest <= g.busy * SP.GR.cap : null, R ? pc(R.busiest / SP.GR.cap) : "·"]];
+    },
+  };
+  const goodG = (c, R) => R.errors <= c.B.goals.errors && R.busiest <= c.B.goals.busy * SP.GR.cap;
+  // playback: quick through the calm, slow while keys are missing and around the moment it joins
+  function prepG(R) {
+    const w = R.bins.map((b) => (b.miss > 1 || Math.abs(b.t - SP.GR.at) < 1.5 || (b.t >= SP.GR.at && b.t < R.cut + 1) ? 5 : 1)), cum = [0];
+    for (const x of w) cum.push(cum[cum.length - 1] + x);
+    R.play = { w, cum };
+    return R;
+  }
+  function playG(R, f) {
+    const { w, cum } = R.play, at = f * cum[cum.length - 1];
+    let i = 0; while (i < w.length - 1 && cum[i + 1] < at) i++;
+    return Math.min(SP.GR.T, (i + (at - cum[i]) / w[i]) * SP.GR.bin);
+  }
+  const sumG = (R, bi) => { let n = 0; for (let i = 0; i <= bi; i++) n += R.bins[i].err; return n; };
+
+  // ------------------------------------------------------------------------------------------------ Friday night --
+  const BY_WORD = { area: "neighbouring streets together (ranges of the map)", driver: "a hash of the driver's id" };
+  const SPL_WORD = { never: "never", 0.9: "when it passes 90% busy", 0.5: "when it passes 50% busy" };
+  const MX = 40, MY = 116, CS = 18, SIDE = 16;
+  const BX0 = 404, BX1 = 900, BB = 336, BH = 120;
+  const HX0 = 404, HX1 = 900, HB = 492, HH = 80;
+  const RIDER = [10, 5];
+  UI.hotcell = {
+    init(c) { Object.assign(c.F, { by: "area", split: "never", res: null, anim: 0, runs: 0, memo: {}, shown: false }); },
+    draw(c) {
+      const { s, F, B } = c, R = F.res, H = SP.HC, g = B.goals, kids = [];
+      const now = R ? Math.min(H.T, playH(F.anim)) : 0, fr = R ? R.frames[Math.floor(now)] : null;
+      const P = fr ? fr.parts : Array.from({ length: 16 }, (_, i) => [i * 16, i * 16 + 16, 0, 0]);
+      const own = new Int16Array(256); P.forEach((p, i) => { for (let d = p[0]; d < p[1]; d++) own[d] = i; });
+      const area = F.by === "area";
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "The city"), s("text", { class: "ev-sub", x: 40, y: 94 }, !R ? "one colour per partition; run the night to watch it" : `${clock(now)} · ${P.length} partitions`));
+      // the cells: a partition's colour, the crowd's heat on top
+      const cellsBy = {}, heat = {};
+      for (let d = 0; d < 256; d++) {
+        const [x, y] = SP.XY[d], px = MX + x * CS, py = MY + y * CS, l = SP.cellLoad(d, now), k = area ? "p" + (own[d] % 6) : "mix";
+        cellsBy[k] = (cellsBy[k] || "") + `M${px} ${py}h${CS}v${CS}h${-CS}Z`;
+        const hl = clamp(l / 1600, 0, 0.9), hk = Math.round(hl * 10);
+        if (hk > 1) heat[hk] = (heat[hk] || "") + `M${px + 1} ${py + 1}h${CS - 2}v${CS - 2}h${-(CS - 2)}Z`;
+      }
+      for (const [k, d] of Object.entries(cellsBy)) kids.push(s("path", { class: "sp-cell " + k, d }));
+      for (const [k, d] of Object.entries(heat)) kids.push(s("path", { class: "sp-heat", d, style: `opacity:${k / 10}` }));
+      // the borders between partitions, and the ones over their limit
+      if (area) {
+        let d = "";
+        for (let y = 0; y < SIDE; y++) for (let x = 0; x < SIDE; x++) {
+          const o = own[SP.DOF[y * SIDE + x]];
+          if (x < SIDE - 1 && own[SP.DOF[y * SIDE + x + 1]] !== o) d += `M${MX + (x + 1) * CS} ${MY + y * CS}v${CS}`;
+          if (y < SIDE - 1 && own[SP.DOF[(y + 1) * SIDE + x]] !== o) d += `M${MX + x * CS} ${MY + (y + 1) * CS}h${CS}`;
+        }
+        kids.push(s("path", { class: "sp-border", d }));
+        let od = "";
+        P.forEach((p) => { if (p[2]) for (let dd = p[0]; dd < p[1]; dd++) { const [x, y] = SP.XY[dd]; od += `M${MX + x * CS} ${MY + y * CS}h${CS}v${CS}h${-CS}Z`; } });
+        if (od) kids.push(s("path", { class: "sp-hotp", d: od }));
+        P.forEach((p) => { if (p[3] > H.cap) for (let dd = p[0]; dd < p[1]; dd++) { const [x, y] = SP.XY[dd]; kids.push(s("rect", { class: "sp-over", x: MX + x * CS + 0.5, y: MY + y * CS + 0.5, width: CS - 1, height: CS - 1 })); } });
+      }
+      kids.push(s("rect", { class: "sp-frame", x: MX, y: MY, width: SIDE * CS, height: SIDE * CS, rx: 3 }));
+      // the stadium, and one rider's nearby search
+      const sx = MX + (H.cx + 0.5) * CS, sy = MY + (H.cy + 0.5) * CS;
+      kids.push(s("circle", { class: "sp-stad", cx: sx, cy: sy, r: 6 }), s("text", { class: "cc-tl yt-halo", x: sx, y: sy - 12, "text-anchor": "middle" }, "stadium"));
+      const [rx0, ry0] = RIDER, seen = new Set();
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) seen.add(own[SP.DOF[(ry0 + dy) * SIDE + rx0 + dx]]);
+      const asks = area ? seen.size : H.parts;
+      kids.push(s("rect", { class: "sp-near", x: MX + (rx0 - 1) * CS, y: MY + (ry0 - 1) * CS, width: 3 * CS, height: 3 * CS, rx: 3 }), s("circle", { class: "sp-hub", cx: MX + (rx0 + 0.5) * CS, cy: MY + (ry0 + 0.5) * CS, r: 4 }));
+      kids.push(s("text", { class: "cc-sm", x: MX, y: MY + SIDE * CS + 16 }, area ? `▢ a rider's nearby search asks ${asks} partition${asks > 1 ? "s" : ""}` : "every cell has drivers from all 16 partitions"));
+      // the numbers, under the map
+      const dropped = R ? dropTo(R, now) : 0, done = R && F.shown;
+      [["updates dropped", R ? fmtN(dropped) : "–", dropped > 0], ["partitions", String(P.length), false], ["most a search asks", R ? (area ? maxSearch(R, now).toFixed(1) : "16") : "–", R && (area ? maxSearch(R, now) : 16) > g.search]].forEach(([k, v, bad], i) => {
+        kids.push(s("text", { class: "cc-sm", x: MX + i * 104, y: 460 }, k), s("text", { class: "sp-num" + (bad ? " over" : ""), x: MX + i * 104, y: 486 }, v));
+      });
+      // every partition's load, in map order
+      kids.push(s("text", { class: "ev-h", x: BX0, y: 140 }, "Each partition"), s("text", { class: "ev-sub", x: BX0, y: 158 }, "updates a second, in map order"));
+      const n = P.length, bw = (BX1 - BX0) / n, cap = (x) => BB - Math.min(1.33, x) * BH;
+      P.forEach((p, i) => {
+        const f = p[3] / H.cap, hh = BB - cap(f);
+        kids.push(s("rect", { class: "sp-pb " + (area ? "p" + (i % 6) : "mixb") + (f > 1 ? " over" : "") + (p[2] ? " splitting" : ""), x: BX0 + i * bw + 1, y: BB - hh, width: Math.max(1, bw - 2), height: hh, rx: 2 }));
+      });
+      kids.push(s("path", { class: "sp-full", d: `M${BX0} ${cap(1)}H${BX1}` }), s("text", { class: "ev-tick", x: BX1 + 4, y: cap(1) + 4 }, "full"));
+      if (area && F.split !== "never") kids.push(s("path", { class: "ub-goal", d: `M${BX0} ${cap(+F.split)}H${BX1}` }), s("text", { class: "ev-tick", x: BX1 + 4, y: cap(+F.split) + 4 }, "split"));
+      kids.push(s("path", { class: "ub-axis", d: `M${BX0} ${BB}H${BX1}` }));
+      if (R && P.some((p) => p[2])) kids.push(s("text", { class: "cc-sm early", x: BX0, y: BB + 16 }, "▨ splitting: 10 s to copy half of it to a new partition"));
+      // the busiest partition over the night
+      kids.push(s("text", { class: "ev-sub", x: HX0, y: HB - HH - 14 }, "the busiest partition, as a share of what it takes"));
+      const hy = (x) => HB - (Math.min(2.5, x) / 2.5) * HH, hx = (t) => HX0 + (t / H.T) * (HX1 - HX0);
+      kids.push(s("path", { class: "ub-axis", d: `M${HX0} ${HB}H${HX1}` }), s("path", { class: "sp-full", d: `M${HX0} ${hy(1)}H${HX1}` }), s("text", { class: "ev-tick", x: HX1 + 4, y: hy(1) + 4 }, "100%"));
+      for (let t = 0; t <= H.T; t += 60) kids.push(s("text", { class: "ev-tick", x: hx(t), y: HB + 16, "text-anchor": "middle" }, clock(t)));
+      if (R) {
+        let d = "", red = "";
+        for (let t = 0; t <= Math.floor(now); t++) {
+          const m = Math.max(...R.frames[t].parts.map((p) => p[3])) / H.cap;
+          d += (t ? "L" : "M") + hx(t).toFixed(1) + " " + hy(m).toFixed(1);
+          if (m > 1) red += `M${hx(t).toFixed(1)} ${hy(1).toFixed(1)}V${hy(m).toFixed(1)}`;
+        }
+        if (red) kids.push(s("path", { class: "sp-drop", d: red }));
+        kids.push(s("path", { class: "sp-line", d }), s("path", { class: "tw-now", d: `M${hx(now)} ${HB - HH - 4}V${HB}` }));
+      }
+      if (fr && fr.drop > 0) kids.push(c.rx("flame", sx - 20, sy - 64, 40));
+      if (done) kids.push(c.rx(goodH(c, R) ? "rocket" : R.dropped > 0 ? "flame" : "snail", 300, 424, 56, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.3 : 10));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodH(c, R)) c.solved(ran(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.shown ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.dropped > g.dropped && `${fmtN(R.dropped)} updates were dropped`, R.search > g.search && `a nearby search asks ${F.by === "area" ? R.search.toFixed(1) : "all 16"} partitions`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each colour on the map is a partition; red is where the drivers are. The concert ends at 9:00:40, and the crowd builds for a minute."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; F.shown = false; c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.by}:${F.split}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = SP.hot({ by: F.by, split: F.split })); F.anim = 0; F.shown = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "split drivers by ", h("button", { class: "sd-word", onclick: () => set("by", cyc(SP.BYS, F.by)) }, BY_WORD[F.by])),
+        F.by === "area" ? h("p", {}, "split a partition in two ", h("button", { class: "sd-word", onclick: () => set("split", cyc(SP.SPLITS, F.split)) }, SPL_WORD[F.split])) : h("p", { class: "sd-quiet" }, "a hash already spreads drivers evenly, so there's nothing to split")),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Run Friday night"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [["no updates dropped", R ? R.dropped <= g.dropped : null, R ? fmtN(R.dropped) : "run it"], [`a search asks at most ${g.search}`, R ? R.search <= g.search : null, R ? (c.F.by === "area" ? R.search.toFixed(1) : "16") : "·"]];
+    },
+  };
+  const goodH = (c, R) => R.dropped <= c.B.goals.dropped && R.search <= c.B.goals.search;
+  // playback: the quiet start goes by quickly, the crowd slowly
+  const playH = (f) => { const q = SP.HC.from - 5, wq = 0.25, tot = q * wq + (SP.HC.T - q), at = f * tot; return at < q * wq ? at / wq : q + (at - q * wq); };
+  const clock = (t) => `9:${String(Math.floor(t / 60)).padStart(2, "0")}${Math.floor(t % 60) ? ":" + String(Math.floor(t % 60)).padStart(2, "0") : ""} pm`;
+  const dropTo = (R, now) => { let n = 0; for (let t = 0; t <= Math.floor(now); t++) n += R.frames[t].drop; return n; };
+  const maxSearch = (R, now) => { let m = 0; for (let t = 0; t <= Math.floor(now); t++) m = Math.max(m, R.frames[t].search); return m; };
+})();

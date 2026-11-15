@@ -611,3 +611,53 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .cc-edit{stroke:var(--pink);stroke-width:1.4;stroke-dasharray:3 3}
 .cc-seg{fill:color-mix(in srgb,var(--ok) 45%,var(--sd-paper))}.cc-seg.stale{fill:var(--sd-hot)}
 @media (prefers-reduced-motion:reduce){.cc-true,.cc-row.in{animation:none}}
+
+/* ---- the Splitting data unit ---- */
+:is(.sp-dot,.sp-bar,.sp-sn,.sp-mark,.sp-tick,.sp-spoke).s0{--c:var(--sd-app)}
+:is(.sp-dot,.sp-bar,.sp-sn,.sp-mark,.sp-tick,.sp-spoke).s1{--c:var(--sd-lb)}
+:is(.sp-dot,.sp-bar,.sp-sn,.sp-mark,.sp-tick,.sp-spoke).s2{--c:var(--sd-queue)}
+:is(.sp-dot,.sp-bar,.sp-sn,.sp-mark,.sp-tick,.sp-spoke).s3{--c:var(--sd-db)}
+:is(.sp-dot,.sp-bar,.sp-sn,.sp-mark,.sp-tick,.sp-spoke).s4{--c:var(--sd-cache)}
+.sp-dot{fill:none;stroke:var(--c);stroke-width:5.5;stroke-linecap:round}
+.sp-dot.mv{stroke-width:7.5}
+.sp-dot.gone{stroke:var(--sd-faint);stroke-width:4;opacity:.5}
+.sp-tick{stroke:var(--c);stroke-width:.9;fill:none;opacity:.75}
+.sp-spoke{stroke:var(--c);stroke-width:1.5;opacity:.6}
+.sp-mark{fill:var(--c);stroke:var(--sd-paper);stroke-width:2}
+:is(.sp-mark,.sp-tick).in{animation:ccpop .5s cubic-bezier(.2,1.6,.4,1) both}
+.sp-mk{font:700 11px var(--f-mono);fill:var(--sd-ink)}
+.sp-rule{font:italic 400 26px var(--f-serif);fill:var(--sd-ink)}.sp-rule.sm{font:600 11px var(--f-mono);fill:var(--sd-faint)}
+.sp-moved{font:700 12px var(--f-mono);fill:var(--sd-cache)}
+.sp-sn{font:600 11px var(--f-mono);fill:var(--c)}.sp-sn.ghost{opacity:.45}
+.sp-ghost{fill:none;stroke:var(--sd-faint);stroke-dasharray:3 3}
+.sp-bar{fill:var(--c)}.sp-bar.over{fill:var(--sd-hot)}
+.sp-col{fill:color-mix(in srgb,var(--sd-ink) 5%,transparent)}
+.sp-fill{fill:color-mix(in srgb,var(--sd-sim) 65%,var(--sd-paper))}.sp-fill.over{fill:var(--sd-hot)}
+.sp-cnt{font:700 11px var(--f-mono);fill:var(--sd-ink)}.sp-cnt.over{fill:var(--sd-hot)}
+.sp-fall{fill:none;stroke-width:5;stroke-linecap:round}.sp-fall.acme{stroke:var(--sd-queue)}.sp-fall.van{stroke:color-mix(in srgb,var(--sd-ink) 40%,transparent)}
+.sp-ask{fill:none;stroke:var(--pink);stroke-width:1.6;stroke-dasharray:4 3;animation:lnrise .35s ease-out both}
+.sp-hub{fill:var(--pink);stroke:var(--sd-paper);stroke-width:2}
+.sp-num{font:italic 400 22px var(--f-serif);fill:var(--sd-ink)}.sp-num.over{fill:var(--sd-hot)}
+.sp-card b{font:600 14px/1.2 var(--f-body)}
+.sp-full{stroke:var(--sd-ink);stroke-width:1.2;opacity:.45}
+.sp-at{stroke:var(--sd-cache);stroke-width:1.5;stroke-dasharray:3 3}
+.sp-cell.p0{fill:color-mix(in srgb,var(--sd-app) 20%,var(--sd-paper))}.sp-cell.p1{fill:color-mix(in srgb,var(--sd-lb) 20%,var(--sd-paper))}
+.sp-cell.p2{fill:color-mix(in srgb,var(--sd-queue) 20%,var(--sd-paper))}.sp-cell.p3{fill:color-mix(in srgb,var(--sd-worker) 20%,var(--sd-paper))}
+.sp-cell.p4{fill:color-mix(in srgb,var(--sd-db) 20%,var(--sd-paper))}.sp-cell.p5{fill:color-mix(in srgb,var(--sd-cdn) 20%,var(--sd-paper))}
+.sp-cell.mix{fill:color-mix(in srgb,var(--sd-ink) 7%,var(--sd-paper))}
+.sp-heat{fill:var(--sd-hot)}
+.sp-border{fill:none;stroke:var(--sd-ink);stroke-width:1.6;opacity:.65}
+.sp-hotp{fill:var(--sd-queue);opacity:.3;animation:spblink 1s ease-in-out infinite alternate}
+@keyframes spblink{to{opacity:.08}}
+.sp-over{fill:color-mix(in srgb,var(--sd-hot) 30%,transparent);stroke:var(--sd-hot);stroke-width:1}
+.sp-frame{fill:none;stroke:var(--sd-ink);stroke-width:1.5;opacity:.55}
+.sp-stad{fill:var(--sd-paper);stroke:var(--sd-ink);stroke-width:2.4}
+.sp-near{fill:none;stroke:var(--pink);stroke-width:2.5}
+.sp-pb.p0{fill:color-mix(in srgb,var(--sd-app) 65%,var(--sd-paper))}.sp-pb.p1{fill:color-mix(in srgb,var(--sd-lb) 65%,var(--sd-paper))}
+.sp-pb.p2{fill:color-mix(in srgb,var(--sd-queue) 65%,var(--sd-paper))}.sp-pb.p3{fill:color-mix(in srgb,var(--sd-worker) 65%,var(--sd-paper))}
+.sp-pb.p4{fill:color-mix(in srgb,var(--sd-db) 65%,var(--sd-paper))}.sp-pb.p5{fill:color-mix(in srgb,var(--sd-cdn) 65%,var(--sd-paper))}
+.sp-pb.mixb{fill:color-mix(in srgb,var(--sd-ink) 35%,var(--sd-paper))}
+.sp-pb.over{fill:var(--sd-hot)}.sp-pb.splitting{stroke:var(--sd-queue);stroke-width:2;stroke-dasharray:3 2}
+.sp-line{fill:none;stroke:var(--sd-sim);stroke-width:2.2;stroke-linejoin:round}
+.sp-drop{stroke:var(--sd-hot);stroke-width:2.5;opacity:.55}
+@media (prefers-reduced-motion:reduce){.sp-hotp{animation:none}}
