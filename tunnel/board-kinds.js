@@ -991,3 +991,278 @@
     else c.rebrief();
   }
 })();
+
+/* The YouTube labs (tunnel/video.js):
+     transcode  the upload: how small to cut an hour of video, and which quality to encode first
+     abr        the train ride: how the player picks each piece's quality, and how far ahead it fetches
+     premiere   the premiere: what an edge does on a miss, and whom it asks */
+(function () {
+  "use strict";
+  const UI = window.SD.UI, V = window.VIDEO;
+  const stars = (n) => (n <= 2 ? 3 : n <= 4 ? 2 : 1);
+  const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+  const lg = Math.log10;
+  const secs = (t) => (t >= 3600 ? `${(t / 3600).toFixed(1)} h` : t >= 100 ? `${(t / 60).toFixed(1)} min` : `${t.toFixed(t < 10 ? 1 : 0)} s`);
+  const big = (n) => (n >= 1e6 ? +(n / 1e6).toFixed(1) + "M" : n >= 1e3 ? +(n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + "k" : String(Math.round(n)));
+
+  // ------------------------------------------------------------------------------------------- transcode --
+  const SEG_WORD = { 3600: "one piece: the whole hour", 600: "10-minute pieces", 60: "1-minute pieces", 10: "10-second pieces", 2: "2-second pieces" };
+  const ORDER_WORD = { piece: "each piece's four qualities together", low: "every piece's 360p first" };
+  const TMAX = 36000, TX0 = 70, TX1 = 560, tx = (t) => TX0 + (lg(Math.max(1, t)) / lg(TMAX)) * (TX1 - TX0);
+  // the clock while it plays: log time, from 1 s to the moment the last task finishes
+  const clockT = (R, a) => (a >= 1 ? R.all : Math.pow(10, a * lg(Math.max(2, R.all))));
+  const pc = (x) => (x * 100).toFixed(x < 0.01 ? 2 : 1) + "%";
+  function busy(R) {
+    // workers busy on each quality, at 90 moments spread on a log scale
+    const out = [];
+    for (let i = 0; i <= 90; i++) {
+      const t = Math.pow(10, (i / 90) * lg(TMAX)), n = [0, 0, 0, 0];
+      for (const x of R.tasks) if (x.start <= t && t < x.end) n[x.k]++;
+      out.push({ t, n });
+    }
+    return out;
+  }
+  UI.transcode = {
+    init(c) { Object.assign(c.F, { seg: 3600, order: "piece", res: null, anim: 0, runs: 0 }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, kids = [], g = c.B.goals, now = R ? clockT(R, Math.min(1, F.anim)) : 0;
+      // the video: four strips, one per quality, filling in as its pieces are encoded
+      const SX0 = 110, SX1 = 920, COLS = 120, cw = (SX1 - SX0) / COLS, pieces = Math.ceil(3600 / F.seg);
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "The video"), s("text", { class: "ev-sub", x: 40, y: 114 }, `an hour, cut into ${pieces === 1 ? "one piece" : c.num(pieces) + " pieces"} · a cell fills when that half-minute is encoded`));
+      V.RENDS.forEach((q, k) => {
+        const y = 130 + k * 26, fill = new Array(COLS).fill(0);
+        if (R) for (const x of R.tasks) if (x.k === k && x.end <= now) { const a = x.p * F.seg, b = a + x.len; for (let i = Math.floor(a / 30); i < Math.min(COLS, Math.ceil(b / 30)); i++) fill[i] += (Math.min(b, (i + 1) * 30) - Math.max(a, i * 30)) / 30; }
+        kids.push(s("text", { class: "ev-tick" + (R && R.ready[k] <= now ? " on" : ""), x: SX0 - 10, y: y + 14, "text-anchor": "end" }, q.id));
+        for (let i = 0; i < COLS; i++) kids.push(s("rect", { class: `yt-cell q${k}`, x: SX0 + i * cw, y, width: cw - 1, height: 20, "fill-opacity": 0.1 + 0.9 * Math.min(1, fill[i]) }));
+      });
+      if (pieces > 1 && pieces <= 60) for (let p = 1; p < pieces; p++) kids.push(s("path", { class: "yt-cut", d: `M${SX0 + (p * F.seg / 30) * cw - 0.5} 126V${130 + 4 * 26}` }));
+      // the workers: how many are busy on each quality, over time
+      const WB = 470, WH = 150, wy = (n) => WB - Math.sqrt(n / 200) * WH;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 270 }, "200 workers"), s("text", { class: "ev-sub", x: 40, y: 288 }, R ? `busy on each quality · ${secs(now)} after the upload` : "busy on each quality, over time (log scales)"));
+      kids.push(s("path", { class: "ub-axis", d: `M${TX0} ${WB}H${TX1}` }));
+      for (const [t, l] of [[1, "1 s"], [10, "10 s"], [60, "1 min"], [600, "10 min"], [3600, "1 h"], [36000, "10 h"]]) kids.push(s("text", { class: "ev-tick", x: tx(t), y: WB + 15, "text-anchor": "middle" }, l));
+      for (const n of [4, 50, 200]) kids.push(s("path", { class: "ub-tick", d: `M${TX0} ${wy(n)}H${TX1}` }), s("text", { class: "ev-tick", x: TX0 - 6, y: wy(n) + 3, "text-anchor": "end" }, String(n)));
+      if (R) {
+        const S = F.series.filter((p) => p.t <= now);
+        for (let k = 3; k >= 0; k--) {
+          // stacked: 360p at the bottom
+          const top = (p) => p.n.slice(0, k + 1).reduce((a, x) => a + x, 0), bot = (p) => p.n.slice(0, k).reduce((a, x) => a + x, 0);
+          if (S.length < 2) break;
+          const d = "M" + S.map((p) => `${tx(p.t).toFixed(1)} ${wy(top(p)).toFixed(1)}`).join("L") + "L" + S.slice().reverse().map((p) => `${tx(p.t).toFixed(1)} ${wy(bot(p)).toFixed(1)}`).join("L") + "Z";
+          kids.push(s("path", { class: `yt-busy q${k}`, d }));
+        }
+        kids.push(s("path", { class: "tw-now", d: `M${tx(now)} ${WB - WH - 6}V${WB}` }));
+        if (R.watchable <= now) kids.push(s("path", { class: "yt-mark", d: `M${tx(R.watchable)} ${WB - WH - 14}V${WB}` }), s("text", { class: "yt-lt", x: tx(R.watchable) + 4, y: WB - WH - 8 }, "▶ watchable"));
+      }
+      kids.push(s("path", { class: "ub-goal", d: `M${tx(g.watch)} ${WB - WH - 22}V${WB + 20}` }), s("text", { class: "ev-tick", x: tx(g.watch), y: WB + 31, "text-anchor": "middle" }, `goal: ${g.watch} s`));
+      // the numbers, and what the player can offer
+      const NX = 620, done = R && F.anim >= 1;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 300 }, "watchable after"), s("text", { class: "wa-big" + (done && R.watchable > g.watch ? " over" : ""), x: NX, y: 346 }, R && R.watchable <= now ? secs(R.watchable) : R ? "…" : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 392 }, "start-up wastes"), s("text", { class: "wa-big" + (R && R.overhead > g.waste ? " over" : ""), x: NX, y: 438 }, R ? pc(R.overhead) : "–"),
+        s("text", { class: "ev-tick", x: NX, y: 458 }, R ? `${c.num(R.tasks.length)} tasks × 4 s of start-up` : "of the work"));
+      V.RENDS.forEach((q, k) => {
+        const on = R && R.ready[k] <= now, x = NX + k * 74;
+        kids.push(s("rect", { class: "yt-chip" + (on ? ` on q${k}` : ""), x, y: 486, width: 66, height: 24, rx: 12 }), s("text", { class: "yt-ct" + (on ? " on" : ""), x: x + 33, y: 502, "text-anchor": "middle" }, q.id));
+      });
+      if (R) kids.push(s("text", { class: "ev-tick", x: NX, y: 476 }, R.all <= now ? `every quality done after ${secs(R.all)}` : "qualities ready to play"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 4.5));
+      c.redraw();
+      if (F.anim >= 1) { if (goodT(c, R)) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.watchable > g.watch && `the video wasn't watchable until ${secs(R.watchable)}`, R.overhead > g.waste && `start-up took ${pc(R.overhead)} of the work`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each strip is the hour of video in one quality. The chart below is what the 200 workers are busy with; time runs on a log scale, so it speeds up as it goes."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "cut it into ", h("button", { class: "sd-word", onclick: () => set("seg", cyc(V.SEGS, F.seg)) }, SEG_WORD[F.seg])),
+        h("p", {}, "encode ", h("button", { class: "sd-word", onclick: () => set("order", cyc(V.ORDERS, F.order)) }, ORDER_WORD[F.order]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: () => { F.runs++; F.res = V.transcode({ seg: F.seg, order: F.order, seed: c.B.sim.seed }); F.series = busy(F.res); F.anim = 0; c.redraw(); c.rebrief(); } }, "Upload it"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} upload${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals;
+      return [[`watchable in 360p within ${g.watch} s`, R ? R.watchable <= g.watch : null, R ? secs(R.watchable) : "run it"], [`start-up wastes ≤ ${g.waste * 100}% of the work`, R ? R.overhead <= g.waste : null, R ? pc(R.overhead) : "·"]];
+    },
+  };
+  const goodT = (c, R) => R.watchable <= c.B.goals.watch && R.overhead <= c.B.goals.waste;
+
+  // ------------------------------------------------------------------------------------------------- abr --
+  const RULE_WORD = { top: "always 1080p", low: "always 360p", rate: "to match the last download's speed", buffer: "by how full the buffer is" };
+  const AHEAD_WORD = { 10: "10 s", 30: "30 s", 120: "2 minutes" };
+  const AX0 = 60, AX1 = 620, AEND = 560, ax = (t) => AX0 + (Math.min(t, AEND) / AEND) * (AX1 - AX0);
+  const BB = 250, BH = 100, by = (m) => BB - ((lg(Math.max(0.1, m)) + 1) / 2.3) * BH; // 0.1 to 20 megabits, log scale
+  // where the playhead is, and what's buffered, at time t
+  function at(R, t) {
+    const T = R.trace;
+    let i = 0;
+    while (i < T.length - 1 && T[i + 1][0] <= t) i++;
+    const [t0, b0, p0] = T[i], [t1, b1, p1] = T[Math.min(T.length - 1, i + 1)], f = t1 > t0 ? Math.min(1, (t - t0) / (t1 - t0)) : 0;
+    return { buf: b0 + (b1 - b0) * f, play: p0 + (p1 - p0) * f, stall: R.stalls.some((x) => t >= x.at && t < x.at + x.len) };
+  }
+  // Leo's screen: a tulip in a field, drawn in blocks as big as the quality is poor
+  const BLOCK = [22, 15, 10, 6, 4];
+  function pixel(u, v) {
+    const dx = (u - 0.5) / 0.13, dy = (v - 0.38) / 0.16;
+    if (dx * dx + dy * dy < 1 && !(v < 0.3 && Math.abs(u - 0.5) < 0.03)) return u < 0.5 ? "pk" : "pk2";
+    if (Math.abs(u - 0.5) < 0.018 && v > 0.5 && v < 0.82) return "st";
+    if ((u - 0.43) ** 2 / 0.004 + (v - 0.66) ** 2 / 0.0012 < 1) return "st";
+    if (v > 0.8) return (u * 7 + v * 3) % 1 < 0.5 ? "gr" : "gr2";
+    if ((u - 0.82) ** 2 + (v - 0.18) ** 2 < 0.006) return "sun";
+    return v < 0.4 ? "sky" : "sky2";
+  }
+  UI.abr = {
+    init(c) { Object.assign(c.F, { rule: "top", ahead: 30, res: null, anim: 0, runs: 0 }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, kids = [], g = c.B.goals, now = R ? Math.min(1, F.anim) * Math.min(AEND, R.end) : 0;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "The signal, and what the player picked"), s("text", { class: "ev-sub", x: 40, y: 114 }, "megabits a second along the ride (log scale)"));
+      // the line's sections
+      let from = 0;
+      for (const sec of V.RIDE) { const a = ax(from), b = ax(Math.min(sec.to, AEND)); if (a < b) { kids.push(s("rect", { class: "yt-sec" + (sec.mbps < 1 ? " dark" : ""), x: a, y: BB - BH - 8, width: b - a, height: BH + 8 })); if (b - a > 40) kids.push(s("text", { class: "ev-tick", x: (a + b) / 2, y: BB + 28, "text-anchor": "middle" }, sec.say)); } from = sec.to; }
+      for (const q of V.LADDER) kids.push(s("path", { class: "ub-tick", d: `M${AX0} ${by(q.mbps)}H${AX1}` }), s("text", { class: "ev-tick", x: AX1 + 6, y: by(q.mbps) + 3 }, q.id));
+      kids.push(s("path", { class: "ub-axis", d: `M${AX0} ${BB}H${AX1}` }));
+      for (const t of [0, 120, 240, 360, 480]) kids.push(s("text", { class: "ev-tick", x: ax(t), y: BB + 14, "text-anchor": "middle" }, `${t / 60} min`));
+      const bw = R ? R.bw : V.ride(c.B.sim.seed), upto = R ? now : AEND;
+      kids.push(s("path", { class: "yt-bw" + (R ? "" : " ghost"), d: `M${ax(0)} ${BB}` + bw.slice(0, Math.ceil(upto) + 1).map((m, t) => `L${ax(t).toFixed(1)} ${by(m).toFixed(1)}`).join("") + `L${ax(upto)} ${BB}Z` }));
+      if (R) {
+        // the quality of each piece, drawn when it was fetched
+        let d = "";
+        for (const p of R.pieces) { if (p.start > now) break; d += `${d ? "L" : "M"}${ax(p.start).toFixed(1)} ${by(V.LADDER[p.k].mbps).toFixed(1)}H${ax(Math.min(p.t, now)).toFixed(1)}`; }
+        if (d) kids.push(s("path", { class: "yt-pick", d }));
+      }
+      // the buffer
+      const QB = 480, QH = 110, qmax = F.ahead * 1.25, qy = (b) => QB - (Math.min(b, qmax) / qmax) * QH;
+      const st = R ? R.stalls.filter((x) => x.at < now) : [];
+      kids.push(s("text", { class: "ev-h", x: 40, y: 320 }, "The buffer"), s("text", { class: "ev-sub", x: 40, y: 338 }, R ? (st.length ? `stalled ${st.length} time${st.length > 1 ? "s" : ""}, ${st.reduce((a, x) => a + Math.min(x.len, now - x.at), 0).toFixed(1)} s in all` : "seconds of video fetched ahead · no stalls yet") : "seconds of video fetched ahead of the playhead"));
+      kids.push(s("path", { class: "ub-axis", d: `M${AX0} ${QB}H${AX1}` }), s("path", { class: "ub-goal", d: `M${AX0} ${qy(F.ahead)}H${AX1}` }), s("text", { class: "ev-tick yt-halo", x: AX1 - 4, y: qy(F.ahead) - 5, "text-anchor": "end" }, `fetch up to ${AHEAD_WORD[F.ahead]} ahead`));
+      if (R) {
+        const pts = R.trace.filter((p) => p[0] <= now);
+        if (pts.length) kids.push(s("path", { class: "yt-buf", d: `M${ax(0)} ${QB}` + pts.map((p) => `L${ax(p[0]).toFixed(1)} ${qy(p[1]).toFixed(1)}`).join("") + `L${ax(now)} ${qy(at(R, now).buf).toFixed(1)}L${ax(now)} ${QB}Z` }));
+        for (const x of st) kids.push(s("rect", { class: "yt-stall", x: ax(x.at), y: QB - 10, width: Math.max(2, ax(Math.min(now, x.at + x.len)) - ax(x.at)), height: 10 }));
+        kids.push(s("path", { class: "tw-now", d: `M${ax(now)} ${BB - BH - 8}V${QB}` }));
+      }
+      // Leo's screen
+      const SX = 680, SY = 128, SW = 240, SHh = 135, cur = R ? at(R, now) : null;
+      const k = R ? (R.pieces[Math.min(R.pieces.length - 1, Math.floor(cur.play / 2))] || { k: 0 }).k : 4, B = BLOCK[k];
+      kids.push(s("text", { class: "ev-sub", x: SX, y: SY - 4 }, R ? `Leo's screen · ${V.LADDER[k].id}` : "Leo's screen"));
+      // (each quality's picture is built once and reused, since 1080p is two thousand blocks)
+      const scr = (F.scr = F.scr || {});
+      if (!scr[k]) { const px = []; for (let y = 0; y < SHh; y += B) for (let x = 0; x < SW; x += B) px.push(s("rect", { class: "yt-px " + pixel((x + B / 2) / SW, (y + B / 2) / SHh), x: SX + x, y: SY + y, width: Math.min(B, SW - x), height: Math.min(B, SHh - y) })); scr[k] = s("g", {}, ...px); }
+      kids.push(scr[k]);
+      kids.push(s("rect", { class: "yt-frame", x: SX, y: SY, width: SW, height: SHh, rx: 4 }));
+      if (cur && cur.stall) kids.push(s("rect", { class: "yt-dim", x: SX, y: SY, width: SW, height: SHh, rx: 4 }), s("circle", { class: "yt-spin", cx: SX + SW / 2, cy: SY + SHh / 2, r: 14, transform: `rotate(${(performance.now() / 3) % 360} ${SX + SW / 2} ${SY + SHh / 2})` }));
+      // the numbers
+      const done = R && F.anim >= 1, NX = 680;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 300 }, "stalled"), s("text", { class: "wa-big" + (done && R.stallShare > g.stall ? " over" : ""), x: NX, y: 340 }, done ? `${(R.stallShare * 100).toFixed(1)}%` : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 376 }, "on average"), s("text", { class: "wa-big" + (done && R.avg < g.avg ? " over" : ""), x: NX, y: 416 }, done ? R.avg.toFixed(2) : "–"), s("text", { class: "ev-tick", x: NX + 104, y: 416 }, "megabits a second"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 452 }, "thrown away"), s("text", { class: "wa-big" + (done && R.wasted > g.waste ? " over" : ""), x: NX, y: 492 }, done ? `${Math.round(R.wasted)} MB` : "–"), s("text", { class: "ev-tick", x: NX, y: 510 }, "fetched, never watched: he got off"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R) return;
+      const moving = F.anim < 1;
+      if (moving) { F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 6)); if (F.anim >= 1) { if (goodA(c, R)) c.solved(stars(F.runs)); else c.rebrief(); } }
+      if (moving) c.redraw();
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.stallShare > g.stall && `it stalled ${(R.stallShare * 100).toFixed(1)}% of the time`, R.avg < g.avg && `the picture averaged ${R.avg.toFixed(2)} megabits a second`, R.wasted > g.waste && `${Math.round(R.wasted)} MB was fetched and never watched`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "The pink steps are the quality of each piece the player fetched, against the signal under it. Below, the buffer: when it hits zero, the picture stops."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "pick each piece's quality ", h("button", { class: "sd-word", onclick: () => set("rule", cyc(V.RULES, F.rule)) }, RULE_WORD[F.rule])),
+        h("p", {}, "fetch up to ", h("button", { class: "sd-word", onclick: () => set("ahead", cyc(V.AHEAD, F.ahead)) }, AHEAD_WORD[F.ahead]), " ahead")),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: () => { F.runs++; F.res = V.abr({ rule: F.rule, ahead: F.ahead, seed: c.B.sim.seed }); F.anim = 0; c.redraw(); c.rebrief(); } }, "Ride the train"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} ride${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals;
+      return [[`stalled under ${g.stall * 100}% of the time`, R ? R.stallShare <= g.stall : null, R ? `${(R.stallShare * 100).toFixed(1)}%` : "run it"],
+        [`at least ${g.avg} megabits a second`, R ? R.avg >= g.avg : null, R ? R.avg.toFixed(2) : "·"], [`at most ${g.waste} MB thrown away`, R ? R.wasted <= g.waste : null, R ? `${Math.round(R.wasted)} MB` : "·"]];
+    },
+  };
+  const goodA = (c, R) => R.stallShare <= c.B.goals.stall && R.avg >= c.B.goals.avg && R.wasted <= c.B.goals.waste;
+
+  // -------------------------------------------------------------------------------------------- premiere --
+  const COL_WORD = { false: "passes every request on", true: "sends one request and holds the rest" };
+  const SHD_WORD = { false: "the origin directly", true: "a shield in their region first" };
+  const CX = 270, CY = 320, RE = 186, RS = 104;
+  const edgeAt = (e) => { const r = e % V.REGIONS, j = Math.floor(e / V.REGIONS), a = (r / V.REGIONS) * 2 * Math.PI + ((j - (V.EDGES / V.REGIONS - 1) / 2) / (V.EDGES / V.REGIONS)) * (2 * Math.PI / V.REGIONS) * 0.85 - Math.PI / 2; return [CX + RE * Math.cos(a), CY + RE * Math.sin(a)]; };
+  const shieldAt = (r) => { const a = (r / V.REGIONS) * 2 * Math.PI - Math.PI / 2; return [CX + RS * Math.cos(a), CY + RS * Math.sin(a)]; };
+  UI.premiere = {
+    init(c) { Object.assign(c.F, { collapse: false, shield: false, res: null, anim: 0, runs: 0, memo: {} }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, kids = [], g = c.B.goals, ts = R ? Math.min(1, F.anim) * 120 : 0, sec = Math.min(119, Math.floor(ts));
+      kids.push(s("text", { class: "ev-h", x: 40, y: 96 }, "3 million viewers, 200 edges"), s("text", { class: "ev-sub", x: 40, y: 114 }, R ? `${Math.floor(ts)} s into the premiere · piece ${Math.min(30, Math.floor(ts / 4) + 1)} of 30` : "a dot is an edge, sized by its viewers"));
+      // a pulse each time a piece goes live
+      const phase = (ts % 4) / 4, lit = R && F.anim < 1 && phase < 0.35, w = (n) => Math.max(0.6, Math.min(7, 0.8 + 1.1 * lg(1 + n)));
+      const per = R ? R.pieces : 30;
+      for (let e = 0; e < V.EDGES; e++) {
+        const [x, y] = edgeAt(e), [tx2, ty2] = F.shield ? shieldAt(e % V.REGIONS) : [CX, CY];
+        kids.push(s("path", { class: "yt-wire" + (lit ? " lit" : ""), d: `M${x.toFixed(1)} ${y.toFixed(1)}L${tx2.toFixed(1)} ${ty2.toFixed(1)}`, "stroke-width": R ? w(R.edgeUp[e] / per) : 0.6 }));
+      }
+      if (F.shield) for (let r = 0; r < V.REGIONS; r++) { const [x, y] = shieldAt(r); kids.push(s("path", { class: "yt-wire up" + (lit ? " lit" : ""), d: `M${x.toFixed(1)} ${y.toFixed(1)}L${CX} ${CY}`, "stroke-width": R ? w(R.regionOrigin[r] / per) : 1 })); }
+      const vmax = R ? Math.max(...R.per) : 1;
+      for (let e = 0; e < V.EDGES; e++) { const [x, y] = edgeAt(e); kids.push(s("circle", { class: "yt-edge", cx: x, cy: y, r: R ? 2 + 4 * Math.sqrt(R.per[e] / vmax) : 3 })); }
+      if (F.shield) for (let r = 0; r < V.REGIONS; r++) { const [x, y] = shieldAt(r); kids.push(s("rect", { class: "yt-shield", x: x - 8, y: y - 8, width: 16, height: 16, rx: 3 })); }
+      const load = R ? R.asked[sec] / R.cap : 0, hot = load > 1;
+      kids.push(s("circle", { class: "yt-origin" + (hot && F.anim < 1 ? " hot" : ""), cx: CX, cy: CY, r: 26 + (R ? Math.min(18, 4 * lg(1 + load)) : 0) }), s("text", { class: "yt-ot", x: CX, y: CY + 4, "text-anchor": "middle" }, "origin"));
+      // what reaches the origin, second by second
+      const OX0 = 600, OX1 = 920, OB = 290, OH = 150, ox = (t) => OX0 + (t / 120) * (OX1 - OX0), oy = (n) => OB - (lg(Math.max(1, n)) / 7) * OH;
+      kids.push(s("text", { class: "ev-h", x: 580, y: 96 }, "Asking the origin"), s("text", { class: "ev-sub", x: 580, y: 114 }, R && F.anim >= 1 ? `at most ${c.num(Math.round(R.originPeak))} requests in a second` : "requests a second (log scale)"));
+      kids.push(s("path", { class: "ub-axis", d: `M${OX0} ${OB}H${OX1}` }));
+      for (const n of [10, 1e3, 1e5]) kids.push(s("path", { class: "ub-tick", d: `M${OX0} ${oy(n)}H${OX1}` }), s("text", { class: "ev-tick", x: OX0 - 6, y: oy(n) + 3, "text-anchor": "end" }, big(n)));
+      for (const t of [0, 30, 60, 90, 120]) kids.push(s("text", { class: "ev-tick", x: ox(t), y: OB + 15, "text-anchor": "middle" }, `${t} s`));
+      if (R) for (let t = 0; t <= sec; t++) if (R.asked[t] > 0) kids.push(s("rect", { class: "yt-ob" + (R.asked[t] > R.cap ? " over" : ""), x: ox(t), y: oy(R.asked[t]), width: Math.max(1.5, (OX1 - OX0) / 120 - 0.5), height: OB - oy(R.asked[t]) }));
+      kids.push(s("path", { class: "tw-cap", d: `M${OX0} ${oy(g.peak)}H${OX1}` }), s("text", { class: "ev-tick yt-halo", x: OX1, y: oy(g.peak) - 5, "text-anchor": "end" }, `it can answer ${g.peak}/s`));
+      // how long viewers wait for each piece
+      const HX0 = 600, HX1 = 920, HB = 480, HH = 110, bw = (HX1 - HX0) / 21;
+      kids.push(s("text", { class: "ev-h", x: 580, y: 338 }, "Waiting for a piece"), s("text", { class: "ev-sub", x: 580, y: 356 }, R && F.anim >= 1 ? (R.failed > 0.005 ? `${(R.failed * 100).toFixed(1)}% gave up · 99% within ${R.waitP99 > 2 ? "never" : R.waitP99.toFixed(2) + " s"}` : `99% got it within ${R.waitP99.toFixed(2)} s`) : "share of viewers, by seconds waited"));
+      kids.push(s("path", { class: "ub-axis", d: `M${HX0} ${HB}H${HX1}` }));
+      for (const [i, l] of [[0, "0"], [5, "0.5"], [10, "1 s"], [15, "1.5"], [20, "gave up"]]) kids.push(s("text", { class: "ev-tick", x: HX0 + i * bw + (i === 20 ? bw / 2 : 0), y: HB + 15, "text-anchor": "middle" }, l));
+      if (R && F.anim >= 1) R.hist.forEach((v, i) => { if (v > 0) { const hgt = Math.max(1.5, Math.sqrt(v) * HH); kids.push(s("rect", { class: "yt-wb" + (i >= g.wait * 10 ? " slow" : ""), x: HX0 + i * bw + 0.5, y: HB - hgt, width: bw - 1, height: hgt })); } });
+      kids.push(s("path", { class: "ub-goal", d: `M${HX0 + g.wait * 10 * bw} ${HB - HH - 6}V${HB}` }));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 6));
+      c.redraw();
+      if (F.anim >= 1) { c.redraw(); if (goodP(c, R)) c.solved(stars(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.originPeak > g.peak && `the origin was asked ${c.num(Math.round(R.originPeak))} times in one second`, R.waitP99 > g.wait && (R.failed > 0.01 ? `${(R.failed * 100).toFixed(1)}% of requests gave up` : `the slowest 1% waited ${R.waitP99.toFixed(2)} s for a piece`)].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Lines are requests going up when an edge misses; thicker is more. Squares, when you add them, are regional shields: caches between the edges and the origin."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.collapse}:${F.shield}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = V.premiere({ collapse: F.collapse, shield: F.shield, seed: c.B.sim.seed })); F.anim = 0; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "on a miss, an edge ", h("button", { class: "sd-word", onclick: () => set("collapse", !F.collapse) }, COL_WORD[F.collapse])),
+        h("p", {}, "edges ask ", h("button", { class: "sd-word", onclick: () => set("shield", !F.shield) }, SHD_WORD[F.shield]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && F.anim < 1, onclick: run }, "Start the premiere"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} premiere${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.anim >= 1 ? c.F.res : null, g = c.B.goals;
+      return [[`the origin is asked ≤ ${g.peak} times a second`, R ? R.originPeak <= g.peak : null, R ? c.num(Math.round(R.originPeak)) : "run it"],
+        [`99% get each piece within ${g.wait} s`, R ? R.waitP99 <= g.wait : null, R ? (R.waitP99 > 2 ? "gave up" : `${R.waitP99.toFixed(2)} s`) : "·"]];
+    },
+  };
+  const goodP = (c, R) => R.originPeak <= c.B.goals.peak && R.waitP99 <= c.B.goals.wait;
+})();
