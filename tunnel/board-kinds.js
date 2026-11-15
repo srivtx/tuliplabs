@@ -1935,3 +1935,407 @@
     F.res = null; c.redraw(); c.rebrief();
   }
 })();
+
+// ===================================================================================================== Caching --
+// The Caching unit's pages (tunnel/cache.js has the simulators): the long tail, which order to write in, the
+// stampede, and fresh enough.
+(function () {
+  "use strict";
+  const UI = window.SD.UI, CA = window.CACHE;
+  const lg = Math.log10;
+  const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+  const fmtN = (n) => Math.round(n).toLocaleString("en-US");
+  const pc = (x, d = 0) => (x * 100).toFixed(d) + "%";
+  const ran = (n) => (n <= 2 ? 3 : n <= 4 ? 2 : 1);
+  // drag on the board: the layer is redrawn every frame, so the pointer is caught by the board's own svg
+  function dragger(c, on) {
+    c.svg.addEventListener("pointermove", (e) => { if (c.isNow() && c.F.drag) on(c.pt(e)); });
+    const up = () => { if (c.isNow() && c.F.drag) { c.F.drag = false; c.redraw(); } };
+    c.svg.addEventListener("pointerup", up);
+    c.svg.addEventListener("pointercancel", up);
+  }
+  const grab = (c, on) => (e) => { c.F.drag = true; try { c.svg.setPointerCapture(e.pointerId); } catch (err) {} on(c.pt(e)); e.preventDefault(); e.stopPropagation(); };
+
+  // -------------------------------------------------------------------------------------------- the long tail --
+  const TX0 = 96, TX1 = 640, TYB = 470, TYT = 128;
+  const tx = (sh) => TX0 + ((lg(Math.max(1e-5, Math.min(1, sh))) + 5) / 5) * (TX1 - TX0);
+  const txi = (x) => Math.pow(10, ((Math.max(TX0, Math.min(TX1, x)) - TX0) / (TX1 - TX0)) * 5 - 5);
+  const ty = (v) => TYB - v * (TYB - TYT), tyi = (y) => (TYB - Math.max(TYT, Math.min(TYB, y))) / (TYB - TYT);
+  const prodN = (sh) => sh * CA.PRODUCTS;
+  const prods = (sh) => { const n = prodN(sh); return n >= 1e6 ? "all 1,000,000" : n >= 1e4 ? fmtN(Math.round(n / 1000) * 1000) : fmtN(n); };
+  const mem = (sh) => { const mb = (prodN(sh) * CA.ITEM_KB) / 1000; return mb >= 1000 ? (mb / 1000).toFixed(mb >= 1e4 ? 0 : 1) + " GB" : mb >= 1 ? Math.round(mb) + " MB" : Math.round(mb * 1000) + " KB"; };
+  const shareW = (sh) => (sh >= 0.1 ? pc(sh) : sh >= 0.001 ? pc(sh, sh >= 0.01 ? 1 : 2) : pc(sh, 3)).replace(/\.0+%$/, "%");
+  const truth = (r) => (r.ask === "hit" ? CA.hit(r.at) : CA.size(r.at));
+  const close = (r, g) => (r.ask === "hit" ? Math.abs(g - truth(r)) <= 0.06 : Math.abs(lg(g / truth(r))) <= lg(2));
+  UI.tail = {
+    init(c) {
+      Object.assign(c.F, { round: 0, guess: null, checked: false, rights: [], picks: [], drag: false, draw: 0 });
+      if (c.done()) { c.F.round = c.B.rounds.length; c.F.picks = c.B.rounds.map(truth); c.F.rights = c.B.rounds.map(() => true); c.F.draw = 1; }
+      else c.F.guess = c.B.rounds[0].ask === "hit" ? 0.3 : 0.01;
+      dragger(c, (p) => move(c, p));
+    },
+    draw(c) {
+      const { s, F, B } = c, kids = [], R = B.rounds, r = R[F.round], over = F.round >= R.length;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "Views the cache answers"), s("text", { class: "ev-sub", x: 40, y: 94 }, "by how much of the catalog it keeps; each step along is ten times more"));
+      // the grid
+      for (let v = 0; v <= 1.0001; v += 0.25) kids.push(s("path", { class: "cc-grid", d: `M${TX0} ${ty(v)}H${TX1}` }), s("text", { class: "ev-tick", x: TX0 - 8, y: ty(v) + 4, "text-anchor": "end" }, pc(v)));
+      for (let k = -5; k <= 0; k++) {
+        const x = tx(Math.pow(10, k));
+        kids.push(s("path", { class: "cc-grid", d: `M${x} ${TYT}V${TYB}` }), s("text", { class: "ev-tick", x, y: TYB + 16, "text-anchor": "middle" }, ["0.001%", "0.01%", "0.1%", "1%", "10%", "100%"][k + 5]),
+          s("text", { class: "cc-sm", x, y: TYB + 30, "text-anchor": "middle" }, ["10", "100", "1,000", "10,000", "100,000", "1,000,000"][k + 5]));
+      }
+      kids.push(s("text", { class: "cc-sm", x: TX0 - 26, y: TYB + 30, "text-anchor": "end" }, "products"), s("path", { class: "ub-axis", d: `M${TX0} ${TYB}H${TX1}` }));
+      // the curve, once every guess is in
+      if (F.draw > 0) {
+        const pts = [], end = -5 + 5 * F.draw;
+        for (let e = -5; e <= end + 1e-9; e += 0.04) pts.push([tx(Math.pow(10, e)), ty(CA.hit(Math.pow(10, e)))]);
+        const d = "M" + pts.map((p) => p.map((v) => v.toFixed(1)).join(" ")).join("L");
+        kids.push(s("path", { class: "cc-area", d: `${d}L${pts[pts.length - 1][0].toFixed(1)} ${TYB}L${TX0} ${TYB}Z` }), s("path", { class: "cc-curve", d }));
+      }
+      // the rounds already answered: your pin and the real point
+      F.picks.forEach((g, i) => {
+        const q = R[i], t = truth(q), ok = F.rights[i];
+        const gx = q.ask === "hit" ? tx(q.at) : tx(g), gy = q.ask === "hit" ? ty(g) : ty(q.at), x = q.ask === "hit" ? tx(q.at) : tx(t), y = q.ask === "hit" ? ty(t) : ty(q.at);
+        kids.push(s("path", { class: "cc-miss" + (ok ? " ok" : ""), d: `M${gx} ${gy}L${x} ${y}` }), s("circle", { class: "cc-pin was" + (ok ? " ok" : " no"), cx: gx, cy: gy, r: 6 }), s("circle", { class: "cc-true", cx: x, cy: y, r: 7 }));
+        const lab = q.ask === "hit" ? pc(t) + " of views" : `${shareW(t)} of the catalog · ${mem(t)}`;
+        kids.push(s("text", { class: "cc-tl yt-halo", x: x + (q.ask === "hit" ? 12 : -10), y: y + (q.ask === "hit" ? 4 : -14), "text-anchor": q.ask === "hit" ? "start" : "end" }, lab));
+      });
+      // this round: a guide along what's given, and the pin you drag along it
+      if (!over) {
+        const g = F.guess, hitQ = r.ask === "hit";
+        const x = hitQ ? tx(r.at) : tx(g), y = hitQ ? ty(g) : ty(r.at);
+        kids.push(s("path", { class: "cc-guide", d: hitQ ? `M${x} ${TYB}V${TYT - 6}` : `M${TX0} ${y}H${TX1}` }));
+        kids.push(s("text", { class: "cc-given yt-halo", x: hitQ ? x + 8 : TX0 + 8, y: hitQ ? TYT + 8 : y - 10 }, hitQ ? `the top ${shareW(r.at)} · ${prods(r.at)} products · ${mem(r.at)}` : `${pc(r.at)} of views`));
+        if (!F.checked) {
+          kids.push(s("rect", { class: "cc-hit", x: TX0 - 30, y: TYT - 20, width: TX1 - TX0 + 60, height: TYB - TYT + 40, onpointerdown: grab(c, (p) => move(c, p)) }));
+          kids.push(s("path", { class: "cc-stem", d: hitQ ? `M${x - 18} ${y}H${x + 18}` : `M${x} ${y - 18}V${y + 18}` }), s("circle", { class: "cc-pin" + (F.drag ? " drag" : ""), cx: x, cy: y, r: 9 }));
+          kids.push(s("text", { class: "cc-read yt-halo", x: x + (hitQ ? 16 : 0), y: y + (hitQ ? 5 : 32), "text-anchor": hitQ ? "start" : "middle" }, hitQ ? pc(g) + "?" : `${shareW(g)}? · ${mem(g)}`));
+        }
+      }
+      // the tail itself, most viewed first, with a crown on the top product
+      const BX = 700, BB = 368, BW = 5.2, H1 = 1 / CA.H(CA.PRODUCTS);
+      kids.push(s("text", { class: "ev-h", x: BX, y: 154 }, "The long tail"), s("text", { class: "ev-sub", x: BX, y: 172 }, "views per product, most viewed first"));
+      for (let k = 1; k <= 40; k++) { const hh = (150 / k); kids.push(s("rect", { class: "cc-tb" + (k === 1 ? " top" : ""), x: BX + (k - 1) * BW, y: BB - hh, width: BW - 1.2, height: hh })); }
+      kids.push(s("path", { class: "cc-tdots", d: `M${BX + 40 * BW + 4} ${BB - 2}H${BX + 236}` }), s("path", { class: "ub-axis", d: `M${BX} ${BB}H${BX + 236}` }));
+      kids.push(c.rx("crown", BX - 9, BB - 182, 30));
+      kids.push(s("text", { class: "cc-sm", x: BX, y: BB + 18 }, `#1 gets ${pc(H1, 1)} of all views`), s("text", { class: "cc-sm", x: BX, y: BB + 32 }, `#1,000,000 gets 1 in ${fmtN(Math.round(1 / (H1 / 1e6) / 1e6))} million`));
+      // the guess, in memory
+      if (!over) {
+        const sh = r.ask === "hit" ? r.at : F.guess;
+        kids.push(s("text", { class: "wa-mn", x: BX, y: 436 }, "in the cache"), s("text", { class: "cc-big", x: BX, y: 470 }, mem(sh)), s("text", { class: "cc-sm", x: BX, y: 490 }, `${prods(sh)} product pages × ${CA.ITEM_KB} KB`));
+      } else kids.push(s("text", { class: "cc-tl", x: BX, y: 440 }, `every ten times more memory`), s("text", { class: "cc-tl", x: BX, y: 456 }, `buys the same ${Math.round((100 * Math.LN10) / CA.H(CA.PRODUCTS))} points`), c.rx("trophy", BX + 150, 404, 74, F.draw >= 1 ? "pop" : ""));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (F.round < c.B.rounds.length || F.draw >= 1) return;
+      F.draw = Math.min(1, F.draw + dt / (c.REDUCED ? 0.1 : 1.6));
+      c.redraw();
+    },
+    brief(c) {
+      const { h, F, B } = c, R = B.rounds;
+      if (F.round >= R.length) return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, `${F.rights.filter(Boolean).length} of ${R.length} guesses close. The curve climbs fast and then crawls: that's the tail.`))];
+      const r = R[F.round], t = truth(r);
+      return [h("div", { class: "sd-ask" }, h("small", {}, `guess ${F.round + 1} of ${R.length}`), h("p", { html: r.say }),
+        !F.checked ? h("p", { class: "sd-quiet" }, r.ask === "hit" ? "Drag the pin up or down the line." : "Drag the pin along the line.") :
+          h("p", { class: "sd-verdict " + (F.rights[F.round] ? "ok" : "no") }, (F.rights[F.round] ? "✓ Close. " : "✗ Not quite. ") + (r.ask === "hit" ? `It's ${pc(t)} of views.` : `It takes ${shareW(t)} of the catalog: ${prods(t)} products, ${mem(t)}.`)))];
+    },
+    tools(c) {
+      const { h, F, B } = c, R = B.rounds;
+      if (F.round >= R.length) return [];
+      if (!F.checked) return [h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: () => check(c) }, "Check my guess"))];
+      return [h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: () => next(c) }, F.round === R.length - 1 ? "Draw the whole curve" : "Next guess →"))];
+    },
+  };
+  function move(c, p) {
+    const F = c.F, r = c.B.rounds[F.round];
+    if (!r || F.checked) return;
+    F.guess = r.ask === "hit" ? Math.max(0.01, Math.min(0.99, tyi(p.y))) : Math.max(1e-5, Math.min(1, txi(p.x)));
+    c.redraw();
+  }
+  function check(c) {
+    const F = c.F, r = c.B.rounds[F.round];
+    F.checked = true; F.rights[F.round] = close(r, F.guess); F.picks[F.round] = F.guess;
+    c.redraw(); c.rebrief();
+  }
+  function next(c) {
+    const F = c.F, R = c.B.rounds;
+    F.round++; F.checked = false;
+    if (F.round < R.length) F.guess = R[F.round].ask === "hit" ? 0.3 : 0.01;
+    else { const n = F.rights.filter(Boolean).length; F.draw = 0.001; c.solved(n === R.length ? 3 : n >= R.length - 1 ? 2 : 1); }
+    c.redraw(); c.rebrief();
+  }
+
+  // ------------------------------------------------------------------------------------------- which order --
+  const PRICE = { 0: "£3", 1: "£1", 2: "£2" }, P$ = (v) => (v == null ? "empty" : PRICE[v]);
+  const ICON = { db: "→ database", set: "→ cache", del: "✕ cache" };
+  const OCOL = { A: 452, B: 540, R: 628, cache: 756, db: 868 };
+  const STEP = 0.75;
+  const SHORT = { setdb: "cache, db", dbset: "db, cache", deldb: "delete, db", dbdel: "db, delete" };
+  UI.inval = {
+    init(c) {
+      Object.assign(c.F, { I: CA.inval(), pick: null, picks: [], t: 0 });
+      if (c.done()) { c.F.pick = c.B.answer; c.F.picks = [c.B.answer]; c.F.t = 99; c.F.won = true; }
+    },
+    draw(c) {
+      const { s, h, F, B } = c, kids = [], I = F.I, ids = Object.keys(CA.ORDERS);
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "A writer's two steps"), s("text", { class: "ev-sub", x: 40, y: 94 }, F.pick ? "tap another to see how it goes wrong" : "tap the order you'd write in"));
+      ids.forEach((id, i) => {
+        const o = CA.ORDERS[id], seen = F.picks.includes(id), cur = F.pick === id;
+        const card = h("button", { class: "cc-ord" + (cur ? " cur" : "") + (seen ? (id === B.answer ? " best" : " bad") : ""), xmlns: "http://www.w3.org/1999/xhtml", onclick: () => pick(c, id) },
+          h("span", { class: "cc-steps" }, ...o.steps.map((k, j) => h("i", { class: "k-" + k }, `${j + 1} ${k === "db" ? "update the database" : k === "set" ? "update the cache" : "delete the key"}`))),
+          seen ? h("small", {}, `wrong price left in ${I[id].stale} of ${I[id].total}`) : null);
+        kids.push(s("foreignObject", { x: 36, y: 108 + i * 78, width: 336, height: 70, class: "sc-fo" }, card));
+      });
+      // every order's count, once you've picked
+      if (F.pick) {
+        kids.push(s("text", { class: "cc-sm", x: 40, y: 438 }, "interleavings that end with the wrong price in the cache"));
+        const mx = Math.max(...ids.map((k) => I[k].total));
+        ids.forEach((id, i) => {
+          const w = (I[id].stale / mx) * 280, y = 450 + i * 18;
+          kids.push(s("text", { class: "cc-sm", x: 40, y: y + 10 }, SHORT[id]), s("rect", { class: "ln-bt", x: 120, y, width: 210, height: 12, rx: 3 }), s("rect", { class: "cc-sb" + (id === B.answer ? " best" : ""), x: 120, y, width: Math.max(2, (w * 210) / 280), height: 12, rx: 3 }),
+            s("text", { class: "cc-sm", x: 338, y: y + 10 }, `${I[id].stale}`));
+        });
+      }
+      // the sequence: one way it goes wrong, step by step
+      if (F.pick) {
+        const ex = I[F.pick].example, log = ex.log, shown = Math.min(log.length, Math.floor(F.t / STEP) + 1), Y0 = 140, DY = Math.min(44, 300 / log.length);
+        kids.push(s("text", { class: "ev-h", x: 420, y: 76 }, "One way it goes wrong"), s("text", { class: "ev-sub", x: 420, y: 94 }, `${CA.ORDERS[F.pick].say}, from a cache that's ${ex.warm ? "warm" : "empty"}`));
+        for (const [k, w] of [["A", "writer A"], ["B", "writer B"], ["R", "shopper"], ["cache", "cache"], ["db", "database"]]) {
+          kids.push(s("text", { class: "cc-col" + (k === "cache" || k === "db" ? " st" : ""), x: OCOL[k], y: 120, "text-anchor": "middle" }, w), s("path", { class: "cc-life", d: `M${OCOL[k]} 126V${Y0 + log.length * DY - 8}` }));
+        }
+        kids.push(s("path", { class: "cc-sep", d: `M${(OCOL.R + OCOL.cache) / 2 + 6} 108V${Y0 + log.length * DY}` }));
+        const st0 = { cache: ex.warm ? 0 : null, db: 0 };
+        for (let i = 0; i < shown; i++) {
+          const e = log[i], y = Y0 + i * DY + 10, col = OCOL[e.who], to = e.k === "db" || e.k === "read" ? OCOL.db : OCOL.cache;
+          const say = e.k === "db" ? `write ${P$(e.v)}` : e.k === "set" ? `set ${P$(e.v)}` : e.k === "del" ? "delete" : e.k === "get" ? (e.v == null ? "get: miss" : `get: ${P$(e.v)}`) : e.k === "read" ? `read: ${P$(e.v)}` : `fill ${P$(e.v)}`;
+          const fresh = i === shown - 1 && F.t < log.length * STEP;
+          kids.push(s("g", { class: "cc-row" + (fresh ? " in" : "") },
+            s("path", { class: "cc-msg w-" + e.who, d: `M${col} ${y}H${to - (to > col ? 12 : -12)}`, "marker-end": "" }), s("circle", { class: "cc-who w-" + e.who, cx: col, cy: y, r: 5 }),
+            s("path", { class: "cc-head w-" + e.who, d: `M${to - 12} ${y - 5}L${to - 3} ${y}L${to - 12} ${y + 5}` }),
+            s("text", { class: "cc-say yt-halo", x: col + 10, y: y - 6 }, say)));
+          // the state after this step
+          const prev = i ? log[i - 1] : st0;
+          for (const k of ["cache", "db"]) {
+            const v = e[k], ch = v !== prev[k];
+            if (ch || i === shown - 1) kids.push(s("text", { class: "cc-val" + (ch ? " ch" : ""), x: OCOL[k] + 8, y: y + 4 }, P$(v)));
+          }
+        }
+        if (shown === log.length && F.t >= log.length * STEP) {
+          const y = Y0 + log.length * DY + 26;
+          kids.push(s("text", { class: "cc-end", x: 530, y }, `cache ${P$(ex.cache)}, database ${P$(ex.db)}`), s("text", { class: "cc-sm", x: 530, y: y + 18 }, "wrong until the key is deleted again, or its TTL runs out"));
+          kids.push(c.rx(F.pick === B.answer ? "bug" : "ghost", 472, y - 32, 48, "pop"));
+        }
+      }
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (!F.pick) return;
+      const end = F.I[F.pick].example.log.length * STEP + 0.01;
+      if (F.t >= end) return;
+      F.t = Math.min(end, F.t + dt * (c.REDUCED ? 20 : 1));
+      c.redraw();
+    },
+    brief(c) {
+      const { h, F, B } = c;
+      if (!F.pick) return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each card is the two steps a writer does when it changes the price. Below the line, a shopper reads it at the same time."))];
+      const I = F.I, a = I[B.answer];
+      const found = F.picks.includes(B.answer);
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-verdict " + (F.pick === B.answer ? "ok" : "no") },
+        F.pick === B.answer ? `✓ The fewest: ${a.stale} of ${a.total}. Not zero, though: watch the one that's left.` : `✗ ${I[F.pick].stale} of ${I[F.pick].total} ways leave the wrong price.${found ? "" : " Try another order."}`))];
+    },
+    tools() { return []; },
+  };
+  function pick(c, id) {
+    const F = c.F;
+    if (!F.picks.includes(id)) F.picks.push(id);
+    F.pick = id; F.t = 0;
+    if (id === c.B.answer && !c.F.won) { c.F.won = true; c.solved(F.picks.length === 1 ? 3 : F.picks.length === 2 ? 2 : 1); }
+    c.redraw(); c.rebrief();
+  }
+
+  // -------------------------------------------------------------------------------------------- stampede --
+  const G_WORD = { none: "everyone asks the database", lock: "one shopper refills it, the rest wait (a lock)", early: "refresh it a little early, and keep serving the old copy" };
+  const T_WORD = { same: "exactly 60 s", jitter: "60 s, give or take 10% at random" };
+  const KX = 40, KY = 116, KC = 12, KCOL = 25;
+  const QX = 452, QB = 350, QH = 200;
+  const CX0 = 40, CX1 = 700, CB = 498, CH = 64;
+  UI.stampede = {
+    init(c) { Object.assign(c.F, { guard: "none", ttl: "same", res: null, anim: 0, runs: 0, memo: {}, shown: false }); },
+    draw(c) {
+      const { s, F, B } = c, R = F.res, g = B.goals, kids = [];
+      const T = CA.ST.T, now = R ? play(R, F.anim) : 0, bi = R ? Math.min(R.bins.length - 1, Math.floor(now / CA.ST.bin)) : 0;
+      // the keys, hottest first
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "500 hot keys in the cache"), s("text", { class: "ev-sub", x: 40, y: 94 }, R ? `${Math.floor(now)} s into the sale${slowNow(R, now) ? " · slowed right down" : ""}` : "hottest first; run the sale to watch them"));
+      for (let k = 0; k < CA.ST.keys; k++) {
+        const st = R ? keyAt(R.spans[k], now) : null;
+        kids.push(s("rect", { class: "cc-key" + (st ? " " + st : ""), x: KX + (k % KCOL) * KC, y: KY + Math.floor(k / KCOL) * KC, width: KC - 2, height: KC - 2, rx: 2 }));
+      }
+      kids.push(s("text", { class: "cc-sm in", x: KX, y: KY + 20 * KC + 14 }, "■ in the cache"), s("text", { class: "cc-sm miss", x: KX + 104, y: KY + 20 * KC + 14 }, "■ gone: shoppers miss"), s("text", { class: "cc-sm early", x: KX + 252, y: KY + 20 * KC + 14 }, "■ refreshing"));
+      // the database, and its line
+      const b = R ? R.bins[bi] : null, wait = b ? b.wait : 0, errs = b ? b.err : 0;
+      kids.push(s("text", { class: "ev-h", x: QX - 30, y: 76 }, "The database"), s("text", { class: "ev-sub", x: QX - 30, y: 94 }, "10 at a time, 200 more can wait"));
+      kids.push(s("rect", { class: "cc-qbox", x: QX, y: QB - QH, width: 64, height: QH, rx: 6 }));
+      const fill = (Math.min(CA.ST.line, wait) / CA.ST.line) * QH;
+      if (fill > 0) kids.push(s("rect", { class: "cc-qfill" + (wait > g.wait ? " over" : ""), x: QX + 4, y: QB - fill, width: 56, height: fill, rx: 3 }));
+      kids.push(s("path", { class: "ub-goal", d: `M${QX - 12} ${QB - (g.wait / CA.ST.line) * QH}H${QX + 76}` }), s("text", { class: "ev-tick", x: QX + 82, y: QB - (g.wait / CA.ST.line) * QH + 4 }, `goal: ${g.wait}`));
+      kids.push(s("text", { class: "cc-qn yt-halo", x: QX - 10, y: Math.max(QB - QH + 12, QB - fill + 4), "text-anchor": "end" }, R ? `${fmtN(wait)} waiting` : ""));
+      kids.push(c.rx(wait >= CA.ST.line ? "flame" : wait > 0 ? "hourglass" : "sleep", QX + 8, QB + 8, 48));
+      if (errs) kids.push(s("text", { class: "cc-err yt-halo", x: QX + 64, y: QB + 38 }, `${fmtN(errs)} error pages`));
+      // the timeline
+      kids.push(s("text", { class: "ev-sub", x: CX0, y: CB - CH - 12 }, "queries asked of the database, every half second (taller is ten times more)"));
+      kids.push(s("path", { class: "ub-axis", d: `M${CX0} ${CB}H${CX1}` }));
+      for (let t = 0; t <= T; t += 30) kids.push(s("text", { class: "ev-tick", x: CX0 + (t / T) * (CX1 - CX0), y: CB + 16, "text-anchor": "middle" }, t + " s"));
+      if (R) {
+        const bw = (CX1 - CX0) / R.bins.length, top = lg(20000);
+        R.bins.forEach((x, i) => {
+          if (i > bi) return;
+          if (x.q) { const hh = Math.max(2, (lg(1 + x.q) / top) * CH); kids.push(s("rect", { class: "cc-tq" + (x.err ? " err" : ""), x: CX0 + i * bw, y: CB - hh, width: Math.max(1.4, bw - 0.4), height: hh })); }
+        });
+        kids.push(s("path", { class: "tw-now", d: `M${CX0 + (now / T) * (CX1 - CX0)} ${CB - CH - 4}V${CB}` }));
+      }
+      // the numbers
+      const NX = 760, done = R && F.shown;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 152 }, "error pages"), s("text", { class: "wa-big" + (done && R.errors > g.errors ? " over" : ""), x: NX, y: 192 }, R ? fmtN(sumTo(R, bi, "err")) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 244 }, "most queries waiting"), s("text", { class: "wa-big" + (done && R.queuePeak > g.wait ? " over" : ""), x: NX, y: 284 }, R ? fmtN(maxTo(R, bi)) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 336 }, "queries in all"), s("text", { class: "cc-big", x: NX, y: 368 }, R ? fmtN(sumTo(R, bi, "q")) : "–"));
+      if (done) kids.push(c.rx(goodS(c, R) ? "rocket" : "snail", NX + 70, 390, 64, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.3 : 9));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodS(c, R)) c.solved(ran(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.shown ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.errors > g.errors && `${fmtN(R.errors)} shoppers got an error page`, R.queuePeak > g.wait && `${fmtN(R.queuePeak)} queries were waiting at once`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each square is a key, hottest at the top left. It runs 150 s of the sale, and slows right down whenever a key runs out."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; F.shown = false; c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.guard}:${F.ttl}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = prep(CA.stampede({ guard: F.guard, ttl: F.ttl, seed: c.B.sim.seed }))); F.anim = 0; F.shown = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "when a key runs out, ", h("button", { class: "sd-word", onclick: () => set("guard", cyc(CA.GUARDS, F.guard)) }, G_WORD[F.guard])),
+        h("p", {}, "keep each key for ", h("button", { class: "sd-word", onclick: () => set("ttl", cyc(CA.TTLS, F.ttl)) }, T_WORD[F.ttl]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Run the sale"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [["no error pages", R ? R.errors <= g.errors : null, R ? fmtN(R.errors) : "run it"], [`at most ${g.wait} queries waiting`, R ? R.queuePeak <= g.wait : null, R ? fmtN(R.queuePeak) : "·"]];
+    },
+  };
+  const goodS = (c, R) => R.errors <= c.B.goals.errors && R.queuePeak <= c.B.goals.wait;
+  // playback: quick through the quiet stretches, slow wherever a key is out
+  function prep(R) {
+    const w = R.bins.map((b) => (b.q || b.wait || b.err ? 24 : 1)), cum = [0];
+    for (const x of w) cum.push(cum[cum.length - 1] + x);
+    R.play = { w, cum };
+    return R;
+  }
+  function play(R, f) {
+    const { w, cum } = R.play, total = cum[cum.length - 1], at = f * total;
+    let i = 0; while (i < w.length - 1 && cum[i + 1] < at) i++;
+    return Math.min(CA.ST.T, (i + (at - cum[i]) / w[i]) * CA.ST.bin);
+  }
+  const slowNow = (R, t) => { const i = Math.min(R.bins.length - 1, Math.floor(t / CA.ST.bin)); return R.play.w[i] > 1; };
+  // a key's state now; a refill takes 50 ms, too quick to see, so a key stays marked for 2 s after, fading
+  function keyAt(spans, t) {
+    let was = null;
+    for (const [a, b, k] of spans) { if (t >= a && t < b) return k; if (t >= b && t < b + 2) was = k + " was"; }
+    return was;
+  }
+  const sumTo = (R, bi, k) => { let n = 0; for (let i = 0; i <= bi; i++) n += R.bins[i][k]; return n; };
+  const maxTo = (R, bi) => { let n = 0; for (let i = 0; i <= bi; i++) n = Math.max(n, R.bins[i].wait); return n; };
+
+  // ----------------------------------------------------------------------------------------- fresh enough --
+  const W_WORD = { local: "in each app server's own memory", shared: "in one Redis, shared by all 50" };
+  const E_WORD = { none: "do nothing: wait for the TTL", delete: "delete the key" };
+  const TT_WORD = { 10: "10 seconds", 60: "60 seconds", 600: "10 minutes" };
+  const FX0 = 150, FX1 = 690;
+  UI.fresh = {
+    init(c) { Object.assign(c.F, { where: "local", ttl: 600, edit: "none", res: null, demo: null, anim: 0, runs: 0, shown: false }); },
+    draw(c) {
+      const { s, F, B } = c, R = F.res, D = F.demo, g = B.goals, kids = [];
+      const fx = (t) => FX0 + (t / 600) * (FX1 - FX0), now = D ? F.anim * 600 : 0;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "One busy product, 10 minutes"), s("text", { class: "ev-sub", x: 40, y: 94 }, D ? (F.where === "local" ? "its copy in 6 of the 50 app servers" : "its copy in the shared Redis") : "run it to watch its price"));
+      const lanes = D ? D.lanes : [];
+      const LY = 132, LH = F.where === "local" || !D ? 30 : 44;
+      // the database: the real price, and the two edits
+      kids.push(s("text", { class: "cc-lane", x: 40, y: LY + 18 }, "database"));
+      const prices = [[0, 100, "£30"], [100, 370, "£25"], [370, 600, "£28"]];
+      for (const [a, b, p] of prices) if (!D || now > a) kids.push(s("rect", { class: "cc-dbseg", x: fx(a), y: LY, width: fx(Math.min(b, D ? now : b)) - fx(a), height: 26, rx: 3 }), s("text", { class: "cc-segt", x: fx(a) + 6, y: LY + 17 }, p));
+      for (const e of [100, 370]) kids.push(s("path", { class: "cc-edit", d: `M${fx(e)} ${LY - 6}V${LY + 40 + Math.max(1, lanes.length) * (LH + 8)}` }), s("text", { class: "cc-sm", x: fx(e) + 4, y: LY - 8 }, "edited"));
+      lanes.forEach((l, i) => {
+        const y = LY + 40 + i * (LH + 8);
+        kids.push(s("text", { class: "cc-lane", x: 40, y: y + LH / 2 + 4 }, F.where === "local" ? `app ${[3, 11, 17, 24, 38, 46][i]}` : "Redis"));
+        for (const sg of l.segs) {
+          if (sg.a >= now) continue;
+          const b = Math.min(sg.b, now), w = fx(b) - fx(sg.a);
+          if (w <= 0) continue;
+          kids.push(s("rect", { class: "cc-seg" + (sg.ok ? "" : " stale"), x: fx(sg.a), y, width: Math.max(0.8, w - 0.8), height: LH, rx: 2 }));
+          if (w > 30) kids.push(s("text", { class: "cc-segt" + (sg.ok ? "" : " stale"), x: fx(sg.a) + 5, y: y + LH / 2 + 4 }, "£" + sg.v));
+        }
+      });
+      if (D) {
+        const y1 = LY + 40 + lanes.length * (LH + 8);
+        kids.push(s("path", { class: "tw-now", d: `M${fx(now)} ${LY - 4}V${y1}` }));
+        for (let t = 0; t <= 600; t += 120) kids.push(s("text", { class: "ev-tick", x: fx(t), y: y1 + 14, "text-anchor": "middle" }, t ? `${t / 60} min` : "0"));
+        kids.push(s("text", { class: "cc-sm in", x: FX0, y: y1 + 30 }, "■ the right price"), s("text", { class: "cc-sm miss", x: FX0 + 120, y: y1 + 30 }, "■ an old price"));
+      }
+      // the whole shop, worked out
+      const NX = 740, done = R && F.shown;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 152 }, "database reads a second"), s("text", { class: "wa-big" + (done && R.db > g.db ? " over" : ""), x: NX, y: 192 }, done ? fmtN(R.db) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 244 }, "reads with an old price"), s("text", { class: "wa-big" + (done && R.stale > g.stale ? " over" : ""), x: NX, y: 284 }, done ? (R.stale === 0 ? "none" : pc(R.stale, R.stale < 0.01 ? 2 : 1)) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 336 }, "the oldest price seen"), s("text", { class: "cc-big", x: NX, y: 368 }, done ? (R.oldest ? `${TT_WORD[R.oldest]} old` : "the latest") : "–"));
+      // the whole shop on two rulers, each going up ten times a step, with its goal
+      const GX0 = 230, GX1 = 690;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 452 }, "The whole shop"));
+      for (const [i, name, lo, hi, v, goal, f] of [[0, "database reads a second", 1, 1e5, R && done ? R.db : null, g.db, fmtN], [1, "reads with an old price", 1e-5, 1, R && done ? R.stale : null, g.stale, (x) => pc(x, x < 0.01 ? 2 : 1)]]) {
+        const y = 474 + i * 34, gx = (x) => GX0 + ((lg(Math.max(lo, Math.min(hi, x))) - lg(lo)) / (lg(hi) - lg(lo))) * (GX1 - GX0);
+        kids.push(s("text", { class: "cc-lane", x: 40, y: y + 10 }, name), s("rect", { class: "ln-bt", x: GX0, y, width: GX1 - GX0, height: 14, rx: 4 }));
+        if (v != null) kids.push(s("rect", { class: "ln-bf " + (v <= goal ? "ok" : "no"), x: GX0, y, width: Math.max(3, gx(v || lo) - GX0), height: 14, rx: 4 }), s("text", { class: "cc-sm", x: Math.min(GX1 - 4, gx(v || lo) + 6), y: y + 11 }, v === 0 ? "none" : f(v)));
+        kids.push(s("path", { class: "ub-goal", d: `M${gx(goal)} ${y - 4}V${y + 18}` }), s("text", { class: "ev-tick", x: gx(goal) + 4, y: y - 6 }, "goal " + f(goal)));
+      }
+      if (done) kids.push(c.rx(goodF(c, R) ? "rocket" : R.stale > g.stale ? "ghost" : "flame", NX + 70, 400, 64, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : 5));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodF(c, R)) c.solved(ran(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.shown ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.db > g.db && `${fmtN(R.db)} reads a second reach the database`, R.stale > g.stale && `${pc(R.stale, 2)} of reads show an old price`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "The picture is one popular product: its price in the database, and its copies. The numbers on the right are the whole shop, all 10,000 products."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; F.demo = null; F.shown = false; c.redraw(); c.rebrief(); };
+      const run = () => { F.runs++; const o = { where: F.where, ttl: F.ttl, edit: F.edit }; F.res = CA.fresh(o); F.demo = CA.freshDemo(o); F.anim = 0; F.shown = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "keep product pages ", h("button", { class: "sd-word", onclick: () => set("where", cyc(CA.WHERES, F.where)) }, W_WORD[F.where])),
+        h("p", {}, "for ", h("button", { class: "sd-word", onclick: () => set("ttl", cyc(CA.FTTLS, F.ttl)) }, TT_WORD[F.ttl])),
+        h("p", {}, "when a price is edited, ", h("button", { class: "sd-word", onclick: () => set("edit", cyc(CA.EDITS, F.edit)) }, E_WORD[F.edit]))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Run it"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [[`at most ${g.db} reads a second on the database`, R ? R.db <= g.db : null, R ? fmtN(R.db) : "run it"], [`at most ${pc(g.stale, 1)} old prices`, R ? R.stale <= g.stale : null, R ? pc(R.stale, 2) : "·"]];
+    },
+  };
+  const goodF = (c, R) => R.db <= c.B.goals.db && R.stale <= c.B.goals.stale;
+})();

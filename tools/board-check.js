@@ -18,6 +18,7 @@ const FD = require(path.join(__dirname, "..", "tunnel", "feed.js"));
 const VD = require(path.join(__dirname, "..", "tunnel", "video.js"));
 const TX = require(path.join(__dirname, "..", "tunnel", "tix.js"));
 const LT = require(path.join(__dirname, "..", "tunnel", "lat.js"));
+const CA = require(path.join(__dirname, "..", "tunnel", "cache.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -427,6 +428,87 @@ for (const b of BOARDS) {
       `Johannesburg waits ${Math.round(all2.worst.ms)} ms`, `within ${Math.round(A.worst.ms)} ms`])
       ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
     ok(all2.worst.id === "jb" && A.worst.id === "sp" && A.worst.site === "va" && A.cities.find((x) => x.id === "jb").site === "in", `${b.id}: Johannesburg isn't the hard city, São Paulo isn't the answer's farthest, or Johannesburg isn't served from Mumbai`);
+  }
+}
+
+// ------------------------------------------------------------------------------------------- Caching --
+const pct = (x, d = 0) => (x * 100).toFixed(d) + "%";
+for (const b of BOARDS) {
+  if (b.kind === "tail") {
+    // the Zipf curve: H(n) matches a plain sum, the curve climbs, and the why's shares and sizes are worked out
+    let sum = 0; for (let k = 1; k <= 5000; k++) sum += 1 / k;
+    ok(Math.abs(CA.H(5000) - sum) < 1e-6, `${b.id}: H(5000) is ${CA.H(5000)}, the sum is ${sum}`);
+    ok(CA.hit(0.001) < CA.hit(0.01) && CA.hit(0.01) < CA.hit(0.1) && Math.abs(CA.hit(1) - 1) < 1e-12, `${b.id}: the curve doesn't climb to 100%`);
+    for (const r of b.rounds) ok(r.ask === "hit" ? r.at > 0 && r.at < 1 : CA.size(r.at) > 0 && CA.size(r.at) < 1, `${b.id}: a round asks for something off the curve`);
+    ok(Math.abs(CA.hit(CA.size(0.9)) - 0.9) < 1e-4, `${b.id}: size() isn't hit() backwards`);
+    // ten times the memory, the same points: H(10k) - H(k) is ln 10 for big k
+    const dec = Math.round((100 * Math.LN10) / CA.H(CA.PRODUCTS));
+    ok([1e-4, 1e-3, 1e-2, 1e-1].every((sh) => Math.abs((CA.hit(sh * 10) - CA.hit(sh)) * 100 - dec) < 1) && b.why.includes(`the same ${dec} points`), `${b.id}: a decade of memory doesn't buy ${dec} points`);
+    const gb = (share) => (share * CA.PRODUCTS * CA.ITEM_KB) / 1e6;
+    for (const x of [`${pct(0.01)} of products, ${Math.round(gb(0.01) * 1000)} MB, answers ${pct(CA.hit(0.01))}`, `takes the top ${pct(CA.size(0.9))}, ${gb(CA.size(0.9)).toFixed(1)} GB`,
+      `takes ${pct(CA.size(0.99))} of the whole catalog, ${gb(CA.size(0.99)).toFixed(1)} GB`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "inval") {
+    // every interleaving of 3 + 2 + 2 steps, from a cold cache and a warm one; the answer is the order with the fewest
+    // stale endings, and it still has some (the race the why describes)
+    const I = CA.inval(), ids2 = Object.keys(CA.ORDERS);
+    ok(ids2.every((k) => I[k].total === 2 * 210), `${b.id}: not every interleaving was tried`);
+    const best = ids2.reduce((a, k) => (I[k].stale < I[a].stale ? k : a), ids2[0]);
+    ok(best === b.answer, `${b.id}: ${best} has the fewest stale endings, not ${b.answer}`);
+    ok(I[b.answer].stale > 0, `${b.id}: the answer never goes stale, but the why says it can`);
+    const ex = I[b.answer].example.log.map((x) => x.who + x.k).join(" ");
+    ok(/Rget.* Rread( \w+)* [AB]db( \w+)* [AB]del( \w+)* Rfill/.test(ex), `${b.id}: the answer's race isn't miss, read, a write and its delete, then fill: ${ex}`);
+    for (const k of ["setdb", "dbset", "deldb", "dbdel"]) ok(b.why.includes(`${I[k].stale}`), `${b.id}: the why doesn't say ${k} goes stale ${I[k].stale} times`);
+    ok(b.why.includes(`${I.setdb.stale} of the ${I.setdb.total} ways`), `${b.id}: the why's total is off`);
+    ok(I.deldb.stale === Math.max(...ids2.map((k) => I[k].stale)), `${b.id}: delete-first isn't the worst`);
+  }
+  if (b.kind === "stampede") {
+    // on the page's seed and four more, exactly the answers pass; the why's numbers are seed 1's
+    const g = b.goals, pass = (r) => r.errors <= g.errors && r.queuePeak <= g.wait, isAns = (o) => b.answers.some((a) => a.guard === o.guard && a.ttl === o.ttl), at = {};
+    for (const guard of CA.GUARDS) for (const ttl of CA.TTLS) {
+      const o = { guard, ttl };
+      for (const seed of SEEDS) {
+        const r = CA.stampede({ ...o, seed });
+        if (seed === b.sim.seed) at[`${guard}:${ttl}`] = r;
+        ok(pass(r) === isAns(o), `${b.id} seed ${seed}: ${guard}, ${ttl}: ${r.errors} errors, ${r.queuePeak} waiting`);
+      }
+    }
+    const top = CA.ST.rate / CA.H(CA.ST.keys), A = at["lock:jitter"];
+    ok(b.lede.includes(num(top)) && b.why.includes(num(top)), `${b.id}: the top product's reads a second (${num(top)}) aren't quoted`);
+    for (const k of ["none:same", "none:jitter", "lock:same", "early:same"]) ok(b.why.includes(`${num(at[k].errors)} error pages`) || b.why.includes(`${num(at[k].errors)} get error pages`), `${b.id}: the why doesn't quote ${k}'s ${num(at[k].errors)} error pages`);
+    ok(b.why.includes(`${num(A.dbq)} queries in ${CA.ST.T} s`) && A.dbq === 2 * CA.ST.keys, `${b.id}: the answer made ${A.dbq} queries, not two a key`);
+    // the herd: with no guard, the queries match the misses one for one
+    ok(at["none:same"].dbq === at["none:same"].slow, `${b.id}: with no guard, a miss didn't make exactly one query`);
+  }
+  if (b.kind === "fresh") {
+    // the closed form against a plain simulation of one product's cache, then exactly the answers pass
+    {
+      const r = 3, mu = 1 / 50, T = 30, own = 0.5, c = CA.cell(r, mu, T, own);
+      let rnd = 9; const u = () => ((rnd = (rnd * 16807) % 2147483647) / 2147483647);
+      const ex = (rate) => -Math.log(1 - u()) / rate;
+      let t = 0, misses = 0, reads = 0, stale = 0, loaded = -1, ver = 0, mine = 0, nextR = ex(r), nextE = ex(mu);
+      const END = 2e5;
+      while (t < END) {
+        if (nextR < nextE) {
+          t = nextR; nextR = t + ex(r); reads++;
+          if (loaded < 0 || t - loaded >= T) { misses++; loaded = t; mine = ver; } else if (mine !== ver) stale++;
+        } else { t = nextE; nextE = t + ex(mu); ver++; if (u() < own) loaded = -1; }
+      }
+      ok(Math.abs(misses / END - c.misses) < 0.02 * c.misses, `fresh: one cache misses ${(misses / END).toFixed(4)}/s, the formula says ${c.misses.toFixed(4)}`);
+      ok(Math.abs(stale / END - c.stale) < 0.03 * c.stale, `fresh: one cache serves ${(stale / END).toFixed(4)} stale/s, the formula says ${c.stale.toFixed(4)}`);
+    }
+    const g = b.goals, pass = (r) => r.db <= g.db && r.stale <= g.stale, isAns = (o) => b.answers.some((a) => a.where === o.where && a.ttl === o.ttl && a.edit === o.edit), at = {};
+    for (const where of CA.WHERES) for (const ttl of CA.FTTLS) for (const edit of CA.EDITS) {
+      const o = { where, ttl, edit }, r = (at[`${where}:${ttl}:${edit}`] = CA.fresh(o));
+      ok(pass(r) === isAns(o), `${b.id}: ${where}, ${ttl} s, ${edit}: ${r.db.toFixed(0)} reads a second, ${(r.stale * 100).toFixed(2)}% stale`);
+    }
+    const L = at["local:600:delete"], sh = (t, e) => at[`shared:${t}:${e}`];
+    for (const x of [`still ${num(L.db)} reads a second`, `so ${pct(L.stale, 1)} of reads`, `kept 10 s, ${num(sh(10, "none").db)} reads a second and ${pct(sh(10, "none").stale, 2)} stale`,
+      `60 s, ${num(sh(60, "none").db)} and ${pct(sh(60, "none").stale, 2)} stale`, `10 minutes, ${num(sh(600, "none").db)} and ${pct(sh(600, "none").stale, 1)} stale`,
+      `60 s is ${num(sh(60, "delete").db)} reads a second, 10 minutes is ${num(sh(600, "delete").db)}`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+    ok(["10", "60", "600"].every((t) => sh(t, "delete").stale === 0), `${b.id}: a shared delete still serves stale reads`);
   }
 }
 

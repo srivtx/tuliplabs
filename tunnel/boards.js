@@ -18,6 +18,11 @@
        race        two jobs, side by side: tap the one that finishes first, then watch them race
        waterfall   a slow page, loaded 2,000 times: move its work down the ladder until it's quick
        globe       a page used in ten cities: choose the datacenters and the round trips
+     The Caching unit (tunnel/cache.js):
+       tail        a million products on a Zipf curve: drag a pin to guess the hit rate a cache size buys, or the size a hit rate takes
+       inval       two writers and a reader on one key: pick the order a writer updates the cache and the database, then see every interleaving
+       stampede    a sale's hot keys run out: choose what a miss does and how long keys are kept
+       fresh       product pages on 50 app servers: choose where they're cached, the TTL, and what an edit does
    Every number here is checked by tools/board-check.js against the simulators the page runs.
    A design: parts {id, kind, x, y, n (machines), size, batch} on a 960 × 540 board, and wires [from, to]. */
 (function (root) {
@@ -900,6 +905,64 @@
     ],
   };
 
+  // --------------------------------------------------------------------------------------------- Caching --
+  // First principles again: what a cache is worth, what it costs, and how it goes wrong. Every number is worked out by
+  // tunnel/cache.js, and tools/board-check.js checks the text against it.
+  const CC_SHOP = {
+    nodes: [P("u", "people", 95, 300, { label: "shoppers", tag: "50,000 reads a second" }), P("ap", "app", 340, 300, { label: "app servers", tag: "cache-aside" }),
+      P("rd", "cache", 620, 150, { label: "Redis", tag: "0.5 ms a read" }), P("db", "sql", 620, 420, { label: "database", tag: "10 ms a read" })],
+    wires: [["u", "ap"], ["ap", "rd"], ["ap", "db"]],
+  };
+  const CACHE_UNIT = {
+    id: "caching", name: "Caching, properly", sub: "Hit rates, stale prices and the stampede", floor: 4,
+    w: [
+      {
+        id: "cc-napkin", kind: "napkin", title: "What a hit is worth",
+        lede: "A shop's product pages: <b>50,000</b> reads a second. The app asks Redis first, <b>0.5 ms</b>; on a miss it reads the database, <b>10 ms</b> more, and puts the answer in Redis. Redis answers <b>90%</b> of reads.",
+        q: {},
+        design: CC_SHOP,
+        notes: [
+          { id: "d", on: "db", dx: 150, dy: -40, label: "reads reaching the database", unit: "/s", calc: "50000 * (1 - 0.9)", hint: "only the misses get past Redis" },
+          { id: "a", on: "ap", dx: -90, dy: -230, label: "the average read", unit: "ms", calc: "0.9 * 0.5 + 0.1 * (0.5 + 10)", hint: "hits × 0.5 ms + misses × (0.5 + 10 ms): a miss asks Redis first" },
+          { id: "e", on: "db", dx: 150, dy: 60, label: "reaching the database at 99% hits", unit: "/s", calc: "50000 * (1 - 0.99)", hint: "the misses are now 1 in 100" },
+        ],
+        why: "At 90% hits, 5,000 reads a second reach the database, and the average read takes 1.5 ms, 1.05 ms of it spent on the misses. At 99% hits the database sees 500 a second: ten times less work, from nine more points. So look at the misses, not the hits: 10% to 1% is a tenfold drop, and that's why the last few points are worth so much. The next question is what they cost.",
+      },
+      {
+        id: "cc-tail", kind: "tail", title: "The long tail",
+        lede: "The shop sells <b>a million</b> products, and views follow a Zipf curve: the 2nd most viewed gets half the views of the 1st, the 3rd a third, and so on. A product page is <b>20 KB</b>. The cache keeps the most viewed ones. Drag the pin to your guess, then check it.",
+        rounds: [
+          { ask: "hit", at: 0.01, say: "Keep the top <b>1%</b> of products. What share of views does the cache answer?" },
+          { ask: "size", at: 0.9, say: "How much of the catalog does it take to answer <b>90%</b> of views?" },
+          { ask: "size", at: 0.99, say: "And <b>99%</b>?" },
+        ],
+        why: "The top 1% of products, 200 MB, answers 68% of views: that's the head of the curve. 90% takes the top 24%, 4.7 GB. 99% takes 87% of the whole catalog, 17.3 GB, for nine more points. On a Zipf curve every ten times more memory buys the same 16 points of hit rate, so each point costs more than the one before, and a cache doesn't need everything: it needs the head, and the tail can go to the database. Pick the hit rate from the misses the database can take (the last question), then buy the memory for it.",
+      },
+      {
+        id: "cc-inval", kind: "inval", title: "Which order?",
+        lede: "A product's price is in the database and in the cache. Two people change it at the same moment, to <b>£1</b> and <b>£2</b>, while a shopper reads it. The shopper reads the usual way: ask the cache; on a miss, read the database and put what it read in the cache. Tap the order you think a writer should do its two steps in.",
+        answer: "dbdel",
+        why: "Update the cache, then the database: 176 of the 420 ways the steps can interleave leave the wrong price in the cache. Update the database, then the cache: 138, because two writers can finish in the opposite order to the one they started in. Delete the key, then update the database: 228, the worst, because a shopper slips in between and puts the old price back. Update the database, then delete the key: 26. It can still go wrong: a shopper misses and reads the price, another write lands and deletes the key, and then the shopper fills the cache with the price it read, which is now old. That needs a slow read exactly while a write lands, which is rare, so give every key a TTL too: when the race happens, the wrong price lasts until the TTL, not forever. Facebook's memcache does this order, with leases on top to close the last gap.",
+      },
+    ],
+    s: [
+      {
+        id: "cc-stampede", kind: "stampede", title: "The stampede",
+        lede: "A sale starts. <b>500</b> products are hot: <b>20,000</b> reads a second between them, and the top one alone gets <b>2,944</b> a second. A deploy put all 500 in the cache at once, each kept <b>60 s</b>. The database runs <b>10</b> queries at once, <b>50 ms</b> each, with room for <b>200</b> more to wait; past that it turns queries away. A shopper who waits <b>1 s</b> gets an error page. Choose what happens when a key runs out, and how long keys are kept. The goals: no error pages, and never more than <b>100</b> queries waiting for the database.",
+        sim: { seed: 1 }, goals: { errors: 0, wait: 100 },
+        answers: [{ guard: "lock", ttl: "jitter" }, { guard: "early", ttl: "jitter" }],
+        why: "With no guard and every key kept exactly 60 s, all 500 run out in the same instant and every shopper asks the database: 45,598 error pages. A random TTL spreads the keys out, but each hot key still gets its own herd: the top product's 2,944 shoppers a second all miss in the 50 ms it takes to refill, and 28,405 error pages go out. A lock lets one shopper refill each key while the rest wait for it, but 500 keys still run out at once, the line fills, and 2,429 get error pages. Refreshing early, with everyone keeping the old copy, has the same problem: 500 refreshes at once, 2,245 error pages. It takes both. A lock, or an early refresh, so each key is filled by one query; and a TTL with a little randomness, so keys don't all run out together. Then there are no error pages and no queries ever wait: 1,000 queries in 150 s, two for each key.",
+      },
+      {
+        id: "cc-fresh", kind: "fresh", title: "Fresh enough",
+        lede: "A shop's <b>10,000</b> product pages: <b>50,000</b> reads a second on a Zipf curve, and each price is edited about <b>once an hour</b>. The shop runs on <b>50</b> app servers. Choose where the pages are cached, how long they're kept, and what editing a price does. The goals: at most <b>200</b> reads a second reach the database, and at most <b>0.1%</b> of reads show an old price.",
+        goals: { db: 200, stale: 0.001 },
+        answers: [{ where: "shared", ttl: 60, edit: "delete" }, { where: "shared", ttl: 600, edit: "delete" }],
+        why: "In each app server's memory, every server fills its own copy: kept 10 minutes, that's still 773 reads a second, and deleting on an edit only reaches the server that took it, so 7.6% of reads show an old price. In one shared Redis with only a TTL, it's a trade: kept 10 s, 913 reads a second and 0.14% stale; 60 s, 164 and 0.83% stale; 10 minutes, 17 and 7.9% stale. Delete the key when the price is edited, and no read is older than the last edit, at any TTL. So the TTL can be long: 60 s is 165 reads a second, 10 minutes is 18. With a delete on every edit, the TTL is a safety net for the rare race from the last question, not the way prices get fresh.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -917,7 +980,7 @@
     [2, "tx", "Transactions", "Isolation and lost updates"], [2, "blobs", "Blobs and search", "S3 vs a database"], [2, "geo", "Geo data", "Geohash and quadtrees"],
     [3, "copies", "Copies and lag", "Leaders, followers, quorums"], [3, "split", "Splitting data", "Consistent hashing"], [3, "agree", "Agreeing", "Raft"],
     [3, "time", "Time and order", "Clock skew, vector clocks"], [3, "cap", "Consistency", "CAP and PACELC"], [3, "sagas", "Transactions across services", "2PC, sagas, outbox"], [3, "ids", "Unique IDs", "Snowflake"],
-    [4, "caching", "Caching, properly", "The stampede"], [4, "queues", "Queues", "Backpressure, dead letters"], [4, "streams", "Logs and streams", "Offsets and replay"],
+[4, "queues", "Queues", "Backpressure, dead letters"], [4, "streams", "Logs and streams", "Offsets and replay"],
     [4, "stream", "Stream processing", "Windows and late events"], [4, "batch", "Batch processing", "MapReduce and skew"], [4, "limits", "Rate limiting", "Token buckets"], [4, "flows", "Workflows", "Leases and retries"],
     [5, "failure", "Failure", "Timeouts, retries, breakers"], [5, "shed", "Load shedding", "Drop the right requests"], [5, "failover", "Failover", "RPO and RTO"],
     [5, "global", "Going global", "The speed of light"], [5, "deploys", "Deploys", "Canary and flags"], [5, "observe", "Observability", "Metrics, logs, traces"],
@@ -940,7 +1003,7 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT, NUMBERS_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT, NUMBERS_UNIT, CACHE_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
@@ -951,6 +1014,7 @@
   YOUTUBE_UNIT.cover = YT_REF;
   TICKET_UNIT.cover = TM_REF;
   NUMBERS_UNIT.cover = LN_PAGE;
+  CACHE_UNIT.cover = CC_SHOP;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];
