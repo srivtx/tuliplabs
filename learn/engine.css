@@ -739,8 +739,8 @@ img.stk{width:34px;height:34px}
 /* ------------------------------------------------------- card pictures --
    Each chapter's pixel scene (learn/cards, drawn in ChatGPT in the sticker style). The growing
    flower moves into a little pot in the corner, and the big number becomes a chip. */
-.plot.pic .soil{height:150px;background:#2a0f22;overflow:hidden}
-.soil img.pic{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s cubic-bezier(.2,.8,.3,1)}
+.plot.pic .soil{height:150px;background:#3d0d33;overflow:hidden}
+.soil img.pic{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:6px 0 2px;box-sizing:border-box;transition:transform .4s cubic-bezier(.2,.8,.3,1)}
 .plot.pic:hover .soil img.pic{transform:scale(1.06)}
 .plot.pic .soil canvas{inset:auto 2px 0 auto;width:58px;height:78px;z-index:2;border-radius:10px;background:radial-gradient(closest-side,rgba(24,6,18,.78),rgba(24,6,18,0))}
 .plot.pic .ghost{top:7px;left:7px;right:auto;bottom:auto;z-index:2;font:700 11px/1 var(--f-display);letter-spacing:.02em;color:#fff;background:rgba(24,8,20,.74);padding:4px 6px;border-radius:5px}
