@@ -13,6 +13,11 @@
        nearby, batch, dispatch Uber's labs (tunnel/geo.js)
        fanout, likes, tlcache  Twitter's labs (tunnel/feed.js)
        transcode, abr, premiere  YouTube's labs (tunnel/video.js)
+     The Latency numbers unit (tunnel/lat.js), first principles, so its questions are its own:
+       ladder      drag each wait onto a ruler from 1 ns to 1 s (within 3x counts)
+       race        two jobs, side by side: tap the one that finishes first, then watch them race
+       waterfall   a slow page, loaded 2,000 times: move its work down the ladder until it's quick
+       globe       a page used in ten cities: choose the datacenters and the round trips
    Every number here is checked by tools/board-check.js against the simulators the page runs.
    A design: parts {id, kind, x, y, n (machines), size, batch} on a 960 × 540 board, and wires [from, to]. */
 (function (root) {
@@ -842,6 +847,59 @@
     ],
   };
 
+
+  // ------------------------------------------------------------------------------------- Latency numbers --
+  // First principles: what a computer waits for. The numbers are tunnel/lat.js's NUMS; every time below is worked
+  // out from them, and tools/board-check.js checks the text against them.
+  const LN_PAGE = {
+    nodes: [P("u", "people", 95, 300, { label: "Ana", tag: "opens her profile" }), P("ap", "app", 330, 300, { label: "app server", tag: "builds the page" }),
+      P("rd", "cache", 600, 110, { label: "Redis", tag: "sessions" }), P("db", "sql", 600, 300, { label: "database", tag: "same datacenter" }), P("pay", "payment", 600, 470, { label: "payments API", tag: "across the Atlantic" })],
+    wires: [["u", "ap"], ["ap", "rd"], ["ap", "db"], ["ap", "pay"]],
+  };
+  const NUMBERS_UNIT = {
+    id: "numbers", name: "Latency numbers", sub: "From an L1 hit to a round trip across the ocean", floor: 0,
+    w: [
+      {
+        id: "ln-ladder", kind: "ladder", title: "Put them in order",
+        lede: "A computer spends its life waiting: for memory, for a disk, for another machine. Drag each card onto the ruler where you think it lands. The ruler goes up ten times at every mark, from <b>1 nanosecond</b> to <b>1 second</b>, and anywhere within 3× of the real number counts.",
+        cards: ["l1", "mutex", "ram", "switch", "ssd", "dc", "seek", "ocean", "notice"],
+        why: "From an L1 hit to a wait a person notices is eight steps of ten. Stretch it so a nanosecond lasts a second, and a read from RAM takes 1.7 minutes, a 4 KB read from an SSD 1.2 days, a round trip across the datacenter 5.8 days, a seek on a spinning disk 3.8 months, and a round trip across the Atlantic 2.5 years. Every fast design moves work down this ladder: memory before disk, the next machine before the next continent, one round trip instead of thirty.",
+      },
+      {
+        id: "ln-race", kind: "race", title: "Which is faster?",
+        lede: "Two jobs start at the same moment. Tap the one you think finishes first, then watch them race, slowed right down. Five races; every time comes from the numbers on the ruler.",
+        why: "Five races, five rules of thumb. The network beats a disk seek. Your own RAM beats any network. Reading in order beats reading at random. Round trips add up, so a loop of queries can cost more than an ocean. And the CPU is cheap next to the wire, so compress before you send.",
+      },
+      {
+        id: "ln-napkin", kind: "napkin", title: "Time a page",
+        lede: "Ana opens her profile. The app server reads her session from Redis in the same datacenter: one round trip, <b>0.5 ms</b>. Then it runs <b>30</b> queries on the database, one after another, each a round trip plus 0.5 ms of work: <b>1 ms</b> each. Then it asks a payments API across the Atlantic for her plan, on a new connection: <b>2</b> round trips to connect (TCP, then TLS) and <b>1</b> to ask, <b>80 ms</b> each.",
+        q: {},
+        design: LN_PAGE,
+        notes: [
+          { id: "q", on: "db", dx: 140, dy: -10, label: "the 30 queries", unit: "ms", calc: "30 * (0.5 + 0.5)", hint: "30 × (a round trip + the work)" },
+          { id: "a", on: "pay", dx: 140, dy: -40, label: "the payments call", unit: "ms", calc: "3 * 80", hint: "connect (2 round trips) + ask (1), each across the ocean" },
+          { id: "t", on: "ap", dx: -90, dy: -230, label: "the whole page", unit: "ms", calc: "0.5 + 30 * (0.5 + 0.5) + 3 * 80", hint: "add the three up: they happen one after another" },
+        ],
+        why: "The session is 0.5 ms. The 30 queries, one after another, are 30 ms. The payments call is three round trips across the ocean: 240 ms. The page takes about 270 ms, and nearly all of it is the speed of light. So fix the big numbers first: keep one connection open to the payments API and that's 80 ms; keep its answer in Redis for a few minutes and it's 0.5 ms. Fold the 30 queries into one and they're about 1 ms. Look at where the time goes before you touch the code.",
+      },
+    ],
+    s: [
+      {
+        id: "ln-waterfall", kind: "waterfall", title: "A slow page",
+        lede: "Ana's profile page again, loaded <b>2,000</b> times. It reads her session, runs <b>30</b> queries, asks the payments API across the Atlantic for her plan, and resizes her <b>2 MB</b> photo. About one round trip in a thousand loses a packet, and a lost packet waits <b>200 ms</b> to be sent again. Choose how each part is done. The goals: half the pages within <b>20 ms</b>, and 99% within <b>100 ms</b>, the wait a person notices.",
+        sim: { seed: 1 }, goals: { p50: 20, p99: 100 },
+        answers: [{ queries: "one", pay: "cache", photo: "ssd" }, { queries: "one", pay: "cache", photo: "ram" }],
+        why: "As it was, half the pages took 307 ms and the slowest 1% took 510 ms: three round trips across the ocean, 30 queries one after another, and a disk seek. Keeping the connection open cuts the ocean to one trip, and the middle page to 140 ms, but that one trip is still 80 ms. A copy of the plan in Redis, kept 5 minutes, turns it into half a millisecond. Running the 30 queries all at once is quick on a good day, 9 ms in the middle, but 30 round trips are 30 chances to lose a packet: 3.4% of pages wait the 200 ms, and the slowest 1% take 209 ms. One query is one chance. The photo from an SSD skips the seek. Together: half the pages in 6.9 ms and 99% in 8.4 ms.",
+      },
+      {
+        id: "ln-globe", kind: "globe", title: "Around the world",
+        lede: "A news site's front page, the same for everyone, so any datacenter can serve all of it. People open it in ten cities. Light in glass goes <b>200 km</b> a millisecond, and cables run about a third longer than a straight line. Tap squares on the map to choose up to <b>3</b> datacenters, and choose how many round trips a page load takes. The goal: the page loads within <b>120 ms</b> in every city.",
+        goals: { ms: 120, sites: 3 }, start: { sites: ["va"], trips: 6 }, answer: { sites: ["va", "in", "si"], trips: 1 },
+        why: "From Virginia alone, on new connections, Sydney waits 1,292 ms. One round trip from Virginia still takes 224 ms there, because Sydney is 15,700 km away and nothing travels faster than light. Two round trips can't make it from anywhere: even with all eight datacenters, Johannesburg waits 203 ms. So it takes both: one round trip, and datacenters near everyone. Virginia, Mumbai and Singapore put every city within 115 ms: São Paulo is the farthest, from Virginia, and Johannesburg, the city furthest from everywhere, is served from Mumbai. Big sites do exactly this: a CDN close to every city, and pages that need as few round trips as they can.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -851,7 +909,7 @@
   ];
   // [floor, id, name, the hard part, group (real apps only)]
   const SOON = [
-    [0, "numbers", "Latency numbers", "From an L1 hit to a cross-ocean round trip"], [0, "capacity", "Throughput vs latency", "Capacity and Little's law"],
+    [0, "capacity", "Throughput vs latency", "Capacity and Little's law"],
     [0, "knee", "The queueing knee", "Why 80% busy is full"], [0, "loops", "Threads and event loops", "10,000 slow clients"], [0, "disk", "Memory and disk", "Page cache and fsync"],
     [1, "trip", "A request's trip", "DNS, TCP, TLS, HTTP"], [1, "http", "HTTP, REST and gRPC", "Verbs and idempotency"], [1, "push", "Polling, SSE, WebSockets", "Who opens the connection"],
     [1, "lbs", "Load balancers", "L4 vs L7, health checks"], [1, "cdn", "Proxies and CDNs", "Edge caches and TTLs"],
@@ -882,7 +940,7 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT, NUMBERS_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
@@ -892,6 +950,7 @@
   TWITTER_UNIT.cover = TW_REF;
   YOUTUBE_UNIT.cover = YT_REF;
   TICKET_UNIT.cover = TM_REF;
+  NUMBERS_UNIT.cover = LN_PAGE;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];

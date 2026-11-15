@@ -5,7 +5,8 @@
      scope    sort cards into what it does, how well, and not now
      evict    race four eviction policies on a full keyspace (twice: steady traffic, then a trend flip)
      persist  pick how the log reaches the disk, then pull the plug
-     shard    deal 16,384 hash slots out to machines, then survive a hot key */
+     shard    deal 16,384 hash slots out to machines, then survive a hot key
+   Later units add their own blocks below (WhatsApp, Uber, Twitter, YouTube, Ticketmaster, Latency numbers). */
 (function () {
   "use strict";
   const SD = (window.SD = window.SD || {});
@@ -1494,4 +1495,443 @@
     },
   };
   const goodS = (c, R) => R.readsPerSec <= c.B.goals.reads && R.clashShare <= c.B.goals.clash;
+})();
+
+/* The Latency numbers unit (tunnel/lat.js):
+     ladder     drag each wait onto a ruler from 1 ns to 1 s; once it's right, the ruler shows the same waits in human time
+     race       two jobs side by side: tap the one you think finishes first, then two couriers race, slowed right down
+     waterfall  a slow page loaded 2,000 times: its steps as a waterfall, and every page's time on a log scale
+     globe      a page used in ten cities: datacenters on a map, and the round trips a page load takes */
+(function () {
+  "use strict";
+  const UI = window.SD.UI, LT = window.LAT;
+  const lg = Math.log10;
+  const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+  const NUM = Object.fromEntries(LT.NUMS.map((n) => [n.id, n]));
+  const ms = (x) => (x >= 100 ? Math.round(x) : x >= 10 ? x.toFixed(1).replace(/\.0$/, "") : x.toFixed(1)) + " ms";
+  const ran = (c, n) => (n <= 2 ? 3 : n <= 4 ? 2 : 1);
+
+  // ------------------------------------------------------------------------------------------------ ladder --
+  const LX0 = 80, LX1 = 880, LY = 432, DEC = 9, TOP3 = lg(3) + 1e-9;
+  const lx = (ns) => LX0 + (lg(Math.max(1, Math.min(1e9, ns))) / DEC) * (LX1 - LX0);
+  const lns = (x) => Math.pow(10, ((Math.max(LX0, Math.min(LX1, x)) - LX0) / (LX1 - LX0)) * DEC);
+  const TICK = ["1 ns", "10 ns", "100 ns", "1 µs", "10 µs", "100 µs", "1 ms", "10 ms", "100 ms", "1 s"];
+  const PW = 262, PH = 44, CW = 168, BAND = 214;
+  const LANES = [378, 324, 270, 216];
+  UI.ladder = {
+    init(c) {
+      const n = c.B.cards.length;
+      c.F.order = c.B.cards.slice().sort((a, b) => ((c.B.cards.indexOf(a) * 5 + 2) % n) - ((c.B.cards.indexOf(b) * 5 + 2) % n));
+      Object.assign(c.F, { pos: {}, marks: {}, tries: 0, sel: null, won: false, snap: 1, from: null });
+      if (c.done()) { for (const id of c.B.cards) { c.F.pos[id] = NUM[id].ns; c.F.marks[id] = "ok"; } c.F.won = true; c.F.tries = 1; }
+    },
+    draw(c) {
+      const { s, h, F, B } = c, kids = [];
+      const pile = F.order.filter((id) => F.pos[id] == null);
+      if (!F.won) kids.push(s("text", { class: "sc-pileh", x: 40, y: 44 }, pile.length ? (F.sel && F.pos[F.sel] == null ? "now tap the ruler where it goes" : "the cards · drag one onto the ruler") : "every card is on the ruler"));
+      // the ruler: a band to drop on, decade marks, and the units underneath
+      kids.push(s("rect", { class: "ln-band" + (F.sel ? " armed" : ""), x: LX0 - 34, y: BAND, width: LX1 - LX0 + 68, height: LY - BAND + 12, rx: 16,
+        onclick: (e) => { if (!F.sel || F.won) return; place(c, F.sel, lns(c.pt(e).x)); } }));
+      kids.push(s("path", { class: "ln-rule", d: `M${LX0} ${LY}H${LX1}` }));
+      for (let k = 0; k <= DEC; k++) {
+        const x = lx(Math.pow(10, k));
+        kids.push(s("path", { class: "ln-tick", d: `M${x} ${LY - 9}V${LY + 9}` }), s("text", { class: "ln-tl", x, y: LY + 26, "text-anchor": "middle" }, TICK[k]));
+        if (k < DEC) for (let m = 2; m < 10; m++) kids.push(s("path", { class: "ln-tick minor", d: `M${lx(m * Math.pow(10, k))} ${LY - 4}V${LY + 4}` }));
+      }
+      // the three scales
+      for (const [a, b, w] of [[0, 3, "nanoseconds · the CPU"], [3, 6, "microseconds · memory, SSDs, the datacenter"], [6, 9, "milliseconds · disks, oceans, people"]])
+        kids.push(s("path", { class: "ln-zone", d: `M${lx(Math.pow(10, a)) + 4} ${LY + 40}H${lx(Math.pow(10, b)) - 4}` }), s("text", { class: "ln-zl", x: (lx(Math.pow(10, a)) + lx(Math.pow(10, b))) / 2, y: LY + 56, "text-anchor": "middle" }, w));
+      // once it's right, the same waits if a nanosecond lasted a second, where the pile was
+      if (F.won) {
+        kids.push(s("text", { class: "ln-hh", x: 40, y: 50 }, "If a nanosecond lasted a second…"));
+        const rows = [-1e9, -1e9, -1e9];
+        LT.NUMS.filter((n) => B.cards.includes(n.id)).forEach((n, i) => {
+          const x = lx(n.ns), w = 132, left = Math.max(30, Math.min(930 - w, x - w / 2));
+          let r = rows.findIndex((q) => q < left - 4); if (r < 0) r = 2;
+          rows[r] = left + w;
+          const y = 84 + r * 44;
+          kids.push(s("g", { class: "ln-hum", style: `animation-delay:${F.snap < 1 ? 0 : i * 70}ms` }, s("path", { class: "ln-hstem", d: `M${x} ${y + 12}V${BAND - 4}` }),
+            s("text", { class: "ln-hl", x: left + w / 2, y }, LT.human(n.ns)), s("text", { class: "ln-hs", x: left + w / 2, y: y + 14 }, n.short)));
+        });
+      }
+      // cards on the ruler, in lanes so they don't cover each other, each pinned to its spot
+      const placed = F.order.filter((id) => F.pos[id] != null).map((id) => ({ id, ns: shown(F, id) })).sort((a, b) => a.ns - b.ns);
+      const lastR = LANES.map(() => -1e9);
+      for (const p of placed) {
+        const x = lx(p.ns), left = Math.max(12, Math.min(948 - CW, x - CW / 2));
+        let L = lastR.findIndex((r) => r < left - 6);
+        if (L < 0) L = lastR.indexOf(Math.min(...lastR));
+        lastR[L] = left + CW;
+        const y = LANES[L], mark = F.marks[p.id];
+        kids.push(s("path", { class: "ln-pin" + (mark ? " " + mark : ""), d: `M${x} ${y + PH - 2}V${LY}` }), s("circle", { class: "ln-dot" + (mark ? " " + mark : ""), cx: x, cy: LY, r: 5 }));
+        kids.push(cardFo(c, p.id, left, y, CW, mark));
+      }
+      // the pile
+      pile.forEach((id, k) => kids.push(cardFo(c, id, 40 + (k % 3) * (PW + 22), 56 + Math.floor(k / 3) * (PH + 8), PW, null)));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (F.snap >= 1) return;
+      F.snap = Math.min(1, F.snap + dt / (c.REDUCED ? 0.1 : 0.9));
+      c.redraw();
+    },
+    brief(c) {
+      const { h, F } = c, left = F.order.filter((id) => F.pos[id] == null).length;
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, F.won ? "Every card is within 3× of the real number, and now shows it. Across the top: the same waits, if a nanosecond lasted a second." :
+        left ? `${left} card${left > 1 ? "s" : ""} still to place. Drag one onto the ruler, or tap a card and then tap the ruler. Arrow keys nudge a card that's on it.` : "Every card is on the ruler. Check it."))];
+    },
+    tools(c) {
+      const { h, F } = c, left = F.order.some((id) => F.pos[id] == null);
+      if (F.won) return [h("ul", { class: "sd-rub" }, c.B.cards.map((id) => h("li", { class: "ok" }, h("i", {}, "✓"), h("b", {}, NUM[id].t + ": "), `${LT.fmt(NUM[id].ns)}, or ${LT.human(NUM[id].ns)} if a nanosecond lasted a second.`)))];
+      return [h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: left, onclick: () => checkL(c) }, "Check the ruler"), h("span", { class: "sd-runs" }, F.tries ? `${F.tries} check${F.tries > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const F = c.F, n = c.B.cards.length, ok = c.B.cards.filter((id) => F.marks[id] === "ok").length;
+      return [["every card within 3×", F.tries ? ok === n : null, F.tries ? `${ok} of ${n}` : "place them"]];
+    },
+  };
+  // where a card shows: where it was dropped, then, once solved, gliding to the real number
+  const shown = (F, id) => (F.won && F.from ? Math.pow(10, lg(F.from[id]) + (lg(NUM[id].ns) - lg(F.from[id])) * F.snap) : F.pos[id]);
+  function place(c, id, ns) { const F = c.F; F.pos[id] = Math.max(1, Math.min(1e9, ns)); delete F.marks[id]; F.sel = null; c.redraw(); c.rebrief(); }
+  function cardFo(c, id, x, y, w, mark) {
+    const { s, h, F } = c, on = F.pos[id] != null;
+    const dir = mark === "no" ? (F.pos[id] < NUM[id].ns ? "→" : "←") : "";
+    const card = h("div", { class: `sc-card ln-card${on ? " in" : ""}${mark ? " " + mark : ""}${F.sel === id ? " sel" : ""}`, xmlns: "http://www.w3.org/1999/xhtml", tabindex: 0, role: "button",
+      "aria-label": `${NUM[id].t}: ${on ? "on the ruler at about " + LT.fmt(F.pos[id]) : "not placed yet"}${mark === "no" ? ", more than 3× off, move it " + (dir === "→" ? "right" : "left") : mark === "ok" ? ", right" : ""}` },
+      F.won ? h("i", { class: "ln-v" }, LT.fmt(NUM[id].ns)) : mark === "ok" ? h("i", {}, "✓") : mark === "no" ? h("i", {}, "✗" + dir) : null, h("span", {}, NUM[id].t));
+    const fo = s("foreignObject", { x, y, width: w, height: PH, class: "sc-fo", "data-card": id }, card);
+    if (!F.won) dragL(c, fo, card, id);
+    return fo;
+  }
+  function dragL(c, fo, card, id) {
+    let st = null;
+    card.addEventListener("pointerdown", (e) => { st = { x: e.clientX, y: e.clientY, moved: false }; card.setPointerCapture(e.pointerId); e.stopPropagation(); });
+    card.addEventListener("pointermove", (e) => {
+      if (!st) return;
+      if (!st.moved && Math.hypot(e.clientX - st.x, e.clientY - st.y) < 6) return;
+      const p = c.pt(e);
+      if (!st.moved) {
+        st.moved = true; fo.setAttribute("width", CW); fo.classList.add("drag"); c.layer.append(fo);
+        // moving the card to the top of the board drops its pointer capture: take it back
+        try { card.setPointerCapture(e.pointerId); } catch (err) {}
+        st.guide = c.s("path", { class: "ln-guide" }); st.read = c.s("text", { class: "ln-read", "text-anchor": "middle" }); c.layer.append(st.guide, st.read);
+      }
+      fo.setAttribute("x", p.x - CW / 2); fo.setAttribute("y", p.y - PH / 2);
+      const on = p.y > BAND - 24, gx = Math.max(LX0, Math.min(LX1, p.x));
+      st.guide.setAttribute("d", on ? `M${gx} ${p.y + PH / 2}V${LY}` : "");
+      st.read.setAttribute("x", gx); st.read.setAttribute("y", Math.min(LY - 12, p.y + PH / 2 + 16)); st.read.textContent = on ? "≈ " + LT.fmt(lns(p.x)) : "";
+    });
+    card.addEventListener("pointerup", (e) => {
+      if (!st) return;
+      const was = st; st = null;
+      if (!was.moved) { c.F.sel = c.F.sel === id ? null : id; c.redraw(); c.rebrief(); return; }
+      const p = c.pt(e);
+      if (p.y < BAND - 24) { delete c.F.pos[id]; delete c.F.marks[id]; c.redraw(); c.rebrief(); return; }
+      place(c, id, lns(p.x));
+    });
+    card.addEventListener("keydown", (e) => {
+      const F = c.F;
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); F.sel = F.sel === id ? null : id; c.redraw(); c.rebrief(); return; }
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      place(c, id, (F.pos[id] || Math.pow(10, 4.5)) * Math.pow(10, e.key === "ArrowRight" ? 0.25 : -0.25));
+      requestAnimationFrame(() => { const el = c.layer.querySelector(`[data-card="${id}"] .sc-card`); if (el) el.focus(); });
+    });
+  }
+  function checkL(c) {
+    const F = c.F;
+    F.tries++;
+    let wrong = 0;
+    for (const id of c.B.cards) { const ok = Math.abs(lg(F.pos[id]) - lg(NUM[id].ns)) <= TOP3; F.marks[id] = ok ? "ok" : "no"; if (!ok) wrong++; }
+    if (!wrong) { F.won = true; F.from = { ...F.pos }; F.snap = 0; c.redraw(); c.solved(F.tries === 1 ? 3 : F.tries === 2 ? 2 : 1); return; }
+    c.redraw();
+    c.flash(`${wrong} card${wrong > 1 ? "s are" : " is"} more than 3× off. The arrow on ${wrong > 1 ? "each" : "it"} says which way to move.`);
+    c.rebrief();
+  }
+
+  // -------------------------------------------------------------------------------------------------- race --
+  const RX0 = 392, RX1 = 868, LANE = { a: 112, b: 292 }, RUN = 3.6;
+  UI.race = {
+    init(c) { Object.assign(c.F, { round: 0, guess: null, t: 0, playing: false, rights: [] }); },
+    draw(c) {
+      const { s, h, F } = c, r = LT.RACES[F.round], kids = [];
+      const slow = Math.max(r.a.ns, r.b.ns), now = F.t * slow, over = F.guess && F.t >= 1;
+      kids.push(s("text", { class: "sc-pileh", x: 40, y: 50 }, `race ${F.round + 1} of ${LT.RACES.length}`), s("text", { class: "ev-sub", x: RX1, y: 50, "text-anchor": "end" }, F.guess ? `slowed down: ${LT.fmt(slow)} takes ${RUN} s here` : "tap the one you think finishes first"));
+      for (const k of ["a", "b"]) {
+        const side = r[k], y = LANE[k], done = F.guess && now >= side.ns, p = F.guess ? Math.min(1, now / side.ns) : 0;
+        const won = over && r.win === k, cls = "ln-job" + (F.guess === k ? " mine" : "") + (over ? (won ? " win" : " lose") : "");
+        const job = h("button", { class: cls, xmlns: "http://www.w3.org/1999/xhtml", disabled: !!F.guess, onclick: () => go(c, k) },
+          h("small", {}, k === "a" ? "A" : "B"), h("b", {}, side.t), over ? h("span", {}, side.how) : null);
+        kids.push(s("foreignObject", { x: 36, y: y - 4, width: 324, height: 132, class: "sc-fo" }, job));
+        // the track, the finish, and the courier
+        const ty = y + 92;
+        kids.push(s("path", { class: "ln-track", d: `M${RX0} ${ty}H${RX1}` }), s("path", { class: "ln-flag", d: `M${RX1} ${ty - 54}V${ty + 6}` }), s("rect", { class: "ln-flagc", x: RX1, y: ty - 54, width: 20, height: 13 }));
+        const x = RX0 + p * (RX1 - RX0);
+        if (F.guess && p > 0) kids.push(s("path", { class: "ln-trail" + (k === r.win ? " win" : ""), d: `M${RX0} ${ty}H${x}` }));
+        kids.push(c.rx(!done ? "walk" : !over ? "bolt" : won ? "trophy" : "snail", x - 30, ty - 58, 58, over ? "pop" : ""));
+        kids.push(s("text", { class: "ln-clock" + (done ? " done" : ""), x: Math.max(RX0 + 20, Math.min(RX1 - 40, x)), y: ty + 26, "text-anchor": "middle" }, F.guess ? LT.fmt(Math.min(now, side.ns)) : ""));
+      }
+      if (over) { const f = Math.max(r.a.ns, r.b.ns) / Math.min(r.a.ns, r.b.ns); kids.push(s("text", { class: "ln-times", x: RX1, y: 486, "text-anchor": "end" }, `${r.win === "a" ? "A" : "B"} wins, ${f >= 10 ? Math.round(f) : f.toFixed(1)}× faster`)); }
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (!F.playing) return;
+      F.t = Math.min(1, F.t + dt / (c.REDUCED ? 0.2 : RUN));
+      c.redraw();
+      if (F.t >= 1) { F.playing = false; F.rights[F.round] = F.guess === LT.RACES[F.round].win; if (F.round === LT.RACES.length - 1) { const n = F.rights.filter(Boolean).length; c.solved(n === LT.RACES.length ? 3 : n >= LT.RACES.length - 1 ? 2 : 1); } else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, r = LT.RACES[F.round];
+      const right = F.rights.filter(Boolean).length;
+      return [h("div", { class: "sd-ask" }, h("small", {}, `race ${F.round + 1} of ${LT.RACES.length}${F.round ? ` · ${right} right so far` : ""}`),
+        !F.guess ? h("p", { class: "sd-quiet" }, "Tap A or B on the board.") : F.t < 1 ? h("p", { class: "sd-quiet" }, "Racing…") :
+          h("p", { class: "sd-verdict " + (F.guess === r.win ? "ok" : "no") }, F.guess === r.win ? "✓ Right. " : "✗ Not that one. ", r.why))];
+    },
+    tools(c) {
+      const { h, F } = c;
+      if (!F.guess || F.t < 1 || F.round === LT.RACES.length - 1) return [];
+      return [h("div", { class: "sd-btns" }, h("button", { class: "btn primary", onclick: () => { Object.assign(F, { round: F.round + 1, guess: null, t: 0 }); c.redraw(); c.rebrief(); } }, "Next race →"))];
+    },
+  };
+  function go(c, k) { const F = c.F; if (F.guess) return; F.guess = k; F.t = 0; F.playing = true; c.redraw(); c.rebrief(); }
+
+  // --------------------------------------------------------------------------------------------- waterfall --
+  const Q_WORD = { serial: "one after another", parallel: "all at once, 10 at a time", one: "as one query" };
+  const PAY_WORD = { new: "on a new connection", open: "on a connection kept open", cache: "from a copy in Redis, kept 5 minutes" };
+  const PH_WORD = { disk: "from the spinning disk", ssd: "from the SSD", ram: "already resized, from RAM" };
+  const WX0 = 200, WX1 = 700, SCALES = [10, 30, 100, 300, 1000];
+  const ROWS = { session: [118, 14, "session · Redis"], queries: [146, 92, "30 queries"], pay: [254, 14, "payments plan"], photo: [282, 14, "photo"] };
+  const HX0 = 70, HX1 = 700, HB = 492, HH = 72, hx = (t) => HX0 + (lg(Math.max(1, Math.min(1000, t))) / 3) * (HX1 - HX0);
+  UI.waterfall = {
+    init(c) { Object.assign(c.F, { queries: "serial", pay: "new", photo: "disk", res: null, anim: 0, runs: 0, memo: {}, view: "typical" }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, g = c.B.goals, kids = [];
+      const P = R ? R[F.view] : null, sc = P ? SCALES.find((v) => v >= P.t * 1.04) || 1000 : 300, wx = (t) => WX0 + (Math.min(t, sc) / sc) * (WX1 - WX0);
+      const now = P ? F.anim * P.t * 1.02 : 0;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "A page, step by step"), s("text", { class: "ev-sub", x: 40, y: 94 }, !R ? "load it to see where the time goes" : F.view === "typical" ? "the typical page: half are faster, half slower" : "one of the slowest 1% of pages"));
+      for (const [id, [y, hh, name]] of Object.entries(ROWS)) kids.push(s("text", { class: "ln-row", x: 40, y: y + Math.min(hh, 14) - 2 + (hh > 14 ? hh / 2 - 6 : 0) }, name));
+      kids.push(s("path", { class: "ub-axis", d: `M${WX0} 306H${WX1}` }));
+      for (let k = 0; k <= 5; k++) kids.push(s("text", { class: "ev-tick", x: WX0 + (k / 5) * (WX1 - WX0), y: 322, "text-anchor": "middle" }, k ? ms((k / 5) * sc) : "0"));
+      if (P) {
+        let big = null;
+        for (const st of P.steps) {
+          const [y, hh] = ROWS[st.id];
+          if (!big || st.d > big.d) big = st;
+          const bar = (t0, d, yy, h2, lost) => { const w = Math.max(0, Math.min(d, now - t0)); if (w > 0) kids.push(s("rect", { class: `ln-bar s-${st.id}${lost ? " lost" : ""}`, x: wx(t0), y: yy, width: Math.max(1.2, wx(t0 + w) - wx(t0)), height: h2, rx: Math.min(3, h2 / 2) })); };
+          if (st.sub && st.sub.length > 1) st.sub.forEach(([t0, d, lost], i) => { const n = st.sub.length, rh = Math.min(14, (hh - 2) / n); bar(st.at + t0, d, n > 3 ? y + i * (hh / n) : y + (i * hh) / n, n > 3 ? Math.max(1.6, rh - 0.8) : 14, lost); });
+          else bar(st.at, st.d, st.id === "queries" ? y + hh / 2 - 7 : y, 14, st.sub && st.sub[0] && st.sub[0][2]);
+          if (now >= st.at + st.d) {
+            const ly = y + Math.min(hh, 14) - 2 + (hh > 14 ? hh / 2 - 6 : 0), lost = st.sub && st.sub.some((x) => x[2]);
+            kids.push(s("text", { class: "ln-st yt-halo" + (lost ? " lost" : ""), x: Math.min(WX1 + 40, wx(st.at + st.d) + 6), y: ly }, ms(st.d) + (lost ? " · a lost packet waited 200 ms" : "")));
+          }
+        }
+        kids.push(s("path", { class: "tw-now", d: `M${wx(Math.min(now, P.t))} 104V306` }));
+        if (F.anim >= 1) {
+          kids.push(s("text", { class: "ln-done yt-halo", x: Math.min(WX1, wx(P.t)) + 6, y: 114 }, `ready at ${ms(P.t)}`));
+          const [y, hh] = ROWS[big.id];
+          if (!goodW(c, R)) kids.push(c.rx("snail", Math.min(WX1 - 10, wx(big.at + big.d)) - 44, y + Math.min(hh, 14) / 2 - 44, 40, "pop"));
+        }
+      }
+      // every page, on a log scale, with the two goals
+      kids.push(s("text", { class: "ev-h", x: 40, y: 362 }, "All 2,000 pages"), s("text", { class: "ev-sub", x: 40, y: 380 }, R && F.shown ? `half within ${ms(R.p50)}, 99% within ${ms(R.p99)} · ${(R.lostShare * 100).toFixed(1)}% lost a packet` : "how long each one took, on a scale that goes up ten times a step"));
+      kids.push(s("path", { class: "ub-axis", d: `M${HX0} ${HB}H${HX1}` }));
+      for (const t of [1, 10, 100, 1000]) kids.push(s("text", { class: "ev-tick", x: hx(t), y: HB + 16, "text-anchor": "middle" }, t === 1000 ? "1 s" : t + " ms"));
+      for (const [t, w, up] of [[g.p50, `half within ${g.p50} ms`, 0], [g.p99, `99% within ${g.p99} ms`, 14]]) kids.push(s("path", { class: "ub-goal", d: `M${hx(t)} ${HB - HH - 4}V${HB + 22}` }), s("text", { class: "ev-tick yt-halo", x: hx(t) + 4, y: HB + 32 }, "goal: " + w));
+      if (R && F.shown) {
+        const NB = 60, bins = new Array(NB).fill(0);
+        for (const t of R.times) bins[Math.min(NB - 1, Math.max(0, Math.floor((lg(Math.max(1, t)) / 3) * NB)))]++;
+        const mx = Math.max(...bins), bw = (HX1 - HX0) / NB;
+        bins.forEach((n, i) => { if (n) { const hh = Math.max(1.5, (Math.sqrt(n) / Math.sqrt(mx)) * HH); kids.push(s("rect", { class: "ln-hist" + (i * bw + HX0 >= hx(g.p99) ? " late" : ""), x: HX0 + i * bw + 0.5, y: HB - hh, width: bw - 1, height: hh })); } });
+        const close = hx(R.p99) - hx(R.p50) < 34;
+        for (const [v, w, an, dx] of [[R.p50, "p50", close ? "end" : "middle", close ? -3 : 0], [R.p99, "p99", close ? "start" : "middle", close ? 3 : 0]])
+          kids.push(s("path", { class: "ln-pm", d: `M${hx(v)} ${HB - HH - 6}V${HB + 4}` }), s("text", { class: "ln-pl yt-halo", x: hx(v) + dx, y: HB - HH - 10, "text-anchor": an }, w));
+      }
+      // the numbers
+      const NX = 760, done = R && F.shown;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 132 }, "half the pages within"), s("text", { class: "wa-big" + (done && R.p50 > g.p50 ? " over" : ""), x: NX, y: 172 }, done ? ms(R.p50) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 228 }, "99% within"), s("text", { class: "wa-big" + (done && R.p99 > g.p99 ? " over" : ""), x: NX, y: 268 }, done ? ms(R.p99) : "–"));
+      if (done && goodW(c, R)) kids.push(c.rx("rocket", NX + 120, 280, 64, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      const P = R[F.view];
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : Math.max(1.6, Math.min(4.5, P.t / 60))));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodW(c, R)) c.solved(ran(c, F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.anim >= 1 ? F.res : null, g = c.B.goals;
+      const miss = R && F.shown ? [R.p50 > g.p50 && `half the pages took longer than ${ms(R.p50)}`, R.p99 > g.p99 && `the slowest 1% took ${ms(R.p99)}`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "The waterfall is one page, slowed right down: each bar is a step, and the queries are 30 thin bars. Below, all 2,000 pages, with a red tail for the slowest."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; c.redraw(); c.rebrief(); };
+      const run = () => { const key = `${F.queries}:${F.pay}:${F.photo}`; F.runs++; F.res = F.memo[key] || (F.memo[key] = LT.page({ queries: F.queries, pay: F.pay, photo: F.photo, seed: c.B.sim.seed })); F.anim = 0; F.shown = false; F.view = "typical"; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "run the 30 queries ", h("button", { class: "sd-word", onclick: () => set("queries", cyc(LT.QUERIES, F.queries)) }, Q_WORD[F.queries])),
+        h("p", {}, "get the payments plan ", h("button", { class: "sd-word", onclick: () => set("pay", cyc(LT.PAYS, F.pay)) }, PAY_WORD[F.pay])),
+        h("p", {}, "read the photo ", h("button", { class: "sd-word", onclick: () => set("photo", cyc(LT.PHOTOS, F.photo)) }, PH_WORD[F.photo])),
+        F.res && F.shown ? h("p", {}, "show ", h("button", { class: "sd-word", onclick: () => { F.view = F.view === "typical" ? "slow" : "typical"; F.anim = 0; c.redraw(); c.rebrief(); } }, F.view === "typical" ? "a typical page" : "one of the slowest 1%")) : null),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Load it 2,000 times"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [[`half the pages within ${g.p50} ms`, R ? R.p50 <= g.p50 : null, R ? ms(R.p50) : "run it"], [`99% within ${g.p99} ms`, R ? R.p99 <= g.p99 : null, R ? ms(R.p99) : "·"]];
+    },
+  };
+  const goodW = (c, R) => R.p50 <= c.B.goals.p50 && R.p99 <= c.B.goals.p99;
+
+  // ------------------------------------------------------------------------------------------------- globe --
+  // The land, as rough outlines [longitude, latitude], drawn as a field of dots so the roughness doesn't show
+  const LAND = [
+    [-166, 68, -156, 71, -141, 69.5, -125, 70, -110, 68, -95, 68, -85, 70, -80, 63, -94, 59, -92, 57, -82, 55, -79, 52, -77, 59, -70, 61, -64, 60, -61, 56, -56, 52, -60, 47, -64, 45, -70, 43, -70, 41.5, -74, 40.5, -76, 37, -75.5, 35, -81, 31, -80, 27, -80.5, 25.2, -82, 26.5, -83, 29.5, -85, 30, -89, 30, -90, 29, -94, 29.5, -97, 27.5, -97.5, 24, -97, 21, -95, 18.5, -91, 18.8, -90.5, 21, -87, 21.5, -88, 17, -88, 16, -84, 15.5, -83.5, 11, -81.5, 9, -79, 9.5, -77.5, 8.5, -80, 7.3, -83, 8.3, -86, 11, -88, 13.3, -92, 14.5, -95, 16, -100, 17, -105.5, 20, -105.5, 23, -109, 27, -112.5, 31, -114.5, 31.5, -112, 28, -110, 23.5, -112, 24.5, -114, 28, -115.5, 30, -117, 32.5, -118.5, 34, -120.6, 34.6, -122.5, 37.5, -124, 40.5, -124.5, 43, -124, 46.5, -124.7, 48.4, -123, 49, -127, 50.5, -130, 54.5, -134, 58, -140, 60, -146, 60.8, -152, 59, -154, 57.5, -158, 56.5, -162, 55, -158, 58.5, -162, 60, -165, 62, -165, 64.5],
+    [-73, 78, -60, 82, -35, 83.5, -20, 82, -18, 77, -20, 72, -22, 70, -32, 68, -40, 65, -43, 60, -48, 61, -52, 65, -54, 69, -58, 75, -66, 76.5],
+    [-80, 73.5, -72, 72, -66, 68, -62, 66.5, -66, 63, -71, 62.5, -78, 64.4, -74, 65.5, -73, 68, -80, 69.8, -90, 72],
+    [-120, 71, -110, 73, -100, 73, -95, 74.5, -85, 76, -80, 79, -62, 82, -75, 83, -95, 81.5, -110, 78, -120, 76, -125, 72.5],
+    [-59.4, 47.6, -53, 46.7, -52.6, 48.5, -55.6, 51.6],
+    [-85, 21.8, -82, 23.2, -77, 22, -74.2, 20.2, -77.7, 19.8, -80, 21.7], [-74.4, 19.8, -70, 19.8, -68.4, 18.5, -71.5, 17.6, -74.4, 18.3],
+    [-77.5, 8.5, -75, 11, -71.5, 12.4, -68, 10.6, -62, 10.7, -60, 8.5, -57, 6, -52, 4.5, -50, 1.8, -48.5, -1, -44.5, -2.5, -40, -3, -35, -5.5, -35, -9, -37, -12, -39, -17.5, -40.5, -21, -42, -23, -45, -23.7, -48.5, -26, -49, -29, -51, -31, -53.5, -34, -57, -35, -57, -37, -58, -38.5, -62, -39, -62.5, -41, -65, -41, -64, -42.5, -65.5, -45, -67.5, -46.5, -66, -48, -69, -51, -68.5, -53, -71, -54, -74.5, -52.5, -75.5, -48, -74, -43, -73.5, -39, -73.5, -37, -71.5, -32, -71.5, -28, -70.5, -25, -70.2, -18.5, -75, -15.5, -77, -12, -79.5, -7.5, -81, -5, -80, -2, -80, 0.8, -79, 1.7, -77.5, 4, -77.4, 7],
+    [-5.6, 36, -4.5, 36.7, -2, 36.8, -0.5, 38.3, 0.2, 39.5, -0.3, 39.8, 1, 41, 3.2, 41.9, 3.1, 43.1, 4.5, 43.4, 6.5, 43.1, 7.5, 43.8, 8.8, 44.4, 10.2, 43.9, 10.5, 42.9, 12.3, 41.7, 13.7, 41.2, 15.6, 40, 16, 38, 16.6, 38.9, 17, 39.4, 16.5, 40.5, 18.5, 40.1, 16, 41.5, 14, 42.5, 12.4, 44.2, 12.3, 45.3, 13.7, 45.7, 14.5, 45.2, 15.2, 44.2, 17.5, 43, 19.4, 41.8, 19.3, 40.5, 20.2, 39.6, 21.1, 38.3, 22, 36.6, 23, 36.5, 23.2, 38, 24, 38.2, 22.8, 40.5, 24, 40.8, 26, 40.8, 26.2, 40.1, 26.7, 39.3, 26.8, 38.4, 27.2, 37.3, 28.2, 36.7, 30.5, 36.3, 32.5, 36.1, 34.6, 36.8, 36, 36.6, 35.8, 34.6, 35, 33, 34.2, 31.3, 34.9, 29.5, 35, 28, 36.5, 26, 37.5, 24.3, 39, 22, 39.8, 20.3, 41.2, 18.5, 42.8, 16, 43.3, 13, 45, 12.8, 48.5, 14, 52.2, 16, 55.5, 17.8, 57.5, 18.9, 58.5, 20.5, 59.8, 22.4, 58.6, 23.6, 57, 24, 56.4, 26.4, 56, 24.8, 54, 24.1, 51.6, 24.3, 51.3, 26, 50.2, 26.2, 48.5, 28.3, 47.9, 29.9, 48.8, 30.3, 50.1, 30.1, 51.5, 27.8, 54, 26.7, 57.3, 25.8, 61.5, 25.2, 66.5, 25.4, 67.5, 24, 68.7, 23.3, 70, 22.5, 72.6, 21.3, 72.8, 19.5, 73.5, 16, 74.8, 12.8, 76.3, 9.5, 77.5, 8.1, 78.2, 8.9, 79.3, 10.3, 79.9, 13, 80.2, 15.5, 82.3, 16.6, 84.8, 19.2, 86.9, 21, 88.8, 21.6, 90.5, 22, 91.8, 22.3, 92.4, 20.7, 94, 19, 94.5, 16.2, 97.7, 15.5, 98.6, 10, 98.3, 8, 100.3, 5.5, 101.3, 2.8, 103.5, 1.3, 104.2, 1.4, 103.4, 4.3, 102.3, 6.2, 100.4, 7.3, 99.2, 10.3, 100, 13.4, 101.5, 12.7, 103, 10.5, 104.8, 10.3, 105, 8.6, 107, 10.4, 109, 11.5, 109.2, 13, 108, 16, 105.7, 18.5, 106.5, 20, 108, 21.6, 110.5, 21, 114, 22.3, 117, 23.6, 119.5, 25.5, 121.8, 29, 121.9, 30.8, 120.8, 32.5, 119.5, 35, 120.5, 36, 122.5, 37, 119, 37.2, 117.7, 38.5, 118, 39, 121, 39, 121.5, 40, 125, 39.5, 126.5, 37.5, 126.5, 34.5, 129.5, 36, 129.5, 41, 131.5, 42.8, 135, 43.5, 140.5, 48, 141, 53, 137, 54, 143, 59.3, 151, 59.2, 155, 59.5, 161, 60.5, 156.5, 57.8, 155.7, 56, 156, 51, 163, 56, 162.5, 57, 164, 60, 170, 60, 174, 61.6, 178, 64.5, 180, 65, 180, 69, 170, 70, 160, 70, 150, 71.5, 140, 72.5, 132, 71.5, 128, 72, 120, 73, 112, 76, 105, 77.7, 95, 76, 87, 74, 80, 73.5, 74, 73, 72.5, 72.8, 67, 72, 68, 70, 60, 69, 54, 68.5, 44, 68.5, 44, 66.2, 40, 66, 41, 67.5, 33, 69.3, 31, 70, 28, 71, 24, 71, 19, 70, 16, 68.5, 13, 66.5, 10, 64, 5, 62.5, 5, 61, 5.5, 58.8, 8, 58, 11, 58.8, 12.8, 56.5, 14, 55.5, 16.5, 57, 18, 59, 19, 60, 17, 61, 17.5, 62.5, 22, 65.8, 25.3, 65, 21.5, 63.3, 21.5, 61, 23, 60, 28, 59.5, 23.5, 59.2, 24, 57.5, 21, 57, 21, 55, 18, 54.8, 14, 54, 12, 54.2, 12.5, 55.5, 10.5, 56, 10.5, 57.7, 8.2, 57, 8.5, 55.5, 7, 53.5, 4.5, 52.5, 3, 51.3, 1.5, 50.2, -1.5, 48.7, -4.7, 48.4, -2.5, 47.3, -1.5, 46, -2, 43.4, -8, 43.7, -9.3, 43, -8.8, 42, -9.5, 39, -9, 37, -7.5, 37.2, -6.3, 36.8],
+    [-5.9, 35.8, -2, 35.1, 1, 36.4, 5, 36.8, 10, 37.2, 11, 35.6, 10.5, 34, 11.5, 33.1, 15.2, 32.3, 19, 30.3, 20, 32, 22, 32.9, 25, 31.8, 29, 30.9, 32.3, 31.2, 34.2, 31.3, 34.9, 29.5, 33.6, 28, 32.5, 29.9, 33.5, 27, 35.5, 23.9, 36.9, 22, 37.3, 18.8, 38.5, 17.9, 39.7, 15.4, 41.8, 13.2, 43.3, 11.8, 44.5, 10.4, 47.5, 11.2, 51.2, 11.8, 50.8, 10, 48.5, 5, 46, 2, 43, -0.5, 41, -2, 39.4, -5, 39, -7, 39.5, -10, 40.5, -11, 40.6, -15, 37, -17.5, 35.3, -22, 35.5, -24, 32.9, -26, 32.5, -29, 30, -31.3, 27.5, -33.5, 25, -34, 22, -34.2, 19, -34.8, 18.3, -33.5, 18, -31, 16.5, -28.6, 15, -26.5, 14.5, -22.9, 12, -18.5, 11.8, -16, 13.5, -12, 13, -8.5, 12.2, -6, 9, -1, 9.5, 3.5, 8.5, 4.5, 5.5, 4.3, 3, 6.4, -1, 5.1, -4, 5.2, -7.5, 4.4, -11, 6.8, -13, 8.2, -15, 11, -16.8, 13, -17.5, 14.7, -16.3, 19, -17, 21, -15.5, 24.5, -13, 27.6, -9.8, 30, -9.3, 32.6, -6.8, 34],
+    [49.3, -12, 50.5, -15.5, 49.5, -17, 47.3, -25, 45, -25.5, 43.5, -22, 44.3, -16.5, 46.5, -15.5],
+    [-5.7, 50, 1.4, 51.2, 1.7, 52.7, 0, 53.5, -1.6, 55.6, -2, 57.7, -3.3, 58.6, -5, 58.6, -6.2, 57.5, -5.5, 55.5, -4.8, 54.8, -3.2, 54.2, -3, 53.3, -4.6, 53.2, -4.2, 52.2, -5.2, 51.7, -3, 51.4],
+    [-6, 52, -6.2, 53.8, -5.6, 54.6, -7.3, 55.3, -8.5, 54.5, -10, 53.5, -9.8, 51.6, -8, 51.6], [-24, 65.5, -22, 66.4, -16, 66.5, -13.6, 65.2, -15, 64.3, -18.7, 63.4, -22.7, 63.8],
+    [130, 31, 131.5, 31.4, 132, 33.8, 135, 33.5, 136.8, 34.3, 139, 34.8, 140.8, 35.7, 141, 38.3, 142, 39.6, 141.4, 41.4, 140, 40.7, 139.8, 39, 138.5, 37.8, 136.8, 37.1, 136, 35.7, 133, 35.5, 131, 34.4, 130, 33.5],
+    [140, 41.5, 141.5, 42.5, 143.3, 42, 145.6, 43.3, 144.5, 44, 142, 45.5, 141.6, 45.3, 141.4, 43.4, 140, 42.5], [142, 46, 143.5, 49, 143, 54, 142.5, 54.3, 142, 51],
+    [79.8, 6, 81.8, 7.5, 81, 9.5, 79.9, 9.7], [120.2, 22.5, 121.5, 25.2, 121.9, 24.5, 120.8, 21.9],
+    [120, 18.5, 122.3, 18.5, 122, 16.5, 124, 13, 121.5, 13.8, 120.3, 14.5, 120, 16], [122, 7, 126.5, 7.2, 126, 9.5, 125, 9, 123.5, 8],
+    [109, 1.8, 110.5, -2.9, 114, -4, 116.5, -3, 118, 1, 119, 5, 117, 7, 115, 5, 113, 3, 111, 1.7], [95.3, 5.5, 97.5, 5.2, 100.3, 2.2, 104, -1, 106, -3.2, 105.8, -5.8, 104.5, -5.9, 102.3, -4, 100.4, -1, 98.7, 1.7],
+    [105.2, -6.8, 108.5, -6.4, 111, -6.4, 114.5, -7.7, 114.5, -8.6, 110, -8.2, 106.5, -7.4], [119.4, -5.5, 120.5, -2.5, 121, 1.2, 124.8, 1.5, 121.5, -1, 123.3, -4.7, 121, -4.6],
+    [131, -1.4, 134, -0.9, 138, -1.6, 141, -2.6, 145.8, -5.3, 147.5, -6.2, 150.5, -10.5, 147, -10, 144, -7.8, 141, -9, 138, -8.3, 137.6, -5.2, 133, -4, 132, -2.7],
+    [113.5, -22, 114.2, -26, 115, -30, 115, -34, 118, -35, 121, -33.8, 124, -32.8, 127, -32.2, 131, -31.5, 134, -32.5, 135.6, -34.8, 137.7, -35.6, 138.5, -34.5, 140, -37.5, 143.5, -38.8, 146.3, -39.1, 148, -37.8, 150, -37.5, 151.2, -33.9, 153.1, -30.5, 153.6, -28, 153, -25.5, 151, -23.5, 149.5, -22.2, 146.3, -19, 145.4, -16, 145.3, -14.8, 143.6, -14, 142.5, -10.7, 141.6, -13, 141.5, -17, 139.5, -17.6, 136, -15.8, 135.5, -14.7, 136.8, -12.2, 133, -11.3, 131, -12.2, 129.5, -14.9, 127, -13.8, 125.5, -14.5, 124, -16.5, 122.3, -17.5, 121, -19.5, 118, -20.4, 115, -21.5],
+    [144.6, -40.7, 148.3, -40.9, 148, -43.2, 146, -43.6], [172.6, -34.4, 174.5, -36, 175.9, -37.6, 178.5, -37.7, 177, -39.3, 176, -41.3, 174.7, -41.3, 175, -39.8, 173.8, -39.2, 174.5, -37.5],
+    [172.7, -40.5, 174.3, -41.5, 173, -43.7, 171, -45.3, 169, -46.6, 166.5, -46, 168, -44, 170.7, -42.6], [52, 71.5, 57, 70.6, 61, 75.5, 68, 76.8, 57, 75.5],
+  ];
+  const SEAS = [[27.5, 42.5, 28, 41.3, 29.5, 41.2, 32, 41.9, 35, 42, 38, 41, 41.5, 41.5, 41.5, 42.5, 39.5, 44, 38, 44.5, 37, 45.3, 35, 45, 33.5, 44.5, 32.5, 45.4, 30.5, 46.5, 29.7, 45.3, 28.6, 44.3],
+    [47, 45, 49, 46.5, 51.5, 47, 53, 45.5, 51, 44.5, 52.7, 42, 54, 40.5, 53.5, 37.5, 51, 36.7, 49, 37.6, 49.5, 40.3, 47.5, 42]];
+  function inside(poly, x, y) {
+    let c = false;
+    for (let i = 0, j = poly.length - 2; i < poly.length; j = i, i += 2) {
+      const xi = poly[i], yi = poly[i + 1], xj = poly[j], yj = poly[j + 1];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+  const GX0 = 30, GX1 = 690, GTOP = 74, GBOT = -50, GY0 = 76, KX = (GX1 - GX0) / 360;
+  const gx = (lon) => GX0 + (lon + 180) * KX, gy = (lat) => GY0 + (GTOP - lat) * KX;
+  const GY1 = gy(GBOT);
+  const TRIP_WORD = { 6: "6 round trips: two requests, each on a new connection", 2: "2 round trips: one connection, kept open", 1: "1 round trip: the data comes inside the page" };
+  function land(c, F) {
+    if (!F.dots) {
+      F.dots = [];
+      for (let lat = GTOP - 1.25; lat > GBOT; lat -= 2.5) for (let lon = -178.75; lon < 180; lon += 2.5)
+        if (LAND.some((p) => inside(p, lon, lat)) && !SEAS.some((p) => inside(p, lon, lat))) F.dots.push(c.s("circle", { class: "ln-land", cx: gx(lon).toFixed(1), cy: gy(lat).toFixed(1), r: 2.1 }));
+    }
+    return F.dots;
+  }
+  // a round trip's path: a curve bowed towards the pole, so long ones read as arcs
+  function arc(a, b) {
+    const x1 = gx(a.lon), y1 = gy(a.lat), x2 = gx(b.lon), y2 = gy(b.lat), d = Math.hypot(x2 - x1, y2 - y1);
+    return { x1, y1, x2, y2, cx: (x1 + x2) / 2, cy: (y1 + y2) / 2 - d * 0.22 };
+  }
+  const bz = (A, u) => [(1 - u) * (1 - u) * A.x1 + 2 * (1 - u) * u * A.cx + u * u * A.x2, (1 - u) * (1 - u) * A.y1 + 2 * (1 - u) * u * A.cy + u * u * A.y2];
+  const BX0 = 812, BX1 = 930, BMAX = 400, bxv = (v) => BX0 + (Math.min(v, BMAX) / BMAX) * (BX1 - BX0);
+  UI.globe = {
+    init(c) { Object.assign(c.F, { sites: c.B.start.sites.slice(), trips: c.B.start.trips, res: null, anim: 0, runs: 0, shown: false }); },
+    draw(c) {
+      const { s, F } = c, R = F.res, g = c.B.goals, kids = [];
+      kids.push(s("text", { class: "ev-h", x: 40, y: 56 }, "Who waits how long"), s("text", { class: "ev-sub", x: 40, y: 74 }, R ? `each city uses its nearest datacenter · a page load is ${F.trips} round trip${F.trips > 1 ? "s" : ""} + ${LT.WORK} ms of work` : "tap a square to put a datacenter there, up to 3"));
+      kids.push(...land(c, F));
+      const worst = R ? R.worst.ms : 1, now = R ? F.anim * worst : 0;
+      // the round trips, a pulse going out and back on each city's arc
+      if (R) for (const ct of R.cities) {
+        const city = LT.CITIES.find((x) => x.id === ct.id), site = LT.SITES.find((x) => x.id === ct.site);
+        if (ct.km < 50) continue;
+        const A = arc(city, site);
+        kids.push(s("path", { class: "ln-arc", d: `M${A.x1} ${A.y1}Q${A.cx} ${A.cy} ${A.x2} ${A.y2}` }));
+        const tt = Math.min(now, ct.ms - LT.WORK), k = Math.floor(tt / ct.rtt), u = (tt - k * ct.rtt) / ct.rtt;
+        if (now < ct.ms - LT.WORK) { const [x, y] = bz(A, u < 0.5 ? u * 2 : 2 - u * 2); kids.push(s("circle", { class: "ln-pulse" + (u < 0.5 ? "" : " back"), cx: x, cy: y, r: 4.2 })); }
+      }
+      // the datacenters you can switch on
+      for (const st of LT.SITES) {
+        const on = F.sites.includes(st.id), x = gx(st.lon), y = gy(st.lat);
+        kids.push(s("g", { class: "ln-site" + (on ? " on" : ""), role: "button", tabindex: 0, "aria-pressed": on ? "true" : "false", "aria-label": `A datacenter in ${st.name}: ${on ? "on" : "off"}`, "data-site": st.id,
+          onclick: () => toggle(c, st.id), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(c, st.id); } } },
+          s("rect", { class: "ln-hit", x: x - 15, y: y - 15, width: 30, height: 30 }), s("rect", { class: "ln-sq", x: x - 8, y: y - 8, width: 16, height: 16, rx: 3 }), s("title", {}, `${st.name}: ${on ? "tap to switch off" : "tap to put a datacenter here"}`)));
+      }
+      // the cities, each with its stopwatch
+      const LBL = { ny: [8, -8], la: [-8, 16, "end"], sp: [10, 14], ld: [-6, -10, "end"], lg: [-8, 4, "end"], jb: [10, 10], mb: [-8, 16, "end"], sg: [10, 16], tk: [10, -8], sy: [10, 14] };
+      for (const ct of LT.CITIES) {
+        const r = R && R.cities.find((x) => x.id === ct.id), x = gx(ct.lon), y = gy(ct.lat), [dx, dy, an] = LBL[ct.id];
+        const fin = r && now >= r.ms, t = r ? Math.min(now, r.ms) : 0;
+        kids.push(s("circle", { class: "ln-city" + (fin ? (r.ms <= g.ms ? " ok" : " no") : ""), cx: x, cy: y, r: 4.6 }));
+        kids.push(s("text", { class: "ln-cn yt-halo" + (fin ? (r.ms <= g.ms ? " ok" : " no") : ""), x: x + dx, y: y + dy, "text-anchor": an || "start" }, R ? `${ct.name} ${ms(t)}` : ct.name));
+      }
+      // every city's page, against the goal
+      kids.push(s("text", { class: "wa-mn", x: 720, y: 96 }, "page load, by city"));
+      kids.push(s("path", { class: "ub-goal", d: `M${bxv(g.ms)} 106V${110 + LT.CITIES.length * 22}` }), s("text", { class: "ev-tick", x: bxv(g.ms), y: 120 + LT.CITIES.length * 22, "text-anchor": "middle" }, `goal ${g.ms} ms`));
+      LT.CITIES.forEach((ct, i) => {
+        const r = R && R.cities.find((x) => x.id === ct.id), y = 116 + i * 22, t = r ? Math.min(now, r.ms) : 0, fin = r && now >= r.ms;
+        kids.push(s("text", { class: "ln-bl", x: 720, y: y + 9 }, ct.name), s("rect", { class: "ln-bt", x: BX0, y, width: BX1 - BX0, height: 11, rx: 3 }));
+        if (r) kids.push(s("rect", { class: "ln-bf" + (fin ? (r.ms <= g.ms ? " ok" : " no") : ""), x: BX0, y, width: Math.max(1.5, bxv(t) - BX0), height: 11, rx: 3 }));
+        if (fin && r.ms > BMAX) kids.push(s("text", { class: "ln-over", x: BX1 + 3, y: y + 10 }, "»"));
+      });
+      // the big numbers, and light's speed limit
+      const done = R && F.anim >= 1;
+      kids.push(s("text", { class: "wa-mn", x: 40, y: 384 }, "the slowest city"), s("text", { class: "wa-big" + (done && R.worst.ms > g.ms ? " over" : ""), x: 40, y: 426 }, done ? ms(R.worst.ms) : "–"),
+        s("text", { class: "ev-tick", x: 40, y: 446 }, done ? `${LT.CITIES.find((x) => x.id === R.worst.id).name}, ${c.num(R.worst.km)} km from ${LT.SITES.find((x) => x.id === R.worst.site).name}` : "after every city has its page"));
+      kids.push(s("text", { class: "wa-mn", x: 300, y: 384 }, "datacenters"), s("text", { class: "wa-big" + (F.sites.length > g.sites ? " over" : ""), x: 300, y: 426 }, `${F.sites.length} of ${g.sites}`),
+        s("text", { class: "ev-tick", x: 300, y: 446 }, F.sites.map((id) => LT.SITES.find((x) => x.id === id).name).join(", ") || "none yet"));
+      const LR = 520, k1000 = (1000 * 2 * LT.DETOUR) / LT.LIGHT;
+      kids.push(s("text", { class: "wa-mn", x: LR, y: 384 }, "the speed limit"), s("text", { class: "ev-sub", x: LR, y: 406 }, `light in glass: ${LT.LIGHT} km a millisecond`),
+        s("text", { class: "ev-sub", x: LR, y: 424 }, `1,000 km there and back: ${k1000.toFixed(1)} ms`), s("text", { class: "ev-sub", x: LR, y: 442 }, "no hardware makes it any faster"));
+      if (done && R.worst.ms <= g.ms) kids.push(c.rx("rocket", 850, 360, 70, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.2 : Math.max(2.5, Math.min(6, R.worst.ms / 60))));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodG(c, R)) c.solved(F.runs <= 3 ? 3 : F.runs <= 6 ? 2 : 1); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.shown ? F.res : null, g = c.B.goals;
+      const late = R ? R.cities.filter((x) => x.ms > g.ms) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each city sends its page load to the nearest datacenter you've switched on; the dots are the round trips, going out and coming back."),
+        late.length ? h("p", { class: "sd-verdict no" }, `✗ ${late.length} cit${late.length > 1 ? "ies wait" : "y waits"} longer than ${g.ms} ms: ${late.map((x) => `${LT.CITIES.find((y) => y.id === x.id).name} ${ms(x.ms)}`).join(", ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c;
+      const run = () => { if (!F.sites.length) { c.flash("Switch on at least one datacenter: tap a square on the map."); return; } F.runs++; F.res = LT.globe({ sites: F.sites, trips: F.trips }); F.anim = 0; F.shown = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "a page load takes ", h("button", { class: "sd-word", onclick: () => { F.trips = cyc(LT.TRIPS, F.trips); F.res = null; c.redraw(); c.rebrief(); } }, TRIP_WORD[F.trips])),
+        h("p", { class: "sd-quiet" }, "Datacenters: tap the squares on the map.")),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Load the page everywhere"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [[`every city within ${g.ms} ms`, R ? R.worst.ms <= g.ms : null, R ? ms(R.worst.ms) : "run it"], [`at most ${g.sites} datacenters`, c.F.sites.length <= g.sites, String(c.F.sites.length)]];
+    },
+  };
+  const goodG = (c, R) => R.worst.ms <= c.B.goals.ms && R.sites <= c.B.goals.sites;
+  function toggle(c, id) {
+    const F = c.F;
+    if (F.res && !F.shown) return;
+    if (F.sites.includes(id)) F.sites = F.sites.filter((x) => x !== id);
+    else if (F.sites.length >= c.B.goals.sites) { c.flash(`${c.B.goals.sites} datacenters is the budget. Switch one off first.`); return; }
+    else F.sites = [...F.sites, id];
+    F.res = null; c.redraw(); c.rebrief();
+  }
 })();
