@@ -16,6 +16,7 @@ const CH = require(path.join(__dirname, "..", "tunnel", "chat.js"));
 const GEO = require(path.join(__dirname, "..", "tunnel", "geo.js"));
 const FD = require(path.join(__dirname, "..", "tunnel", "feed.js"));
 const VD = require(path.join(__dirname, "..", "tunnel", "video.js"));
+const TX = require(path.join(__dirname, "..", "tunnel", "tix.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -315,6 +316,55 @@ for (const b of BOARDS) {
   }
 }
 function c(n) { return n.toLocaleString("en-US").replace(/,/g, ""); }
+
+// ------------------------------------------------------------------------------------- Ticketmaster labs --
+const pct1 = (x) => (x * 100).toFixed(1) + "%";
+for (const b of BOARDS) {
+  if (b.kind === "onsale") {
+    // on the page's seed only the answer passes; on four more seeds the answer still passes and its rivals still fail
+    const g = b.goals, pass = (r) => r.errors <= g.errors && r.soldOut != null && r.soldOut <= g.sold && r.botShare <= g.bots, at = {};
+    for (const door of TX.DOORS) for (const line of TX.LINES) { const r = (at[door + line] = TX.onsale({ door, line, seed: b.sim.seed })); ok(pass(r) === (door === b.answer.door && line === b.answer.line), `${b.id}: ${door}, ${line}: ${r.errors} errors, sold out ${r.soldOut} s, bots ${pct1(r.botShare)}`); }
+    for (const seed of [2, 3, 4, 5]) {
+      ok(pass(TX.onsale({ ...b.answer, seed })), `${b.id} seed ${seed}: the answer failed`);
+      ok(!pass(TX.onsale({ door: "swap", line: "came", seed })) && !pass(TX.onsale({ door: 3, line: "shuffle", seed })) && !pass(TX.onsale({ door: 50, line: "shuffle", seed })), `${b.id} seed ${seed}: a rival passed`);
+    }
+    // the door never lets more than the servers hold inside, and every seat is sold, two at a time
+    const A = at.swapshuffle;
+    ok(A.series.every((p) => p[1] <= A.cap) && A.sold === TX.SEATS && A.errors === 0, `${b.id}: one-in-one-out let too many in, or didn't sell every seat`);
+    ok(A.order.length === 400 && at.swapcame.order.every((x) => x === 1), `${b.id}: in arrival order the front of the line isn't all bots`);
+    const mn = (t) => (t / 60).toFixed(1) + " min";
+    for (const x of [`${c(at.allshuffle.errors).replace(/(\d)(?=(\d{3})+$)/g, "$1,")} error pages`, `${c(at.allshuffle.gaveUp).replace(/(\d)(?=(\d{3})+$)/g, "$1,")} fans give up`, `then ${c(at["50shuffle"].errors).replace(/(\d)(?=(\d{3})+$)/g, "$1,")} error pages`,
+      `after ${mn(at["3shuffle"].soldOut)}`, `after ${mn(A.soldOut)}`, `get ${pct1(at.swapcame.botShare)} of the seats`, `bots get ${pct1(A.botShare)}`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "hold") {
+    const g = b.goals, at19 = (r) => (r.series.find((p) => p[1] >= 19000) || [null])[0], pass = (r) => { const t = at19(r); return r.errors <= g.errors && r.kickShare <= g.kick && t != null && t <= g.by; }, at = {};
+    for (const keep of TX.KEEPS) for (const mins of TX.MINS) { const r = (at[keep + mins] = TX.hold({ keep, mins, seed: b.sim.seed })); ok(pass(r) === (keep === b.answer.keep && mins === b.answer.mins), `${b.id}: ${keep}, ${mins} min: ${r.errors} errors, ${pct1(r.kickShare)} kicked, 19k at ${at19(r)} s`); }
+    for (const seed of [2, 3, 4, 5]) {
+      ok(pass(TX.hold({ ...b.answer, seed })), `${b.id} seed ${seed}: the answer failed`);
+      ok(!pass(TX.hold({ keep: "hold", mins: 5, seed })) && !pass(TX.hold({ keep: "hold", mins: 30, seed })) && !pass(TX.hold({ keep: "lock", mins: 10, seed })), `${b.id} seed ${seed}: a rival passed`);
+    }
+    // a lock never has more open than the database's connections, and seats are never oversold
+    for (const k in at) { const r = at[k]; ok(r.peakOpen <= r.conns && r.series.every((p) => p[1] + p[2] + p[3] <= TX.SEATS), `${b.id}: ${k} oversold or overran its connections`); }
+    const A = at.hold10, pc2 = (x) => (x * 100).toFixed(2) + "%", mn = (t) => (t / 60).toFixed(1) + " min", fmt = (n) => Math.round(n).toLocaleString("en-US");
+    const s60 = (r) => (r.series.filter((p) => p[0] <= 3600).pop() || [0, 0])[1];
+    for (const x of [`${fmt(at.lock10.errors)} error pages`, `${pct1(at.hold2.kickShare)} of buyers`, `from ${pct1(at.hold5.kickShare)}`, `from only ${pc2(A.kickShare)}`, `sold after ${mn(at19(A))}`, `pile up to ${fmt(at.hold30.peakIdle)}`, `only ${fmt(s60(at.hold30))} are sold`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "seatmap") {
+    const g = b.goals, pass = (r) => r.readsPerSec <= g.reads && r.clashShare <= g.clash, at = {};
+    for (const map of TX.MAPS) for (const pick of TX.PICKS) { const r = (at[map + pick] = TX.seatmap({ map, pick, seed: b.sim.seed })); ok(pass(r) === (map === b.answer.map && pick === b.answer.pick), `${b.id}: ${map}, ${pick}: ${r.readsPerSec.toFixed(1)} reads/s, ${pct1(r.clashShare)} clash`); }
+    for (const seed of [2, 3, 4, 5]) {
+      ok(pass(TX.seatmap({ ...b.answer, seed })), `${b.id} seed ${seed}: the answer failed`);
+      ok(!pass(TX.seatmap({ map: 1, pick: "click", seed })) && !pass(TX.seatmap({ map: 30, pick: "best", seed })) && !pass(TX.seatmap({ map: "live", pick: "best", seed })), `${b.id} seed ${seed}: a rival passed`);
+    }
+    // no block ever goes below zero seats, and a copy made every second clashes exactly as often as the live map
+    for (const k in at) { const r = at[k], free = r.start.slice(); let okk = true; for (const [, bl] of r.takes) if ((free[bl] -= 2) < 0) okk = false; ok(okk && r.got === r.takes.length, `${b.id}: ${k} sold seats that weren't there`); }
+    ok(at["1best"].clashes === at.livebest.clashes && at["1click"].clashes === at.liveclick.clashes, `${b.id}: a one-second copy doesn't behave like the live map`);
+    for (const x of [`${Math.round(at.liveclick.readsPerSec)} reads a second`, `${Math.round(at.livebest.readsPerSec)} while they pick`, `${pct1(at.liveclick.clashShare)} of tries clash`, `${pct1(at["30click"].clashShare)} clash`, `only ${pct1(at["1best"].clashShare)}`, `${pct1(at["30best"].clashShare)} pick sections`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  }
+}
 
 const ids = BOARDS.map((b) => b.id), ladder = SD.LADDER.map((u) => u.id);
 ok(new Set(ids).size === ids.length, "two questions share an id");
