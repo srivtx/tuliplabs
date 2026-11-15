@@ -17,6 +17,7 @@ const GEO = require(path.join(__dirname, "..", "tunnel", "geo.js"));
 const FD = require(path.join(__dirname, "..", "tunnel", "feed.js"));
 const VD = require(path.join(__dirname, "..", "tunnel", "video.js"));
 const TX = require(path.join(__dirname, "..", "tunnel", "tix.js"));
+const LT = require(path.join(__dirname, "..", "tunnel", "lat.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -363,6 +364,69 @@ for (const b of BOARDS) {
     ok(at["1best"].clashes === at.livebest.clashes && at["1click"].clashes === at.liveclick.clashes, `${b.id}: a one-second copy doesn't behave like the live map`);
     for (const x of [`${Math.round(at.liveclick.readsPerSec)} reads a second`, `${Math.round(at.livebest.readsPerSec)} while they pick`, `${pct1(at.liveclick.clashShare)} of tries clash`, `${pct1(at["30click"].clashShare)} clash`, `only ${pct1(at["1best"].clashShare)}`, `${pct1(at["30best"].clashShare)} pick sections`])
       ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  }
+}
+
+// ---------------------------------------------------------------------------------- Latency numbers --
+for (const b of BOARDS) {
+  if (b.kind === "ladder") {
+    // every card is a number on the ruler, the numbers climb as the ladder says, and the why's human times are worked out
+    ok(b.cards.every((id) => LT.N[id] >= 1 && LT.N[id] <= 1e9), `${b.id}: a card is off the 1 ns to 1 s ruler`);
+    const order = ["l1", "mutex", "ram", "switch", "ssd", "dc", "seek", "ocean", "notice"];
+    ok(order.every((id, i) => !i || LT.N[order[i - 1]] < LT.N[id]), `${b.id}: the numbers aren't in ladder order`);
+    for (const id of ["ram", "ssd", "dc", "seek", "ocean"]) ok(b.why.includes(LT.human(LT.N[id])), `${b.id}: the why doesn't say ${id} is ${LT.human(LT.N[id])}`);
+    ok(LT.human(1) === "1 second" && LT.human(100) === "1.7 minutes" && LT.human(80e6) === "2.5 years", `${b.id}: human time is off`);
+  }
+  if (b.kind === "race") {
+    // the winner each race's why argues for is the one the numbers make, and no race is a photo finish
+    const said = ["a", "b", "a", "b", "b"];
+    LT.RACES.forEach((r, i) => {
+      ok(r.win === said[i], `race ${i + 1}: ${r.win} wins, but the why argues for ${said[i]}`);
+      ok(Math.max(r.a.ns, r.b.ns) / Math.min(r.a.ns, r.b.ns) >= 1.2, `race ${i + 1}: a photo finish (${LT.fmt(r.a.ns)} vs ${LT.fmt(r.b.ns)})`);
+    });
+    ok(LT.fmt(LT.RACES[3].a.ns) === "100 ms" && LT.fmt(LT.RACES[0].b.ns) === "20 ms", `${b.id}: the N+1 race or the disk race moved`);
+  }
+  if (b.kind === "waterfall") {
+    // on the page's seed exactly the answers pass, on four more seeds too; every page's steps add up to its time
+    const g = b.goals, pass = (r) => r.p50 <= g.p50 && r.p99 <= g.p99, isAns = (o) => b.answers.some((a) => a.queries === o.queries && a.pay === o.pay && a.photo === o.photo), at = {};
+    for (const queries of LT.QUERIES) for (const pay of LT.PAYS) for (const photo of LT.PHOTOS) {
+      const o = { queries, pay, photo }, r = (at[`${queries}:${pay}:${photo}`] = LT.page({ ...o, seed: b.sim.seed }));
+      ok(pass(r) === isAns(o), `${b.id}: ${queries}, ${pay}, ${photo}: p50 ${r.p50.toFixed(1)} ms, p99 ${r.p99.toFixed(1)} ms`);
+      ok(Math.abs(r.typical.steps.reduce((a, x) => a + x.d, 0) - r.typical.t) < 1e-9, `${b.id}: ${queries}, ${pay}, ${photo}: the steps don't add up to the page`);
+      for (const seed of [2, 3, 4, 5]) ok(pass(LT.page({ ...o, seed })) === isAns(o), `${b.id} seed ${seed}: ${queries}, ${pay}, ${photo} came out differently`);
+    }
+    ok(!pass(at["serial:new:disk"]), `${b.id}: the start passes`);
+    // one round trip in a thousand loses a packet: about 3% of pages with 32 round trips lose one
+    ok(Math.abs(at["serial:cache:ssd"].lostShare - (1 - Math.pow(1 - LT.LOSS, 32))) < 0.012, `${b.id}: 32 round trips lost a packet on ${(at["serial:cache:ssd"].lostShare * 100).toFixed(1)}% of pages`);
+    const A = at["one:cache:ssd"], P = at["parallel:cache:ssd"], S0 = at["serial:new:disk"], O = at["serial:open:disk"];
+    for (const x of [`half the pages took ${Math.round(S0.p50)} ms`, `slowest 1% took ${Math.round(S0.p99)} ms`, `middle page to ${Math.round(O.p50)} ms`, `${Math.round(P.p50)} ms in the middle`,
+      `${(P.lostShare * 100).toFixed(1)}% of pages`, `slowest 1% take ${Math.round(P.p99)} ms`, `half the pages in ${A.p50.toFixed(1)} ms`, `99% in ${A.p99.toFixed(1)} ms`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "globe") {
+    // the start misses; the answer meets it; nothing with two or more round trips meets it, even with every datacenter;
+    // and every way that meets it is one round trip from three datacenters
+    const g = b.goals, pass = (r) => r.worst.ms <= g.ms && r.sites <= g.sites;
+    ok(!pass(LT.globe(b.start)), `${b.id}: the start passes`);
+    const A = LT.globe(b.answer);
+    ok(pass(A), `${b.id}: the answer misses: ${A.worst.id} ${A.worst.ms.toFixed(1)} ms`);
+    const ids = LT.SITES.map((x) => x.id), wins = [];
+    for (let m = 1; m < 1 << ids.length; m++) {
+      const sites = ids.filter((_, i) => (m >> i) & 1);
+      for (const trips of LT.TRIPS) { const r = LT.globe({ sites, trips }); if (pass(r)) wins.push({ sites, trips }); }
+    }
+    ok(wins.length >= 3 && wins.every((w) => w.trips === 1 && w.sites.length === 3), `${b.id}: ${wins.length} ways pass, not all one round trip from three datacenters`);
+    const all2 = LT.globe({ sites: ids, trips: 2 });
+    ok(all2.worst.ms > g.ms, `${b.id}: two round trips can pass with every datacenter`);
+    // the speed of light: New York to London is about the ladder's Atlantic round trip
+    const ny = LT.CITIES.find((x) => x.id === "ny"), ld = LT.CITIES.find((x) => x.id === "ld"), atl = LT.rtt(LT.km(ny, ld));
+    ok(Math.abs(atl - LT.N.ocean / 1e6) < 8, `${b.id}: New York to London is ${atl.toFixed(1)} ms there and back, not about ${LT.N.ocean / 1e6}`);
+    const st = LT.globe(b.start), v1 = LT.globe({ sites: ["va"], trips: 1 });
+    const sy = (r) => r.cities.find((x) => x.id === "sy"), fmtN = (n) => Math.round(n).toLocaleString("en-US");
+    for (const x of [`Sydney waits ${fmtN(sy(st).ms)} ms`, `still takes ${Math.round(sy(v1).ms)} ms`, `${fmtN(Math.round(sy(v1).km / 100) * 100)} km away`,
+      `Johannesburg waits ${Math.round(all2.worst.ms)} ms`, `within ${Math.round(A.worst.ms)} ms`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+    ok(all2.worst.id === "jb" && A.worst.id === "sp" && A.worst.site === "va" && A.cities.find((x) => x.id === "jb").site === "in", `${b.id}: Johannesburg isn't the hard city, São Paulo isn't the answer's farthest, or Johannesburg isn't served from Mumbai`);
   }
 }
 
