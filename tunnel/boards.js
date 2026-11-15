@@ -23,6 +23,11 @@
        inval       two writers and a reader on one key: pick the order a writer updates the cache and the database, then see every interleaving
        stampede    a sale's hot keys run out: choose what a miss does and how long keys are kept
        fresh       product pages on 50 app servers: choose where they're cached, the TTL, and what an edit does
+     The Splitting data unit (tunnel/split.js):
+       pkey        10,000 vans' readings over 8 partitions: tap a partition key, watch the writes land and a question's reads
+       ring        keys on a ring of servers: drag a pin to guess how many move when one is added, and how even they are
+       grow        add a 5th cache server at the peak: choose how keys find their server and how the new one joins
+       hotcell     a city's drivers in 16 partitions, and a concert ends: choose how to split them, and when to split again
    Every number here is checked by tools/board-check.js against the simulators the page runs.
    A design: parts {id, kind, x, y, n (machines), size, batch} on a 960 × 540 board, and wires [from, to]. */
 (function (root) {
@@ -963,6 +968,66 @@
     ],
   };
 
+  // --------------------------------------------------------------------------------------- Splitting data --
+  // First principles: when one machine can't hold it all, how to cut the data, how to add a machine without moving
+  // everything, and what to do with the hot part. Every number is worked out by tunnel/split.js, and
+  // tools/board-check.js checks the text against it.
+  const SP_CHAT = {
+    nodes: [P("u", "people", 95, 270, { label: "senders", tag: "150,000 a second" }), P("ap", "app", 330, 270, { label: "app servers", tag: "route by key" }),
+      P("d1", "sql", 640, 90, { label: "partition 1", tag: "4 TB" }), P("d2", "sql", 640, 210, { label: "partition 2", tag: "4 TB" }),
+      P("d3", "sql", 640, 330, { label: "partition 3", tag: "4 TB" }), P("d4", "sql", 640, 450, { label: "partition …", tag: "4 TB" })],
+    wires: [["u", "ap"], ["ap", "d1"], ["ap", "d2"], ["ap", "d3"], ["ap", "d4"]],
+  };
+  const SPLIT_UNIT = {
+    id: "split", name: "Splitting data", sub: "Range or hash, rings, and the hot partition", floor: 3,
+    w: [
+      {
+        id: "sp-napkin", kind: "napkin", title: "How many pieces?",
+        lede: "A chat app keeps every message: <b>40 TB</b> today, growing <b>2 TB</b> a month. At its peak it writes <b>150,000</b> messages a second. One database machine has <b>4 TB</b> of disk and takes <b>12,000</b> writes a second. Plan for a year from now. Then, when it's time to add a machine, its share of the data has to be copied onto it at <b>200 MB/s</b>.",
+        q: {},
+        design: SP_CHAT,
+        notes: [
+          { id: "d", on: "d1", dx: 190, dy: 10, label: "machines to hold a year's data", unit: "", calc: "(40 + 12 * 2) / 4", hint: "today's 40 TB plus 12 months of 2 TB, over 4 TB a machine" },
+          { id: "w", on: "ap", dx: -90, dy: -200, label: "machines for the writes", unit: "", calc: "150000 / 12000", hint: "the peak writes over what one machine takes" },
+          { id: "h", on: "d4", dx: 190, dy: -30, label: "hours to fill a 17th machine", unit: "h", calc: "(64e6 / 17) / 200 / 3600", hint: "its fair share is 64 TB ÷ 17 = 3.8 TB, which is 3.8 million MB, at 200 MB a second" },
+        ],
+        why: "A year from now it's 64 TB: 16 machines just to hold it. The writes need 12.5, so here the disk decides, not the writes. And adding a 17th is slow even if you move only its fair share, 64 ÷ 17 = 3.8 TB: 5.2 hours at 200 MB/s. So how you split the keys matters twice over. Hash % N, the obvious way, moves a key unless hash % 16 equals hash % 17, which is 1 time in 17: 60 TB, three and a half days of copying. The next questions are how to cut the data so no one machine gets the hot part, and how to add one without moving everything.",
+      },
+      {
+        id: "sp-key", kind: "pkey", title: "Which key?",
+        lede: "A delivery company's <b>10,000</b> vans each send where they are every second. The readings go in one table split over <b>8</b> partitions, and a partition takes at most <b>2,500</b> writes a second. Drivers' screens keep asking for <b>one van's last hour</b>. <b>4,000</b> of the vans belong to one big customer, whose van ids all start with <i>acme-</i>. Tap the partition key you'd pick.",
+        answer: "hashvan",
+        why: "By time, every van writes into the newest hour, so one partition takes all 10,000 writes a second and seven sit idle. By ranges of van id, Acme's 4,000 vans all land in a–c, with 850 others: 4,850 a second, nearly twice what it can take. A hash of each reading spreads the writes evenly (the busiest takes 1,291), but one van's hour is scattered over all 8, so every driver's screen asks every partition. A hash of the van id spreads the vans too (the busiest takes 1,296) and keeps each van's readings together, in time order, in one partition: its last hour is one read. The price is the other question: the whole fleet's last minute now asks all 8. Pick the key from the question that's asked most. Cassandra and DynamoDB call it a partition key, with a sort key inside it.",
+      },
+      {
+        id: "sp-ring", kind: "ring", title: "Add a server",
+        lede: "<b>100,000</b> keys are spread over <b>4</b> cache servers. Each key's hash is a point round a circle, drawn as dots in its server's colour. Drag the pin along the ruler to your guess, then check it.",
+        rounds: [
+          { ask: "move", scheme: "mod", v: 0, say: "The obvious way: a key goes to server <b>hash % 4</b>. Add a 5th server, so now it's hash % 5. What share of the keys move to a different server?" },
+          { ask: "move", scheme: "ring", v: 200, say: "A ring instead: each server sits at <b>200</b> points round the circle, and a key goes to the next point clockwise. Add a 5th. What share of the keys move?" },
+          { ask: "max", scheme: "ring", v: 1, say: "Now just <b>one</b> point per server, 5 servers. The fullest server holds what share of the keys?" },
+        ],
+        why: "With hash % N, a key stays only if hash % 4 equals hash % 5, which happens 1 time in 5: 80% of the keys move, and three quarters of those just shuffle between the old servers. On a ring, each of the new server's points takes the keys just before it, so only the keys it takes move: 20%, the least anything could. With one point each, the shares are as uneven as the points fall: here the fullest server holds 31% and the emptiest 3%. With 200 points each, they even out to between 19% and 21%. That's consistent hashing with virtual nodes, what Cassandra, DynamoDB and most distributed caches do. Redis Cluster gets the same effect another way: 16,384 slots, dealt out to servers and moved a slot at a time.",
+      },
+    ],
+    s: [
+      {
+        id: "sp-grow", kind: "grow", title: "Grow at the peak",
+        lede: "<b>1,000,000</b> logged-in sessions live in a cache on <b>4</b> servers. Every page asks for one: <b>200,000</b> reads a second, spread evenly. A server takes at most <b>60,000</b> a second, so you add a 5th at the peak. A key that moves is missing on its new server until a read fills it from the database, which takes <b>20,000</b> reads a second; past that, reads fail. Choose how keys find their server, and how the new one joins. The goals: no failed reads, and no server over <b>80%</b> busy afterwards.",
+        goals: { errors: 0, busy: 0.8 },
+        answers: [{ scheme: "ring200", how: "copy" }],
+        why: "Hash % N moves 80% of the sessions: 160,000 reads a second miss, eight times what the database takes, and 2,446,990 reads fail. Copying the new server's keys first doesn't save it, because 60% just moved between the old servers: 1,249,750 still fail. A ring with one point per server moves only what the new server takes, but the servers are as uneven as their points: the fullest was doing 67,714 reads a second before you added anything, more than it can. With 200 points each, the load evens out and 20% of the keys move. Switched on at once, those 40,000 misses a second are twice what the database takes, and 49,650 reads fail. Copy its keys over first (2 seconds at 100,000 keys a second), then switch it on: nothing fails, and the busiest server does 41,124 reads a second, 69%.",
+      },
+      {
+        id: "sp-hot", kind: "hotcell", title: "Friday night",
+        lede: "A ride app keeps its drivers' locations in <b>16</b> partitions, and each takes at most <b>5,000</b> updates a second. The city is a grid of cells. To find drivers near a rider, the app asks for the rider's cell and the 8 around it. At 9 pm a concert ends, and over a minute <b>24,000</b> more updates a second pile into the streets around the stadium. A partition can split in two, which takes <b>10 s</b>. Choose how drivers are split, and when a partition splits. The goals: no updates dropped, and a nearby search asks at most <b>6</b> partitions.",
+        goals: { dropped: 0, search: 6 },
+        answers: [{ by: "area", split: 0.5 }],
+        why: "Split by area and never split again, and the partition with the stadium in it takes 11,200 updates a second, over twice what it can: 1,776,800 updates are dropped. Split when a partition passes 90% busy, and each split starts too late: the crowd keeps growing for the 10 s a split takes, the halves pass 100%, and 7,135 updates are dropped. Split at 50%, and each half is still under its limit when the split lands: nothing is dropped, 18 splits leave 34 partitions, small ones round the stadium and big ones elsewhere, and a nearby search asks 4.2 partitions at worst. A hash of the driver id spreads the crowd over all 16 at 70% busy, but drivers on one street are now in every partition, so each nearby search asks all 16. Keep neighbours together, and split hot ranges early: Bigtable, HBase and DynamoDB all split by load like this.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -978,7 +1043,7 @@
     [1, "lbs", "Load balancers", "L4 vs L7, health checks"], [1, "cdn", "Proxies and CDNs", "Edge caches and TTLs"],
     [2, "models", "Data models", "Relational, document, graph…"], [2, "indexes", "Indexes", "B-trees and query plans"], [2, "engines", "Storage engines", "B-tree vs LSM"],
     [2, "tx", "Transactions", "Isolation and lost updates"], [2, "blobs", "Blobs and search", "S3 vs a database"], [2, "geo", "Geo data", "Geohash and quadtrees"],
-    [3, "copies", "Copies and lag", "Leaders, followers, quorums"], [3, "split", "Splitting data", "Consistent hashing"], [3, "agree", "Agreeing", "Raft"],
+    [3, "copies", "Copies and lag", "Leaders, followers, quorums"], [3, "agree", "Agreeing", "Raft"],
     [3, "time", "Time and order", "Clock skew, vector clocks"], [3, "cap", "Consistency", "CAP and PACELC"], [3, "sagas", "Transactions across services", "2PC, sagas, outbox"], [3, "ids", "Unique IDs", "Snowflake"],
 [4, "queues", "Queues", "Backpressure, dead letters"], [4, "streams", "Logs and streams", "Offsets and replay"],
     [4, "stream", "Stream processing", "Windows and late events"], [4, "batch", "Batch processing", "MapReduce and skew"], [4, "limits", "Rate limiting", "Token buckets"], [4, "flows", "Workflows", "Leases and retries"],
@@ -1003,7 +1068,7 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT, NUMBERS_UNIT, CACHE_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT, NUMBERS_UNIT, CACHE_UNIT, SPLIT_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
@@ -1015,6 +1080,7 @@
   TICKET_UNIT.cover = TM_REF;
   NUMBERS_UNIT.cover = LN_PAGE;
   CACHE_UNIT.cover = CC_SHOP;
+  SPLIT_UNIT.cover = SP_CHAT;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];
