@@ -455,3 +455,18 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .tm-gauge{fill:color-mix(in srgb,var(--sd-ink) 10%,transparent)}
 .tm-gfill{fill:var(--ok)}.tm-gfill.over{fill:var(--sd-hot)}
 .sd-ch-l.full{fill:var(--sd-hot)}
+/* pixel stickers: the prize slapped on a solved board, and small ones that react to a run */
+.sd-why{position:relative}
+.sd-prize{position:absolute;right:-12px;top:-30px;width:78px;height:78px;object-fit:contain;transform:rotate(var(--tilt,-6deg));filter:drop-shadow(0 4px 0 rgba(0,0,0,.25));pointer-events:none;z-index:3}
+.sd-prize.slap{animation:sdslap .55s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes sdslap{0%{opacity:0;transform:translateY(-30px) scale(1.9) rotate(calc(var(--tilt,-6deg) - 18deg))}60%{opacity:1;transform:scale(.92) rotate(var(--tilt,-6deg))}80%{transform:scale(1.05) rotate(var(--tilt,-6deg))}100%{transform:scale(1) rotate(var(--tilt,-6deg))}}
+.sd-rx{pointer-events:none;filter:drop-shadow(0 2px 0 rgba(0,0,0,.3))}
+.sd-rx.pop{transform-box:fill-box;transform-origin:center;animation:sdpop .35s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes sdpop{from{opacity:0;transform:scale(.3) rotate(-20deg)}}
+.sd-mini{width:18px;height:18px;vertical-align:-4px;margin:0 4px 0 0}
+.sd-score li .sd-mini{margin:0 0 0 6px}
+.sd-score.win{border-color:color-mix(in srgb,var(--ok) 60%,transparent)}
+.sd-rocket{position:absolute;top:-20px;left:-22px;width:52px;height:52px;transform:rotate(-12deg);animation:sdpop .45s cubic-bezier(.2,1.5,.4,1) both;filter:drop-shadow(0 3px 0 rgba(0,0,0,.25))}
+@media (prefers-reduced-motion:reduce){.sd-rx.pop,.sd-rocket{animation:none}}
+@media (max-width:700px){.sd-prize{width:62px;height:62px;right:-6px;top:-24px}}
+.sd-fin{width:20px;height:20px;margin:0 0 0 8px;vertical-align:-5px}
