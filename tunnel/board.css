@@ -470,3 +470,12 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 @media (prefers-reduced-motion:reduce){.sd-rx.pop,.sd-rocket{animation:none}}
 @media (max-width:700px){.sd-prize{width:62px;height:62px;right:-6px;top:-24px}}
 .sd-fin{width:20px;height:20px;margin:0 0 0 8px;vertical-align:-5px}
+/* frame-by-frame sprites: a strip of n square frames, stepped through */
+.sd-spr{animation:sdspr var(--d) steps(var(--n),jump-none) infinite;transform-box:fill-box}
+.sd-spr.once{animation-iteration-count:1;animation-fill-mode:both}
+@keyframes sdspr{from{transform:translateX(0)}to{transform:translateX(calc(-100% * (var(--n) - 1) / var(--n)))}}
+.sd-sprw{display:inline-block;overflow:hidden;line-height:0}
+.sd-sprw>img{height:100%;width:calc(var(--n) * 100%);max-width:none}
+.sd-sprw.held>img{animation:none;transform:translateX(calc(-100% * (var(--n) - 1) / var(--n)))}
+.sd-sprw.slap>img.once{animation-delay:.35s}
+@media (prefers-reduced-motion:reduce){.sd-spr{animation:none}.sd-spr.once{transform:translateX(calc(-100% * (var(--n) - 1) / var(--n)))}}

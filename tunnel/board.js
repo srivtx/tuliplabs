@@ -50,7 +50,22 @@
   // that react to a run (a flame on a part that's maxed out, a snail when it's too slow, a rocket when it all passes)
   const STK = (n) => `stickers/${n}.webp`;
   const prize = (n, last) => (last ? "trophy" : n >= 3 ? "crown" : n === 2 ? "thumbs" : "heart");
-  function rx(name, x, y, size = 34, cls = "") { return s("image", { class: "sd-rx " + cls, href: STK(name), x, y, width: size, height: size }); }
+  // frame-by-frame sprites (made in ChatGPT a frame at a time): tunnel/stickers/anim/<name>.webp holds n square
+  // frames of 160 px in a row; CSS steps through them. once: played through, then held on the last frame
+  const ANIM = { flame: { n: 6, ms: 110 }, bloom: { n: 8, ms: 130, once: true }, walk: { n: 8, ms: 85 }, rocket: { n: 6, ms: 90 }, sleep: { n: 6, ms: 260 }, hourglass: { n: 6, ms: 200 } };
+  const sprVars = (a) => `--n:${a.n};--d:${a.n * a.ms}ms`;
+  function rx(name, x, y, size = 34, cls = "") {
+    const a = ANIM[name];
+    if (!a) return s("image", { class: "sd-rx " + cls, href: STK(name), x, y, width: size, height: size });
+    return s("g", { class: "sd-rx " + cls }, s("svg", { x, y, width: size, height: size, viewBox: "0 0 160 160", overflow: "hidden" },
+      s("image", { class: "sd-spr" + (a.once ? " once" : ""), href: `stickers/anim/${name}.webp`, width: 160 * a.n, height: 160, style: sprVars(a) })));
+  }
+  // the same sprite as HTML: a window onto the strip
+  function sprite(name, cls = "") {
+    const a = ANIM[name];
+    if (!a) return h("img", { class: cls, src: STK(name), alt: "" });
+    return h("span", { class: "sd-sprw " + cls, style: sprVars(a), "aria-hidden": "true" }, h("img", { class: "sd-spr" + (a.once ? " once" : ""), src: `stickers/anim/${name}.webp`, alt: "" }));
+  }
   // a part's reaction pops in once, when it changes, not on every redraw
   let seenRx = new Map();
   function prx(ox, oy, id, name, x, y, size) { const fresh = seenRx.get(id) !== name; seenRx.set(id, name); return rx(name, ox + x, oy + y, size, fresh ? "pop" : ""); }
@@ -107,9 +122,10 @@
     els.gp = s("g", { class: "sd-parts" });
     els.gd = s("g", { class: "sd-dots", "aria-hidden": "true" });
     els.gs = s("g", { class: "sd-stickers", "aria-hidden": "true" });
+    els.gk = s("g", { class: "sd-courier", "aria-hidden": "true" });
     els.go = s("g", { class: "sd-over" });
     els.gx = s("g", { class: "sd-x" });
-    els.svg.append(els.gc, els.gw, els.gd, els.gp, els.gs, els.go, els.gx);
+    els.svg.append(els.gc, els.gw, els.gd, els.gp, els.gs, els.gk, els.go, els.gx);
     els.mode = h("div", { class: "sd-modechip", "aria-hidden": "true" });
     els.score = h("div", { class: "sd-score", "aria-live": "polite" });
     els.stage = h("div", { class: "sd-stage" }, els.svg, els.score, els.mode);
@@ -134,7 +150,7 @@
     B = L[qi];
     const m = mine(B.id);
     D = clone(m.design && editable() ? m.design : B.design || { nodes: [], wires: [] });
-    seenRx = new Map();
+    seenRx = new Map(); courier = null; els.gk.replaceChildren();
     slapped = null;
     sel = null; selW = -1; res = null; runs = 0; solvedNow = false; problems = []; flows = {}; heat = {}; waits = {}; label = {}; wiring = null;
     F = B.kind === "follow" ? { round: 0, got: [], tries: 0 } : B.kind === "napkin" ? { vals: {}, marks: {}, tries: 0 } : B.kind === "bottleneck" ? { guess: null, steps: null, at: 0 } : B.kind === "sketch" ? { tries: 0, hints: 0, G: null } : {};
@@ -362,7 +378,7 @@
     els.score.hidden = false;
     const all = rows.length > 1 && rows.every((r) => r.classList.contains("ok"));
     els.score.classList.toggle("win", all);
-    els.score.replaceChildren(...[all ? h("img", { class: "sd-rocket", src: STK("rocket"), alt: "" }) : null, h("ul", {}, rows), B.kind === "draw" && res && res.hist ? spread(res) : null].filter(Boolean));
+    els.score.replaceChildren(...[all ? sprite("rocket", "sd-rocket") : null, h("ul", {}, rows), B.kind === "draw" && res && res.hist ? spread(res) : null].filter(Boolean));
   }
   // every click of the last run by how long it took, on a log scale, with the goal and the run's p99 marked
   function spread(r) {
@@ -385,9 +401,36 @@
   // each wire carries dots at a rate that grows with its real rate (log, so 20/s and 2,000/s both read)
   const dots = [];
   let acc = {}, lastT = 0;
+  // a pixel courier (frame-by-frame walk) that runs a traced path along its wires, then leaves
+  let courier = null;
+  function runCourier(dt) {
+    const c = courier;
+    if (!c.segs) {
+      // each wire of the path, with its length, so the courier keeps one pace
+      c.segs = [];
+      for (let k = 1; k < c.path.length; k++) {
+        let p = wirePaths.get(c.path[k - 1] + ">" + c.path[k]), rev = false;
+        if (!p) { p = wirePaths.get(c.path[k] + ">" + c.path[k - 1]); rev = true; }
+        let L = 0; try { L = p ? p.getTotalLength() : 0; } catch (e) { /* hidden */ }
+        if (p && L) c.segs.push({ p, rev, L });
+      }
+      c.total = c.segs.reduce((a, x) => a + x.L, 0);
+    }
+    c.t += dt / 1.45;
+    if (c.t >= 1 || REDUCED || !c.total) { courier = null; els.gk.replaceChildren(); return; }
+    let d = c.t * c.total, sg = c.segs[0];
+    for (sg of c.segs) { if (d <= sg.L) break; d -= sg.L; }
+    let pt;
+    try { pt = sg.p.getPointAtLength(sg.rev ? sg.L - Math.min(d, sg.L) : Math.min(d, sg.L)); } catch (e) { return; }
+    if (c.x != null && Math.abs(pt.x - c.x) > 0.3) c.dir = pt.x < c.x ? -1 : 1;
+    c.x = pt.x;
+    if (!els.gk.firstChild) els.gk.append(s("g", {}, rx("walk", -29, -54, 58)));
+    els.gk.firstChild.setAttribute("transform", `translate(${pt.x.toFixed(1)} ${pt.y.toFixed(1)}) scale(${c.dir} 1)`);
+  }
   function frame(t) {
     const dt = Math.min(0.1, (t - lastT) / 1000 || 0);
     lastT = t;
+    if (courier && !document.hidden) runCourier(dt);
     if (ctx && UI[B.kind].frame && !document.hidden) UI[B.kind].frame(ctx, dt, t);
     if (!REDUCED && !document.hidden && !ctx) {
       for (const [k, f] of Object.entries(flows)) {
@@ -613,7 +656,10 @@
     let hsh = 0; for (const c of B.id) hsh = (hsh * 31 + c.charCodeAt(0)) | 0;
     const fresh = solvedNow && slapped !== B.id && !REDUCED;
     if (solvedNow) slapped = B.id;
-    const img = h("img", { class: "sd-prize" + (fresh ? " slap" : ""), src: STK(prize(n, last)), alt: last ? "Unit finished" : `${n} stars`, title: last ? "Unit finished" : `${n} of 3 stars` });
+    // a unit's last question: the tulip blooms, frame by frame (and stays open when you come back)
+    const img = last ? sprite("bloom", "sd-prize" + (fresh ? " slap" : " held"))
+      : h("img", { class: "sd-prize" + (fresh ? " slap" : ""), src: STK(prize(n, last)), alt: `${n} stars`, title: `${n} of 3 stars` });
+    if (last) img.title = "Unit finished";
     img.style.setProperty("--tilt", `${(Math.abs(hsh) % 17) - 8}deg`);
     return img;
   }
@@ -629,6 +675,7 @@
         // the click runs the path it just traced, as a stream of dots
         flows = {}; for (let k = 1; k < r.path.length; k++) flows[r.path[k - 1] + ">" + r.path[k]] = 30;
         drawAll();
+        courier = { path: r.path.slice(), t: 0, dir: 1 };
         setTimeout(() => {
           F.round++; F.got = []; flows = {};
           if (F.round >= B.rounds.length) solved(F.tries === 0 ? 3 : F.tries <= 2 ? 2 : 1);
