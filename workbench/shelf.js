@@ -226,6 +226,25 @@
     const line = ([a, b]) => { const p = at(a), q = at(b); return p && q ? `<path d="M${p.x} ${p.y} C${(p.x + q.x) / 2} ${p.y} ${(p.x + q.x) / 2} ${q.y} ${q.x} ${q.y}"/>` : ""; };
     return h("span", { class: "la-sketch", html: `<svg viewBox="0 40 960 500" aria-hidden="true"><g class="w">${d.wires.map(line).join("")}</g><g class="b">${d.nodes.map(box).join("")}</g></svg>` });
   }
+  // live experiments look like the news cards: a bright block with a 9×9 pixel glyph of the idea, a deep block with the law
+  const WT_GLYPH = {
+    wt01: ["#.......#", "#.......#", "#......#.", "#......#.", "#.....#..", "#...##...", "#.##.....", "##.......", "#########"], // the knee
+    wt02: ["#########", ".#.....#.", "..#...#..", "...#.#...", "....#....", "...#.#...", "..#.#.#..", ".#.###.#.", "#########"], // time in the system
+    wt03: [".........", ".....####", "....#....", "...#.....", "#########", "...#.....", "....#....", ".....####", "........."], // one in, three out
+    wt04: ["#........", "#........", "#.#......", "#.#......", "#.#.#....", "#.#.#.#..", "#.#.#.#.#", "#.#.#.#.#", "........."], // a few keys get most reads
+    wt05: ["....###..", "...###...", "..###....", ".#######.", "....###..", "...###...", "..##.....", ".#.......", "........."], // the storm
+    wt06: ["#########", ".#######.", "..#####..", "...###...", "....#....", ".........", "....#....", ".........", "....#...."], // a burst in, a drip out
+    wt07: ["..#####..", ".#.....#.", ".#######.", ".#.....#.", ".#######.", ".#.....#.", ".#######.", ".#.....#.", "..#####.."], // the database
+    wt08: ["....#....", "....#....", ".........", "#.......#", "#.##.##.#", "#.##.##.#", "#.......#", ".#######.", "........."], // a bucket of tokens
+    wt09: ["....#....", "...##....", "...###...", "..####.#.", ".#######.", ".###.###.", ".##...##.", "..##.##..", "...###..."], // a hot key
+    wt10: [".........", "..#####..", ".#..#..#.", "#..#.#..#", "#########", "#..#.#..#", ".#..#..#.", "..#####..", "........."], // the far side of the world
+    wt11: ["..##.....", ".###.....", "####.##..", "####.###.", "####.####", ".###.####", "..##.####", ".....###.", ".....##.."], // one disc, split and slipped
+    wt12: [".........", "........#", ".......##", "......##.", "#....##..", "##..##...", ".####....", "..##.....", "........."], // passes review
+  };
+  const wtArt = (x) => h("span", { class: "la-news" },
+    h("span", { class: "la-px", html: `<svg viewBox="-1 -1 11 11" shape-rendering="crispEdges" aria-hidden="true">${(WT_GLYPH[x.id] || WT_GLYPH.wt01).map((r, y) =>
+      [...r].map((c, i) => (c === "#" ? `<rect x="${i}" y="${y}" width="1" height="1" style="--d:${(i + y) * 28}ms"/>` : "")).join("")).join("")}</svg>` }),
+    h("b", {}, x.law));
   const WT_HUE = { wt01: "cyan", wt02: "teal", wt03: "blue", wt04: "violet", wt05: "red", wt06: "amber", wt07: "green", wt08: "yellow", wt09: "orange", wt10: "lilac", wt11: "pink", wt12: "cyan" };
   function tunnel() {
     const X = (window.WT && window.WT.experiments) || [], SDX = window.SD || {}, UNITS = SDX.UNITS || [], SDQ = SDX.BOARDS || [];
@@ -247,10 +266,9 @@
       h("div", { class: "branch" }, X.filter((x) => !x.live).map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))));
     const plotOf = (x) => {
       const i = X.indexOf(x);
-      const media = x.live ? h("img", { class: "la-shot", src: `shots/${x.id}.webp`, alt: "", loading: "lazy" })
-        : h("p", { class: "la-ask" }, x.ask || x.teaser);
+      const media = x.live ? wtArt(x) : h("p", { class: "la-ask" }, x.ask || x.teaser);
       return plot({ href: x.live ? `lab.html#${i + 1}` : null, num: i + 1, title: x.title, sub: x.teaser, hue: WT_HUE[x.id] || "cyan", media,
-        soon: !x.live, pct: done[x.id] ? 100 : 0, bloomed: !!done[x.id], next: x === next ? (have ? "next" : "start here") : null, tag: x.live ? x.law : null });
+        soon: !x.live, pct: done[x.id] ? 100 : 0, bloomed: !!done[x.id], next: x === next ? (have ? "next" : "start here") : null });
     };
     const col = h("div", { class: "col wide hero" },
       poster({
@@ -269,7 +287,7 @@
       ladder([["Predict", "Drag a pin to where you think it breaks, and lock it in."], ["Push it", "Drag the crowd up. Watch queues stack and servers drown."],
         ["The law", "See your guess against the answer, and the law behind it."], ["Fix it", "A launch day, a budget, a goal. Change the design."],
         ["Read the diff", "Your design is system.yaml; the change shows as a diff."], ["Rewind", "Drag back along a timeline to the moment it broke."]]),
-      h("div", { class: "note", html: "Every number in an experiment's text comes out of the same seeded simulator you're watching, and is checked before it ships. Same seed, same run: that's what makes rewind exact. The pictures below are frames from that simulator." }),
+      h("div", { class: "note", html: "Every number in an experiment's text comes out of the same seeded simulator you're watching, and is checked before it ships. Same seed, same run: that's what makes rewind exact." }),
       secH("Live experiments", "each one is its own system, caught at the moment it bends"),
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, live.map(plotOf))),
       UNITS.length ? secH("System design", "every unit in two modes: on the whiteboard you scope, size and sketch it; in simulation it runs") : null,
