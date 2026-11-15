@@ -403,3 +403,20 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .yt-ob{fill:var(--sd-sim)}.yt-ob.over{fill:var(--sd-hot)}
 .yt-wb{fill:var(--ok)}.yt-wb.slow{fill:var(--sd-hot)}
 .yt-halo{paint-order:stroke;stroke:var(--sd-paper);stroke-width:4px;stroke-linejoin:round}
+
+/* Ticketmaster labs */
+.tm-dot{fill:color-mix(in srgb,var(--sd-sim) 55%,var(--sd-paper))}.tm-dot.bot{fill:#8f6bff}
+.tm-in{fill:color-mix(in srgb,var(--sd-sim) 28%,transparent);stroke:var(--sd-sim);stroke-width:1.4}
+.tm-err{fill:var(--sd-hot)}
+.tm-sold{fill:color-mix(in srgb,var(--pink) 55%,transparent);stroke:var(--pink);stroke-width:1.2}
+.tm-held{fill:color-mix(in srgb,var(--sd-warm) 60%,transparent)}
+.tm-idle{fill:color-mix(in srgb,var(--sd-ink) 22%,transparent)}
+.tm-seat{fill:color-mix(in srgb,var(--sd-ink) 10%,var(--sd-paper))}.tm-seat.sold{fill:var(--pink)}
+.tm-stage{fill:var(--sd-ink);opacity:.55}
+.tm-pay{fill:color-mix(in srgb,var(--sd-sim) 70%,var(--sd-paper))}.tm-pay.late{fill:var(--sd-hot)}
+.tm-conn{fill:none;stroke:var(--sd-ink);stroke-opacity:.3;stroke-width:1.2}.tm-conn.on{fill:var(--sd-hot);stroke:var(--sd-hot);stroke-opacity:1}
+.tm-blk{fill:var(--pink);stroke:color-mix(in srgb,var(--pink) 45%,transparent);stroke-width:.8}
+.tm-sec{fill:none;stroke:var(--sd-ink);stroke-opacity:.45;stroke-width:1.3;stroke-dasharray:4 3}
+.tm-miss{fill:none;stroke:var(--sd-hot);stroke-width:2.6}
+.tm-gauge{fill:color-mix(in srgb,var(--sd-ink) 10%,transparent)}
+.tm-gfill{fill:var(--ok)}.tm-gfill.over{fill:var(--sd-hot)}
