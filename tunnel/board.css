@@ -344,3 +344,31 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .ub-seen.z{stroke-width:5}
 .ub-zf{fill:none;stroke:var(--pink);stroke-width:1.4}
 .ub-zb{fill:none;stroke:var(--sd-ink);stroke-opacity:.45;stroke-width:1.2}
+
+/* Twitter labs */
+.tw-hit{fill:transparent;cursor:pointer}
+.tw-hb{fill:color-mix(in srgb,var(--sd-sim) 70%,var(--sd-paper))}
+.tw-hb.read{fill:color-mix(in srgb,var(--pink) 75%,var(--sd-paper))}
+.tw-star{font:16px var(--f-body);fill:var(--sd-warm)}
+.tw-star.read{fill:var(--pink)}
+.tw-line{stroke:var(--pink);stroke-width:2.5}
+.tw-lt{font:600 10.5px var(--f-mono);fill:var(--pink)}
+.tw-lt.w{fill:var(--sd-sim)}
+.tw-q{fill:color-mix(in srgb,var(--sd-hot) 30%,transparent);stroke:var(--sd-hot);stroke-width:1.4}
+.tw-lb{fill:var(--ok)}.tw-lb.slow{fill:var(--sd-hot)}
+.tw-p99{stroke:var(--sd-ink);stroke-width:1.6}
+.tw-rate{fill:color-mix(in srgb,var(--sd-sim) 28%,transparent);stroke:var(--sd-sim);stroke-width:1.6}
+.tw-rate.ghost{opacity:.4}
+.tw-cap{stroke:var(--sd-ink);stroke-width:1.6;stroke-dasharray:6 4}
+.tw-over{fill:color-mix(in srgb,var(--sd-hot) 45%,transparent)}
+.tw-now{stroke:var(--pink);stroke-width:2}
+.tw-wait{fill:color-mix(in srgb,var(--sd-hot) 30%,transparent);stroke:var(--sd-hot);stroke-width:1.4}
+.tw-row{fill:color-mix(in srgb,var(--sd-ink) 8%,var(--sd-paper));stroke:var(--sd-ink);stroke-opacity:.5;stroke-width:1.2}
+.tw-row.h0{fill:color-mix(in srgb,var(--ok) 30%,var(--sd-paper))}.tw-row.h2{fill:color-mix(in srgb,var(--sd-warm) 45%,var(--sd-paper))}.tw-row.h3{fill:color-mix(in srgb,var(--sd-hot) 55%,var(--sd-paper))}
+.tw-row.beat{stroke:var(--pink);stroke-opacity:1;stroke-width:2}
+.tw-heart{font:22px var(--f-body);fill:var(--pink)}
+.tw-acct{opacity:.35}.tw-acct.in{opacity:1}
+.tw-acct.g0{fill:var(--sd-sim)}.tw-acct.g1{fill:var(--sd-sessions)}.tw-acct.g2{fill:var(--sd-warm)}.tw-acct.g3{fill:color-mix(in srgb,var(--sd-ink) 45%,var(--sd-paper))}
+.tw-acct:not(.in){fill:none;stroke:var(--sd-ink);stroke-opacity:.35}
+.tw-kept{fill:color-mix(in srgb,var(--sd-sim) 55%,var(--sd-paper))}
+.tw-deep{fill:color-mix(in srgb,var(--sd-hot) 18%,var(--sd-paper));stroke:var(--sd-hot);stroke-dasharray:3 3;stroke-width:1}

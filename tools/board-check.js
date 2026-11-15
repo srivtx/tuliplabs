@@ -14,6 +14,7 @@ const SD = require(path.join(__dirname, "..", "tunnel", "boards.js"));
 const KV = require(path.join(__dirname, "..", "tunnel", "kv.js"));
 const CH = require(path.join(__dirname, "..", "tunnel", "chat.js"));
 const GEO = require(path.join(__dirname, "..", "tunnel", "geo.js"));
+const FD = require(path.join(__dirname, "..", "tunnel", "feed.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -239,6 +240,36 @@ for (const b of BOARDS) {
     const chk = GEO.evening({ claim: "check", expiry: 15, seed: b.sim.seed }), good = GEO.evening({ ...b.answer, seed: b.sim.seed });
     ok(says(b.why, `${chk.doubled} drivers got two riders`), `${b.id}: the why doesn't say ${chk.doubled} drivers got two riders`);
     ok(says(b.why, `worst wait is ${Math.round(good.worst)} s`), `${b.id}: the why doesn't say the worst wait is ${Math.round(good.worst)} s`);
+  }
+}
+
+// ------------------------------------------------------------------------------------------ Twitter labs --
+for (const b of BOARDS) {
+  if (b.kind === "fanout") {
+    // on the page's seed only the answer's lines pass; on every seed, all-on-write and all-on-read fail and a million passes
+    const g = b.goals, pass = (r) => r.lagP99 <= g.lag && r.readP99 <= g.read, at = {};
+    for (const T of FD.THRESHOLDS) { const r = (at[T] = FD.fanout({ T, seed: b.sim.seed })); ok(pass(r) === b.answer.includes(T), `${b.id}: the line at ${T}: ${r.lagP99.toFixed(1)} s, ${Math.round(r.readP99)} ms`); }
+    for (const seed of [2, 3, 4, 5]) {
+      ok(!pass(FD.fanout({ T: Infinity, seed })) && !pass(FD.fanout({ T: 0, seed })), `${b.id} seed ${seed}: all on write or all on read passed`);
+      ok(pass(FD.fanout({ T: 1e6, seed })), `${b.id} seed ${seed}: the line at a million failed`);
+    }
+    const m = at[1e6];
+    for (const x of [Math.round(at[Infinity].lagP99) + " s", Math.round(at[0].readP99) + " ms", `only ${m.onRead} of`, `${Math.round(FD.share(1e6) * 100)}% of all follows`, `merges ${FD.pct(m.merged, 0.5)} of them`, `${Math.round(m.readP99)} ms`, `${Math.round(at[1e5].readP99)} ms`])
+      ok(says(b.why, x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "likes") {
+    const g = b.goals, pass = (r) => r.likeMs <= g.like && r.readMs <= g.read && !r.lostOnCrash, at = {};
+    for (const batch of FD.BATCH) for (const shards of FD.SHARDS) { const r = (at[batch + ":" + shards] = FD.likes({ shards, batch })); ok(pass(r) === (shards === b.answer.shards && batch === b.answer.batch), `${b.id}: ${shards} rows, batch ${batch}: ${r.likeMs.toFixed(1)} ms, read ${r.readMs} ms, ${r.lostOnCrash} lost`); }
+    const one = at["0:1"], ans = at["0:64"];
+    for (const x of [`grows to ${Math.round(one.backlog / 1e6)} million`, `saved in ${ans.likeMs.toFixed(1)} ms`, `${ans.readMs} ms`, `${at["0:256"].readMs} ms`, `about ${at["1:1"].lostOnCrash} for every second`]) ok(says(b.why, x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "tlcache") {
+    const g = b.goals, C = (who, keep) => FD.cache({ who, keep });
+    for (const who of FD.WHO) for (const keep of FD.KEEP) { const r = C(who, keep), pass = r.tb <= g.tb && r.slow <= g.slow; ok(pass === (who === b.answer.who && keep === b.answer.keep), `${b.id}: ${who}, ${keep} ids: ${r.tb.toFixed(1)} TB, ${(r.slow * 100).toFixed(1)}% slow`); }
+    ok(Math.abs(FD.GROUPS.reduce((a, x) => a + x.users, 0) - 500e6) < 1 && Math.abs(FD.GROUPS.reduce((a, x) => a + x.opens, 0) - 1) < 1e-9, `${b.id}: the groups don't add up to 500M accounts and every open`);
+    const tb = (who, keep) => C(who, keep).tb.toFixed(1), pc = (x) => +(x * 100).toFixed(1) + "%";
+    for (const x of [`${tb("dormant", 800)} TB`, `${tb("day", 800)} TB`, `${pc(C("day", 800).slow)} are slow`, `${tb("week", 800)} TB`, `${pc(C("week", 800).slow)} of opens are slow`, `${FD.DEEP[400] * 100}% of opens scroll past 400`, `${Math.round(C("week", 3200).tb)} TB`])
+      ok(says(b.why, x), `${b.id}: the why doesn't say "${x}"`);
   }
 }
 
