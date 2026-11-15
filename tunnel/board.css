@@ -12,6 +12,15 @@
 main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .sd-strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-size:13px}
 .sd-back{color:var(--muted);text-decoration:none}
+.sd-unit-pic{width:44px;height:31px;object-fit:contain;margin:-6px -6px -6px 0;filter:drop-shadow(0 2px 0 var(--line))}
+.sd-hero{display:block;width:100%;max-width:300px;height:170px;object-fit:contain;object-position:left center;margin:-4px 0 -6px;animation:sdhero .7s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes sdhero{from{opacity:0;transform:translateY(10px) scale(.94) rotate(-2deg)}}
+.sd-nextunit{display:flex;align-items:center;gap:12px;padding:8px 14px 8px 8px;border:1.5px solid var(--pink);border-radius:12px;background:var(--card);color:var(--ink);text-decoration:none;box-shadow:0 3px 0 var(--pink);transition:transform .15s}
+.sd-nextunit:hover{transform:translateY(-2px)}
+.sd-nextunit img{width:84px;height:60px;object-fit:contain}
+.sd-nextunit small{display:block;font:600 10.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--pink)}
+.sd-nextunit b{font:400 22px var(--f-serif)}
+@media (prefers-reduced-motion:reduce){.sd-hero{animation:none}}
 .sd-back:hover{color:var(--ink)}
 .sd-sh{font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .sd-strip ol{display:flex;gap:6px;list-style:none;margin:0 0 0 auto;padding:0}
@@ -145,6 +154,31 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .sd-score li b{font:600 12.5px var(--f-mono)}
 .sd-score li.ok i,.sd-score li.ok b{color:var(--ok)}
 .sd-score li.no i,.sd-score li.no b{color:var(--bad)}
+/* the run's spread: every click by how long it took */
+.sd-spread-w{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.sd-spread-w small{display:block;font:10.5px var(--f-mono);color:var(--muted);margin-bottom:4px}
+.sd-spread{display:block;overflow:visible}
+.sd-spread rect{fill:var(--sd-app)}
+.sd-spread rect.late{fill:var(--sd-hot)}
+.sd-spread .ax{stroke:var(--line);stroke-width:1}
+.sd-spread .goal{stroke:var(--ok);stroke-width:1.4;stroke-dasharray:3 3}
+.sd-spread .p99{stroke:var(--ink);stroke-width:1.4}
+.sd-spread text{font:9.5px var(--f-mono);fill:var(--ok)}
+.sd-spread text.tick{fill:var(--muted)}
+/* a marker note on an empty sketch */
+.sd-doodle path{fill:none;stroke:var(--sd-faint);stroke-width:1.6;stroke-dasharray:6 6;stroke-linecap:round;opacity:.8}
+.sd-doodle text{font:italic 400 21px var(--f-serif);fill:var(--sd-faint)}
+/* the bottleneck chart, drawn on the board behind the parts */
+.sd-ch-t{font:italic 400 19px var(--f-serif);fill:var(--sd-ink)}
+.sd-ch-s{font:10px var(--f-mono);fill:var(--sd-faint)}
+.sd-ch-ax{stroke:var(--sd-faint);stroke-width:1;opacity:.6}
+.sd-ch-full{stroke:var(--sd-hot);stroke-width:1.2;stroke-dasharray:5 5;opacity:.75}
+.sd-ch-l{font:10px var(--f-mono);fill:var(--sd-faint)}
+.sd-ch-l.on{fill:var(--sd-ink);font-weight:600}
+.sd-ch-now{stroke:var(--sd-ink);stroke-width:1;opacity:.25}
+.sd-ch-line{fill:none;stroke:var(--kc);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.sd-ch-dot{fill:var(--sd-paper);stroke:var(--kc);stroke-width:2}
+.sd-ch-tag{font:600 10.5px var(--f-mono);fill:var(--kc);paint-order:stroke;stroke:var(--sd-paper);stroke-width:4px;stroke-linejoin:round}
 @media (max-width:700px){
   main.sd{padding:10px 12px 40px}
   .sd-strip ol{margin-left:0}
@@ -420,3 +454,19 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .tm-miss{fill:none;stroke:var(--sd-hot);stroke-width:2.6}
 .tm-gauge{fill:color-mix(in srgb,var(--sd-ink) 10%,transparent)}
 .tm-gfill{fill:var(--ok)}.tm-gfill.over{fill:var(--sd-hot)}
+.sd-ch-l.full{fill:var(--sd-hot)}
+/* pixel stickers: the prize slapped on a solved board, and small ones that react to a run */
+.sd-why{position:relative}
+.sd-prize{position:absolute;right:-12px;top:-30px;width:78px;height:78px;object-fit:contain;transform:rotate(var(--tilt,-6deg));filter:drop-shadow(0 4px 0 rgba(0,0,0,.25));pointer-events:none;z-index:3}
+.sd-prize.slap{animation:sdslap .55s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes sdslap{0%{opacity:0;transform:translateY(-30px) scale(1.9) rotate(calc(var(--tilt,-6deg) - 18deg))}60%{opacity:1;transform:scale(.92) rotate(var(--tilt,-6deg))}80%{transform:scale(1.05) rotate(var(--tilt,-6deg))}100%{transform:scale(1) rotate(var(--tilt,-6deg))}}
+.sd-rx{pointer-events:none;filter:drop-shadow(0 2px 0 rgba(0,0,0,.3))}
+.sd-rx.pop{transform-box:fill-box;transform-origin:center;animation:sdpop .35s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes sdpop{from{opacity:0;transform:scale(.3) rotate(-20deg)}}
+.sd-mini{width:18px;height:18px;vertical-align:-4px;margin:0 4px 0 0}
+.sd-score li .sd-mini{margin:0 0 0 6px}
+.sd-score.win{border-color:color-mix(in srgb,var(--ok) 60%,transparent)}
+.sd-rocket{position:absolute;top:-20px;left:-22px;width:52px;height:52px;transform:rotate(-12deg);animation:sdpop .45s cubic-bezier(.2,1.5,.4,1) both;filter:drop-shadow(0 3px 0 rgba(0,0,0,.25))}
+@media (prefers-reduced-motion:reduce){.sd-rx.pop,.sd-rocket{animation:none}}
+@media (max-width:700px){.sd-prize{width:62px;height:62px;right:-6px;top:-24px}}
+.sd-fin{width:20px;height:20px;margin:0 0 0 8px;vertical-align:-5px}

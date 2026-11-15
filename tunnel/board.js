@@ -45,6 +45,16 @@
   const clone = (x) => JSON.parse(JSON.stringify(x));
   const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches, TOUCH = matchMedia("(hover: none)").matches;
 
+  // ------------------------------------------------------------ stickers --
+  // pixel stickers (tunnel/stickers/*.webp): one slapped onto the Solved card when a question is solved, and small ones
+  // that react to a run (a flame on a part that's maxed out, a snail when it's too slow, a rocket when it all passes)
+  const STK = (n) => `stickers/${n}.webp`;
+  const prize = (n, last) => (last ? "trophy" : n >= 3 ? "crown" : n === 2 ? "thumbs" : "heart");
+  function rx(name, x, y, size = 34, cls = "") { return s("image", { class: "sd-rx " + cls, href: STK(name), x, y, width: size, height: size }); }
+  // a part's reaction pops in once, when it changes, not on every redraw
+  let seenRx = new Map();
+  function prx(ox, oy, id, name, x, y, size) { const fresh = seenRx.get(id) !== name; seenRx.set(id, name); return rx(name, ox + x, oy + y, size, fresh ? "pop" : ""); }
+
   // ------------------------------------------------------------ progress --
   const KEY = "vnl-code-v1";
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { return {}; } };
@@ -92,12 +102,14 @@
     els.svg.append(s("defs", { html: `
       <filter id="sd-sk" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="2.6"/></filter>
       <marker id="sd-ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 9 5 1 8.5" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>` }));
+    els.gc = s("g", { class: "sd-chart", "aria-hidden": "true" });
     els.gw = s("g", { class: "sd-wires" });
     els.gp = s("g", { class: "sd-parts" });
     els.gd = s("g", { class: "sd-dots", "aria-hidden": "true" });
+    els.gs = s("g", { class: "sd-stickers", "aria-hidden": "true" });
     els.go = s("g", { class: "sd-over" });
     els.gx = s("g", { class: "sd-x" });
-    els.svg.append(els.gw, els.gd, els.gp, els.go, els.gx);
+    els.svg.append(els.gc, els.gw, els.gd, els.gp, els.gs, els.go, els.gx);
     els.mode = h("div", { class: "sd-modechip", "aria-hidden": "true" });
     els.score = h("div", { class: "sd-score", "aria-live": "polite" });
     els.stage = h("div", { class: "sd-stage" }, els.svg, els.score, els.mode);
@@ -122,6 +134,8 @@
     B = L[qi];
     const m = mine(B.id);
     D = clone(m.design && editable() ? m.design : B.design || { nodes: [], wires: [] });
+    seenRx = new Map();
+    slapped = null;
     sel = null; selW = -1; res = null; runs = 0; solvedNow = false; problems = []; flows = {}; heat = {}; waits = {}; label = {}; wiring = null;
     F = B.kind === "follow" ? { round: 0, got: [], tries: 0 } : B.kind === "napkin" ? { vals: {}, marks: {}, tries: 0 } : B.kind === "bottleneck" ? { guess: null, steps: null, at: 0 } : B.kind === "sketch" ? { tries: 0, hints: 0, G: null } : {};
     ctx = UI[B.kind] ? makeCtx() : null;
@@ -160,15 +174,44 @@
     };
     els.strip.replaceChildren(
       h("a", { class: "sd-back", href: "./#ladder" }, "← Wind Tunnel"),
-      h("span", { class: "sd-sh" }, h("b", {}, U.name), ` · ${U.sub}`),
+      h("img", { class: "sd-unit-pic", src: `shots/sd-${U.id}.webp`, alt: "", width: 44, height: 31 }),
+      h("span", { class: "sd-sh" }, h("b", {}, U.name), ` · ${U.sub}`, L.every((b) => S.done[b.id]) ? h("img", { class: "sd-mini sd-fin", src: STK("tulip"), alt: "Unit finished", title: "Unit finished" }) : null),
       h("div", { class: "sd-modes" }, group("w"), group("s")));
   }
   function stars(n) { return h("span", { class: "sd-stars", "aria-label": `${n} of 3 stars` }, [1, 2, 3].map((k) => h("i", { class: k <= n ? "on" : "" }))); }
 
   // ---------------------------------------------------------------- board --
   function drawAll() {
-    if (ctx) { els.gw.replaceChildren(); els.gp.replaceChildren(); els.go.replaceChildren(); els.gd.replaceChildren(); UI[B.kind].draw(ctx); drawScore(); return; }
-    drawWires(); drawParts(); drawOver(); drawScore();
+    if (ctx) { els.gc.replaceChildren(); els.gs.replaceChildren(); els.gw.replaceChildren(); els.gp.replaceChildren(); els.go.replaceChildren(); els.gd.replaceChildren(); UI[B.kind].draw(ctx); drawScore(); return; }
+    drawChart(); drawWires(); drawParts(); drawOver(); drawScore();
+  }
+  // behind the parts: what a lab measured, drawn on the whiteboard itself
+  function drawChart() {
+    const kids = [];
+    if (B.kind === "bottleneck") {
+      // how busy each part gets as the traffic climbs, a line per part in its own colour, up to the step on show
+      const X0 = 70, X1 = 890, Y0 = 512, Y1 = 404, n = B.ramp.length;
+      const x = (i) => X0 + (X1 - X0) * i / (n - 1), y = (u) => Y0 - (Y0 - Y1) * Math.min(1, u);
+      kids.push(s("text", { class: "sd-ch-t", x: X0 - 8, y: Y1 - 22 }, "How busy each part gets"),
+        s("text", { class: "sd-ch-s", x: X0 - 8, y: Y1 - 8 }, F.steps ? "as the traffic climbs · past the dashed line, it's full" : "the traffic climbs once you've picked a part"),
+        s("line", { class: "sd-ch-ax", x1: X0, y1: Y0, x2: X1, y2: Y0 }),
+        s("line", { class: "sd-ch-full", x1: X0, y1: y(0.85), x2: X1, y2: y(0.85) }),
+        s("text", { class: "sd-ch-l full", x: X0 + 4, y: y(0.85) - 5 }, "85% · full"));
+      B.ramp.forEach((r, i) => kids.push(s("text", { class: "sd-ch-l" + (F.steps && i === F.at ? " on" : ""), x: x(i), y: Y0 + 14, "text-anchor": "middle" }, `${num(r)}/s`)));
+      if (F.steps) {
+        kids.push(s("line", { class: "sd-ch-now", x1: x(F.at), y1: Y1 - 4, x2: x(F.at), y2: Y0 }));
+        for (const nd of D.nodes) {
+          if (nd.kind === "users" || nd.kind === "lb") continue;
+          const pts = F.steps.slice(0, F.at + 1).map((st, i) => [x(i), y(st.r.util[nd.id] || 0)]);
+          const last = pts[pts.length - 1], u = F.steps[F.at].r.util[nd.id] || 0;
+          kids.push(s("g", { class: `k-${nd.kind}` },
+            s("polyline", { class: "sd-ch-line", points: pts.map((p) => p.join(",")).join(" ") }),
+            pts.map((p) => s("circle", { class: "sd-ch-dot", cx: p[0], cy: p[1], r: 3 })),
+            s("text", { class: "sd-ch-tag", x: last[0] + (F.at < n / 2 ? 8 : -8), y: last[1] - 8, "text-anchor": F.at < n / 2 ? "start" : "end" }, `${labelOf(nd)} ${Math.round(Math.min(1, u) * 100)}%`)));
+        }
+      }
+    }
+    els.gc.replaceChildren(...kids);
   }
   function sub(nd) {
     if (nd.tag) return nd.tag; // a part drawn for one question can say what it is there (Nia "wants two seats")
@@ -183,7 +226,9 @@
     return "";
   }
   function drawParts() {
+    const stk = [];
     els.gp.replaceChildren(...D.nodes.map((nd) => {
+      const ox = nd.x - PW / 2, oy = nd.y - PH / 2;
       const u = heat[nd.id], hot = u == null ? "" : u < 0.6 ? " h0" : u < 0.85 ? " h1" : u < 0.97 ? " h2" : " h3";
       const follow = B.kind === "follow" ? F.got.indexOf(nd.id) : -1;
       const g = s("g", {
@@ -199,6 +244,15 @@
         s("text", { class: "sd-name", x: 48, y: 29 }, labelOf(nd)),
         s("text", { class: "sd-sub", x: 48, y: 47 }, sub(nd)));
       if (u != null && nd.kind !== "users") g.append(s("rect", { class: "sd-meter-bg", x: 12, y: PH - 9, width: PW - 24, height: 3, rx: 1.5 }), s("rect", { class: "sd-meter", x: 12, y: PH - 9, width: Math.max(2, (PW - 24) * Math.min(1, u)), height: 3, rx: 1.5 }));
+      if (u == null || nd.kind === "users" || nd.kind === "lb") seenRx.delete(nd.id);
+      else {
+        if (u >= 0.97) stk.push(prx(ox, oy, nd.id, "flame", -16, -20, 38));
+        else if (nd.kind === "queue" && (waits[nd.id] || 0) > 2) stk.push(prx(ox, oy, nd.id, "hourglass", -14, -20, 34));
+        else if (nd.kind === "cache" && res && flows[Object.keys(flows).find((k) => k.endsWith(">" + nd.id))] > 0) stk.push(prx(ox, oy, nd.id, "bolt", -14, -20, 34));
+        else if (u < 0.12) stk.push(prx(ox, oy, nd.id, "sleep", -14, -22, 36));
+      }
+      if (problems.some((p) => p.node === nd.id) && B.kind === "sketch") stk.push(prx(ox, oy, nd.id + "!", "bug", PW - 22, -20, 36));
+      else seenRx.delete(nd.id + "!");
       if (follow >= 0) g.append(s("circle", { class: "sd-badge", cx: PW - 6, cy: 6, r: 11 }), s("text", { class: "sd-badge-t", x: PW - 6, y: 10.5, "text-anchor": "middle" }, follow + 1));
       // a queue that built up: a little tower of waiting requests on top of the part
       const w = waits[nd.id] || 0;
@@ -210,6 +264,7 @@
       if (editable()) g.append(s("g", { class: "sd-nib", transform: `translate(${PW} ${PH / 2})`, "data-nib": nd.id }, s("circle", { r: 10 }), s("path", { d: "M-4 0h8M0-4v8" })));
       return g;
     }));
+    els.gs.replaceChildren(...stk);
   }
   // where a wire leaves one part and enters another: the facing sides, curved like a marker stroke
   function geom(a, b) {
@@ -262,6 +317,14 @@
       const x = nd ? Math.min(W - 130, Math.max(130, nd.x)) : W / 2, y = nd ? (nd.y > H / 2 ? nd.y - PH / 2 - 54 : nd.y + PH / 2 + 12) : 40 + k * 50;
       kids.push(s("foreignObject", { x: x - 125, y, width: 250, height: 46, class: "sd-prob-fo" }, h("div", { class: "sd-prob", xmlns: "http://www.w3.org/1999/xhtml" }, short(p.text))));
     });
+    // an almost empty sketch: a marker note on the board saying how to start, gone once the drawing gets going
+    if (B.kind === "sketch" && D.nodes.length < 3 && !F.G) {
+      const u = D.nodes[0];
+      kids.push(s("g", { class: "sd-doodle", "aria-hidden": "true" },
+        u ? s("path", { d: `M${u.x + PW / 2 + 14} ${u.y - 6} C ${u.x + PW / 2 + 90} ${u.y - 60}, 470 ${u.y - 90}, 540 ${u.y - 40}`, "marker-end": "url(#sd-ar)" }) : null,
+        s("text", { x: 560, y: (u ? u.y : 270) - 44 }, TOUCH ? "tap parts in from the tray," : "drag parts in from the tray,"),
+        s("text", { x: 560, y: (u ? u.y : 270) - 18 }, "then wire them up from the +")));
+    }
     if (B.kind === "napkin") for (const n of B.notes) {
       const nd = part(n.on), x = nd.x + n.dx - 85, y = nd.y + n.dy;
       const mark = F.marks[n.id];
@@ -269,6 +332,10 @@
       kids.push(s("line", { class: "sd-string", x1: x + 85, y1: n.dy < 0 ? y + 80 : y, x2: nd.x, y2: n.dy < 0 ? nd.y - PH / 2 : nd.y + PH / 2 }));
       kids.push(s("foreignObject", { x, y, width: 170, height: 100 }, h("div", { class: "sd-note" + (mark ? " " + mark.cls : ""), xmlns: "http://www.w3.org/1999/xhtml" },
         h("label", {}, n.label), h("span", { class: "sd-nin" }, inp, h("small", {}, n.unit)), mark ? h("em", {}, mark.say) : null)));
+    }
+    if (B.kind === "draw" && res) {
+      const u = D.nodes.find((n) => n.kind === "users"), goal = (B.goals.find(([k]) => k === "p99") || [])[2];
+      if (u && goal && res.p99 >= goal) kids.push(rx(res.errors > 0.001 ? "ghost" : "snail", u.x - PW / 2 + 4, u.y + PH / 2 + 6, 44, "pop"));
     }
     els.go.replaceChildren(...kids);
   }
@@ -283,7 +350,7 @@
         const x = k === "cost" ? cost : res ? res[k] : null;
         const pass = x == null ? null : op === "<" ? x < v : op === "<=" ? x <= v : x > v;
         const shown = x == null ? "run it" : k === "cost" ? `$${num(x)}` : k === "errors" ? `${(x * 100).toFixed(x > 0 && x < 0.01 ? 2 : 0)}%` : k === "lag" ? (x < 0.05 ? "on time" : tm(x).replace("ms", "ms late").replace(/ s$/, " s late")) : tm(x);
-        rows.push(h("li", { class: pass == null ? "" : pass ? "ok" : "no" }, h("i", {}, pass == null ? "·" : pass ? "✓" : "✗"), h("span", {}, say), h("b", {}, shown)));
+        rows.push(h("li", { class: pass == null ? "" : pass ? "ok" : "no" }, h("i", {}, pass == null ? "·" : pass ? "✓" : "✗"), h("span", {}, say, k === "cost" && pass === false ? h("img", { class: "sd-mini", src: STK("money"), alt: "" }) : null), h("b", {}, shown)));
       }
     } else if (B.kind === "bottleneck" && F.steps && F.steps[F.at]) {
       const st = F.steps[F.at];
@@ -293,7 +360,25 @@
       for (const [say, pass, shown] of UI[B.kind].score(ctx)) rows.push(h("li", { class: pass == null ? "" : pass ? "ok" : "no" }, h("i", {}, pass == null ? "·" : pass ? "✓" : "✗"), h("span", {}, say), h("b", {}, shown)));
     } else { els.score.hidden = true; return; }
     els.score.hidden = false;
-    els.score.replaceChildren(h("ul", {}, rows));
+    const all = rows.length > 1 && rows.every((r) => r.classList.contains("ok"));
+    els.score.classList.toggle("win", all);
+    els.score.replaceChildren(...[all ? h("img", { class: "sd-rocket", src: STK("rocket"), alt: "" }) : null, h("ul", {}, rows), B.kind === "draw" && res && res.hist ? spread(res) : null].filter(Boolean));
+  }
+  // every click of the last run by how long it took, on a log scale, with the goal and the run's p99 marked
+  function spread(r) {
+    const Wd = 220, Hd = 54, n = r.hist.length, mx = Math.max(...r.hist, 1), bw = Wd / n;
+    const xAt = (sec) => Math.max(0, Math.min(Wd, Wd * Math.log10(Math.max(sec, 1e-3) / 1e-3) / Math.log10(4000)));
+    const goal = (B.goals.find(([k]) => k === "p99") || [])[2];
+    const svg = s("svg", { class: "sd-spread", viewBox: `0 -4 ${Wd} ${Hd + 20}`, width: Wd, height: Hd + 24, "aria-hidden": "true" },
+      r.hist.map((c, i) => {
+        const bh = c ? Math.max(1.5, (Hd - 4) * Math.sqrt(c / mx)) : 0, mid = 1e-3 * Math.pow(4000, (i + 0.5) / n);
+        return s("rect", { class: goal && mid > goal ? "late" : "", x: i * bw + 0.8, y: Hd - bh, width: bw - 1.6, height: bh, rx: 1 });
+      }),
+      s("line", { class: "ax", x1: 0, y1: Hd, x2: Wd, y2: Hd }),
+      goal ? [s("line", { class: "goal", x1: xAt(goal), y1: -2, x2: xAt(goal), y2: Hd }), s("text", { x: xAt(goal) + 3, y: 6 }, "goal")] : null,
+      s("line", { class: "p99", x1: xAt(r.p99), y1: 8, x2: xAt(r.p99), y2: Hd }),
+      [[1e-3, "1 ms"], [0.01, "10 ms"], [0.1, "100 ms"], [1, "1 s"]].map(([t, l]) => s("text", { class: "tick", x: xAt(t) + (t === 1e-3 ? 0 : -8), y: Hd + 12 }, l)));
+    return h("div", { class: "sd-spread-w" }, h("small", {}, "every click, by how long it took"), svg);
   }
 
   // ----------------------------------------------------------------- dots --
@@ -491,7 +576,7 @@
       if (G) tools.push(h("ul", { class: "sd-rub" }, G.items.filter((i) => i.ok).map((i) => h("li", { class: "ok" }, h("i", {}, "✓"), i.say)),
         left.slice(0, F.hints).map((i) => h("li", { class: "hint" }, h("i", {}, "?"), i.say)),
         G.bad.map((b) => h("li", { class: "no" }, h("i", {}, "✗"), b.text)),
-        left.length > F.hints ? h("li", { class: "more" }, h("i", {}, "·"), `${left.length - F.hints} more link${left.length - F.hints > 1 ? "s" : ""} to find. `, h("button", { class: "sd-word", onclick: () => { F.hints++; drawBrief(); } }, "show a hint")) : null));
+        left.length > F.hints ? h("li", { class: "more" }, h("i", {}, "·"), `${left.length - F.hints} more link${left.length - F.hints > 1 ? "s" : ""} to find. `, h("button", { class: "sd-word", onclick: () => { F.hints++; drawBrief(); } }, h("img", { class: "sd-mini", src: STK("bulb"), alt: "" }), "show a hint")) : null));
       tools.push(h("div", { class: "sd-tray" }, h("div", { class: "sd-h" }, "Parts"), h("div", { class: "sd-tray-g" }, B.tray.map(trayButton))), h("div", { class: "sd-h" }, "Selected"), inspector(),
         h("p", {}, h("button", { class: "sd-word", onclick: () => { D = clone(B.design); delete mine(B.id).design; save(); sel = null; changed(); } }, "start over")));
     }
@@ -504,8 +589,10 @@
     }
     const nx = L[qi + 1], nu = UNITS[UNITS.indexOf(U) + 1];
     const next = nx ? h("a", { class: "btn primary", href: loc(nx) }, nx.mode !== B.mode ? `Now run it: ${nx.title} →` : `Next: ${nx.title} →`)
-      : nu ? h("a", { class: "btn primary", href: loc(nu.w[0]) }, `Next unit: ${nu.name} →`) : h("a", { class: "btn", href: "./#ladder" }, "Back to the ladder →");
-    if (solvedNow || done) kids.splice(3, 0, h("div", { class: "sd-why" + (solvedNow ? " fresh" : "") }, h("div", { class: "sd-wh" }, stars(starsOf(B.id)), h("b", {}, solvedNow ? "Solved" : "Solved before")), h("p", {}, B.why), next));
+      : nu ? h("a", { class: "sd-nextunit", href: loc(nu.w[0]) }, h("img", { src: `shots/sd-${nu.id}.webp`, alt: "" }), h("span", {}, h("small", {}, "Next unit"), h("b", {}, `${nu.name} →`))) : h("a", { class: "btn", href: "./#ladder" }, "Back to the ladder →");
+    if (solvedNow || done) kids.splice(3, 0, h("div", { class: "sd-why" + (solvedNow ? " fresh" : "") }, prizeEl(), h("div", { class: "sd-wh" }, stars(starsOf(B.id)), h("b", {}, solvedNow ? "Solved" : "Solved before")), h("p", {}, B.why), next));
+    // the unit's own picture opens it
+    if (qi === 0) kids.unshift(h("img", { class: "sd-hero", src: `shots/sd-${U.id}.webp`, alt: "" }));
     els.brief.replaceChildren(...kids);
     els.tools.replaceChildren(...tools);
     els.tools.hidden = !tools.length;
@@ -519,6 +606,18 @@
     drawStrip();
     drawBrief();
   }
+  // the prize sticker, slapped onto the Solved card once when it's earned, already there when you come back
+  let slapped = null;
+  function prizeEl() {
+    const last = qi === L.length - 1, n = starsOf(B.id);
+    let hsh = 0; for (const c of B.id) hsh = (hsh * 31 + c.charCodeAt(0)) | 0;
+    const fresh = solvedNow && slapped !== B.id && !REDUCED;
+    if (solvedNow) slapped = B.id;
+    const img = h("img", { class: "sd-prize" + (fresh ? " slap" : ""), src: STK(prize(n, last)), alt: last ? "Unit finished" : `${n} stars`, title: last ? "Unit finished" : `${n} of 3 stars` });
+    img.style.setProperty("--tilt", `${(Math.abs(hsh) % 17) - 8}deg`);
+    return img;
+  }
+
 
   // --------------------------------------------------------------- follow --
   function followTap(id) {
