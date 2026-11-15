@@ -710,3 +710,105 @@ button.pc:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
 .parrow{grid-column:2;font:12px var(--f-mono);color:var(--pink)}
 .parrow:empty{display:none}
 @media (prefers-reduced-motion:reduce){.pc.hint,.pz li.hint button.ln,.dk-node.new{animation:none}}
+
+/* ---------------------------------------------------------- stickers --
+   Pixel stickers (tunnel/stickers): a prize slapped on a finished task, a bug, ghost or snail on a wrong run.
+   A .sprw is a window onto a strip of frames that steps along (frame-by-frame, planned in ChatGPT). */
+.stk{display:inline-block;vertical-align:middle;user-select:none}
+img.stk{width:34px;height:34px}
+.sprw{width:34px;height:34px;overflow:hidden;line-height:0}
+.sprw>.spr{height:100%;width:calc(var(--n) * 100%);max-width:none;animation:tlspr var(--d) steps(var(--n),jump-none) infinite}
+.sprw>.spr.once{animation-iteration-count:1;animation-fill-mode:both}
+@keyframes tlspr{from{transform:translateX(0)}to{transform:translateX(calc(-100% * (var(--n) - 1) / var(--n)))}}
+.bh .stk.prize{width:38px;height:38px;margin:-12px 0 -12px auto;transform:rotate(var(--tilt,-6deg));filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
+.bh .stk.prize+.tick{margin-left:4px}
+.stk.slap{animation:tlslap .55s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes tlslap{0%{transform:scale(2.4) rotate(calc(var(--tilt,-6deg) - 30deg));opacity:0}60%{opacity:1}100%{transform:scale(1) rotate(var(--tilt,-6deg))}}
+.result .stk.oops{width:32px;height:32px;float:left;margin:-4px 10px 0 -2px;animation:tlwob 2.4s ease-in-out infinite}
+.why .stk.oops{width:26px;height:26px;margin:-4px 6px 0 0}
+@keyframes tlwob{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg) translateY(-2px)}}
+.result.fail::after{content:"";display:block;clear:both}
+.result.pass .stk.prize{width:34px;height:34px;margin:-8px 6px -8px -2px;--tilt:-8deg}
+.stats .stk.streak{width:20px;height:20px;margin:-6px 0 -4px 3px}
+.chip .stk.chip-stk{width:18px;height:18px;margin:-4px 0}
+.chip:has(.chip-stk) i{display:none}
+.fin-art .stk.fin-trophy{position:absolute;right:-14px;top:-16px;width:62px;height:62px;--tilt:12deg;z-index:2;filter:drop-shadow(0 3px 0 rgba(0,0,0,.4))}
+.fin-art .stk.fin-rocket{position:absolute;left:8px;bottom:8px;width:46px;height:46px;z-index:2}
+@media (prefers-reduced-motion:reduce){.stk.slap,.result .stk.oops{animation:none}}
+
+/* ------------------------------------------------------- card pictures --
+   Each chapter's pixel scene (learn/cards, drawn in ChatGPT in the sticker style). The growing
+   flower moves into a little pot in the corner, and the big number becomes a chip. */
+.plot.pic .soil{height:auto;aspect-ratio:6/5;background:#3d0d33;overflow:hidden}
+.soil img.pic{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 60%;transition:transform .4s cubic-bezier(.2,.8,.3,1)}
+.plot.pic:hover .soil img.pic{transform:scale(1.06)}
+.plot.pic .soil canvas{inset:auto 2px 0 auto;width:58px;height:78px;z-index:2;border-radius:10px;background:radial-gradient(closest-side,rgba(24,6,18,.78),rgba(24,6,18,0))}
+.plot.pic .ghost{top:7px;left:7px;right:auto;bottom:auto;z-index:2;font:700 11px/1 var(--f-display);letter-spacing:.02em;color:#fff;background:rgba(24,8,20,.74);padding:4px 6px;border-radius:5px}
+.plot.pic:hover .ghost,.plot.pic.bloomed .ghost{color:#fff}
+.plot.pic .next-tag{z-index:3}
+.plot.pic.bloomed .soil::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;box-shadow:inset 0 0 0 3px var(--pink);border-radius:0}
+.rail-fl.has-pic{height:190px;overflow:hidden;background:#2a0f22}
+.rail-fl img.rail-pic{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rail-fl.has-pic canvas{inset:auto 6px 4px auto;width:56px;height:74px;border-radius:12px;background:radial-gradient(closest-side,rgba(24,6,18,.8),rgba(24,6,18,0))}
+.cv-art img.cv-pic{position:absolute;right:4px;bottom:26px;width:148px;height:148px;z-index:1;border:4px solid #fff;border-radius:14px;transform:rotate(4deg);box-shadow:0 12px 26px rgba(0,0,0,.35);transition:transform .3s cubic-bezier(.2,1.5,.4,1)}
+.cv-art.has-pic:hover img.cv-pic{transform:rotate(-2deg) scale(1.04)}
+.cv-art.has-pic .cv-ghost{opacity:.12}
+.cv-art.has-pic .cv-fl{inset:auto auto -6px -18px;width:76px;height:100px;z-index:2}
+@media (max-width:640px){.cv-art img.cv-pic{width:112px;height:112px;bottom:16px}}
+@media (max-width:640px){.plot.pic .soil{aspect-ratio:5/4}}
+
+/* a bee loops over every chapter in full bloom; a watering can pours on the rail's flower when it grows */
+.bee-path{position:absolute;left:46%;top:34%;z-index:3;pointer-events:none;animation:tlbee 6s ease-in-out infinite;animation-delay:var(--bd,0s)}
+.bee-path .plot-bee{width:30px;height:30px;filter:drop-shadow(0 2px 0 rgba(0,0,0,.3))}
+@keyframes tlbee{
+  0%{transform:translate(-62px,8px) scaleX(1)}
+  22%{transform:translate(-8px,-26px) scaleX(1)}
+  45%{transform:translate(58px,-4px) scaleX(1)}
+  50%{transform:translate(62px,6px) scaleX(-1)}
+  72%{transform:translate(6px,28px) scaleX(-1)}
+  95%{transform:translate(-58px,2px) scaleX(-1)}
+  100%{transform:translate(-62px,8px) scaleX(1)}}
+.rail-fl .rail-water{position:absolute;left:38px;top:4px;width:78px;height:78px;z-index:3;animation:tlcan 1.9s ease both}
+@keyframes tlcan{0%{opacity:0;transform:translateY(-10px)}10%,85%{opacity:1;transform:none}100%{opacity:0}}
+.rail-fl .rail-water>.spr{animation-delay:.2s}
+@media (prefers-reduced-motion:reduce){.bee-path{animation:none}}
+.plot.pic .num{display:none}
+
+/* ---------------------------------------------------------- seed packets --
+   A chapter's card on the garden, when its track has pictures: a cream seed packet with stamped edges.
+   The wrapper carries the shadow and the lift; the body is masked into the stamped shape. */
+.plots.packets{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:20px 18px}
+.pk{position:relative;display:block;text-decoration:none;color:#3b1530;filter:drop-shadow(0 12px 14px rgba(0,0,0,.45));
+  transition:transform .25s cubic-bezier(.2,1.4,.4,1)}
+.pk:hover{transform:translateY(-5px) rotate(var(--tilt,-.6deg))}
+.pk-body{display:flex;flex-direction:column;height:100%;box-sizing:border-box;background:#f7eddf;padding:12px 10px 0;
+  -webkit-mask:radial-gradient(5px at 50% 0,#0000 98%,#000) 50% 0/14px 51% repeat-x,radial-gradient(5px at 50% 100%,#0000 98%,#000) 50% 100%/14px 51% repeat-x;
+  mask:radial-gradient(5px at 50% 0,#0000 98%,#000) 50% 0/14px 51% repeat-x,radial-gradient(5px at 50% 100%,#0000 98%,#000) 50% 100%/14px 51% repeat-x}
+.pk-top{display:flex;justify-content:space-between;align-items:center;margin:2px 2px 8px;min-height:18px}
+.pk-no{font:700 11px var(--f-display);letter-spacing:.06em;color:#c8327a;text-transform:uppercase}
+.pk-min{font:500 10px var(--f-mono);letter-spacing:.04em;color:#9a7a86;text-transform:uppercase}
+.pk-next{font:700 10px var(--f-mono);color:#2a0b1b;background:#ffd21f;padding:2px 7px;border-radius:3px;box-shadow:inset 0 -2px 0 #d9a600}
+.pk-pic{position:relative;display:block;aspect-ratio:6/5;border-radius:3px;overflow:hidden;background:#3d0d33;box-shadow:0 0 0 2px #3b1530}
+.pk-pic img.pic{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 60%;transition:transform .45s cubic-bezier(.2,.8,.3,1)}
+.pk:hover .pk-pic img.pic{transform:scale(1.06)}
+.pk-t{font:400 23px/1.02 var(--f-serif);margin:11px 2px 5px;color:#2a0b22}
+.pk-s{font:13px/1.38 var(--f-body);color:#6d5462;margin:0 2px 12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pk-foot{margin:auto -10px 0;padding:10px 12px 15px;background:#c8327a;color:#fff;display:flex;align-items:center;gap:8px;font:600 11px var(--f-mono)}
+.pk-seeds{display:flex;gap:3px;flex:1}
+.pk-seeds i{width:7px;height:7px;background:rgba(255,255,255,.32)}
+.pk-seeds i.on{background:#ffd21f;box-shadow:0 0 6px rgba(255,210,31,.6)}
+.pk.next .pk-body{background:#fff4e3}
+.pk.next{filter:drop-shadow(0 0 0 #ff8fc4) drop-shadow(0 12px 16px rgba(200,50,122,.5))}
+.pk.bloomed .pk-foot{background:linear-gradient(90deg,#c8327a,#e0559b)}
+.pk-stamp{position:absolute;right:4px;top:26px;width:60px;height:60px;z-index:3;transform:rotate(12deg);pointer-events:none;filter:drop-shadow(0 2px 0 rgba(0,0,0,.3))}
+.pk .bee-path{left:46%;top:38%}
+:root[data-theme="light"] .pk{filter:drop-shadow(0 10px 12px rgba(70,20,50,.28)) drop-shadow(0 0 1px rgba(70,20,50,.35))}
+@media (max-width:640px){
+  .plots.packets{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
+  .pk-body{padding:10px 8px 0}
+  .pk-t{font-size:19px}
+  .pk-s{font-size:12px;-webkit-line-clamp:3}
+  .pk-foot{margin:auto -8px 0;padding:9px 9px 14px}
+  .pk-seeds{gap:2px}.pk-seeds i{width:5px;height:5px}
+  .pk-stamp{width:46px;height:46px}}
+@media (prefers-reduced-motion:reduce){.pk,.pk-pic img.pic{transition:none}}

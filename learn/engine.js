@@ -27,6 +27,30 @@
     }
     return el;
   }
+  // ----------------------------------------------------------- stickers --
+  // The pixel stickers (tunnel/stickers, made in ChatGPT) and their frame-by-frame strips.
+  // A finished task gets a prize slapped on its header; a wrong run gets a bug, a ghost or a snail.
+  const STK = (() => { try { return new URL("../tunnel/stickers/", document.currentScript.src).href; } catch (e) { return "../tunnel/stickers/"; } })();
+  const ANIM = { flame: { n: 6, ms: 110 }, bloom: { n: 8, ms: 130, once: true }, walk: { n: 8, ms: 85 }, rocket: { n: 6, ms: 90 }, sleep: { n: 6, ms: 260 }, hourglass: { n: 6, ms: 200 }, water: { n: 6, ms: 170, once: true }, bee: { n: 6, ms: 90 } };
+  function sticker(name, cls, title) {
+    const a = ANIM[name];
+    const attrs = { class: "stk " + (cls || ""), title: title || null, "aria-hidden": title ? null : "true" };
+    if (!a) return h("img", Object.assign(attrs, { src: STK + name + ".webp", alt: title || "", draggable: "false" }));
+    attrs.class += " sprw";
+    attrs.style = `--n:${a.n};--d:${a.n * a.ms}ms`;
+    return h("span", attrs, h("img", { class: "spr" + (a.once ? " once" : ""), src: STK + "anim/" + name + ".webp", alt: "", draggable: "false" }));
+  }
+  const CARDS = (() => { try { return new URL("cards/", document.currentScript.src).href; } catch (e) { return "../learn/cards/"; } })();
+  const pic = (ch, cls) => (CFG.cards ? h("img", { class: "pic " + (cls || ""), src: CARDS + ch.id + ".webp", alt: "", loading: "lazy", draggable: "false" }) : null);
+  const tiltOf = (id) => { let x = 7; for (const c of String(id)) x = (x * 31 + c.charCodeAt(0)) % 997; return (x % 17) - 8; };
+  // what a wrong run looks like: too slow, crashed, or just wrong
+  function oops(r) {
+    const txt = [r.failed, r.message, r.error].filter(Boolean).join(" ");
+    // the hidden big tests time the code: "secs < 0.1" in the check, "1.52s: ..." in the message
+    if (/too slow|time limit|timed out|\bsecs?\s*</i.test(txt) || /^\d+(\.\d+)?s\b/m.test(r.message || "")) return sticker("snail", "oops", "Right idea, too slow");
+    if (r.error && !r.failed) return sticker("ghost", "oops", "It crashed");
+    return sticker("bug", "oops", "Something's off");
+  }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   function toast(msg) {
     const t = h("div", { class: "toast", role: "status" }, msg);
@@ -44,8 +68,9 @@
 
   // ------------------------------------------------------------ storage --
   const KEY = "vnl-code-v1";
-  let S = { done: {}, code: {}, rev: {}, sol: {} };
+  let S = { done: {}, code: {}, rev: {}, sol: {}, pz: {} };
   try { S = Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { /* private mode */ }
+  S.pz = S.pz || {};
   let saveT = 0;
   function save() {
     clearTimeout(saveT);
@@ -75,6 +100,7 @@
     if (!el) return;
     const st = streak();
     el.innerHTML = `<b>${S.xp || 0}</b> XP` + (st ? ` · <b>${st}</b>-day streak` : "");
+    if (st >= 2) el.append(sticker("flame", "streak", `${st} days in a row`));
   }
   function markDone(id) {
     const first = !S.done[id];
@@ -193,6 +219,8 @@
     const c = $("#py-chip");
     if (!c) return;
     c.className = "chip " + cls;
+    c.querySelector(".stk")?.remove();
+    if (cls === "busy" && !REDUCED) c.prepend(sticker("hourglass", "chip-stk"));
     c.lastChild.textContent = text;
     c.title = text;
   }
@@ -424,9 +452,24 @@
     const head = h("div", { class: "bh" }, h("span", { class: "badge " + badgeCls }, badgeText), title ? h("span", { class: "t" }, title) : null, tick);
     const body = h("div", { class: "bb" });
     const el = h("div", { class: "blk" + (S.done[b.id] ? " done" : ""), id: "b-" + b.id }, head, body);
+    const slap = (name, fresh) => {
+      head.querySelector(".stk.prize")?.remove();
+      const st = sticker(name, "prize" + (fresh ? " slap" : ""), { crown: "First try", thumbs: "Got it", heart: "Done, with help", bulb: "Saw it coming", trophy: "Shipped", bolt: "Goal reached" }[name]);
+      st.style.setProperty("--tilt", tiltOf(b.id) + "deg");
+      tick.before(st);
+    };
+    if (S.done[b.id] && S.pz[b.id]) slap(S.pz[b.id], false);
     return {
       el, body,
       done() { el.classList.add("done"); tick.textContent = "✓ done"; },
+      // a prize sticker; a better one replaces a worse one, never the other way round
+      prize(name) {
+        if (!name || !b.id) return;
+        const RANK = { heart: 1, thumbs: 2, bulb: 2, bolt: 2, trophy: 3, crown: 3 };
+        if (S.pz[b.id] && (RANK[S.pz[b.id]] || 0) >= (RANK[name] || 0)) return;
+        S.pz[b.id] = name; save();
+        slap(name, true);
+      },
     };
   }
 
@@ -493,6 +536,8 @@
       lock.disabled = true;
       skip.remove();
       if (markDone(b.id)) sh.done();
+      if (match && !ctx.review) sh.prize("bulb");
+      if (!match && guessed) res.firstChild.prepend(sticker("bug", "oops"));
       if (ctx.review) ctx.onResult(match);
       else if (guessed) enroll(b.id, match);
     }
@@ -547,6 +592,7 @@
         const r = await Runner.run({ op: "check", prelude: ctx.ch.prelude, lang: ctx.ch.lang, setup: b.setup, code: ans.map((x) => x.t).join("\n"), tests: b.tests || "" });
         out.show(r);
         if (markDone(b.id)) sh.done();
+        if (!ctx.review) sh.prize("thumbs");
         ctx.review ? ctx.onResult(true) : enroll(b.id, true);
       } else {
         const marks = ans.map((it, i) => it.t === b.lines[i]);
@@ -556,7 +602,7 @@
         let why = usedBad ? "One of your lines is a decoy that doesn't belong. " : "";
         if (missing > 0) why += `${missing} line${missing > 1 ? "s are" : " is"} still missing. `;
         if (!why) why = "Every line is there, but the order is off. Red lines are in the wrong spot. ";
-        msg.append(h("div", { class: "result fail" }, why + "Check indentation too: it decides which block a line belongs to."));
+        msg.append(h("div", { class: "result fail" }, sticker("bug", "oops"), why + "Check indentation too: it decides which block a line belongs to."));
         if (ctx.review) ctx.onResult(false);
       }
     };
@@ -604,6 +650,7 @@
           solved = true;
           const first = markDone(b.id);
           if (first) sh.done();
+          if (!ctx.review) sh.prize(S.sol[b.id] ? "heart" : fails === 0 ? "crown" : "thumbs");
           if (ctx.review) ctx.onResult(fails === 0 && !S.sol[b.id + ":r"]);
           else enroll(b.id, fails === 0 && !S.sol[b.id]);
         }
@@ -611,12 +658,12 @@
         fails++;
         if (fails >= 2) { solBtn.disabled = false; solBtn.title = ""; }
         if (!r.error) {
-          res.append(h("div", { class: "result fail" },
+          res.append(h("div", { class: "result fail" }, oops(r),
             h("b", {}, `${r.ok} of ${r.total} checks pass.`), meter,
             r.failed ? h("pre", {}, "Failed: " + r.failed) : null,
             r.message ? h("div", {}, r.message) : null));
         } else {
-          res.append(h("div", { class: "result fail" }, "Your code raised an error before the checks could run (see above). Read the last line of the error first."));
+          res.append(h("div", { class: "result fail" }, oops(r), "Your code raised an error before the checks could run (see above). Read the last line of the error first."));
         }
         if (ctx.review && fails === 1) ctx.onResult(false, true);
       }
@@ -656,7 +703,9 @@
         btn.classList.add(o.ok ? "right" : "wrong");
         if (!o.ok) [...opts.children].forEach((c, i) => { if (c.dataset.ok) c.classList.add("right"); });
         why.innerHTML = (o.ok ? "<p><b>Right.</b></p>" : "<p><b>Not this one.</b></p>") + b.why;
+        if (!o.ok) why.firstChild.prepend(sticker("bug", "oops"));
         if (markDone(b.id)) sh.done();
+        if (o.ok && !ctx.review) sh.prize("thumbs");
         ctx.review ? ctx.onResult(o.ok) : enroll(b.id, o.ok);
       };
       if (o.ok) btn.dataset.ok = "1";
@@ -680,6 +729,7 @@
               [...e.target.parentNode.querySelectorAll("button")].forEach((x) => (x.disabled = true));
               e.target.classList.add("primary");
               if (markDone(b.id)) sh.done();
+              if (!ctx.review) sh.prize(label === "Nailed it" ? "crown" : label === "Partly" ? "thumbs" : "heart");
               ctx.review ? ctx.onResult(ok) : schedule(b.id, ok);
             },
           }, label))));
@@ -701,6 +751,7 @@
       if (ctx.review) { ctx.onResult(true); return; }
       if (goal) goal.firstChild.textContent = "✓ Goal reached: ";
       if (markDone(b.id)) { sh.done(); if (msg) toast(msg); confetti(sh.el.querySelector(".bh")); }
+      sh.prize("bolt");
     };
     stage.vizDone = finish; // lets tools/e2e.js complete a goal
     if (!window.VIZ) { stage.textContent = "The simulation library did not load."; return sh.el; }
@@ -738,7 +789,7 @@
       cb.onchange = () => { ticks[i] = cb.checked ? 1 : 0; save(); sync(); };
       return h("li", {}, cb, h("label", { for: `${b.id}-m${i}`, html: m }));
     }));
-    ship.onclick = () => { if (markDone(b.id)) { sh.done(); confetti(sh.el.querySelector(".bh")); } sync(); };
+    ship.onclick = () => { if (markDone(b.id)) { sh.done(); confetti(sh.el.querySelector(".bh")); } sh.prize("trophy"); sync(); };
     sh.body.append(
       b.client ? h("div", { class: "client" }, h("b", {}, "Client: "), h("span", { html: b.client })) : null,
       h("div", { class: "prompt", html: b.brief }),
@@ -787,7 +838,7 @@
       const prev = S.stars[b.id] || 0;
       if (stars > prev) { S.stars[b.id] = stars; save(); award(5 * (stars - prev), stars === 3 ? "puzzle, 3 stars" : "puzzle solved"); }
       head.replaceChildren(starsEl(Math.max(stars, prev)));
-      msg.replaceChildren(h("div", { class: "result pass" }, starsEl(stars), " ", (note || "Solved.") + (capped ? ` The hint${pz.used > 1 ? "s" : ""} cost ${3 - pz.cap()} star${3 - pz.cap() > 1 ? "s" : ""}.` : "")), b.why ? h("div", { class: "why", html: b.why }) : "");
+      msg.replaceChildren(h("div", { class: "result pass" }, sticker(stars === 3 ? "crown" : stars === 2 ? "thumbs" : "heart", "prize slap", stars + " of 3 stars"), starsEl(stars), " ", (note || "Solved.") + (capped ? ` The hint${pz.used > 1 ? "s" : ""} cost ${3 - pz.cap()} star${3 - pz.cap() > 1 ? "s" : ""}.` : "")), b.why ? h("div", { class: "why", html: b.why }) : "");
       sh.done();
       confetti(sh.el.querySelector(".bh"));
       ping();
@@ -1097,7 +1148,7 @@
           h("h1", {}, ch.title),
           h("p", { class: "tag" }, "No reading. Touch the pictures until they're right."),
           h("div", { class: "meta" }, modeSwitch(ch, "puzzle"), h("span", { class: "pill" }, `${got} / ${ch.puzzles.length * 3} stars`))),
-        h("div", { class: "cv-art" }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), flower(ch.id, "cv-fl"))),
+        h("div", { class: "cv-art" + (CFG.cards ? " has-pic" : "") }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), pic(ch, "cv-pic"), flower(ch.id, "cv-fl"))),
       ...ch.puzzles.map((b) => renderPuzzle(b, desk)),
       ...viz.map((b) => renderBlock(b, ctx)),
       h("div", { class: "pager" }, h("a", { class: "btn", href: "#" + ch.num }, "← Back to the lesson"), h("a", { class: "btn", href: "#puzzles" }, "Every puzzle →"))), desk.el));
@@ -1200,6 +1251,28 @@
   }
   let bloomT = 0;
   addEventListener("resize", () => { clearTimeout(bloomT); bloomT = setTimeout(() => DATA && bloomAll(true), 200); });
+  // A seed packet per chapter: its number and time, its pixel scene, the title in serif, and a pink strip
+  // whose ten seeds turn gold as the tasks get done. A finished chapter is stamped with a tulip and gets a bee.
+  const PACKET_STAGE = ["seed", "sprout", "bud", "half open", "in bloom"];
+  function packet(ch, p, isNext) {
+    const fin = p.n && p.d === p.n;
+    const st = window.GARDEN ? GARDEN.stage(p.pct) : 0;
+    const lit = p.n ? Math.round((10 * p.d) / p.n) : 0;
+    const no = String(ch.num).padStart(2, "0");
+    return h("a", { class: "pk" + (fin ? " bloomed" : p.d ? " growing" : "") + (isNext ? " next" : ""), href: "#" + ch.num, style: `--tilt:${tiltOf(ch.id) / 8}deg` },
+      h("span", { class: "pk-body" },
+        h("span", { class: "pk-top" }, h("span", { class: "pk-no" }, "No. " + no),
+          isNext ? h("span", { class: "pk-next" }, p.d ? "carry on" : "start here") : h("span", { class: "pk-min" }, ch.minutes ? ch.minutes + " min" : "")),
+        h("span", { class: "pk-pic" }, pic(ch),
+          fin ? h("span", { class: "bee-path", style: `--bd:${-(ch.num % 7) * 0.6}s` }, sticker("bee", "plot-bee")) : null),
+        h("b", { class: "pk-t" }, ch.title.replace(/\s*\(.*\)\s*$/, "")),
+        h("small", { class: "pk-s" }, ch.tagline),
+        h("span", { class: "pk-foot", title: `${p.d} of ${p.n} tasks done` },
+          h("span", { class: "pk-seeds", "aria-hidden": "true" }, Array.from({ length: 10 }, (_, i) => h("i", { class: i < lit ? "on" : "" }))),
+          h("span", { class: "pk-stage" }, PACKET_STAGE[st]),
+          h("i", { class: "pk-prog", "data-prog": ch.id, hidden: true }))),
+      fin ? sticker("tulip", "pk-stamp", "In full bloom") : null);
+  }
   const glyph = (p) => h("i", { class: "g " + (p.n && p.d === p.n ? "g2" : p.d ? "g1" : "g0"), title: `${p.d} / ${p.n} done` });
 
   function dueItems() {
@@ -1280,10 +1353,12 @@
       const bloomed = list.filter((c) => { const p = chProgress(c); return p.n && p.d === p.n; }).length;
       return h("div", { class: "bed" },
         h("h3", { class: "bed-h" }, h("span", { class: "tree" }, "└──"), pt || "Chapters", h("small", {}, `${bloomed} / ${list.length} in bloom`)),
-        h("div", { class: "plots" }, list.map((ch) => {
+        h("div", { class: "plots" + (CFG.cards ? " packets" : "") }, list.map((ch) => {
           const p = chProgress(ch);
-          return h("a", { class: "plot" + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : "") + (ch === nextCh ? " next" : ""), href: "#" + ch.num },
-            h("div", { class: "soil" }, h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id), ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
+          if (CFG.cards) return packet(ch, p, ch === nextCh);
+          return h("a", { class: "plot" + (CFG.cards ? " pic" : "") + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : "") + (ch === nextCh ? " next" : ""), href: "#" + ch.num },
+            h("div", { class: "soil" }, pic(ch), h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id),
+              p.n && p.d === p.n ? h("span", { class: "bee-path", style: `--bd:${-(ch.num % 7) * 0.6}s` }, sticker("bee", "plot-bee")) : null, ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
             h("span", { class: "num" }, String(ch.num).padStart(2, "0")),
             h("b", {}, ch.title), h("small", {}, ch.tagline),
             h("span", { class: "pbar" }, h("i", { "data-prog": ch.id, style: `width:${p.pct}%` })));
@@ -1371,7 +1446,7 @@
           h("h1", {}, ch.title),
           h("p", { class: "tag" }, ch.tagline),
           h("div", { class: "meta" }, pills)),
-        h("div", { class: "cv-art" }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), flower(ch.id, "cv-fl"))),
+        h("div", { class: "cv-art" + (CFG.cards ? " has-pic" : "") }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), pic(ch, "cv-pic"), flower(ch.id, "cv-fl"))),
       ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"), h("ul", {}, ch.goals.map((g) => h("li", { html: g })))) : null,
     );
     // ---- step-by-step: one section at a time, the next unlocks when this one is done
@@ -1462,8 +1537,20 @@
         h("summary", {}, h("code", {}, "└──"), h("b", {}, "Say it in your own words"), h("small", {}, "+5 XP")), ta, said);
     }
     const railNote = h("p", { class: "rail-note" });
+    const railFl = h("div", { class: "rail-fl" }, flower(ch.id, "rail-flower"));
+    let lastStage = window.GARDEN ? GARDEN.stage(chProgress(ch).pct) : 0;
+    const water = () => {
+      const st = window.GARDEN ? GARDEN.stage(chProgress(ch).pct) : 0;
+      if (st > lastStage && !REDUCED) {
+        railFl.querySelector(".rail-water")?.remove();
+        const can = sticker("water", "rail-water", "Your flower grew");
+        railFl.append(can);
+        setTimeout(() => can.remove(), 1900);
+      }
+      lastStage = st;
+    };
     const rail = h("aside", { class: "rail", "aria-label": "Steps in this chapter" },
-      h("div", { class: "rail-fl" }, flower(ch.id, "rail-flower")),
+      railFl,
       h("div", { class: "rail-h" }, `Chapter ${ch.num} · steps`), railList, railNote, railWords);
     function drawRail() {
       railList.textContent = "";
@@ -1553,7 +1640,7 @@
       const nxt = DATA.chapters[i + 1];
       const grown = flower(ch.id, "fin-fl", { "data-stage": 4 });
       finale = h("div", { class: "finale" },
-        h("div", { class: "fin-art dark" }, grown),
+        h("div", { class: "fin-art dark" }, grown, sticker("trophy", "fin-trophy slap", "Chapter complete"), sticker("rocket", "fin-rocket")),
         h("div", { class: "eyebrow" }, "Chapter " + ch.num + " complete · in full bloom"),
         h("h2", {}, "You can now…"),
         h("ul", { class: "wins" }, ch.goals.map((g) => h("li", { html: g }))),
@@ -1574,7 +1661,7 @@
       finale.scrollIntoView({ behavior: "smooth" });
     }
     for (let k = 0; k <= reached; k++) stepsEl.append(renderSection(ch.sections[k]));
-    onProgress = () => { if (gate) drawGate(); drawHead(); bloomAll(); };
+    onProgress = () => { if (gate) drawGate(); drawHead(); bloomAll(); water(); };
     drawHead();
     if (S.step[ch.id + ":fin"]) showFinale(); else drawGate();
     const i = DATA.chapters.indexOf(ch);
