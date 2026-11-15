@@ -218,6 +218,8 @@
     return h("ol", { class: "lad", id: "ladder" }, floors);
   }
   const SD_KIND = { follow: "Follow it", napkin: "Napkin math", bottleneck: "Find the bottleneck", draw: "Draw it" };
+  // units with a picture of their own in tunnel/shots/sd-<id>.webp: one soft clay object each; the rest show their drawing
+  const SD_ART = ["snip", "redis", "whatsapp", "uber", "twitter", "youtube"];
   function sketch(d) {
     const box = (n) => `<rect x="${n.x - 80}" y="${n.y - 33}" width="160" height="66" rx="14"/>`;
     const at = (id) => d.nodes.find((n) => n.id === id);
@@ -272,7 +274,8 @@
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, live.map(plotOf))),
       UNITS.length ? secH("System design", "every unit in two modes: on the whiteboard you scope, size and sketch it; in simulation it runs") : null,
       UNITS.length ? h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, UNITS.map((u, i) => { const qs = unitQs(u), d = qs.filter((b) => done[b.id]).length;
-        return plot({ href: unitHref(u), num: i + 1, title: u.name, sub: u.sub, hue: SD_HUE[i % SD_HUE.length], media: sketch(u.cover), tag: `${qs.length} questions`,
+        const media = SD_ART.includes(u.id) ? h("img", { class: "la-clay", src: `shots/sd-${u.id}.webp`, alt: "", loading: "lazy" }) : sketch(u.cover);
+        return plot({ href: unitHref(u), num: i + 1, title: u.name, sub: u.sub, hue: SD_HUE[i % SD_HUE.length], media, tag: `${qs.length} questions`,
           pct: (100 * d) / qs.length, bloomed: d === qs.length, next: d < qs.length && UNITS.findIndex((x) => unitQs(x).some((b) => !done[b.id])) === i ? (d ? "carry on" : "start here") : null }); }))) : null,
       UNITS.length ? secH("The ladder", `${SDX.LADDER.length} units, first principles first: nothing on a floor needs a floor above it`) : null,
       UNITS.length ? h("div", { class: "lad-wrap" }, ladderMap(SDX)) : null,
