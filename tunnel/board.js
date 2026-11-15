@@ -92,12 +92,13 @@
     els.svg.append(s("defs", { html: `
       <filter id="sd-sk" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="2.6"/></filter>
       <marker id="sd-ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 9 5 1 8.5" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>` }));
+    els.gc = s("g", { class: "sd-chart", "aria-hidden": "true" });
     els.gw = s("g", { class: "sd-wires" });
     els.gp = s("g", { class: "sd-parts" });
     els.gd = s("g", { class: "sd-dots", "aria-hidden": "true" });
     els.go = s("g", { class: "sd-over" });
     els.gx = s("g", { class: "sd-x" });
-    els.svg.append(els.gw, els.gd, els.gp, els.go, els.gx);
+    els.svg.append(els.gc, els.gw, els.gd, els.gp, els.go, els.gx);
     els.mode = h("div", { class: "sd-modechip", "aria-hidden": "true" });
     els.score = h("div", { class: "sd-score", "aria-live": "polite" });
     els.stage = h("div", { class: "sd-stage" }, els.svg, els.score, els.mode);
@@ -160,6 +161,7 @@
     };
     els.strip.replaceChildren(
       h("a", { class: "sd-back", href: "./#ladder" }, "← Wind Tunnel"),
+      h("img", { class: "sd-unit-pic", src: `shots/sd-${U.id}.webp`, alt: "", width: 44, height: 31 }),
       h("span", { class: "sd-sh" }, h("b", {}, U.name), ` · ${U.sub}`),
       h("div", { class: "sd-modes" }, group("w"), group("s")));
   }
@@ -167,8 +169,36 @@
 
   // ---------------------------------------------------------------- board --
   function drawAll() {
-    if (ctx) { els.gw.replaceChildren(); els.gp.replaceChildren(); els.go.replaceChildren(); els.gd.replaceChildren(); UI[B.kind].draw(ctx); drawScore(); return; }
-    drawWires(); drawParts(); drawOver(); drawScore();
+    if (ctx) { els.gc.replaceChildren(); els.gw.replaceChildren(); els.gp.replaceChildren(); els.go.replaceChildren(); els.gd.replaceChildren(); UI[B.kind].draw(ctx); drawScore(); return; }
+    drawChart(); drawWires(); drawParts(); drawOver(); drawScore();
+  }
+  // behind the parts: what a lab measured, drawn on the whiteboard itself
+  function drawChart() {
+    const kids = [];
+    if (B.kind === "bottleneck") {
+      // how busy each part gets as the traffic climbs, a line per part in its own colour, up to the step on show
+      const X0 = 70, X1 = 890, Y0 = 512, Y1 = 404, n = B.ramp.length;
+      const x = (i) => X0 + (X1 - X0) * i / (n - 1), y = (u) => Y0 - (Y0 - Y1) * Math.min(1, u);
+      kids.push(s("text", { class: "sd-ch-t", x: X0 - 8, y: Y1 - 22 }, "How busy each part gets"),
+        s("text", { class: "sd-ch-s", x: X0 - 8, y: Y1 - 8 }, F.steps ? "as the traffic climbs · past the dashed line, it's full" : "the traffic climbs once you've picked a part"),
+        s("line", { class: "sd-ch-ax", x1: X0, y1: Y0, x2: X1, y2: Y0 }),
+        s("line", { class: "sd-ch-full", x1: X0, y1: y(0.85), x2: X1, y2: y(0.85) }),
+        s("text", { class: "sd-ch-l full", x: X0 + 4, y: y(0.85) - 5 }, "85% · full"));
+      B.ramp.forEach((r, i) => kids.push(s("text", { class: "sd-ch-l" + (F.steps && i === F.at ? " on" : ""), x: x(i), y: Y0 + 14, "text-anchor": "middle" }, `${num(r)}/s`)));
+      if (F.steps) {
+        kids.push(s("line", { class: "sd-ch-now", x1: x(F.at), y1: Y1 - 4, x2: x(F.at), y2: Y0 }));
+        for (const nd of D.nodes) {
+          if (nd.kind === "users" || nd.kind === "lb") continue;
+          const pts = F.steps.slice(0, F.at + 1).map((st, i) => [x(i), y(st.r.util[nd.id] || 0)]);
+          const last = pts[pts.length - 1], u = F.steps[F.at].r.util[nd.id] || 0;
+          kids.push(s("g", { class: `k-${nd.kind}` },
+            s("polyline", { class: "sd-ch-line", points: pts.map((p) => p.join(",")).join(" ") }),
+            pts.map((p) => s("circle", { class: "sd-ch-dot", cx: p[0], cy: p[1], r: 3 })),
+            s("text", { class: "sd-ch-tag", x: last[0] + (F.at < n / 2 ? 8 : -8), y: last[1] - 8, "text-anchor": F.at < n / 2 ? "start" : "end" }, `${labelOf(nd)} ${Math.round(Math.min(1, u) * 100)}%`)));
+        }
+      }
+    }
+    els.gc.replaceChildren(...kids);
   }
   function sub(nd) {
     if (nd.tag) return nd.tag; // a part drawn for one question can say what it is there (Nia "wants two seats")
@@ -262,6 +292,14 @@
       const x = nd ? Math.min(W - 130, Math.max(130, nd.x)) : W / 2, y = nd ? (nd.y > H / 2 ? nd.y - PH / 2 - 54 : nd.y + PH / 2 + 12) : 40 + k * 50;
       kids.push(s("foreignObject", { x: x - 125, y, width: 250, height: 46, class: "sd-prob-fo" }, h("div", { class: "sd-prob", xmlns: "http://www.w3.org/1999/xhtml" }, short(p.text))));
     });
+    // an almost empty sketch: a marker note on the board saying how to start, gone once the drawing gets going
+    if (B.kind === "sketch" && D.nodes.length < 3 && !F.G) {
+      const u = D.nodes[0];
+      kids.push(s("g", { class: "sd-doodle", "aria-hidden": "true" },
+        u ? s("path", { d: `M${u.x + PW / 2 + 14} ${u.y - 6} C ${u.x + PW / 2 + 90} ${u.y - 60}, 470 ${u.y - 90}, 540 ${u.y - 40}`, "marker-end": "url(#sd-ar)" }) : null,
+        s("text", { x: 560, y: (u ? u.y : 270) - 44 }, TOUCH ? "tap parts in from the tray," : "drag parts in from the tray,"),
+        s("text", { x: 560, y: (u ? u.y : 270) - 18 }, "then wire them up from the +")));
+    }
     if (B.kind === "napkin") for (const n of B.notes) {
       const nd = part(n.on), x = nd.x + n.dx - 85, y = nd.y + n.dy;
       const mark = F.marks[n.id];
@@ -293,7 +331,23 @@
       for (const [say, pass, shown] of UI[B.kind].score(ctx)) rows.push(h("li", { class: pass == null ? "" : pass ? "ok" : "no" }, h("i", {}, pass == null ? "·" : pass ? "✓" : "✗"), h("span", {}, say), h("b", {}, shown)));
     } else { els.score.hidden = true; return; }
     els.score.hidden = false;
-    els.score.replaceChildren(h("ul", {}, rows));
+    els.score.replaceChildren(...[h("ul", {}, rows), B.kind === "draw" && res && res.hist ? spread(res) : null].filter(Boolean));
+  }
+  // every click of the last run by how long it took, on a log scale, with the goal and the run's p99 marked
+  function spread(r) {
+    const Wd = 220, Hd = 54, n = r.hist.length, mx = Math.max(...r.hist, 1), bw = Wd / n;
+    const xAt = (sec) => Math.max(0, Math.min(Wd, Wd * Math.log10(Math.max(sec, 1e-3) / 1e-3) / Math.log10(4000)));
+    const goal = (B.goals.find(([k]) => k === "p99") || [])[2];
+    const svg = s("svg", { class: "sd-spread", viewBox: `0 -4 ${Wd} ${Hd + 20}`, width: Wd, height: Hd + 24, "aria-hidden": "true" },
+      r.hist.map((c, i) => {
+        const bh = c ? Math.max(1.5, (Hd - 4) * Math.sqrt(c / mx)) : 0, mid = 1e-3 * Math.pow(4000, (i + 0.5) / n);
+        return s("rect", { class: goal && mid > goal ? "late" : "", x: i * bw + 0.8, y: Hd - bh, width: bw - 1.6, height: bh, rx: 1 });
+      }),
+      s("line", { class: "ax", x1: 0, y1: Hd, x2: Wd, y2: Hd }),
+      goal ? [s("line", { class: "goal", x1: xAt(goal), y1: -2, x2: xAt(goal), y2: Hd }), s("text", { x: xAt(goal) + 3, y: 6 }, "goal")] : null,
+      s("line", { class: "p99", x1: xAt(r.p99), y1: 8, x2: xAt(r.p99), y2: Hd }),
+      [[1e-3, "1 ms"], [0.01, "10 ms"], [0.1, "100 ms"], [1, "1 s"]].map(([t, l]) => s("text", { class: "tick", x: xAt(t) + (t === 1e-3 ? 0 : -8), y: Hd + 12 }, l)));
+    return h("div", { class: "sd-spread-w" }, h("small", {}, "every click, by how long it took"), svg);
   }
 
   // ----------------------------------------------------------------- dots --
@@ -504,8 +558,10 @@
     }
     const nx = L[qi + 1], nu = UNITS[UNITS.indexOf(U) + 1];
     const next = nx ? h("a", { class: "btn primary", href: loc(nx) }, nx.mode !== B.mode ? `Now run it: ${nx.title} →` : `Next: ${nx.title} →`)
-      : nu ? h("a", { class: "btn primary", href: loc(nu.w[0]) }, `Next unit: ${nu.name} →`) : h("a", { class: "btn", href: "./#ladder" }, "Back to the ladder →");
+      : nu ? h("a", { class: "sd-nextunit", href: loc(nu.w[0]) }, h("img", { src: `shots/sd-${nu.id}.webp`, alt: "" }), h("span", {}, h("small", {}, "Next unit"), h("b", {}, `${nu.name} →`))) : h("a", { class: "btn", href: "./#ladder" }, "Back to the ladder →");
     if (solvedNow || done) kids.splice(3, 0, h("div", { class: "sd-why" + (solvedNow ? " fresh" : "") }, h("div", { class: "sd-wh" }, stars(starsOf(B.id)), h("b", {}, solvedNow ? "Solved" : "Solved before")), h("p", {}, B.why), next));
+    // the unit's own picture opens it
+    if (qi === 0) kids.unshift(h("img", { class: "sd-hero", src: `shots/sd-${U.id}.webp`, alt: "" }));
     els.brief.replaceChildren(...kids);
     els.tools.replaceChildren(...tools);
     els.tools.hidden = !tools.length;

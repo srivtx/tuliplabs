@@ -215,13 +215,16 @@
     for (const s of st.values()) mark(s, END);
     const lat = reqs.filter((r) => r.t0 >= A).map((r) => (r.done == null ? END - r.t0 : r.done - r.t0)).sort((a, b) => a - b);
     const qt = (p) => lat.length ? lat[Math.min(lat.length - 1, Math.floor(p * lat.length))] : 0;
+    // every measured request by how long it took: 24 buckets, log-spaced from 1 ms to 4 s (the last holds the rest)
+    const hist = new Array(24).fill(0);
+    for (const x of lat) hist[Math.max(0, Math.min(23, Math.floor(Math.log10(Math.max(x, 1e-3) / 1e-3) * 24 / Math.log10(4000))))]++;
     const util = {}, queue = {}, tput = {};
     for (const [id, s] of st) { util[id] = s.area / (s.c * win); queue[id] = s.qarea / win; tput[id] = s.n / win; }
     for (const k in flow) flow[k] /= win;
     const waiting = jobs.filter((j) => j.done == null || j.done > B).filter((j) => j.t0 <= B);
     return {
       p50: qt(0.5), p99: qt(0.99), errors: lat.filter((x) => x > drain).length / Math.max(1, lat.length), n: lat.length,
-      util, queue, tput, flow, cost: costOf(design), dbLoad: dbIn / win,
+      util, queue, tput, flow, cost: costOf(design), dbLoad: dbIn / win, hist,
       lag: waiting.length ? B - Math.min(...waiting.map((j) => j.t0)) : 0,
     };
   }
