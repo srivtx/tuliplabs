@@ -19,6 +19,7 @@ const VD = require(path.join(__dirname, "..", "tunnel", "video.js"));
 const TX = require(path.join(__dirname, "..", "tunnel", "tix.js"));
 const LT = require(path.join(__dirname, "..", "tunnel", "lat.js"));
 const CA = require(path.join(__dirname, "..", "tunnel", "cache.js"));
+const SP = require(path.join(__dirname, "..", "tunnel", "split.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -509,6 +510,82 @@ for (const b of BOARDS) {
       `60 s is ${num(sh(60, "delete").db)} reads a second, 10 minutes is ${num(sh(600, "delete").db)}`])
       ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
     ok(["10", "60", "600"].every((t) => sh(t, "delete").stale === 0), `${b.id}: a shared delete still serves stale reads`);
+  }
+}
+
+// ------------------------------------------------------------------------------------ Splitting data --
+for (const b of BOARDS) {
+  if (b.id === "sp-napkin") {
+    // hash % N keeps a key only when hash % 16 equals hash % 17: 1 time in 17, on real hashes too
+    const m = SP.moved("mod", 0, 16, 17);
+    ok(Math.abs(m.all - 16 / 17) < 0.005, `${b.id}: hash % 16 → 17 moved ${pct(m.all, 1)}, not 16/17`);
+    const tb = 40 + 12 * 2, share = tb / 17, hrs = (share * 1e6) / 200 / 3600, all = (tb * 16) / 17;
+    for (const x of [`it's ${tb} TB: ${tb / 4} machines`, `need ${150000 / 12000}`, `${tb} ÷ 17 = ${share.toFixed(1)} TB: ${hrs.toFixed(1)} hours`, `1 time in 17: ${Math.round(all)} TB, three and a half days`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+    ok(Math.abs((all * 1e6) / 200 / 86400 - 3.5) < 0.1, `${b.id}: moving ${Math.round(all)} TB isn't three and a half days`);
+  }
+  if (b.kind === "ring") {
+    // the moves and shares the rounds ask about, on 100,000 real keys
+    const mod = SP.moved("mod", 0, 4, 5), r200 = SP.moved("ring", 200, 4, 5), one = SP.layout("ring", 5, 1).share, even = SP.layout("ring", 5, 200).share;
+    ok(Math.abs(mod.all - 0.8) < 0.01 && Math.abs(mod.among - 0.6) < 0.01, `${b.id}: hash % 4 → 5 moved ${pct(mod.all, 1)} (${pct(mod.among, 1)} between old servers)`);
+    ok(r200.among === 0 && Math.abs(r200.all - 0.2) < 0.01, `${b.id}: the ring moved keys between old servers, or not about 20%`);
+    ok(SP.moved("ring", 1, 4, 5).among === 0, `${b.id}: a one-point ring moved keys between old servers`);
+    for (const x of [`${pct(mod.all)} of the keys move`, `only the keys it takes move: ${pct(r200.all)}`, `fullest server holds ${pct(Math.max(...one))} and the emptiest ${pct(Math.min(...one))}`,
+      `between ${pct(Math.min(...even))} and ${pct(Math.max(...even))}`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+    ok(b.rounds.length === 3 && b.rounds[2].ask === "max", `${b.id}: the rounds changed`);
+  }
+  if (b.kind === "pkey") {
+    // every key against both goals; exactly the answer spreads the writes and reads one van's hour from one partition
+    const R = SP.pkey(), pass = (r) => r.busiest <= SP.PK.cap && r.one === 1;
+    for (const k of SP.KEYS_P) ok(pass(R[k]) === (k === b.answer), `${b.id}: ${k}: busiest ${R[k].busiest}, one van's hour asks ${R[k].one}`);
+    ok(R.time.busiest === SP.PK.vans && R.hashread.one === SP.PK.parts && R.hashvan.all === SP.PK.parts, `${b.id}: time, a reading's hash or the van's hash don't behave as the why says`);
+    const F = SP.fleet(), acme = F.ids.filter((id) => id.startsWith(SP.PK.big)).length, other = R.idrange.busiest - acme;
+    ok(acme === 4000 && SP.partOf("idrange", "acme-0001") === 0 && R.idrange.counts[0] === R.idrange.busiest, `${b.id}: Acme's vans aren't all in a–c, or a–c isn't the busiest`);
+    for (const x of [`with ${Math.round(other / 50) * 50} others: ${num(R.idrange.busiest)} a second`, `the busiest takes ${num(R.hashread.busiest)}`, `the busiest takes ${num(R.hashvan.busiest)}`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  }
+  if (b.kind === "grow") {
+    // every scheme and way of joining: exactly the answers pass, and the why's numbers are worked out
+    const g = b.goals, pass = (r) => r.errors <= g.errors && r.busiest <= g.busy * SP.GR.cap, isAns = (o) => b.answers.some((a) => a.scheme === o.scheme && a.how === o.how), at = {};
+    for (const scheme of SP.SCHEMES) for (const how of SP.HOWS) {
+      const o = { scheme, how }, r = (at[`${scheme}:${how}`] = SP.grow(o));
+      ok(pass(r) === isAns(o), `${b.id}: ${scheme}, ${how}: ${r.errors} failed, busiest ${Math.round(r.busiest)}`);
+    }
+    // the cold keys refill at what the database takes: a plain count of the misses agrees with the steps
+    {
+      const r = at["ring200:now"], cold = r.cold0 * SP.GR.sessions;
+      let C = cold, err = 0; for (let t = 0; t < 200; t += 0.001) { const m = (SP.GR.rate * C) / SP.GR.sessions, s2 = Math.min(m, SP.GR.db); err += (m - s2) * 0.001; C -= s2 * 0.001; }
+      ok(Math.abs(err - r.dbErr) < 0.01 * err, `${b.id}: the refill steps give ${r.dbErr} failed reads, a finer count ${Math.round(err)}`);
+    }
+    const mod = SP.moved("mod", 0, 4, 5), A = at["ring200:copy"];
+    for (const x of [`${num(Math.round(at["mod:now"].dbPeak / 1000) * 1000)} reads a second miss`, `${num(at["mod:now"].errors)} reads fail`, `${num(at["mod:copy"].errors)} still fail`, `${pct(mod.among)} just moved`,
+      `doing ${num(at["ring1:now"].busiestBefore)} reads a second`, `${num(Math.round(at["ring200:now"].dbPeak / 1000) * 1000)} misses a second`, `${num(at["ring200:now"].errors)} reads fail`,
+      `(${Math.round(A.copyTime)} seconds at ${num(SP.GR.copy)} keys a second)`, `busiest server does ${num(A.busiest)} reads a second, ${pct(A.busiest / SP.GR.cap)}`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+    ok(at["ring1:now"].busiestBefore > SP.GR.cap && at["mod:now"].dbPeak / SP.GR.db > 7.9, `${b.id}: the one-point ring wasn't over before, or hash % N wasn't eight times the database`);
+  }
+  if (b.kind === "hotcell") {
+    // the Hilbert curve visits every cell once, a step at a time; then on three crowd speeds exactly the answer passes
+    const seen = new Set(SP.XY.map(([x, y]) => y * 16 + x));
+    ok(seen.size === 256 && SP.XY.every(([x, y], d) => !d || Math.abs(x - SP.XY[d - 1][0]) + Math.abs(y - SP.XY[d - 1][1]) === 1), `${b.id}: the Hilbert curve skips or jumps`);
+    const g = b.goals, pass = (r) => r.dropped <= g.dropped && r.search <= g.search, isAns = (o) => b.answers.some((a) => a.by === o.by && a.split === o.split), ramp0 = SP.HC.ramp, at = {};
+    for (const ramp of [50, ramp0, 70]) {
+      SP.HC.ramp = ramp;
+      for (const by of SP.BYS) for (const split of SP.SPLITS) {
+        const o = { by, split }, r = SP.hot(o);
+        if (ramp === ramp0) at[`${by}:${split}`] = r;
+        ok(pass(r) === isAns(o), `${b.id} ramp ${ramp}: ${by}, ${split}: ${r.dropped} dropped, search ${r.search.toFixed(2)}`);
+      }
+    }
+    SP.HC.ramp = ramp0;
+    let hottest = 0; for (let d = 0; d < 256; d++) hottest = Math.max(hottest, SP.cellLoad(d, SP.HC.T));
+    ok(hottest < 0.5 * SP.HC.cap, `${b.id}: one cell takes ${Math.round(hottest)}, so no split could ever help`);
+    const N0 = at["area:never"], N9 = at["area:0.9"], N5 = at["area:0.5"], D = at["driver:never"];
+    for (const x of [`takes ${num(Math.round((N0.peak * SP.HC.cap) / 100) * 100)} updates a second`, `${num(N0.dropped)} updates are dropped`, `${num(N9.dropped)} updates are dropped`,
+      `${N5.splits} splits leave ${N5.count} partitions`, `asks ${N5.search.toFixed(1)} partitions at worst`, `at ${pct(D.peak)} busy`])
+      ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+    ok(N5.peak < 1 && N9.peak > 1 && D.search === 16, `${b.id}: the peaks or the hash search aren't what the why says`);
   }
 }
 
