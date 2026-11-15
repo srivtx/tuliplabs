@@ -973,7 +973,7 @@
   // everything, and what to do with the hot part. Every number is worked out by tunnel/split.js, and
   // tools/board-check.js checks the text against it.
   const SP_CHAT = {
-    nodes: [P("u", "people", 95, 270, { label: "senders", tag: "150,000 messages a second" }), P("ap", "app", 330, 270, { label: "app servers", tag: "pick the partition" }),
+    nodes: [P("u", "people", 95, 270, { label: "senders", tag: "150,000 a second" }), P("ap", "app", 330, 270, { label: "app servers", tag: "route by key" }),
       P("d1", "sql", 640, 90, { label: "partition 1", tag: "4 TB" }), P("d2", "sql", 640, 210, { label: "partition 2", tag: "4 TB" }),
       P("d3", "sql", 640, 330, { label: "partition 3", tag: "4 TB" }), P("d4", "sql", 640, 450, { label: "partition …", tag: "4 TB" })],
     wires: [["u", "ap"], ["ap", "d1"], ["ap", "d2"], ["ap", "d3"], ["ap", "d4"]],
@@ -987,9 +987,9 @@
         q: {},
         design: SP_CHAT,
         notes: [
-          { id: "d", on: "d1", dx: 160, dy: 0, label: "machines to hold a year's data", unit: "", calc: "(40 + 12 * 2) / 4", hint: "today's 40 TB plus 12 months of 2 TB, over 4 TB a machine" },
+          { id: "d", on: "d1", dx: 190, dy: 10, label: "machines to hold a year's data", unit: "", calc: "(40 + 12 * 2) / 4", hint: "today's 40 TB plus 12 months of 2 TB, over 4 TB a machine" },
           { id: "w", on: "ap", dx: -90, dy: -200, label: "machines for the writes", unit: "", calc: "150000 / 12000", hint: "the peak writes over what one machine takes" },
-          { id: "h", on: "d4", dx: 160, dy: -20, label: "hours to fill a 17th machine", unit: "h", calc: "(64e6 / 17) / 200 / 3600", hint: "its fair share is 64 TB ÷ 17 = 3.8 TB, which is 3.8 million MB, at 200 MB a second" },
+          { id: "h", on: "d4", dx: 190, dy: -30, label: "hours to fill a 17th machine", unit: "h", calc: "(64e6 / 17) / 200 / 3600", hint: "its fair share is 64 TB ÷ 17 = 3.8 TB, which is 3.8 million MB, at 200 MB a second" },
         ],
         why: "A year from now it's 64 TB: 16 machines just to hold it. The writes need 12.5, so here the disk decides, not the writes. And adding a 17th is slow even if you move only its fair share, 64 ÷ 17 = 3.8 TB: 5.2 hours at 200 MB/s. So how you split the keys matters twice over. Hash % N, the obvious way, moves a key unless hash % 16 equals hash % 17, which is 1 time in 17: 60 TB, three and a half days of copying. The next questions are how to cut the data so no one machine gets the hot part, and how to add one without moving everything.",
       },
