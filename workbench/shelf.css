@@ -4,7 +4,8 @@
 .la-plot{border-color:color-mix(in srgb,var(--a) 14%,var(--line))}
 .la-plot:hover{border-color:var(--a)}
 .la-plot .soil.la-soil{height:172px;background:radial-gradient(120% 90% at 70% 100%,color-mix(in srgb,var(--a) 22%,var(--b)),var(--b) 70%);border-bottom:0;overflow:hidden;isolation:isolate}
-.la-tag{position:absolute;top:9px;left:10px;z-index:3;font:600 10px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--a);background:color-mix(in srgb,var(--b) 82%,transparent);padding:2px 7px;border-radius:4px;backdrop-filter:blur(3px)}
+.la-tag{position:absolute;top:9px;left:10px;z-index:3;font:600 10px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--a);background:color-mix(in srgb,var(--b) 82%,transparent);padding:2px 7px;border-radius:4px;backdrop-filter:blur(3px);max-width:calc(100% - 34px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.la-plot.next .la-tag{max-width:calc(100% - 112px)}
 .la-soon-tag{position:absolute;top:9px;right:10px;z-index:3;font:600 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--a);border:1px solid color-mix(in srgb,var(--a) 50%,transparent);padding:1px 6px;border-radius:4px}
 .la-plot .next-tag{z-index:3}
 .la-plot .pbar i{background:var(--a)}

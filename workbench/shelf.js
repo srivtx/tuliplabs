@@ -247,8 +247,8 @@
       h("div", { class: "branch" }, X.filter((x) => !x.live).map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))));
     const plotOf = (x) => {
       const i = X.indexOf(x);
-      const media = x.live ? h("img", { class: "la-shot", src: `shots/${x.id}.webp`, alt: "", loading: "lazy" })
-        : h("p", { class: "la-ask" }, x.ask || x.teaser);
+      // a live experiment shows one soft clay object (made in ChatGPT, picked by hand); a planned one asks its question
+      const media = x.live ? h("img", { class: "la-clay", src: `shots/clay-${x.id}.webp`, alt: "", loading: "lazy" }) : h("p", { class: "la-ask" }, x.ask || x.teaser);
       return plot({ href: x.live ? `lab.html#${i + 1}` : null, num: i + 1, title: x.title, sub: x.teaser, hue: WT_HUE[x.id] || "cyan", media,
         soon: !x.live, pct: done[x.id] ? 100 : 0, bloomed: !!done[x.id], next: x === next ? (have ? "next" : "start here") : null, tag: x.live ? x.law : null });
     };
@@ -269,7 +269,7 @@
       ladder([["Predict", "Drag a pin to where you think it breaks, and lock it in."], ["Push it", "Drag the crowd up. Watch queues stack and servers drown."],
         ["The law", "See your guess against the answer, and the law behind it."], ["Fix it", "A launch day, a budget, a goal. Change the design."],
         ["Read the diff", "Your design is system.yaml; the change shows as a diff."], ["Rewind", "Drag back along a timeline to the moment it broke."]]),
-      h("div", { class: "note", html: "Every number in an experiment's text comes out of the same seeded simulator you're watching, and is checked before it ships. Same seed, same run: that's what makes rewind exact. The pictures below are frames from that simulator." }),
+      h("div", { class: "note", html: "Every number in an experiment's text comes out of the same seeded simulator you're watching, and is checked before it ships. Same seed, same run: that's what makes rewind exact." }),
       secH("Live experiments", "each one is its own system, caught at the moment it bends"),
       h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, live.map(plotOf))),
       UNITS.length ? secH("System design", "every unit in two modes: on the whiteboard you scope, size and sketch it; in simulation it runs") : null,
