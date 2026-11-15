@@ -1251,6 +1251,28 @@
   }
   let bloomT = 0;
   addEventListener("resize", () => { clearTimeout(bloomT); bloomT = setTimeout(() => DATA && bloomAll(true), 200); });
+  // A seed packet per chapter: its number and time, its pixel scene, the title in serif, and a pink strip
+  // whose ten seeds turn gold as the tasks get done. A finished chapter is stamped with a tulip and gets a bee.
+  const PACKET_STAGE = ["seed", "sprout", "bud", "half open", "in bloom"];
+  function packet(ch, p, isNext) {
+    const fin = p.n && p.d === p.n;
+    const st = window.GARDEN ? GARDEN.stage(p.pct) : 0;
+    const lit = p.n ? Math.round((10 * p.d) / p.n) : 0;
+    const no = String(ch.num).padStart(2, "0");
+    return h("a", { class: "pk" + (fin ? " bloomed" : p.d ? " growing" : "") + (isNext ? " next" : ""), href: "#" + ch.num, style: `--tilt:${tiltOf(ch.id) / 8}deg` },
+      h("span", { class: "pk-body" },
+        h("span", { class: "pk-top" }, h("span", { class: "pk-no" }, "No. " + no),
+          isNext ? h("span", { class: "pk-next" }, p.d ? "carry on" : "start here") : h("span", { class: "pk-min" }, ch.minutes ? ch.minutes + " min" : "")),
+        h("span", { class: "pk-pic" }, pic(ch),
+          fin ? h("span", { class: "bee-path", style: `--bd:${-(ch.num % 7) * 0.6}s` }, sticker("bee", "plot-bee")) : null),
+        h("b", { class: "pk-t" }, ch.title.replace(/\s*\(.*\)\s*$/, "")),
+        h("small", { class: "pk-s" }, ch.tagline),
+        h("span", { class: "pk-foot", title: `${p.d} of ${p.n} tasks done` },
+          h("span", { class: "pk-seeds", "aria-hidden": "true" }, Array.from({ length: 10 }, (_, i) => h("i", { class: i < lit ? "on" : "" }))),
+          h("span", { class: "pk-stage" }, PACKET_STAGE[st]),
+          h("i", { class: "pk-prog", "data-prog": ch.id, hidden: true }))),
+      fin ? sticker("tulip", "pk-stamp", "In full bloom") : null);
+  }
   const glyph = (p) => h("i", { class: "g " + (p.n && p.d === p.n ? "g2" : p.d ? "g1" : "g0"), title: `${p.d} / ${p.n} done` });
 
   function dueItems() {
@@ -1331,8 +1353,9 @@
       const bloomed = list.filter((c) => { const p = chProgress(c); return p.n && p.d === p.n; }).length;
       return h("div", { class: "bed" },
         h("h3", { class: "bed-h" }, h("span", { class: "tree" }, "└──"), pt || "Chapters", h("small", {}, `${bloomed} / ${list.length} in bloom`)),
-        h("div", { class: "plots" }, list.map((ch) => {
+        h("div", { class: "plots" + (CFG.cards ? " packets" : "") }, list.map((ch) => {
           const p = chProgress(ch);
+          if (CFG.cards) return packet(ch, p, ch === nextCh);
           return h("a", { class: "plot" + (CFG.cards ? " pic" : "") + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : "") + (ch === nextCh ? " next" : ""), href: "#" + ch.num },
             h("div", { class: "soil" }, pic(ch), h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id),
               p.n && p.d === p.n ? h("span", { class: "bee-path", style: `--bd:${-(ch.num % 7) * 0.6}s` }, sticker("bee", "plot-bee")) : null, ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
