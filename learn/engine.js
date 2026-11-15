@@ -31,7 +31,7 @@
   // The pixel stickers (tunnel/stickers, made in ChatGPT) and their frame-by-frame strips.
   // A finished task gets a prize slapped on its header; a wrong run gets a bug, a ghost or a snail.
   const STK = (() => { try { return new URL("../tunnel/stickers/", document.currentScript.src).href; } catch (e) { return "../tunnel/stickers/"; } })();
-  const ANIM = { flame: { n: 6, ms: 110 }, bloom: { n: 8, ms: 130, once: true }, walk: { n: 8, ms: 85 }, rocket: { n: 6, ms: 90 }, sleep: { n: 6, ms: 260 }, hourglass: { n: 6, ms: 200 } };
+  const ANIM = { flame: { n: 6, ms: 110 }, bloom: { n: 8, ms: 130, once: true }, walk: { n: 8, ms: 85 }, rocket: { n: 6, ms: 90 }, sleep: { n: 6, ms: 260 }, hourglass: { n: 6, ms: 200 }, water: { n: 6, ms: 170, once: true }, bee: { n: 6, ms: 90 } };
   function sticker(name, cls, title) {
     const a = ANIM[name];
     const attrs = { class: "stk " + (cls || ""), title: title || null, "aria-hidden": title ? null : "true" };
@@ -1334,7 +1334,8 @@
         h("div", { class: "plots" }, list.map((ch) => {
           const p = chProgress(ch);
           return h("a", { class: "plot" + (CFG.cards ? " pic" : "") + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : "") + (ch === nextCh ? " next" : ""), href: "#" + ch.num },
-            h("div", { class: "soil" }, pic(ch), h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id), ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
+            h("div", { class: "soil" }, pic(ch), h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id),
+              p.n && p.d === p.n ? h("span", { class: "bee-path", style: `--bd:${-(ch.num % 7) * 0.6}s` }, sticker("bee", "plot-bee")) : null, ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
             h("span", { class: "num" }, String(ch.num).padStart(2, "0")),
             h("b", {}, ch.title), h("small", {}, ch.tagline),
             h("span", { class: "pbar" }, h("i", { "data-prog": ch.id, style: `width:${p.pct}%` })));
@@ -1513,8 +1514,20 @@
         h("summary", {}, h("code", {}, "└──"), h("b", {}, "Say it in your own words"), h("small", {}, "+5 XP")), ta, said);
     }
     const railNote = h("p", { class: "rail-note" });
+    const railFl = h("div", { class: "rail-fl" }, flower(ch.id, "rail-flower"));
+    let lastStage = window.GARDEN ? GARDEN.stage(chProgress(ch).pct) : 0;
+    const water = () => {
+      const st = window.GARDEN ? GARDEN.stage(chProgress(ch).pct) : 0;
+      if (st > lastStage && !REDUCED) {
+        railFl.querySelector(".rail-water")?.remove();
+        const can = sticker("water", "rail-water", "Your flower grew");
+        railFl.append(can);
+        setTimeout(() => can.remove(), 1900);
+      }
+      lastStage = st;
+    };
     const rail = h("aside", { class: "rail", "aria-label": "Steps in this chapter" },
-      h("div", { class: "rail-fl" }, flower(ch.id, "rail-flower")),
+      railFl,
       h("div", { class: "rail-h" }, `Chapter ${ch.num} · steps`), railList, railNote, railWords);
     function drawRail() {
       railList.textContent = "";
@@ -1625,7 +1638,7 @@
       finale.scrollIntoView({ behavior: "smooth" });
     }
     for (let k = 0; k <= reached; k++) stepsEl.append(renderSection(ch.sections[k]));
-    onProgress = () => { if (gate) drawGate(); drawHead(); bloomAll(); };
+    onProgress = () => { if (gate) drawGate(); drawHead(); bloomAll(); water(); };
     drawHead();
     if (S.step[ch.id + ":fin"]) showFinale(); else drawGate();
     const i = DATA.chapters.indexOf(ch);

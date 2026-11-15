@@ -756,3 +756,20 @@ img.stk{width:34px;height:34px}
 .cv-art.has-pic .cv-fl{inset:auto auto -6px -18px;width:76px;height:100px;z-index:2}
 @media (max-width:640px){.cv-art img.cv-pic{width:112px;height:112px;bottom:16px}}
 @media (max-width:640px){.plot.pic .soil{height:210px}}
+
+/* a bee loops over every chapter in full bloom; a watering can pours on the rail's flower when it grows */
+.bee-path{position:absolute;left:46%;top:34%;z-index:3;pointer-events:none;animation:tlbee 6s ease-in-out infinite;animation-delay:var(--bd,0s)}
+.bee-path .plot-bee{width:30px;height:30px;filter:drop-shadow(0 2px 0 rgba(0,0,0,.3))}
+@keyframes tlbee{
+  0%{transform:translate(-62px,8px) scaleX(1)}
+  22%{transform:translate(-8px,-26px) scaleX(1)}
+  45%{transform:translate(58px,-4px) scaleX(1)}
+  50%{transform:translate(62px,6px) scaleX(-1)}
+  72%{transform:translate(6px,28px) scaleX(-1)}
+  95%{transform:translate(-58px,2px) scaleX(-1)}
+  100%{transform:translate(-62px,8px) scaleX(1)}}
+.rail-fl .rail-water{position:absolute;left:38px;top:4px;width:78px;height:78px;z-index:3;animation:tlcan 1.9s ease both}
+@keyframes tlcan{0%{opacity:0;transform:translateY(-10px)}10%,85%{opacity:1;transform:none}100%{opacity:0}}
+.rail-fl .rail-water>.spr{animation-delay:.2s}
+@media (prefers-reduced-motion:reduce){.bee-path{animation:none}}
+.plot.pic .num{display:none}
