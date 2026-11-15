@@ -936,7 +936,7 @@
           { ask: "size", at: 0.9, say: "How much of the catalog does it take to answer <b>90%</b> of views?" },
           { ask: "size", at: 0.99, say: "And <b>99%</b>?" },
         ],
-        why: "The top 1% of products, 200 MB, answers 68% of views: that's the head of the curve. 90% takes the top 24%, 4.7 GB. 99% takes 87% of the whole catalog, 17.3 GB, for nine more points. On a Zipf curve each point of hit rate costs more memory than the one before, so a cache doesn't need everything: it needs the head, and the tail can go to the database. Pick the hit rate from the misses the database can take (the last question), then buy the memory for it.",
+        why: "The top 1% of products, 200 MB, answers 68% of views: that's the head of the curve. 90% takes the top 24%, 4.7 GB. 99% takes 87% of the whole catalog, 17.3 GB, for nine more points. On a Zipf curve every ten times more memory buys the same 16 points of hit rate, so each point costs more than the one before, and a cache doesn't need everything: it needs the head, and the tail can go to the database. Pick the hit rate from the misses the database can take (the last question), then buy the memory for it.",
       },
       {
         id: "cc-inval", kind: "inval", title: "Which order?",

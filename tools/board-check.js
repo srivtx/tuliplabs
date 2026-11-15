@@ -441,6 +441,9 @@ for (const b of BOARDS) {
     ok(CA.hit(0.001) < CA.hit(0.01) && CA.hit(0.01) < CA.hit(0.1) && Math.abs(CA.hit(1) - 1) < 1e-12, `${b.id}: the curve doesn't climb to 100%`);
     for (const r of b.rounds) ok(r.ask === "hit" ? r.at > 0 && r.at < 1 : CA.size(r.at) > 0 && CA.size(r.at) < 1, `${b.id}: a round asks for something off the curve`);
     ok(Math.abs(CA.hit(CA.size(0.9)) - 0.9) < 1e-4, `${b.id}: size() isn't hit() backwards`);
+    // ten times the memory, the same points: H(10k) - H(k) is ln 10 for big k
+    const dec = Math.round((100 * Math.LN10) / CA.H(CA.PRODUCTS));
+    ok([1e-4, 1e-3, 1e-2, 1e-1].every((sh) => Math.abs((CA.hit(sh * 10) - CA.hit(sh)) * 100 - dec) < 1) && b.why.includes(`the same ${dec} points`), `${b.id}: a decade of memory doesn't buy ${dec} points`);
     const gb = (share) => (share * CA.PRODUCTS * CA.ITEM_KB) / 1e6;
     for (const x of [`${pct(0.01)} of products, ${Math.round(gb(0.01) * 1000)} MB, answers ${pct(CA.hit(0.01))}`, `takes the top ${pct(CA.size(0.9))}, ${gb(CA.size(0.9)).toFixed(1)} GB`,
       `takes ${pct(CA.size(0.99))} of the whole catalog, ${gb(CA.size(0.99)).toFixed(1)} GB`])

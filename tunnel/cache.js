@@ -203,29 +203,29 @@
     const fresh0 = own === 1;
     return { db, stale: stale / P.reads, hit: 1 - db / P.reads, oldest: fresh0 ? 0 : o.ttl, edits: P.products * mu };
   }
-  // one busy product over 10 minutes, for the picture: when it's edited, and each cache's copies
+  // one busy product over 10 minutes, for the picture: its price, edited twice, and each cache's copies of it. A copy
+  // holds the price it was read at, until its TTL runs out or an edit deletes it; then the next read fills it again.
+  // In local memory an edit only reaches the server that took it (here, the 3rd and the 5th of the six shown).
   function freshDemo(o) {
-    const r = rng(o.seed || 7), W = 600, edits = [100, 370], lanes = o.where === "local" ? 6 : 1, ttl = o.ttl;
+    const r = rng(7), W = 600, edits = [100, 370];
     const price = (t) => (t < edits[0] ? 30 : t < edits[1] ? 25 : 28);
-    const out = [];
-    for (let l = 0; l < lanes; l++) {
-      // each server's copy was loaded at some point before the window
-      let at = -r() * ttl, segs = [];
-      const took = edits.map(() => o.where === "shared" || r() < 1 / 50); // the local server that took each edit
-      if (o.where === "local") took[0] = took[0] || l === 2, took[1] = took[1] || l === 4;
-      for (let t0 = at; t0 < W;) {
-        const v = price(Math.max(0, t0)), end = Math.min(W, t0 + ttl);
-        let cut = end;
-        edits.forEach((e, i) => { if (o.edit === "delete" && took[i] && e > t0 && e < cut) cut = e; });
-        // split the copy where the database moves on without it
-        let a = Math.max(0, t0);
-        for (const e of edits) if (e > a && e < cut) { segs.push([a, e, v, v === price(a)]); a = e; }
-        if (cut > a) segs.push([a, cut, v, v === price(a)]);
-        t0 = cut + 0.5;
+    const lanes = [];
+    for (let l = 0; l < (o.where === "local" ? 6 : 1); l++) {
+      const segs = [];
+      let L = -r() * o.ttl;
+      while (L < W) {
+        const v = price(Math.max(0, L));
+        let end = L + o.ttl;
+        edits.forEach((e, i) => { if (o.edit === "delete" && (o.where === "shared" || l === [2, 4][i]) && e > L && e < end) end = e; });
+        let a = Math.max(0, L);
+        const b = Math.min(W, end);
+        for (const e of edits) if (e > a && e < b) { segs.push({ a, b: e, v, ok: v === price(a) }); a = e; }
+        if (b > a) segs.push({ a, b, v, ok: v === price(a) });
+        L = end + 1;
       }
-      out.push({ segs: segs.map(([a, b, v, ok]) => ({ a, b, v, ok: v === price(a) && ok })) });
+      lanes.push({ segs });
     }
-    return { W, edits, price: [30, 25, 28], lanes: out };
+    return { W, edits, lanes };
   }
 
   const API = { H, PRODUCTS, ITEM_KB, hit, size, ORDERS, inval, play, ST, GUARDS, TTLS, stampede, FR, WHERES, FTTLS, EDITS, cell, fresh, freshDemo };
