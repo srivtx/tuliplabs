@@ -239,3 +239,21 @@ Each principle is **taught** in one first-principles unit and **reused** in the 
 6. **The rest of the apps**, then the frontier.
 
 Each new unit adds its own simulator file and its proofs to `tools/board-check.js`. `net.js` stays the request-flow engine.
+
+### The next round, by reach (agreed 2026-11-15)
+After the seven apps, the first-principles units come first, picked by how many later units reuse them (the principle map above). Each one makes the apps after it shorter to teach.
+
+| # | Unit | Why it comes now | Reused in |
+|---|---|---|---|
+| 1 | **Latency numbers** | Every napkin in every unit leans on it | all |
+| 2 | **Caching, properly** | The first move in any read-heavy design; stampedes and invalidation | Snip, Redis, Reddit, typeahead, CDNs |
+| 3 | **Splitting data** | Hot keys and moving keys show up in every big system | Redis slots, Kafka, Twitter, Uber cells |
+| 4 | **Copies and lag** | Every database tier has replicas, and every replica is a little late | Redis replica, feeds, read-your-writes |
+| 5 | **Queues** | Bursts, backpressure, at-least-once, poison messages | YouTube, notifications, ad clicks, Uber trips |
+| 6 | **HTTP and idempotency** | A retried POST is the root of double charges | Stripe, Amazon, notifications, queues |
+| 7 | **Transactions** | Isolation and lost updates, two people and one seat | Ticketmaster, Airbnb, wallet, Stripe |
+| 8 | **Failure** | Timeouts, retries with backoff and jitter, circuit breakers | every app |
+| 9 | **Consistency** | CAP and PACELC, by cutting the network | Airbnb, feeds, Dynamo-style stores |
+| 10 | **Agreeing** | Raft, leases, fencing tokens | etcd, Kafka, schedulers, locks |
+
+Then **Stripe**, which uses 6, 7 and fsync from Memory and disk, then the rest of the apps.
