@@ -735,3 +735,24 @@ img.stk{width:34px;height:34px}
 .fin-art .stk.fin-trophy{position:absolute;right:-14px;top:-16px;width:62px;height:62px;--tilt:12deg;z-index:2;filter:drop-shadow(0 3px 0 rgba(0,0,0,.4))}
 .fin-art .stk.fin-rocket{position:absolute;left:8px;bottom:8px;width:46px;height:46px;z-index:2}
 @media (prefers-reduced-motion:reduce){.stk.slap,.result .stk.oops{animation:none}}
+
+/* ------------------------------------------------------- card pictures --
+   Each chapter's pixel scene (learn/cards, drawn in ChatGPT in the sticker style). The growing
+   flower moves into a little pot in the corner, and the big number becomes a chip. */
+.plot.pic .soil{height:150px;background:#2a0f22;overflow:hidden}
+.soil img.pic{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s cubic-bezier(.2,.8,.3,1)}
+.plot.pic:hover .soil img.pic{transform:scale(1.06)}
+.plot.pic .soil canvas{inset:auto 2px 0 auto;width:58px;height:78px;z-index:2;border-radius:10px;background:radial-gradient(closest-side,rgba(24,6,18,.78),rgba(24,6,18,0))}
+.plot.pic .ghost{top:7px;left:7px;right:auto;bottom:auto;z-index:2;font:700 11px/1 var(--f-display);letter-spacing:.02em;color:#fff;background:rgba(24,8,20,.74);padding:4px 6px;border-radius:5px}
+.plot.pic:hover .ghost,.plot.pic.bloomed .ghost{color:#fff}
+.plot.pic .next-tag{z-index:3}
+.plot.pic.bloomed .soil::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;box-shadow:inset 0 0 0 3px var(--pink);border-radius:0}
+.rail-fl.has-pic{height:190px;overflow:hidden;background:#2a0f22}
+.rail-fl img.rail-pic{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rail-fl.has-pic canvas{inset:auto 6px 4px auto;width:56px;height:74px;border-radius:12px;background:radial-gradient(closest-side,rgba(24,6,18,.8),rgba(24,6,18,0))}
+.cv-art img.cv-pic{position:absolute;right:4px;bottom:26px;width:148px;height:148px;z-index:1;border:4px solid #fff;border-radius:14px;transform:rotate(4deg);box-shadow:0 12px 26px rgba(0,0,0,.35);transition:transform .3s cubic-bezier(.2,1.5,.4,1)}
+.cv-art.has-pic:hover img.cv-pic{transform:rotate(-2deg) scale(1.04)}
+.cv-art.has-pic .cv-ghost{opacity:.12}
+.cv-art.has-pic .cv-fl{inset:auto auto -6px -18px;width:76px;height:100px;z-index:2}
+@media (max-width:640px){.cv-art img.cv-pic{width:112px;height:112px;bottom:16px}}
+@media (max-width:640px){.plot.pic .soil{height:210px}}

@@ -40,6 +40,8 @@
     attrs.style = `--n:${a.n};--d:${a.n * a.ms}ms`;
     return h("span", attrs, h("img", { class: "spr" + (a.once ? " once" : ""), src: STK + "anim/" + name + ".webp", alt: "", draggable: "false" }));
   }
+  const CARDS = (() => { try { return new URL("cards/", document.currentScript.src).href; } catch (e) { return "../learn/cards/"; } })();
+  const pic = (ch, cls) => (CFG.cards ? h("img", { class: "pic " + (cls || ""), src: CARDS + ch.id + ".webp", alt: "", loading: "lazy", draggable: "false" }) : null);
   const tiltOf = (id) => { let x = 7; for (const c of String(id)) x = (x * 31 + c.charCodeAt(0)) % 997; return (x % 17) - 8; };
   // what a wrong run looks like: too slow, crashed, or just wrong
   function oops(r) {
@@ -1146,7 +1148,7 @@
           h("h1", {}, ch.title),
           h("p", { class: "tag" }, "No reading. Touch the pictures until they're right."),
           h("div", { class: "meta" }, modeSwitch(ch, "puzzle"), h("span", { class: "pill" }, `${got} / ${ch.puzzles.length * 3} stars`))),
-        h("div", { class: "cv-art" }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), flower(ch.id, "cv-fl"))),
+        h("div", { class: "cv-art" + (CFG.cards ? " has-pic" : "") }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), pic(ch, "cv-pic"), flower(ch.id, "cv-fl"))),
       ...ch.puzzles.map((b) => renderPuzzle(b, desk)),
       ...viz.map((b) => renderBlock(b, ctx)),
       h("div", { class: "pager" }, h("a", { class: "btn", href: "#" + ch.num }, "← Back to the lesson"), h("a", { class: "btn", href: "#puzzles" }, "Every puzzle →"))), desk.el));
@@ -1331,8 +1333,8 @@
         h("h3", { class: "bed-h" }, h("span", { class: "tree" }, "└──"), pt || "Chapters", h("small", {}, `${bloomed} / ${list.length} in bloom`)),
         h("div", { class: "plots" }, list.map((ch) => {
           const p = chProgress(ch);
-          return h("a", { class: "plot" + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : "") + (ch === nextCh ? " next" : ""), href: "#" + ch.num },
-            h("div", { class: "soil" }, h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id), ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
+          return h("a", { class: "plot" + (CFG.cards ? " pic" : "") + (p.n && p.d === p.n ? " bloomed" : p.d ? " growing" : "") + (ch === nextCh ? " next" : ""), href: "#" + ch.num },
+            h("div", { class: "soil" }, pic(ch), h("span", { class: "ghost", "aria-hidden": "true" }, String(ch.num).padStart(2, "0")), flower(ch.id), ch === nextCh ? h("span", { class: "next-tag" }, p.d ? "carry on" : "start here") : null),
             h("span", { class: "num" }, String(ch.num).padStart(2, "0")),
             h("b", {}, ch.title), h("small", {}, ch.tagline),
             h("span", { class: "pbar" }, h("i", { "data-prog": ch.id, style: `width:${p.pct}%` })));
@@ -1420,7 +1422,7 @@
           h("h1", {}, ch.title),
           h("p", { class: "tag" }, ch.tagline),
           h("div", { class: "meta" }, pills)),
-        h("div", { class: "cv-art" }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), flower(ch.id, "cv-fl"))),
+        h("div", { class: "cv-art" + (CFG.cards ? " has-pic" : "") }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), pic(ch, "cv-pic"), flower(ch.id, "cv-fl"))),
       ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"), h("ul", {}, ch.goals.map((g) => h("li", { html: g })))) : null,
     );
     // ---- step-by-step: one section at a time, the next unlocks when this one is done
