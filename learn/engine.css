@@ -710,3 +710,28 @@ button.pc:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
 .parrow{grid-column:2;font:12px var(--f-mono);color:var(--pink)}
 .parrow:empty{display:none}
 @media (prefers-reduced-motion:reduce){.pc.hint,.pz li.hint button.ln,.dk-node.new{animation:none}}
+
+/* ---------------------------------------------------------- stickers --
+   Pixel stickers (tunnel/stickers): a prize slapped on a finished task, a bug, ghost or snail on a wrong run.
+   A .sprw is a window onto a strip of frames that steps along (frame-by-frame, planned in ChatGPT). */
+.stk{display:inline-block;vertical-align:middle;user-select:none}
+img.stk{width:34px;height:34px}
+.sprw{width:34px;height:34px;overflow:hidden;line-height:0}
+.sprw>.spr{height:100%;width:calc(var(--n) * 100%);max-width:none;animation:tlspr var(--d) steps(var(--n),jump-none) infinite}
+.sprw>.spr.once{animation-iteration-count:1;animation-fill-mode:both}
+@keyframes tlspr{from{transform:translateX(0)}to{transform:translateX(calc(-100% * (var(--n) - 1) / var(--n)))}}
+.bh .stk.prize{width:38px;height:38px;margin:-12px 0 -12px auto;transform:rotate(var(--tilt,-6deg));filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
+.bh .stk.prize+.tick{margin-left:4px}
+.stk.slap{animation:tlslap .55s cubic-bezier(.2,1.6,.4,1) both}
+@keyframes tlslap{0%{transform:scale(2.4) rotate(calc(var(--tilt,-6deg) - 30deg));opacity:0}60%{opacity:1}100%{transform:scale(1) rotate(var(--tilt,-6deg))}}
+.result .stk.oops{width:32px;height:32px;float:left;margin:-4px 10px 0 -2px;animation:tlwob 2.4s ease-in-out infinite}
+.why .stk.oops{width:26px;height:26px;margin:-4px 6px 0 0}
+@keyframes tlwob{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(6deg) translateY(-2px)}}
+.result.fail::after{content:"";display:block;clear:both}
+.result.pass .stk.prize{width:34px;height:34px;margin:-8px 6px -8px -2px;--tilt:-8deg}
+.stats .stk.streak{width:20px;height:20px;margin:-6px 0 -4px 3px}
+.chip .stk.chip-stk{width:18px;height:18px;margin:-4px 0}
+.chip:has(.chip-stk) i{display:none}
+.fin-art .stk.fin-trophy{position:absolute;right:-14px;top:-16px;width:62px;height:62px;--tilt:12deg;z-index:2;filter:drop-shadow(0 3px 0 rgba(0,0,0,.4))}
+.fin-art .stk.fin-rocket{position:absolute;left:8px;bottom:8px;width:46px;height:46px;z-index:2}
+@media (prefers-reduced-motion:reduce){.stk.slap,.result .stk.oops{animation:none}}

@@ -27,6 +27,28 @@
     }
     return el;
   }
+  // ----------------------------------------------------------- stickers --
+  // The pixel stickers (tunnel/stickers, made in ChatGPT) and their frame-by-frame strips.
+  // A finished task gets a prize slapped on its header; a wrong run gets a bug, a ghost or a snail.
+  const STK = (() => { try { return new URL("../tunnel/stickers/", document.currentScript.src).href; } catch (e) { return "../tunnel/stickers/"; } })();
+  const ANIM = { flame: { n: 6, ms: 110 }, bloom: { n: 8, ms: 130, once: true }, walk: { n: 8, ms: 85 }, rocket: { n: 6, ms: 90 }, sleep: { n: 6, ms: 260 }, hourglass: { n: 6, ms: 200 } };
+  function sticker(name, cls, title) {
+    const a = ANIM[name];
+    const attrs = { class: "stk " + (cls || ""), title: title || null, "aria-hidden": title ? null : "true" };
+    if (!a) return h("img", Object.assign(attrs, { src: STK + name + ".webp", alt: title || "", draggable: "false" }));
+    attrs.class += " sprw";
+    attrs.style = `--n:${a.n};--d:${a.n * a.ms}ms`;
+    return h("span", attrs, h("img", { class: "spr" + (a.once ? " once" : ""), src: STK + "anim/" + name + ".webp", alt: "", draggable: "false" }));
+  }
+  const tiltOf = (id) => { let x = 7; for (const c of String(id)) x = (x * 31 + c.charCodeAt(0)) % 997; return (x % 17) - 8; };
+  // what a wrong run looks like: too slow, crashed, or just wrong
+  function oops(r) {
+    const txt = [r.failed, r.message, r.error].filter(Boolean).join(" ");
+    // the hidden big tests time the code: "secs < 0.1" in the check, "1.52s: ..." in the message
+    if (/too slow|time limit|timed out|\bsecs?\s*</i.test(txt) || /^\d+(\.\d+)?s\b/m.test(r.message || "")) return sticker("snail", "oops", "Right idea, too slow");
+    if (r.error && !r.failed) return sticker("ghost", "oops", "It crashed");
+    return sticker("bug", "oops", "Something's off");
+  }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   function toast(msg) {
     const t = h("div", { class: "toast", role: "status" }, msg);
@@ -44,8 +66,9 @@
 
   // ------------------------------------------------------------ storage --
   const KEY = "vnl-code-v1";
-  let S = { done: {}, code: {}, rev: {}, sol: {} };
+  let S = { done: {}, code: {}, rev: {}, sol: {}, pz: {} };
   try { S = Object.assign(S, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) { /* private mode */ }
+  S.pz = S.pz || {};
   let saveT = 0;
   function save() {
     clearTimeout(saveT);
@@ -75,6 +98,7 @@
     if (!el) return;
     const st = streak();
     el.innerHTML = `<b>${S.xp || 0}</b> XP` + (st ? ` · <b>${st}</b>-day streak` : "");
+    if (st >= 2) el.append(sticker("flame", "streak", `${st} days in a row`));
   }
   function markDone(id) {
     const first = !S.done[id];
@@ -193,6 +217,8 @@
     const c = $("#py-chip");
     if (!c) return;
     c.className = "chip " + cls;
+    c.querySelector(".stk")?.remove();
+    if (cls === "busy" && !REDUCED) c.prepend(sticker("hourglass", "chip-stk"));
     c.lastChild.textContent = text;
     c.title = text;
   }
@@ -424,9 +450,24 @@
     const head = h("div", { class: "bh" }, h("span", { class: "badge " + badgeCls }, badgeText), title ? h("span", { class: "t" }, title) : null, tick);
     const body = h("div", { class: "bb" });
     const el = h("div", { class: "blk" + (S.done[b.id] ? " done" : ""), id: "b-" + b.id }, head, body);
+    const slap = (name, fresh) => {
+      head.querySelector(".stk.prize")?.remove();
+      const st = sticker(name, "prize" + (fresh ? " slap" : ""), { crown: "First try", thumbs: "Got it", heart: "Done, with help", bulb: "Saw it coming", trophy: "Shipped", bolt: "Goal reached" }[name]);
+      st.style.setProperty("--tilt", tiltOf(b.id) + "deg");
+      tick.before(st);
+    };
+    if (S.done[b.id] && S.pz[b.id]) slap(S.pz[b.id], false);
     return {
       el, body,
       done() { el.classList.add("done"); tick.textContent = "✓ done"; },
+      // a prize sticker; a better one replaces a worse one, never the other way round
+      prize(name) {
+        if (!name || !b.id) return;
+        const RANK = { heart: 1, thumbs: 2, bulb: 2, bolt: 2, trophy: 3, crown: 3 };
+        if (S.pz[b.id] && (RANK[S.pz[b.id]] || 0) >= (RANK[name] || 0)) return;
+        S.pz[b.id] = name; save();
+        slap(name, true);
+      },
     };
   }
 
@@ -493,6 +534,8 @@
       lock.disabled = true;
       skip.remove();
       if (markDone(b.id)) sh.done();
+      if (match && !ctx.review) sh.prize("bulb");
+      if (!match && guessed) res.firstChild.prepend(sticker("bug", "oops"));
       if (ctx.review) ctx.onResult(match);
       else if (guessed) enroll(b.id, match);
     }
@@ -547,6 +590,7 @@
         const r = await Runner.run({ op: "check", prelude: ctx.ch.prelude, lang: ctx.ch.lang, setup: b.setup, code: ans.map((x) => x.t).join("\n"), tests: b.tests || "" });
         out.show(r);
         if (markDone(b.id)) sh.done();
+        if (!ctx.review) sh.prize("thumbs");
         ctx.review ? ctx.onResult(true) : enroll(b.id, true);
       } else {
         const marks = ans.map((it, i) => it.t === b.lines[i]);
@@ -556,7 +600,7 @@
         let why = usedBad ? "One of your lines is a decoy that doesn't belong. " : "";
         if (missing > 0) why += `${missing} line${missing > 1 ? "s are" : " is"} still missing. `;
         if (!why) why = "Every line is there, but the order is off. Red lines are in the wrong spot. ";
-        msg.append(h("div", { class: "result fail" }, why + "Check indentation too: it decides which block a line belongs to."));
+        msg.append(h("div", { class: "result fail" }, sticker("bug", "oops"), why + "Check indentation too: it decides which block a line belongs to."));
         if (ctx.review) ctx.onResult(false);
       }
     };
@@ -604,6 +648,7 @@
           solved = true;
           const first = markDone(b.id);
           if (first) sh.done();
+          if (!ctx.review) sh.prize(S.sol[b.id] ? "heart" : fails === 0 ? "crown" : "thumbs");
           if (ctx.review) ctx.onResult(fails === 0 && !S.sol[b.id + ":r"]);
           else enroll(b.id, fails === 0 && !S.sol[b.id]);
         }
@@ -611,12 +656,12 @@
         fails++;
         if (fails >= 2) { solBtn.disabled = false; solBtn.title = ""; }
         if (!r.error) {
-          res.append(h("div", { class: "result fail" },
+          res.append(h("div", { class: "result fail" }, oops(r),
             h("b", {}, `${r.ok} of ${r.total} checks pass.`), meter,
             r.failed ? h("pre", {}, "Failed: " + r.failed) : null,
             r.message ? h("div", {}, r.message) : null));
         } else {
-          res.append(h("div", { class: "result fail" }, "Your code raised an error before the checks could run (see above). Read the last line of the error first."));
+          res.append(h("div", { class: "result fail" }, oops(r), "Your code raised an error before the checks could run (see above). Read the last line of the error first."));
         }
         if (ctx.review && fails === 1) ctx.onResult(false, true);
       }
@@ -656,7 +701,9 @@
         btn.classList.add(o.ok ? "right" : "wrong");
         if (!o.ok) [...opts.children].forEach((c, i) => { if (c.dataset.ok) c.classList.add("right"); });
         why.innerHTML = (o.ok ? "<p><b>Right.</b></p>" : "<p><b>Not this one.</b></p>") + b.why;
+        if (!o.ok) why.firstChild.prepend(sticker("bug", "oops"));
         if (markDone(b.id)) sh.done();
+        if (o.ok && !ctx.review) sh.prize("thumbs");
         ctx.review ? ctx.onResult(o.ok) : enroll(b.id, o.ok);
       };
       if (o.ok) btn.dataset.ok = "1";
@@ -680,6 +727,7 @@
               [...e.target.parentNode.querySelectorAll("button")].forEach((x) => (x.disabled = true));
               e.target.classList.add("primary");
               if (markDone(b.id)) sh.done();
+              if (!ctx.review) sh.prize(label === "Nailed it" ? "crown" : label === "Partly" ? "thumbs" : "heart");
               ctx.review ? ctx.onResult(ok) : schedule(b.id, ok);
             },
           }, label))));
@@ -701,6 +749,7 @@
       if (ctx.review) { ctx.onResult(true); return; }
       if (goal) goal.firstChild.textContent = "✓ Goal reached: ";
       if (markDone(b.id)) { sh.done(); if (msg) toast(msg); confetti(sh.el.querySelector(".bh")); }
+      sh.prize("bolt");
     };
     stage.vizDone = finish; // lets tools/e2e.js complete a goal
     if (!window.VIZ) { stage.textContent = "The simulation library did not load."; return sh.el; }
@@ -738,7 +787,7 @@
       cb.onchange = () => { ticks[i] = cb.checked ? 1 : 0; save(); sync(); };
       return h("li", {}, cb, h("label", { for: `${b.id}-m${i}`, html: m }));
     }));
-    ship.onclick = () => { if (markDone(b.id)) { sh.done(); confetti(sh.el.querySelector(".bh")); } sync(); };
+    ship.onclick = () => { if (markDone(b.id)) { sh.done(); confetti(sh.el.querySelector(".bh")); } sh.prize("trophy"); sync(); };
     sh.body.append(
       b.client ? h("div", { class: "client" }, h("b", {}, "Client: "), h("span", { html: b.client })) : null,
       h("div", { class: "prompt", html: b.brief }),
@@ -787,7 +836,7 @@
       const prev = S.stars[b.id] || 0;
       if (stars > prev) { S.stars[b.id] = stars; save(); award(5 * (stars - prev), stars === 3 ? "puzzle, 3 stars" : "puzzle solved"); }
       head.replaceChildren(starsEl(Math.max(stars, prev)));
-      msg.replaceChildren(h("div", { class: "result pass" }, starsEl(stars), " ", (note || "Solved.") + (capped ? ` The hint${pz.used > 1 ? "s" : ""} cost ${3 - pz.cap()} star${3 - pz.cap() > 1 ? "s" : ""}.` : "")), b.why ? h("div", { class: "why", html: b.why }) : "");
+      msg.replaceChildren(h("div", { class: "result pass" }, sticker(stars === 3 ? "crown" : stars === 2 ? "thumbs" : "heart", "prize slap", stars + " of 3 stars"), starsEl(stars), " ", (note || "Solved.") + (capped ? ` The hint${pz.used > 1 ? "s" : ""} cost ${3 - pz.cap()} star${3 - pz.cap() > 1 ? "s" : ""}.` : "")), b.why ? h("div", { class: "why", html: b.why }) : "");
       sh.done();
       confetti(sh.el.querySelector(".bh"));
       ping();
@@ -1553,7 +1602,7 @@
       const nxt = DATA.chapters[i + 1];
       const grown = flower(ch.id, "fin-fl", { "data-stage": 4 });
       finale = h("div", { class: "finale" },
-        h("div", { class: "fin-art dark" }, grown),
+        h("div", { class: "fin-art dark" }, grown, sticker("trophy", "fin-trophy slap", "Chapter complete"), sticker("rocket", "fin-rocket")),
         h("div", { class: "eyebrow" }, "Chapter " + ch.num + " complete · in full bloom"),
         h("h2", {}, "You can now…"),
         h("ul", { class: "wins" }, ch.goals.map((g) => h("li", { html: g }))),
