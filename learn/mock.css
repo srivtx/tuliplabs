@@ -11,9 +11,25 @@
 .mk-mix{color:var(--muted);font-size:14px;margin:0 0 14px}
 .mk-resume{background:color-mix(in srgb,var(--c4) 14%,var(--card));border:1px solid color-mix(in srgb,var(--c4) 50%,var(--line));border-radius:10px;padding:12px 16px;margin-bottom:16px}
 .mk-resume p{margin:0}
-.mk-kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:24px}
-.mk-kinds div{border-top:2px solid var(--line);padding:8px 2px 0;font-size:13.5px;color:var(--muted)}
-.mk-kinds b{display:block;color:var(--ink);font-weight:600;margin-bottom:2px}
+/* the kinds of question, each a card with a little drawing of what it looks like */
+.mk-kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:24px}
+.mk-kinds>div{border:1px solid var(--line);border-radius:12px;background:var(--card);overflow:hidden;box-shadow:0 3px 0 var(--line);font-size:12.5px;line-height:1.45;color:var(--muted);transition:transform .15s,box-shadow .15s}
+.mk-kinds>div:hover{transform:translateY(-3px);border-color:var(--pink);box-shadow:0 6px 0 var(--pink)}
+.mk-kinds>div>i{display:block;background:var(--panel);border-bottom:1px solid var(--line)}
+.mk-kinds b{display:block;color:var(--ink);font-weight:600;font-size:13.5px;margin:9px 12px 2px}
+.mk-kinds span{display:block;margin:0 12px 12px}
+.mk-art{display:block;width:100%;height:auto}
+.mk-art .c{fill:var(--card);stroke:var(--line);stroke-width:1.5}.mk-art .l{fill:var(--line)}.mk-art .m{fill:var(--muted)}
+.mk-art .k{fill:var(--k)}.mk-art .s{fill:var(--s)}.mk-art .f{fill:var(--f)}.mk-art .p{fill:var(--pink)}.mk-art .ok{fill:var(--ok)}.mk-art .bad{fill:var(--bad)}.mk-art .y{fill:#ffd21f}
+.mk-art .right{stroke:var(--ok);stroke-width:2.5}.mk-art .tick{fill:none;stroke:var(--ok);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.mk-art .t{font:600 11px var(--f-mono);fill:var(--ink);text-anchor:middle}.mk-art .t.w{fill:#fff}.mk-art .t.l{text-anchor:start}
+.mk-art .hop{fill:none;stroke:var(--pink);stroke-width:2;stroke-dasharray:4 3}.mk-art .hop.solid{stroke-dasharray:none;stroke-linecap:round}
+.mk-art .dk{fill:#1d1b17}.mk-art .badrow{fill:var(--bad);opacity:.14}.mk-art .ring{fill:none;stroke:var(--pink);stroke-width:2.5}
+.mk-art .lift{stroke:var(--pink);stroke-width:2}.mk-art .model{fill:color-mix(in srgb,var(--pink) 18%,var(--card));stroke:var(--pink);stroke-width:1.5}
+.mk-art image{image-rendering:pixelated}
+@media (prefers-reduced-motion:no-preference){.mk-art .cur{animation:mkblink 1s steps(1) infinite}}
+@keyframes mkblink{50%{opacity:0}}
+@media (max-width:560px){.mk-kinds{grid-template-columns:repeat(2,1fr);gap:10px}}
 .mk-hist h3,.mk-h{font:600 12px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:26px 0 10px}
 .mk-hist table{width:100%;font-size:14px}.mk-hist td{border:0;border-bottom:1px solid var(--line);padding:6px 8px 6px 0}
 

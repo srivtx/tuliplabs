@@ -29,6 +29,31 @@
     explain: "A why-question. Say the answer in your own words, then hold it up against the model answer and mark yourself honestly.",
     code: "A real problem from a chapter. Write the whole solution; its hidden checks mark it, like an online assessment. Run them as often as you like.",
   };
+  // A little drawing of each kind of question, so the list of kinds reads at a glance. Plain shapes in the page's
+  // colours (they follow light and dark), plus the chapter scenes for "which pattern fits?" and the bug sticker.
+  function kindArt(k) {
+    const code = (x, y, rows, bad) => rows.map((w, i) => `<rect x="${x + (w[1] || 0)}" y="${y + i * 11}" width="${w[0]}" height="6" rx="2" class="${i === bad ? "bad" : ["k", "s", "f", "m"][i % 4]}"/>`).join("");
+    const chs = (A.data().chapters || []), pick = [7, 8, 3].map((n) => chs.find((c) => c.num === n)).filter(Boolean);
+    const pics = A.cfg.cards && pick.length === 3
+      ? pick.map((c, i) => `<image href="../learn/cards/${c.id}.webp" x="${110 + (i % 2) * 40}" y="${16 + i * 28}" width="36" height="36"/>`).join("") + `<rect x="108" y="14" width="40" height="40" rx="4" class="ring"/>`
+      : [0, 1, 2].map((i) => `<rect x="${110 + (i % 2) * 40}" y="${16 + i * 28}" width="36" height="36" rx="5" class="${i ? "c" : "c ring"}"/>`).join("");
+    const art = {
+      mc: [0, 1, 2, 3].map((i) => `<rect x="20" y="${16 + i * 24}" width="160" height="18" rx="5" class="c${i === 2 ? " right" : ""}"/><rect x="30" y="${22.5 + i * 24}" width="${[90, 70, 104, 60][i]}" height="5" rx="2" class="l"/>`).join("") + `<path d="M160 72l4 4 8-8" class="tick"/>`,
+      trace: [3, 9, 1, 7, 5].map((v, i) => `<rect x="${22 + i * 33}" y="44" width="27" height="27" rx="5" class="c"/><text x="${35.5 + i * 33}" y="62" class="t">${v}</text>`).join("")
+        + [[2, 1], [0, 2], [4, 3]].map(([i, o]) => `<circle cx="${35.5 + i * 33}" cy="28" r="8" class="p"/><text x="${35.5 + i * 33}" y="32" class="t w">${o}</text>`).join("")
+        + `<path d="M36 90q33 14 66 0" class="hop"/><path d="M101 90l-6-1M101 90l-2-6" class="hop solid"/>`,
+      pattern: `<rect x="14" y="22" width="70" height="72" rx="6" class="c"/>${[0, 1, 2, 3, 4].map((i) => `<rect x="22" y="${32 + i * 11}" width="${[50, 40, 54, 30, 44][i]}" height="5" rx="2" class="l"/>`).join("")}<path d="M90 58h12M98 54l4 4-4 4" class="hop solid"/>${pics}`,
+      out: `${code(16, 18, [[70], [52, 10], [80, 10], [40]])}<rect x="108" y="30" width="76" height="52" rx="6" class="dk"/><text x="116" y="50" class="t w l">&gt; 12</text><text x="116" y="68" class="t w l">&gt; <tspan class="cur">▌</tspan></text>`,
+      line: `${code(18, 18, [[90], [70, 12], [96, 12], [60, 24], [80, 12], [44]], 3)}<rect x="12" y="49" width="176" height="14" rx="3" class="badrow"/><image href="../tunnel/stickers/bug.webp" x="146" y="34" width="38" height="38"/>`,
+      order: [[22, 18], [34, 40], [22, 62], [30, 84]].map(([x, y], i) => { const r = i === 1 ? ' transform="rotate(-4 98 48)"' : "";
+        return `<g${r}><rect x="${x}" y="${y}" width="128" height="16" rx="4" class="c${i === 1 ? " lift" : ""}"/><rect x="${x + 22}" y="${y + 5.5}" width="${[80, 64, 90, 50][i]}" height="5" rx="2" class="${["k", "s", "f", "m"][i]}"/>${[0, 1, 2].map((q) => `<rect x="${x + 7}" y="${y + 4 + q * 3.5}" width="8" height="1.6" class="m"/>`).join("")}</g>`; }).join(""),
+      explain: `<rect x="14" y="16" width="112" height="38" rx="12" class="c"/><path d="M30 53l-6 10 16-9" class="c"/>${[0, 1].map((i) => `<rect x="26" y="${27 + i * 11}" width="${[86, 60][i]}" height="5" rx="2" class="l"/>`).join("")}
+        <rect x="74" y="64" width="112" height="38" rx="12" class="model"/>${[0, 1].map((i) => `<rect x="86" y="${75 + i * 11}" width="${[80, 70][i]}" height="5" rx="2" class="p"/>`).join("")}<path d="M150 22l5 5 10-11" class="tick"/>`,
+      code: `<rect x="14" y="12" width="172" height="70" rx="6" class="c"/><rect x="14.75" y="12.75" width="170.5" height="11" rx="5.5" class="l"/>${["bad", "y", "ok"].map((c, i) => `<circle cx="${23 + i * 8}" cy="18" r="2.4" class="${c}"/>`).join("")}${code(24, 32, [[70], [90, 10], [60, 20], [50, 10]])}
+        ${[1, 1, 1, 0, 0].map((ok, i) => `<rect x="${44 + i * 24}" y="90" width="18" height="12" rx="3" class="${ok ? "ok" : "l"}"/>`).join("")}`,
+    }[k];
+    return art ? `<svg class="mk-art" viewBox="0 0 200 112" aria-hidden="true">${art}</svg>` : "";
+  }
   // the subjects with a mock test: the sentence's first word cycles through them
   const SUBJECTS = [["ds", "DSA", "../dsa/"], ["bx", "Build your own X", "../build/"], ["ps", "Probability & Stats", "../stats/"], ["ms", "ModSim", "../modsim/"], ["tc", "Complexity in code", "../code/"]];
   // topics that cut across a track's parts, offered as scopes alongside them
@@ -147,7 +172,7 @@
         h("div", { class: "btns" }, h("button", { class: "key primary", onclick: () => begin(st) }, "Start the mock →"))),
       window.INTERVIEW && TRACK === "ds" ? h("p", { class: "mk-iv" }, h("a", { href: "#interview" }, "Or sit an interview"),
         ": one problem you haven't seen, 45 minutes, from asking questions to a follow-up, with a scorecard at the end.") : null,
-      h("div", { class: "mk-kinds" }, Object.entries(KIND_NAME).filter(([k]) => present.has(k)).map(([k, name]) => h("div", {}, h("b", {}, name), h("span", {}, KIND_TEXT[k])))),
+      h("div", { class: "mk-kinds" }, Object.entries(KIND_NAME).filter(([k]) => present.has(k)).map(([k, name]) => h("div", {}, h("i", { html: kindArt(k) }), h("b", {}, name), h("span", {}, KIND_TEXT[k])))),
       hist.length ? h("div", { class: "mk-hist" }, h("h3", {}, "Your last mocks"), h("table", {}, hist.map((r) => h("tr", {},
         h("td", {}, new Date(r.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })), h("td", {}, h("b", {}, `${r.right} / ${r.n}`)),
         h("td", {}, fmtTime(r.secs)), h("td", { class: "mk-muted" }, r.scope))))) : null));
