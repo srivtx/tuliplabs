@@ -1267,8 +1267,12 @@
     document.querySelectorAll("canvas[data-fl]").forEach((cv) => {
       if (!cv.isConnected || !cv.clientWidth) return;
       const id = cv.dataset.fl;
-      const ch = DATA.chapters.find((c) => c.id === id);
-      const st = cv.dataset.stage != null ? +cv.dataset.stage : GARDEN.stage(ch ? chProgress(ch).pct : trackPct());
+      // a goal's flower ("<chapter>~g<i>", one of <of> goals) grows through its own share of the chapter's tasks
+      const [cid, gi] = id.split("~g");
+      const ch = DATA.chapters.find((c) => c.id === cid);
+      const share = (pct) => { const of = +cv.dataset.of || 1; return Math.max(0, Math.min(100, (pct * of) - 100 * gi)); };
+      const st = cv.dataset.stage != null ? +cv.dataset.stage : GARDEN.stage(ch ? (gi != null ? share(chProgress(ch).pct) : chProgress(ch).pct) : trackPct());
+      if (gi != null) cv.closest("li")?.setAttribute("data-st", st);
       const key = st + ":" + cv.clientWidth + "x" + cv.clientHeight;
       if (!force && cv.dataset.drawn === key) return;
       cv.dataset.drawn = key;
@@ -1491,7 +1495,8 @@
           h("p", { class: "tag" }, ch.tagline),
           h("div", { class: "meta" }, pills)),
         h("div", { class: "cv-art" + (CFG.cards ? " has-pic" : "") }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), pic(ch, "cv-pic"), flower(ch.id, "cv-fl"))),
-      ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"), h("ul", {}, ch.goals.map((g) => h("li", { html: g })))) : null,
+      ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"),
+        h("ul", { class: "goal-pots" }, ch.goals.map((g, i) => h("li", {}, flower(ch.id + "~g" + i, "goal-fl", { "data-of": ch.goals.length }), h("span", { html: g }))))) : null,
     );
     // ---- step-by-step: one section at a time, the next unlocks when this one is done
     S.step = S.step || {};

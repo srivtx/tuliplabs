@@ -438,6 +438,12 @@ th{background:var(--soft)}
 .cv-ghost{opacity:.18}
 .goals{border-radius:0 0 10px 10px}
 .goals li::marker{content:"✚  ";color:var(--pink);font-size:.8em}
+/* each goal grows its own flower through its share of the chapter's tasks: seed, sprout, bud, half open, bloom */
+.goals ul.goal-pots{list-style:none;padding:0;margin:10px 0 2px;display:grid;gap:8px}
+.goal-pots li{display:flex;align-items:flex-end;gap:12px}.goal-pots li>span{padding-bottom:3px}
+.goal-pots li::marker{content:none}
+.goal-pots canvas.goal-fl{flex:none;width:46px;height:62px;margin:-16px -4px -2px -8px}
+.goal-pots li[data-st="0"] span{color:var(--muted)}
 
 /* ---- chapter grid with the step rail */
 .chgrid{display:block}
