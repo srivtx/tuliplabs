@@ -1173,11 +1173,37 @@
       h("header", { class: "ch-head cover dark" }, h("div", { class: "cv-text" },
         h("div", { class: "eyebrow" }, `${CFG.short} · puzzle mode`), h("h1", {}, "Every puzzle"),
         h("p", { class: "tag" }, all.length ? `${all.length} puzzles in ${chs.length} chapters · ${got} of ${all.length * 3} stars` : "Puzzles are on their way for this track."))),
-      h("div", { class: "pwall" }, chs.map((c) => h("a", { class: "pkey", href: `#${c.num}/puzzle` },
-        h("b", {}, String(c.num).padStart(2, "0")), h("span", {}, c.title),
-        starsEl(Math.round(c.puzzles.reduce((a, p) => a + ((S.stars || {})[p.id] || 0), 0) / c.puzzles.length)))))));
+      wallParts(chs)));
     document.title = `Puzzles · ${CFG.pageTitle}`;
     window.scrollTo(0, 0);
+  }
+
+  // The puzzle wall: one tile per chapter with its pixel scene, grouped by part, each part with its own star bar.
+  // A chapter's stars show as three petals (its average); all puzzles solved earns a sticker on the picture.
+  const PETAL = (on) => `<svg viewBox="0 0 12 12" aria-hidden="true"><path class="${on ? "on" : "off"}" d="M6 1C9 3 10 7 6 11C2 7 3 3 6 1Z"/></svg>`;
+  function wallParts(chs) {
+    const st = (p) => (S.stars || {})[p.id] || 0;
+    const got = (c) => c.puzzles.reduce((a, p) => a + st(p), 0);
+    const any = chs.some((c) => got(c));
+    const next = chs.find((c) => c.puzzles.some((p) => !st(p)));
+    const parts = [];
+    for (const c of chs) { const k = c.part || ""; let P = parts.find((x) => x.k === k); if (!P) parts.push((P = { k, cs: [] })); P.cs.push(c); }
+    return h("div", { class: "pwall" }, parts.map(({ k, cs }) => {
+      const g = cs.reduce((a, c) => a + got(c), 0), n = cs.reduce((a, c) => a + c.puzzles.length * 3, 0);
+      return h("section", { class: "pw-part" },
+        h("h3", {}, h("span", {}, k.replace(/^Part [\w]+ · /, "") || "Every chapter"), h("small", {}, `${g} of ${n} stars`),
+          h("i", { class: "pw-bar", "aria-hidden": "true" }, h("b", { style: `width:${n ? (100 * g) / n : 0}%` }))),
+        h("div", { class: "pw-grid" }, cs.map((c) => {
+          const s = got(c), all = c.puzzles.every((p) => st(p)), perfect = c.puzzles.every((p) => st(p) === 3);
+          const avg = Math.round(s / c.puzzles.length);
+          return h("a", { class: "pkey" + (CFG.cards ? " pic" : "") + (all ? " won" : ""), href: `#${c.num}/puzzle`, title: `${c.puzzles.length} puzzle${c.puzzles.length > 1 ? "s" : ""} · ${s} of ${c.puzzles.length * 3} stars` },
+            pic(c, "pw-pic"),
+            all ? sticker(perfect ? "crown" : "thumbs", "pw-stk", perfect ? "Every star" : "All solved") : null,
+            c === next ? h("span", { class: "next-tag" }, any ? "next" : "start here") : null,
+            h("span", { class: "pw-b" }, h("b", {}, String(c.num).padStart(2, "0")), h("span", { class: "pw-t" }, c.title.replace(/ \(.*\)$/, "")),
+              h("span", { class: "pw-pet", "aria-label": `${avg} of 3 stars`, html: [0, 1, 2].map((i) => PETAL(i < avg)).join("") })));
+        })));
+    }));
   }
 
   function renderBlock(b, ctx) {

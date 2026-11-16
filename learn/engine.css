@@ -626,11 +626,29 @@ button.pc:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
 .stars i{width:12px;height:12px;background:var(--line);clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
 .stars i.on{background:var(--c4)}
 .pstar{margin-left:auto}
-.pwall{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:18px}
-.pkey{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:0 4px 0 var(--line);color:inherit;text-decoration:none}
-.pkey:hover{border-color:var(--pink);box-shadow:0 4px 0 var(--pink)}
-.pkey b{font:600 18px var(--f-display);color:var(--pink)}
-.pkey span{font-size:13.5px;line-height:1.35}
+/* the puzzle wall: parts, each with a star bar, and a tile per chapter with its pixel scene */
+.pwall{margin-top:8px}
+.pw-part{margin:22px 0 4px}
+.pw-part h3{display:flex;align-items:center;gap:12px;margin:0 0 12px;font:400 24px/1.1 var(--f-serif)}
+.pw-part h3 small{margin-left:auto;font:500 11.5px var(--f-mono);color:var(--muted);white-space:nowrap}
+.pw-bar{flex:none;width:90px;height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.pw-bar b{display:block;height:100%;background:var(--pink);border-radius:3px}
+.pw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:14px}
+.pkey{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:0 4px 0 var(--line);color:inherit;text-decoration:none;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.pkey:hover{transform:translateY(-3px) rotate(-.6deg);border-color:var(--pink);box-shadow:0 7px 0 var(--pink)}
+.pkey.won{border-color:color-mix(in srgb,var(--pink) 50%,var(--line))}
+.pkey .pw-pic{display:block;width:100%;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;background:#3d0d33}
+.pw-b{display:grid;gap:3px;padding:9px 11px 11px}
+.pkey .pw-b b{font:600 12px var(--f-display);color:var(--pink)}
+.pw-t{font-size:13px;line-height:1.3;min-height:2.6em}
+.pw-pet{display:flex;gap:3px;margin-top:2px}
+.pw-pet svg{width:15px;height:15px}
+.pw-pet .off{fill:none;stroke:var(--line);stroke-width:1.4}
+.pw-pet .on{fill:var(--pink)}
+.pkey img.pw-stk{position:absolute;right:6px;top:6px;width:36px;height:36px;z-index:2;transform:rotate(9deg);filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
+
+.pkey .next-tag{z-index:2;right:auto;left:8px;background:#ffd21f;color:#1b1a12;box-shadow:inset 0 -2px 0 #d9a800}
+@media (max-width:560px){.pw-grid{grid-template-columns:repeat(2,1fr);gap:10px}.pw-part h3{font-size:21px}.pw-bar{width:56px}}
 @media (max-width:560px){.pslider{grid-template-columns:1fr 56px}.pslider span{grid-column:1/-1}.pc{min-width:34px;height:34px}}
 
 /* puzzle desk: the right side of puzzle mode. A sheet that pulls up on narrow screens, a sticky rail on wide ones. */
