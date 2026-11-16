@@ -2807,3 +2807,490 @@
   const dropTo = (R, now) => { let n = 0; for (let t = 0; t <= Math.floor(now); t++) n += R.frames[t].drop; return n; };
   const maxSearch = (R, now) => { let m = 0; for (let t = 0; t <= Math.floor(now); t++) m = Math.max(m, R.frames[t].search); return m; };
 })();
+
+// ---------------------------------------------------------------------------------------- Copies and lag --
+// The Copies and lag unit's own kinds; tunnel/copies.js does the working out.
+(function () {
+  "use strict";
+  const UI = window.SD.UI, CP = window.COPY;
+  const cyc = (L, v) => L[(L.indexOf(v) + 1) % L.length];
+  const fmtN = (n) => Math.round(n).toLocaleString("en-US");
+  const pc = (x, d = 0) => (x * 100).toFixed(d) + "%";
+  const ran = (n) => (n <= 2 ? 3 : n <= 4 ? 2 : 1);
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const ease = (x) => 1 - Math.pow(1 - clamp(x), 3);
+  const lerp = (a, b, f) => a + (b - a) * f;
+  // a database copy, drawn as a little cylinder in its colour (set by a class: cp-c0 … cp-c8)
+  function cyl(s, x, y, w, h, cls = "") {
+    const e = w * 0.2, r = w / 2;
+    return [s("path", { class: "cp-cyl " + cls, d: `M${x} ${y}V${y + h}A${r} ${e} 0 0 0 ${x + w} ${y + h}V${y}Z` }),
+      s("ellipse", { class: "cp-top " + cls, cx: x + r, cy: y, rx: r, ry: e })];
+  }
+  // dots, every one of a class in one path: zero-length lines with round ends
+  function dots(s, groups, base) {
+    const out = [];
+    for (const [k, xs] of Object.entries(groups)) {
+      let d = "";
+      for (let j = 0; j < xs.length; j += 2) d += `M${xs[j].toFixed(1)} ${xs[j + 1].toFixed(1)}h0`;
+      if (d) out.push(s("path", { class: `${base} ${k}`, d }));
+    }
+    return out;
+  }
+  const put = (g, k, x, y) => (g[k] = g[k] || []).push(x, y);
+
+  // -------------------------------------------------------------------------------------- three strange reloads --
+  const STORY_SAY = {
+    mine: ["Ana posts a comment and reloads.", " It's gone."],
+    back: ["Ben sees Ana's comment, reloads,", " and it's gone again."],
+    order: ["Eve sees an answer", " to a question that isn't there."],
+  };
+  const FIX_SAY = {
+    leader: ["Read what you wrote from a copy that has it", "the leader, or a follower that has reached your write", "read-your-writes"],
+    sticky: ["Send each person to the same follower", "every read, every time", "monotonic reads"],
+    thread: ["Keep a whole thread in one partition", "so it's copied in the order it was written", "consistent prefix"],
+  };
+  const LANES = { mine: ["leader", "follower 1", "follower 2"], back: ["leader", "follower 1", "follower 2"], order: ["questions' leader", "its follower", "answers' leader", "its follower"] };
+  const PY0 = 108, PH = 134, PG = 6, PX0 = 36, PX1 = 640, LX0 = 214, LX1 = 580, TMAX = 1.5;
+  const FX = 664, FY0 = 116, FH = 80;
+  const lx = (t) => LX0 + (t / TMAX) * (LX1 - LX0);
+  const py = (i) => PY0 + i * (PH + PG);
+  const laneY = (st, i, j) => { const n = LANES[st].length, gap = n === 4 ? 22 : 29; return py(i) + 46 + j * gap; };
+  UI.anomaly = {
+    init(c) {
+      Object.assign(c.F, { put: {}, tried: {}, wrong: 0, clk: 0, start: { mine: 0, back: 0.4, order: 0.8 }, drag: null, sel: null, flash: {} });
+      if (c.done()) { c.F.put = { ...c.B.answer }; c.F.clk = 99; }
+      const up = (e) => {
+        if (!c.isNow()) return;
+        const at0 = (p) => CP.STORIES.findIndex((st, i) => p.x > PX0 && p.x < PX1 && p.y > py(i) && p.y < py(i) + PH);
+        // tap a fix, then tap anywhere on a story
+        if (!c.F.drag) { const i = c.F.sel ? at0(c.pt(e)) : -1; if (i >= 0) { dropA(c, c.F.sel, CP.STORIES[i]); c.F.sel = null; c.redraw(); c.rebrief(); } return; }
+        const d = c.F.drag, p = c.pt(e), moved = Math.hypot(p.x - d.x0, p.y - d.y0) > 8;
+        c.F.drag = null;
+        const at = at0(p);
+        if (moved && at >= 0) dropA(c, d.fix, CP.STORIES[at]);
+        else if (!moved) c.F.sel = c.F.sel === d.fix ? null : d.fix;
+        c.redraw(); c.rebrief();
+      };
+      c.svg.addEventListener("pointermove", (e) => { if (c.isNow() && c.F.drag) { const p = c.pt(e); c.F.drag.x = p.x; c.F.drag.y = p.y; c.redraw(); } });
+      c.svg.addEventListener("pointerup", up);
+      c.svg.addEventListener("pointercancel", () => { if (c.isNow()) { c.F.drag = null; c.redraw(); } });
+    },
+    draw(c) {
+      const { s, h, F, B } = c, kids = [];
+      kids.push(s("text", { class: "ev-h", x: PX0, y: 76 }, "Three reloads, on a timeline"),
+        s("text", { class: "ev-sub", x: PX0, y: 94 }, "time runs left to right; dashed lines are the leader's log reaching a follower"));
+      CP.STORIES.forEach((st, i) => {
+        const y0 = py(i), fix = F.put[st] || (F.flash[st] && F.flash[st].fix) || "none", tr = CP.EX[st], o = CP.story(st, fix, tr);
+        const T = clamp((F.clk - F.start[st]) * 0.55, 0, TMAX), cured = F.put[st] === B.answer[st];
+        const hot = F.drag || F.sel;
+        kids.push(s("rect", { class: "cp-panel" + (cured ? " ok" : "") + (hot ? " drop" : ""), x: PX0, y: y0, width: PX1 - PX0, height: PH, rx: 14 }));
+        kids.push(s("text", { class: "cp-say", x: PX0 + 16, y: y0 + 24 }, STORY_SAY[st][0], s("tspan", { class: "b" }, STORY_SAY[st][1])));
+        // lanes, and the time ruler under them
+        LANES[st].forEach((name, j) => {
+          const y = laneY(st, i, j);
+          kids.push(s("path", { class: "cp-lane" + (j === 0 || (st === "order" && j === 2) ? " lead" : ""), d: `M${LX0} ${y}H${LX1}` }), s("text", { class: "cp-lt", x: LX0 - 10, y: y + 4, "text-anchor": "end" }, name));
+        });
+        if (st === "order" && fix === "thread") kids.push(s("text", { class: "cp-lt faint", x: (LX0 + LX1) / 2, y: laneY(st, i, 2) + 16, "text-anchor": "middle" }, "nothing here now: the thread lives in one partition"));
+        // the writes, and the log carrying them to each follower
+        const reps = st === "order" ? [[0, 1, o.lags.q], ...(fix === "thread" ? [] : [[2, 3, o.lags.a]])] : [[0, 1, tr.f[0]], [0, 2, tr.f[1]]];
+        for (const w of o.writes) {
+          if (T < w.t) continue;
+          const wx = lx(w.t), wy = laneY(st, i, w.lane);
+          for (const [from, to, lag] of reps) {
+            if (from !== w.lane) continue;
+            const ty = laneY(st, i, to), f = clamp((T - w.t) / lag), x1 = lerp(wx, lx(Math.min(TMAX, w.t + lag)), f), y1 = lerp(wy, ty, f);
+            const lag2 = st === "order" && fix === "thread" && w.who === "Dev" ? o.lags.q : lag;
+            kids.push(s("path", { class: "cp-rep", d: `M${wx} ${wy}L${x1} ${y1}` }));
+            if (f >= 1 && w.t + lag2 <= TMAX) kids.push(s("circle", { class: "cp-arr", cx: x1, cy: y1, r: 3.5 }));
+          }
+          const under = w.who === "Dev" && w.lane === 0;
+          kids.push(s("circle", { class: "cp-w", cx: wx, cy: wy, r: 6 }), s("text", { class: "cp-who yt-halo", x: wx + 9, y: under ? wy + 15 : wy - 7 }, w.who === "Dev" ? "Dev's answer" : w.who === "Cleo" ? "Cleo's question" : "Ana's comment"));
+        }
+        // the reads: a beam down to the copy that answered, and what it showed
+        o.reads.forEach((r, k) => {
+          if (T < r.t) return;
+          const x = lx(r.t) + (st === "order" ? 0 : 0), y = laneY(st, i, r.lane), top = y0 + 50;
+          kids.push(s("path", { class: "cp-beam", d: `M${x} ${top}V${y - 7}` }), s("rect", { class: "cp-read" + (r.sees ? " ok" : " no"), x: x - 7, y: y - 7, width: 14, height: 14, rx: 4, transform: `rotate(45 ${x} ${y})` }));
+          const lab = st === "order" ? (r.sees ? `✓ ${r.what}` : `✗ no ${r.what}`) : st === "back" && k === 0 ? (r.sees ? "✓" : "✗") : r.sees ? "✓ sees it" : "✗ not there";
+          const two = st === "order" && o.reads[0].lane === o.reads[1].lane;
+          kids.push(s("text", { class: "cp-res yt-halo" + (r.sees ? " ok" : " no"), x: x + 11, y: y - 7 + (two && k === 1 ? 20 : 0) }, (k === 0 ? r.who + " " : "") + lab));
+        });
+        // the verdict, once the story has played
+        const over = T >= TMAX - 0.01;
+        if (over) {
+          const bad = o.bad;
+          kids.push(s("text", { class: "cp-verd" + (bad ? " no" : " ok"), x: PX1 - 16, y: y0 + 24, "text-anchor": "end" }, bad ? (F.flash[st] ? "still wrong" : "✗ went wrong") : "✓ cured"));
+          if (cured) kids.push(s("text", { class: "cp-name", x: PX1 - 16, y: y0 + 42, "text-anchor": "end" }, FIX_SAY[B.answer[st]][2]), c.rx("thumbs", PX1 - 48, y0 + PH - 50, 40));
+          else if (bad && !F.flash[st]) kids.push(c.rx(st === "mine" ? "ghost" : st === "back" ? "bug" : "bulb", PX1 - 50, y0 + PH - 52, 42));
+        }
+        if (!F.put[st] && F.flash[st]) kids.push(s("text", { class: "cp-chip no", x: PX1 - 16, y: y0 + 42, "text-anchor": "end" }, "with: " + FIX_SAY[F.flash[st].fix][2]));
+        // the time ruler
+        kids.push(s("text", { class: "ev-tick", x: LX0, y: y0 + PH - 8 }, "0 s"), s("text", { class: "ev-tick", x: lx(1), y: y0 + PH - 8, "text-anchor": "middle" }, "1 s"));
+        if (!over) kids.push(s("path", { class: "tw-now", d: `M${lx(T)} ${y0 + 48}V${y0 + PH - 18}` }));
+      });
+      // the fixes, still to place
+      kids.push(s("text", { class: "ev-h", x: FX, y: 76 }, "Fixes"), s("text", { class: "ev-sub", x: FX, y: 94 }, "drag one onto the story it cures"));
+      const left = CP.FIXES.filter((f) => !Object.values(F.put).includes(f));
+      CP.FIXES.forEach((f, k) => {
+        const placed = !left.includes(f), dragging = F.drag && F.drag.fix === f && Math.hypot(F.drag.x - F.drag.x0, F.drag.y - F.drag.y0) > 8;
+        if (placed) { kids.push(s("rect", { class: "cp-slot", x: FX, y: FY0 + k * FH, width: 262, height: FH - 10, rx: 12 }), s("text", { class: "cp-lt faint", x: FX + 131, y: FY0 + k * FH + 39, "text-anchor": "middle" }, "✓ " + FIX_SAY[f][2])); return; }
+        const card = h("button", { class: "cc-ord cp-card" + (F.sel === f ? " cur" : "") + (dragging ? " lift" : ""), xmlns: "http://www.w3.org/1999/xhtml",
+          onpointerdown: (e) => { const p = c.pt(e); F.drag = { fix: f, x0: p.x, y0: p.y, x: p.x, y: p.y }; try { c.svg.setPointerCapture(e.pointerId); } catch (err) {} e.preventDefault(); } },
+          h("b", {}, FIX_SAY[f][0]), h("small", {}, FIX_SAY[f][1]));
+        kids.push(s("foreignObject", { x: FX, y: FY0 + k * FH, width: 262, height: FH - 6, class: "sc-fo" + (dragging ? " ghosted" : "") }, card));
+      });
+      if (F.drag && Math.hypot(F.drag.x - F.drag.x0, F.drag.y - F.drag.y0) > 8) {
+        const d = F.drag;
+        kids.push(s("g", { class: "cp-ghost", transform: `translate(${d.x - 120} ${d.y - 26})` }, s("rect", { width: 240, height: 52, rx: 12 }), s("text", { x: 14, y: 31 }, FIX_SAY[d.fix][0].length > 30 ? FIX_SAY[d.fix][0].slice(0, 30) + "…" : FIX_SAY[d.fix][0])));
+      }
+      const nOk = CP.STORIES.filter((st) => F.put[st] === B.answer[st]).length;
+      if (nOk === 3) kids.push(c.rx("trophy", FX + 90, FY0 + 3 * FH + 10, 80, "pop"));
+      else kids.push(s("text", { class: "cp-lt faint", x: FX, y: FY0 + 3 * FH + 20 }, F.wrong ? `${F.wrong} wrong guess${F.wrong > 1 ? "es" : ""} so far` : ""));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, end = Math.max(...CP.STORIES.map((st) => F.start[st])) + TMAX / 0.55 + 0.2;
+      if (c.REDUCED) { if (F.clk < 99) { F.clk = 99; c.redraw(); } return; }
+      // the uncured stories replay every few seconds, so there's always something to watch
+      F.clk += dt;
+      let looping = false;
+      for (const st of CP.STORIES) {
+        if (F.put[st] === c.B.answer[st]) continue;
+        looping = true;
+        if (F.clk - F.start[st] > TMAX / 0.55 + 2.4) { F.start[st] = F.clk; if (F.flash[st] && F.flash[st].n-- <= 0) delete F.flash[st]; }
+      }
+      if (looping || F.clk < end + 1 || F.drag) c.redraw();
+    },
+    brief(c) {
+      const { h, F, B } = c, nOk = CP.STORIES.filter((st) => F.put[st] === B.answer[st]).length;
+      const last = F.last;
+      return [h("div", { class: "sd-ask" }, h("small", {}, `${nOk} of 3 cured`),
+        h("p", { class: "sd-quiet" }, "Each story is one reload, drawn on a timeline: where the write landed, when the log reached each follower, and which copy the read asked."),
+        last ? h("p", { class: "sd-verdict " + (last.ok ? "ok" : "no") }, last.ok ? `✓ That cures it: ${FIX_SAY[last.fix][2]}.` : `✗ ${FIX_SAY[last.fix][0]} doesn't cure that one: watch it go wrong anyway.`) : null)];
+    },
+    tools() { return []; },
+  };
+  function dropA(c, fix, st) {
+    const F = c.F, B = c.B;
+    if (F.put[st] === B.answer[st]) return;
+    const ok = B.answer[st] === fix;
+    F.last = { fix, ok };
+    if (ok) { F.put[st] = fix; delete F.flash[st]; }
+    else { F.wrong++; F.flash[st] = { fix, n: 1 }; }
+    F.start[st] = F.clk;
+    if (ok && CP.STORIES.every((x) => F.put[x] === B.answer[x])) c.solved(F.wrong === 0 ? 3 : F.wrong <= 2 ? 2 : 1);
+  }
+
+  // ------------------------------------------------------------------------------------------------- R + W --
+  const QCX = 230, QCY = 318, QR = 128, GX0 = 618, GY0 = 168, GC = 50;
+  const qxy = (i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5; return [QCX + QR * Math.cos(a), QCY + QR * Math.sin(a)]; };
+  const QA = 3.2; // seconds of animation for the whole write and read
+  UI.quorum = {
+    init(c) {
+      Object.assign(c.F, { pick: null, tries: [], t: 0, won: false });
+      if (c.done()) Object.assign(c.F, { pick: { ...c.B.answer }, tries: [{ ...c.B.answer }], t: 99, won: true });
+    },
+    draw(c) {
+      const { s, F, B } = c, kids = [], P = F.pick, Q = P ? CP.quorum(P.w, P.r) : null, t = F.t;
+      kids.push(s("text", { class: "ev-h", x: 40, y: 76 }, "5 copies of every key"), s("text", { class: "ev-sub", x: 40, y: 94 }, P ? `W = ${P.w}, R = ${P.r}: one write, then a read straight after it` : "tap a square on the right to choose W and R"));
+      // the example: when each message lands, scaled so the slow ones still fit
+      const X = Q && Q.exPlay, T0 = Q && Q.ex;
+      const span = X ? Math.max(...X.back.map((b, i) => b), ...T0.wIn.map((w, i) => w + T0.wBack[i])) : 1;
+      const at = (ms) => QA * Math.sqrt(ms / span);
+      const writeEnd = X ? at(X.done) : 0, downAt = QA + 0.8;
+      // wires from the app to each copy
+      for (let i = 0; i < 5; i++) { const [x, y] = qxy(i); kids.push(s("path", { class: "cp-wire", d: `M${QCX} ${QCY}L${x} ${y}` })); }
+      const g = {};
+      if (X) {
+        for (let i = 0; i < 5; i++) {
+          const [x, y] = qxy(i), wIn = at(T0.wIn[i]), wAck = at(T0.wIn[i] + T0.wBack[i]), rIn = at(X.reached[i]), rOut = at(X.back[i]);
+          const fly = (t0, t1, out, cls) => { if (t > t0 && t < t1) { const f = (t - t0) / (t1 - t0), a = out ? f : 1 - f; put(g, cls, lerp(QCX, x, a), lerp(QCY, y, a)); } };
+          fly(0, wIn, true, "w"); fly(wIn, wAck, false, X.acks.includes(i) ? "wack" : "w");
+          fly(writeEnd, rIn, true, "r"); fly(rIn, rOut, false, X.ans.includes(i) ? "rans" : "r");
+        }
+      }
+      kids.push(...dots(s, g, "cp-msg"));
+      // the copies: filled once the write reaches them; the ones that answered get a ring
+      let acks = 0, answers = 0;
+      for (let i = 0; i < 5; i++) {
+        const [x, y] = qxy(i), dead = t >= downAt && Q && Q.down.includes(i);
+        const has = X && t >= at(T0.wIn[i]), acked = X && X.acks.includes(i) && t >= at(T0.wIn[i] + T0.wBack[i]), ans = X && X.ans.includes(i) && t >= at(X.back[i]);
+        if (acked) acks++;
+        if (ans) answers++;
+        kids.push(...cyl(s, x - 22, y - 20, 44, 34, "cp-q" + (has ? " has" : "") + (dead ? " dead" : "")));
+        if (acked && t < writeEnd + 0.4) kids.push(s("circle", { class: "cp-ring w", cx: x, cy: y - 4, r: 32 }));
+        if (ans && t < downAt) kids.push(s("circle", { class: "cp-ring r" + (X.has[i] ? "" : " stale"), cx: x, cy: y - 4, r: 32 }));
+        kids.push(s("text", { class: "cp-lt", x, y: y + 34, "text-anchor": "middle" }, dead ? "down" : `copy ${i + 1}`));
+        if (dead) kids.push(s("path", { class: "cp-x", d: `M${x - 16} ${y - 18}l32 32m0 -32l-32 32` }));
+      }
+      kids.push(s("circle", { class: "cp-app", cx: QCX, cy: QCY, r: 26 }), s("text", { class: "cp-lt", x: QCX, y: QCY + 4, "text-anchor": "middle" }, "app"));
+      if (X) {
+        const line = t < writeEnd ? `write: ${acks} of ${P.w} yes` : t < at(Math.max(...X.back)) && answers < P.r ? `read: ${answers} of ${P.r} answers` : t < downAt ? (X.fresh ? "✓ the read saw the write" : "✗ the read missed the write") : "";
+        if (line) kids.push(s("text", { class: "cp-res yt-halo" + (t >= writeEnd && answers >= P.r ? (X.fresh ? " ok" : " no") : ""), x: QCX, y: QCY + 54, "text-anchor": "middle" }, line));
+        if (t >= downAt) {
+          kids.push(s("text", { class: "cp-res yt-halo" + (Q.wDown ? " ok" : " no"), x: QCX, y: QCY + 46, "text-anchor": "middle" }, Q.wDown ? `✓ a write still gets ${P.w} of the 3 left` : `✗ a write needs ${P.w}, only 3 left`),
+            s("text", { class: "cp-res yt-halo" + (Q.rDown ? " ok" : " no"), x: QCX, y: QCY + 64, "text-anchor": "middle" }, Q.rDown ? `✓ a read still gets ${P.r} of the 3 left` : Q.wDown ? `✗ a read needs ${P.r}, only 3 left` : ""));
+        }
+      }
+      // the grid of every W and R
+      kids.push(s("text", { class: "ev-h", x: GX0 - 30, y: 128 }, "Pick W and R"), s("text", { class: "cp-ax", x: GX0 + (5 * GC) / 2, y: GY0 - 12, "text-anchor": "middle" }, "R: answers a read takes →"),
+        s("text", { class: "cp-ax", x: GX0 - 30, y: GY0 + (5 * GC) / 2, "text-anchor": "middle", transform: `rotate(-90 ${GX0 - 30} ${GY0 + (5 * GC) / 2})` }, "W: yeses a write waits for →"));
+      for (let w = 1; w <= 5; w++) for (let r = 1; r <= 5; r++) {
+        const x = GX0 + (r - 1) * GC, y = GY0 + (w - 1) * GC, tried = F.tries.some((q) => q.w === w && q.r === r), cur = P && P.w === w && P.r === r;
+        let cls = "", lab = `${w}·${r}`;
+        if (tried && (!cur || t >= downAt)) { const q = CP.quorum(w, r); cls = q.stale ? " stale" : !(q.wDown && q.rDown) ? " down" : " good"; lab = q.stale ? fmtN(q.stale) : !(q.wDown && q.rDown) ? "2↓" : "✓"; }
+        kids.push(s("rect", { class: "cp-cell" + cls + (cur ? " cur" : ""), x: x + 2, y: y + 2, width: GC - 4, height: GC - 4, rx: 8, onclick: () => pickQ(c, w, r) }),
+          s("text", { class: "cp-cl" + cls, x: x + GC / 2, y: y + GC / 2 + 4, "text-anchor": "middle" }, lab));
+      }
+      for (let k = 1; k <= 5; k++) kids.push(s("text", { class: "ev-tick", x: GX0 + (k - 0.5) * GC, y: GY0 + 5 * GC + 14, "text-anchor": "middle" }, String(k)), s("text", { class: "ev-tick", x: GX0 - 10, y: GY0 + (k - 0.5) * GC + 4, "text-anchor": "end" }, String(k)));
+      // once found, or after a few tries: the line where R + W passes 5
+      if (F.won || F.tries.length >= 4) {
+        let d = "";
+        for (let w = 1; w <= 5; w++) { const r0 = 6 - w; d += `${w === 1 ? "M" : "L"}${GX0 + (r0 - 1) * GC} ${GY0 + (w - 1) * GC}L${GX0 + (r0 - 1) * GC} ${GY0 + w * GC}`; }
+        kids.push(s("path", { class: "cp-edge", d }), s("text", { class: "cc-given", x: GX0 + 110, y: 128 }, "right of the pink line: R + W > 5"));
+      }
+      // what the pick costs
+      if (Q && t >= downAt) {
+        const y = GY0 + 5 * GC + 44;
+        kids.push(s("text", { class: "cc-sm", x: GX0 - 30, y }, `misses the write: ${fmtN(Q.stale)} of ${fmtN(CP.QT)} reads`),
+          s("text", { class: "cc-sm", x: GX0 - 30, y: y + 18 }, `slowest 1%: writes ${Q.wP99.toFixed(1)} ms, reads ${Q.rP99.toFixed(1)} ms`));
+        const good = Q.stale === 0 && Q.wDown && Q.rDown;
+        kids.push(c.rx(good ? "trophy" : Q.stale ? "ghost" : "plug", GX0 + 5 * GC - 20, y - 4, 52, "pop"));
+      }
+      kids.push(s("text", { class: "ev-tick", x: GX0 - 30, y: 524 }, "number: reads that missed · 2↓: fails with 2 down"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F;
+      if (!F.pick || F.t >= QA + 1.6) return;
+      F.t = Math.min(QA + 1.6, F.t + dt * (c.REDUCED ? 40 : 1));
+      c.redraw();
+      if (F.t >= QA + 1.6) c.rebrief();
+    },
+    brief(c) {
+      const { h, F, B } = c, P = F.pick;
+      if (!P || F.t < QA + 0.8) return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Pink copies have the write. A ring marks a copy that answered in time: the W yeses, then the R answers. Then the two fastest copies go down."))];
+      const Q = CP.quorum(P.w, P.r), ok = P.w === B.answer.w && P.r === B.answer.r;
+      const why = Q.stale ? `${fmtN(Q.stale)} of 10,000 reads straight after a write missed it` : !Q.wDown ? `with 2 copies down, a write can't get ${P.w} yeses` : !Q.rDown ? `with 2 copies down, a read can't get ${P.r} answers` : "";
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-verdict " + (ok ? "ok" : "no") }, ok ? "✓ Every read fresh, and it keeps going with 2 down." : `✗ ${why[0].toUpperCase() + why.slice(1)}.`))];
+    },
+    tools() { return []; },
+  };
+  function pickQ(c, w, r) {
+    const F = c.F;
+    if (!F.tries.some((q) => q.w === w && q.r === r)) F.tries.push({ w, r });
+    F.pick = { w, r }; F.t = 0;
+    if (w === c.B.answer.w && r === c.B.answer.r && !F.won) { F.won = true; c.solved(F.tries.length === 1 ? 3 : F.tries.length <= 3 ? 2 : 1); }
+    c.redraw(); c.rebrief();
+  }
+
+  // ------------------------------------------------------------------------------------------- the leader dies --
+  const MODE_WORD = { async: "says yes at once (async)", semi: "says yes once one follower has it (semi-sync)", sync: "says yes once both followers have it (sync)" };
+  const PRO_WORD = { near: "the near follower", ahead: "whichever follower is furthest ahead", far: "the far follower" };
+  const MACH = [["leader", "", 150], ["near follower", "same building · 0.3 ms", 262], ["far follower", "another region · 35 ms", 374]];
+  const MX = 44, TX0 = 256, TX1 = 690, TW = 1.0, LB = 516, LH = 66;
+  const RUN = 3.4, HOLD = 2.2, FROM = 30 - 3; // each day plays the 3 s before it dies, then holds
+  const tapeX = (tw, now) => TX0 + clamp((tw - (now - TW)) / TW) * (TX1 - TX0);
+  UI.failover = {
+    init(c) { Object.assign(c.F, { mode: "async", promote: "near", res: null, anim: 0, runs: 0, shown: false }); },
+    draw(c) {
+      const { s, F, B } = c, R = F.res, g = B.goals, kids = [], FO = CP.FO;
+      const full = RUN + HOLD, a = R ? F.anim * 2 * full : 0, day = a < full ? 0 : 1, local = a - day * full, run = R ? (day ? R.stall : R.calm) : null;
+      const now = R ? Math.min(30, FROM + (local / RUN) * 3) : 0, dead = R && local >= RUN;
+      kids.push(s("text", { class: "ev-h", x: MX, y: 76 }, R ? (day ? "Day 2 · the near follower's disk stalls at 28 s" : "Day 1 · a calm day") : "A leader and two followers"),
+        s("text", { class: "ev-sub", x: MX, y: 94 }, R ? (dead ? `30 s: the leader's machine dies; ${run.who === "near" ? "the near" : "the far"} follower takes over` : `${now.toFixed(1)} s · each tape is the last second of the log`) : "kill the leader to watch: each tape will show the last second of the log"));
+      // the three machines, their tapes, and the line where the leader has said yes
+      const k = R ? Math.min(run.n - 1, Math.floor(now * FO.rate)) : 0;
+      let yes = 0;
+      if (R) for (let j = k; j >= Math.max(0, k - 6000); j--) if (run.ack[j] <= now) { yes = run.t[j]; break; }
+      const appl = (arr) => { let lo = 0, hi = run.n; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] <= now) lo = m + 1; else hi = m; } return lo; };
+      const has = R ? [k + 1, appl(run.aN), appl(run.aF)] : [0, 0, 0];
+      const pkt = {};
+      MACH.forEach(([name, sub, y], i) => {
+        const promoted = R && dead && ((i === 1 && run.who === "near") || (i === 2 && run.who === "far"));
+        kids.push(...cyl(s, MX, y - 26, 46, 40, `cp-c${i}` + (i === 0 && dead ? " dead" : "") + (promoted ? " crown" : "")));
+        kids.push(s("text", { class: "cp-mn", x: MX + 58, y: y - 6 }, promoted ? "new leader" : name), s("text", { class: "cp-lt faint", x: MX + 58, y: y + 10, "text-anchor": "start" }, i === 0 ? (dead ? "dead" : "takes the writes") : sub));
+        kids.push(s("rect", { class: "cp-tape", x: TX0, y: y - 22, width: TX1 - TX0, height: 30, rx: 6 }));
+        if (R) {
+          const upto = has[i] > 0 ? run.t[Math.min(run.n - 1, has[i] - 1)] : -1, x1 = tapeX(upto, now);
+          if (x1 > TX0) kids.push(s("rect", { class: `cp-tfill cp-c${i}`, x: TX0, y: y - 22, width: x1 - TX0, height: 30, rx: 6 }));
+          const behind = now - upto;
+          const inside = x1 > TX1 - 96;
+          if (i > 0 && behind > 0.004) kids.push(s("text", { class: "cp-lag yt-halo" + (behind > TW ? " far" : ""), x: inside ? x1 - 6 : Math.max(TX0 + 8, x1 + 6), y: y - 2, "text-anchor": inside ? "end" : "start" }, behind > TW ? `${behind.toFixed(1)} s behind` : `${Math.round(behind * 1000)} ms behind`));
+          if (promoted) {
+            const xy = tapeX(yes, now), lost = run.lost;
+            if (lost) kids.push(s("rect", { class: "cp-lost", x: Math.max(TX0, x1), y: y - 26, width: Math.max(3, xy - Math.max(TX0, x1)), height: 38, rx: 4 }), s("text", { class: "cp-res no yt-halo", x: Math.min(TX1 - 4, xy + 8), y: y + 30, "text-anchor": xy > TX1 - 140 ? "end" : "start" }, `${fmtN(lost)} said-yes writes lost`));
+            else kids.push(s("text", { class: "cp-res ok yt-halo", x: TX1, y: y + 30, "text-anchor": "end" }, "✓ has every write the leader said yes to"));
+            kids.push(c.rx("crown", MX + 6, y - 66, 34));
+          }
+          // the log flying out to the followers
+          if (i > 0 && !dead) for (let j = 0; j < 7; j++) {
+            const ph = ((now * (i === 1 ? 5 : 1.2) + j / 7) % 1), stalled = i === 1 && day === 1 && now >= FO.stall;
+            if (stalled && ph > 0.5) continue;
+            put(pkt, "c" + i, MX + 23 + (i === 1 ? 0 : -30) * Math.sin(Math.PI * ph), lerp(MACH[0][2] + 14, y - 26, ph));
+          }
+        }
+      });
+      kids.push(...dots(s, pkt, "cp-pkt"));
+      if (R) {
+        const xy = tapeX(yes, now);
+        kids.push(s("path", { class: "cp-yes", d: `M${xy} ${MACH[0][2] - 34}V${MACH[2][2] + 14}` }), s("text", { class: "cc-given yt-halo", x: xy, y: MACH[0][2] - 38, "text-anchor": "middle" }, "said yes up to here"));
+        if (day === 1 && now >= FO.stall) kids.push(c.rx("sleep", TX1 - 40, MACH[1][2] - 50, 36));
+        if (dead) kids.push(c.rx("flame", MX + 106, MACH[0][2] - 42, 36));
+      }
+      // every write's wait, on a log scale: from 0.3 ms to 3 s
+      const ly = (ms) => LB - (Math.log10(clamp(ms, 0.3, 3000) / 0.3) / 4) * LH, lx2 = (t) => TX0 + ((t - FROM) / 3) * (TX1 - TX0);
+      kids.push(s("text", { class: "ev-sub", x: MX, y: LB - LH + 4 }, "how long"), s("text", { class: "ev-sub", x: MX, y: LB - LH + 18 }, "each write"), s("text", { class: "ev-sub", x: MX, y: LB - LH + 32 }, "waited"));
+      kids.push(s("path", { class: "ub-axis", d: `M${TX0} ${LB}H${TX1}` }), s("path", { class: "ub-goal", d: `M${TX0} ${ly(g.p99)}H${TX1}` }), s("text", { class: "ev-tick", x: TX1 + 6, y: ly(g.p99) + 4 }, "100 ms"));
+      for (const t of [27, 28, 29, 30]) kids.push(s("text", { class: "ev-tick", x: lx2(t), y: LB + 14, "text-anchor": "middle" }, t + " s"));
+      for (const [ms, lab] of [[1, "1 ms"], [1000, "1 s"]]) kids.push(s("text", { class: "ev-tick", x: TX0 - 6, y: ly(ms) + 4, "text-anchor": "end" }, lab));
+      if (R) {
+        const wg = {};
+        for (let j = Math.floor(FROM * FO.rate); j <= k; j += 5) {
+          const done = run.ack[j] <= now, ms = done ? (run.ack[j] - run.t[j]) * 1000 : (now - run.t[j]) * 1000;
+          if (!done && ms < 2) continue;
+          put(wg, done ? (ms > g.p99 ? "slow" : "ok") : "wait", lx2(run.t[j]), ly(ms));
+        }
+        kids.push(...dots(s, wg, "cp-lat"));
+      }
+      // the numbers
+      const NX = 752, done = R && F.shown;
+      const lostSoFar = !R ? 0 : day === 0 ? (dead ? R.calm.lost : 0) : R.calm.lost + (dead ? R.stall.lost : 0);
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 152 }, "said yes, then lost"), s("text", { class: "wa-big" + (lostSoFar > g.lost ? " over" : ""), x: NX, y: 192 }, R ? fmtN(lostSoFar) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 244 }, "slowest 1% of writes"), s("text", { class: "wa-big" + (done && R.p99 > g.p99 ? " over" : ""), x: NX, y: 284 }, done ? (R.p99 >= 1000 ? (R.p99 / 1000).toFixed(1) + " s" : R.p99.toFixed(R.p99 < 10 ? 1 : 0) + " ms") : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 336 }, "left waiting when it died"), s("text", { class: "cc-big", x: NX, y: 368 }, done ? fmtN(R.hung) : "–"));
+      if (done) kids.push(c.rx(goodF(c, R) ? "trophy" : R.lost ? "ghost" : "snail", NX + 70, 392, 64, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.3 : 2 * (RUN + HOLD)));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodF(c, R)) c.solved(ran(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.shown ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.lost > g.lost && `${fmtN(R.lost)} writes were lost after the leader said yes (${fmtN(R.calm.lost)} on the calm day, ${fmtN(R.stall.lost)} in the stall)`, R.p99 > g.p99 && `the slowest 1% of writes took ${R.p99 >= 1000 ? (R.p99 / 1000).toFixed(1) + " s" : Math.round(R.p99) + " ms"}`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Each tape fills as that machine gets the log. The pink line is how far the leader has said yes. When it dies, anything past the new leader's tape is gone."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; F.shown = false; c.redraw(); c.rebrief(); };
+      const run = () => { F.runs++; F.res = CP.failover({ mode: F.mode, promote: F.promote }); F.anim = 0; F.shown = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "the leader ", h("button", { class: "sd-word", onclick: () => set("mode", cyc(CP.MODES, F.mode)) }, MODE_WORD[F.mode])),
+        h("p", {}, "when it dies, ", h("button", { class: "sd-word", onclick: () => set("promote", cyc(CP.PROMOTE, F.promote)) }, PRO_WORD[F.promote]), " takes over")),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Kill the leader"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [["no lost writes", R ? R.lost <= g.lost : null, R ? fmtN(R.lost) : "run it"], ["slowest 1% within 100 ms", R ? R.p99 <= g.p99 : null, R ? (R.p99 >= 1000 ? (R.p99 / 1000).toFixed(1) + " s" : Math.round(R.p99) + " ms") : "·"]];
+    },
+  };
+  const goodF = (c, R) => R.lost <= c.B.goals.lost && R.p99 <= c.B.goals.p99;
+
+  // -------------------------------------------------------------------------------------- where did my post go? --
+  const ROUTE_WORD = { any: "any follower", leader60: "the leader, for a minute after they post", caught: "a follower that has their post, else the leader" };
+  const RX0 = 40, RX1 = 700, RTOP = 128, RM = 236, RBAR = 360;
+  const HX0 = 70, HX1 = 700, HB = 512, HH = 70;
+  const NP = 90; // reads in flight on screen
+  const clockR = (t) => { const m = Math.floor(t / 60); return `9:${String(m).padStart(2, "0")} pm`; };
+  UI.ryw = {
+    init(c) { Object.assign(c.F, { route: "any", n: 4, res: null, anim: 0, runs: 0, shown: false }); },
+    draw(c) {
+      const { s, F, B } = c, R = F.res, RW = CP.RW, g = B.goals, kids = [], n = R ? R.n : F.n;
+      const now = R ? F.anim * RW.T : 0, bi = R ? Math.min(R.bins.length - 1, Math.floor(now / RW.bin)) : 0, b = R ? R.bins[bi] : null;
+      kids.push(s("text", { class: "ev-h", x: RX0, y: 76 }, R ? `${clockR(now)} · ${fmtN(RW.reads)} reads a second` : `A leader and ${n} followers`),
+        s("text", { class: "ev-sub", x: RX0, y: 94 }, R ? "pink dots are people looking for the post they just made" : "run the night to watch the reads"));
+      // the machines: the leader, then the followers
+      const m = n + 1, w = (RX1 - RX0) / m, cx = (j) => RX0 + w * (j + 0.5);
+      kids.push(s("path", { class: "cp-crowd", d: `M${RX0} ${RTOP}H${RX1}` }), s("text", { class: "cp-lt faint", x: RX0, y: RTOP - 8, "text-anchor": "start" }, "people"));
+      for (let j = 0; j < m; j++) {
+        const x = cx(j), lead = j === 0, f = j - 1, lag = lead ? 0 : CP.lagOf(f, now), load = !b ? 0 : lead ? b.lead / RW.lcap : b.fol[f] / RW.fcap;
+        kids.push(...cyl(s, x - 20, RM - 22, 40, 34, lead ? "cp-c0" : "cp-c1" + (f === 0 && lag > 3 ? " lagging" : "")));
+        kids.push(s("text", { class: "cp-lt", x, y: RM + 30, "text-anchor": "middle" }, lead ? "leader" : n > 6 ? `f${j}` : `follower ${j}`));
+        if (!lead && R) kids.push(s("text", { class: "cp-lag" + (lag > 3 ? " far" : ""), x, y: RM - 40, "text-anchor": "middle" }, lag > 60 ? `${(lag / 60).toFixed(1)} min behind` : lag > 3 ? `${Math.round(lag)} s behind` : "0.2 s"));
+        // how busy: a bar under each machine
+        const bh = 70, hh = Math.min(bh * 1.25, load * bh);
+        kids.push(s("rect", { class: "sp-col", x: x - 9, y: RBAR - bh * 1.25, width: 18, height: bh * 1.25, rx: 4 }));
+        if (hh > 0) kids.push(s("rect", { class: "cp-load" + (load > 1 ? " over" : load > g.busy ? " warm" : ""), x: x - 9, y: RBAR - hh, width: 18, height: hh, rx: 4 }));
+        if (R) kids.push(s("text", { class: "cc-sm", x, y: RBAR + 14, "text-anchor": "middle" }, pc(load)));
+      }
+      kids.push(s("path", { class: "ub-goal", d: `M${RX0} ${RBAR - g.busy * 70}H${RX1}` }), s("text", { class: "ev-tick", x: RX1 + 6, y: RBAR - g.busy * 70 + 4 }, "80%"));
+      // the reads falling into the machines; a pink one that lands on a copy without the post bursts
+      if (R) {
+        const gg = {}, bursts = [];
+        for (let i = 0; i < NP; i++) {
+          const cy2 = now / 216 + (i / NP) * 7.3, ph = cy2 % 1, mine = i % 3 === 0, a = RW.looks[(i / 3) % RW.looks.length | 0];
+          let tgt;
+          if (!mine) tgt = 1 + (i * 7) % n;
+          else {
+            const missing = []; for (let f = 0; f < n; f++) if (CP.lagOf(f, now) > a) missing.push(f);
+            if (F.route === "leader60" && a < 60) tgt = 0;
+            else if (F.route === "caught") { const ok = []; for (let f = 0; f < n; f++) if (!missing.includes(f)) ok.push(f); tgt = ok.length ? 1 + ok[i % ok.length] : 0; }
+            else tgt = 1 + ((i * 5 + Math.floor(cy2)) % n);
+          }
+          const x0 = RX0 + ((i * 97) % (RX1 - RX0)), x = lerp(x0, cx(tgt), ph), y = lerp(RTOP, RM - 26, ph * ph);
+          const miss = mine && tgt > 0 && CP.lagOf(tgt - 1, now) > a;
+          if (miss && ph > 0.92) bursts.push([cx(tgt), RM - 30]);
+          else put(gg, mine ? "mine" : "other", x, y);
+        }
+        kids.push(...dots(s, gg, "cp-rd"));
+        for (const [x, y] of bursts) kids.push(s("text", { class: "cp-burst", x: x + 14, y }, "✗ gone"));
+      }
+      // the half hour: follower 1's lag, and the posts that vanished
+      const tx = (t) => HX0 + (t / RW.T) * (HX1 - HX0);
+      kids.push(s("text", { class: "ev-sub", x: RX0, y: HB - HH - 30 }, "follower 1 runs the report from 9:05 to 9:20: how far behind it falls (pink), and the share of posts that vanished (red bars)"));
+      kids.push(s("path", { class: "ub-axis", d: `M${HX0} ${HB}H${HX1}` }));
+      let d = `M${HX0} ${HB}`;
+      for (let t = 0; t <= RW.T; t += 15) d += `L${tx(t).toFixed(1)} ${(HB - (CP.repLag(t) / 300) * HH).toFixed(1)}`;
+      kids.push(s("path", { class: "cp-lagarea", d: d + `L${HX1} ${HB}Z` }), s("text", { class: "ev-tick", x: HX0 - 6, y: HB - HH + 4, "text-anchor": "end" }, "5 min"));
+      for (let t = 0; t <= RW.T; t += 300) kids.push(s("text", { class: "ev-tick", x: tx(t), y: HB + 14, "text-anchor": "middle" }, clockR(t)));
+      if (R) {
+        R.bins.forEach((x, i) => { if (i > bi || !x.lost) return; const hh = Math.max(2, (x.lost / (RW.posts * RW.bin)) * HH); kids.push(s("rect", { class: "cc-tq err", x: tx(x.t), y: HB - hh, width: Math.max(1.4, ((HX1 - HX0) * RW.bin) / RW.T - 0.4), height: hh })); });
+        kids.push(s("path", { class: "tw-now", d: `M${tx(now)} ${HB - HH - 6}V${HB}` }));
+      }
+      // the numbers
+      const NX = 752, done = R && F.shown;
+      let lost = 0; if (R) for (let i = 0; i <= bi; i++) lost += R.bins[i].lost;
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 152 }, "posts that vanished"), s("text", { class: "wa-big" + (lost > g.vanished ? " over" : ""), x: NX, y: 192 }, R ? fmtN(lost) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 244 }, "the leader, busy"), s("text", { class: "wa-big" + (R && R.leader > g.busy ? " over" : ""), x: NX, y: 284 }, R ? pc(R.leader) : "–"));
+      kids.push(s("text", { class: "wa-mn", x: NX, y: 336 }, "the busiest follower"), s("text", { class: "wa-big" + (R && R.follower > g.busy ? " over" : ""), x: NX, y: 376 }, R ? pc(R.follower) : "–"));
+      if (done) kids.push(c.rx(goodR(c, R) ? "rocket" : R.vanished ? "ghost" : "flame", NX + 70, 396, 64, "pop"));
+      c.layer.replaceChildren(...kids);
+    },
+    frame(c, dt) {
+      const F = c.F, R = F.res;
+      if (!R || F.anim >= 1) return;
+      F.anim = Math.min(1, F.anim + dt / (c.REDUCED ? 0.3 : 10));
+      const first = F.anim >= 1 && !F.shown;
+      if (first) F.shown = true;
+      c.redraw();
+      if (first) { if (goodR(c, R)) c.solved(ran(F.runs)); else c.rebrief(); }
+    },
+    brief(c) {
+      const { h, F } = c, R = F.res && F.shown ? F.res : null, g = c.B.goals;
+      const miss = R ? [R.vanished > g.vanished && `${fmtN(R.vanished)} people saw their own post vanish`, R.leader > g.busy && `the leader is ${pc(R.leader)} busy`, R.follower > g.busy && `the busiest follower is ${pc(R.follower)} busy`].filter(Boolean) : [];
+      return [h("div", { class: "sd-ask" }, h("p", { class: "sd-quiet" }, "Grey dots are everyone's reads; pink ones are people looking again at what they just posted. At 9:05 follower 1 starts the report and falls behind."),
+        miss.length ? h("p", { class: "sd-verdict no" }, `✗ ${miss.join("; and ")}.`) : null)];
+    },
+    tools(c) {
+      const { h, F } = c, set = (k, v) => { F[k] = v; F.res = null; F.shown = false; c.redraw(); c.rebrief(); };
+      const run = () => { F.runs++; F.res = CP.ryw({ route: F.route, n: F.n }); F.anim = 0; F.shown = false; c.redraw(); c.rebrief(); };
+      return [h("div", { class: "sd-insp" },
+        h("p", {}, "after someone posts, their reads go to ", h("button", { class: "sd-word", onclick: () => set("route", cyc(CP.ROUTES, F.route)) }, ROUTE_WORD[F.route])),
+        h("p", {}, "the leader has ", h("button", { class: "sd-word", onclick: () => set("n", cyc(CP.NS, F.n)) }, `${F.n} followers`))),
+        h("div", { class: "sd-btns" }, h("button", { class: "btn primary", disabled: F.res && !F.shown, onclick: run }, "Run the night"),
+          h("span", { class: "sd-runs" }, F.runs ? `${F.runs} run${F.runs > 1 ? "s" : ""}` : ""))];
+    },
+    score(c) {
+      const R = c.F.res && c.F.shown ? c.F.res : null, g = c.B.goals;
+      return [["no post vanishes", R ? R.vanished <= g.vanished : null, R ? fmtN(R.vanished) : "run it"], ["no machine over 80%", R ? R.leader <= g.busy && R.follower <= g.busy : null, R ? pc(Math.max(R.leader, R.follower)) : "·"]];
+    },
+  };
+  const goodR = (c, R) => R.vanished <= c.B.goals.vanished && R.leader <= c.B.goals.busy && R.follower <= c.B.goals.busy;
+})();

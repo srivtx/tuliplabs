@@ -661,3 +661,62 @@ main.sd{max-width:1480px;margin:0 auto;padding:14px 20px 40px}
 .sp-line{fill:none;stroke:var(--sd-sim);stroke-width:2.2;stroke-linejoin:round}
 .sp-drop{stroke:var(--sd-hot);stroke-width:2.5;opacity:.55}
 @media (prefers-reduced-motion:reduce){.sp-hotp{animation:none}}
+
+/* ---- the Copies and lag unit ---- */
+.cp-c0{--c:var(--sd-db)}.cp-c1{--c:var(--sd-app)}.cp-c2{--c:var(--sd-lb)}
+.cp-cyl{fill:color-mix(in srgb,var(--c,var(--sd-faint)) 22%,var(--sd-paper));stroke:var(--c,var(--sd-faint));stroke-width:1.8}
+.cp-top{fill:color-mix(in srgb,var(--c,var(--sd-faint)) 40%,var(--sd-paper));stroke:var(--c,var(--sd-faint));stroke-width:1.8}
+:is(.cp-cyl,.cp-top).dead{--c:var(--sd-faint);opacity:.45;stroke-dasharray:4 3}
+:is(.cp-cyl,.cp-top).crown{stroke-width:3}
+:is(.cp-cyl,.cp-top).lagging{--c:var(--sd-hot);animation:spblink 1s ease-in-out infinite alternate}
+:is(.cp-cyl,.cp-top).cp-q{--c:var(--sd-cache)}
+.cp-cyl.has,.cp-top.has{fill:color-mix(in srgb,var(--sd-cache) 70%,var(--sd-paper));transition:fill .2s}
+.cp-panel{fill:color-mix(in srgb,var(--sd-ink) 3.5%,var(--sd-paper));stroke:color-mix(in srgb,var(--sd-ink) 14%,transparent);stroke-width:1.2;transition:fill .2s,stroke .2s}
+.cp-panel.drop{stroke:var(--pink);stroke-dasharray:6 4;stroke-width:1.6;cursor:copy}
+.cp-panel.ok{fill:color-mix(in srgb,var(--ok) 9%,var(--sd-paper));stroke:color-mix(in srgb,var(--ok) 55%,transparent)}
+.cp-say{font:500 13px var(--f-body);fill:var(--sd-ink)}.cp-say .b{font-weight:700}
+.cp-lane{stroke:color-mix(in srgb,var(--sd-ink) 22%,transparent);stroke-width:1.4}.cp-lane.lead{stroke:color-mix(in srgb,var(--sd-db) 55%,transparent);stroke-width:2.4}
+.cp-lt{font:600 10.5px var(--f-mono);fill:var(--sd-ink)}.cp-lt.faint{fill:var(--sd-faint);font-weight:400}
+.cp-rep{stroke:var(--sd-db);stroke-width:1.6;stroke-dasharray:4 3;fill:none;opacity:.8}
+.cp-arr{fill:var(--sd-db)}
+.cp-w{fill:var(--sd-db);stroke:var(--sd-paper);stroke-width:2}
+.cp-who{font:700 10.5px var(--f-mono);fill:var(--sd-db)}
+.cp-beam{stroke:var(--pink);stroke-width:1.5;stroke-dasharray:2 3;opacity:.7}
+.cp-read{stroke:var(--sd-paper);stroke-width:2}.cp-read.ok{fill:var(--ok)}.cp-read.no{fill:var(--sd-hot)}
+.cp-res{font:700 11.5px var(--f-mono);fill:var(--sd-ink)}.cp-res.ok{fill:color-mix(in srgb,var(--ok) 80%,var(--sd-ink))}.cp-res.no{fill:var(--sd-hot)}
+.cp-verd{font:italic 400 20px var(--f-serif)}.cp-verd.ok{fill:color-mix(in srgb,var(--ok) 80%,var(--sd-ink))}.cp-verd.no{fill:var(--sd-hot)}
+.cp-name{font:700 11px var(--f-mono);fill:var(--pink)}
+.cp-chip{font:10px var(--f-mono);fill:var(--sd-faint)}.cp-chip.no{fill:var(--sd-hot)}
+.cp-card{width:262px;height:72px}.cp-card b{font:600 13px/1.2 var(--f-body)}.cp-card small{font-size:10.5px}
+.cp-card.lift{opacity:.35}
+.cp-slot{fill:none;stroke:color-mix(in srgb,var(--ok) 50%,transparent);stroke-dasharray:5 4;stroke-width:1.4}
+.cp-ghost{pointer-events:none}.cp-ghost rect{fill:var(--sd-paper);stroke:var(--pink);stroke-width:2;filter:drop-shadow(0 8px 14px rgba(0,0,0,.22))}
+.cp-ghost text{font:600 12px var(--f-body);fill:var(--sd-ink)}
+.cp-wire{stroke:color-mix(in srgb,var(--sd-ink) 18%,transparent);stroke-width:1.4;stroke-dasharray:3 4}
+.cp-msg{fill:none;stroke-linecap:round;stroke-width:9}
+.cp-msg.w{stroke:color-mix(in srgb,var(--sd-cache) 55%,var(--sd-paper))}.cp-msg.wack{stroke:var(--sd-cache)}
+.cp-msg.r{stroke:color-mix(in srgb,var(--sd-sim) 50%,var(--sd-paper))}.cp-msg.rans{stroke:var(--sd-sim)}
+.cp-ring{fill:none;stroke-width:3;animation:ccpop .4s cubic-bezier(.2,1.6,.4,1) both}.cp-ring.w{stroke:var(--sd-cache)}.cp-ring.r{stroke:var(--sd-sim)}.cp-ring.stale{stroke:var(--sd-hot);stroke-dasharray:5 3}
+.cp-x{stroke:var(--sd-hot);stroke-width:3.5;stroke-linecap:round}
+.cp-app{fill:var(--sd-paper);stroke:var(--sd-app);stroke-width:2.4}
+.cp-ax{font:600 11px var(--f-mono);fill:var(--sd-faint)}
+.cp-cell{fill:color-mix(in srgb,var(--sd-ink) 5%,var(--sd-paper));stroke:color-mix(in srgb,var(--sd-ink) 15%,transparent);cursor:pointer;transition:transform .15s}
+.cp-cell:hover{fill:color-mix(in srgb,var(--pink) 14%,var(--sd-paper))}
+.cp-cell.good{fill:color-mix(in srgb,var(--ok) 30%,var(--sd-paper))}.cp-cell.stale{fill:color-mix(in srgb,var(--sd-hot) 22%,var(--sd-paper))}.cp-cell.down{fill:color-mix(in srgb,var(--sd-queue) 26%,var(--sd-paper))}
+.cp-cell.cur{stroke:var(--pink);stroke-width:3}
+.cp-cl{font:600 10.5px var(--f-mono);fill:var(--sd-faint);pointer-events:none}.cp-cl.good{fill:var(--sd-ink);font-size:14px}.cp-cl.stale{fill:var(--sd-hot)}.cp-cl.down{fill:color-mix(in srgb,var(--sd-queue) 70%,var(--sd-ink))}
+.cp-edge{fill:none;stroke:var(--pink);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.cp-mn{font:italic 400 17px var(--f-serif);fill:var(--sd-ink)}
+.cp-tape{fill:color-mix(in srgb,var(--sd-ink) 5%,var(--sd-paper));stroke:color-mix(in srgb,var(--sd-ink) 14%,transparent)}
+.cp-tfill{fill:color-mix(in srgb,var(--c) 45%,var(--sd-paper))}
+.cp-lag{font:700 10.5px var(--f-mono);fill:var(--sd-ink)}.cp-lag.far{fill:var(--sd-hot)}
+.cp-yes{stroke:var(--pink);stroke-width:2.2;stroke-dasharray:6 3}
+.cp-lost{fill:color-mix(in srgb,var(--sd-hot) 35%,transparent);stroke:var(--sd-hot);stroke-width:1.5;animation:ccpop .5s cubic-bezier(.2,1.6,.4,1) both}
+.cp-pkt{fill:none;stroke-linecap:round;stroke-width:5}.cp-pkt.c1{stroke:var(--sd-app)}.cp-pkt.c2{stroke:var(--sd-lb)}
+.cp-lat{fill:none;stroke-linecap:round;stroke-width:3.2}.cp-lat.ok{stroke:color-mix(in srgb,var(--sd-db) 70%,var(--sd-paper))}.cp-lat.slow{stroke:var(--sd-queue)}.cp-lat.wait{stroke:var(--sd-hot)}
+.cp-crowd{stroke:color-mix(in srgb,var(--sd-ink) 25%,transparent);stroke-width:6;stroke-linecap:round;stroke-dasharray:1 9}
+.cp-load{fill:color-mix(in srgb,var(--sd-sim) 65%,var(--sd-paper))}.cp-load.warm{fill:var(--sd-queue)}.cp-load.over{fill:var(--sd-hot)}
+.cp-rd{fill:none;stroke-linecap:round;stroke-width:5}.cp-rd.other{stroke:color-mix(in srgb,var(--sd-ink) 28%,transparent)}.cp-rd.mine{stroke:var(--pink);stroke-width:7}
+.cp-burst{font:700 11px var(--f-mono);fill:var(--sd-hot);paint-order:stroke;stroke:var(--sd-paper);stroke-width:3px}
+.cp-lagarea{fill:color-mix(in srgb,var(--pink) 16%,transparent);stroke:var(--pink);stroke-width:1.5}
+@media (prefers-reduced-motion:reduce){:is(.cp-cyl,.cp-top).lagging,.cp-ring,.cp-lost{animation:none}}

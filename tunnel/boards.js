@@ -1034,8 +1034,8 @@
   // checks the text against it.
   const CP_SITE = {
     nodes: [P("u", "people", 95, 300, { label: "people", tag: "read and post" }), P("ap", "app", 320, 300, { label: "app servers", tag: "writes → leader" }),
-      P("ld", "sql", 560, 140, { label: "leader", tag: "6,000 writes a second" }), P("f1", "rreplica", 560, 430, { label: "follower 1", tag: "runs the report" }),
-      P("f2", "rreplica", 800, 300, { label: "follower 2", tag: "replays the log" })],
+      P("ld", "sql", 560, 140, { label: "leader", tag: "6,000 writes/s" }), P("f1", "rreplica", 560, 410, { label: "follower 1", tag: "runs the report" }),
+      P("f2", "rreplica", 820, 140, { label: "follower 2", tag: "replays the log" })],
     wires: [["u", "ap"], ["ap", "ld"], ["ap", "f1"], ["ap", "f2"], ["ld", "f1"], ["ld", "f2"]],
   };
   const COPIES_UNIT = {
@@ -1047,9 +1047,9 @@
         q: {},
         design: CP_SITE,
         notes: [
-          { id: "b", on: "f1", dx: 210, dy: -10, label: "writes behind when the report ends", unit: "", calc: "(6000 - 4000) * 15 * 60", hint: "it falls 2,000 further behind every second, for 15 minutes" },
+          { id: "b", on: "f1", dx: 250, dy: -115, label: "writes behind when the report ends", unit: "", calc: "(6000 - 4000) * 15 * 60", hint: "it falls 2,000 further behind every second, for 15 minutes" },
           { id: "l", on: "ld", dx: -250, dy: -10, label: "how old its newest data is then", unit: "s", calc: "1800000 / 6000", hint: "the writes it's missing, over how many the leader takes a second" },
-          { id: "c", on: "f1", dx: 210, dy: 80, label: "minutes to catch up afterwards", unit: "min", calc: "1800000 / (10000 - 6000) / 60", hint: "it replays 10,000 a second, but 6,000 new ones keep coming" },
+          { id: "c", on: "f1", dx: 250, dy: 0, label: "minutes to catch up afterwards", unit: "min", calc: "1800000 / (10000 - 6000) / 60", hint: "it replays 10,000 a second, but 6,000 new ones keep coming" },
         ],
         why: "The report lets follower 1 replay 4,000 writes a second while the leader takes 6,000, so it falls 2,000 further behind every second: after 15 minutes, 1,800,000 writes. Those are the last 300 seconds of the site (1,800,000 ÷ 6,000), so anyone reading from it sees the site as it was 5 minutes ago: new posts missing, an old price, a message not sent. Afterwards it replays 10,000 a second, but 6,000 new ones keep arriving, so it gains only 4,000 a second: 7.5 minutes to catch up. So lag isn't one number: most of the night it's a fraction of a second, and for 22 minutes it's minutes. Anything that reads from a follower has to live with that, or ask for more. The next questions are what that looks like to the people using it, and what to ask for.",
       },
