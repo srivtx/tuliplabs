@@ -237,6 +237,24 @@ th{background:var(--soft)}
 .pager{display:flex;justify-content:space-between;gap:10px;margin-top:30px}
 .toast{pointer-events:none;position:fixed;top:64px;right:16px;background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:14px;z-index:50}
 .empty{color:var(--muted);text-align:center;padding:40px 10px}
+/* the review page at rest: a sticker, a line, and the track the cards hop along */
+.rv-rest{position:relative;margin:24px 0;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:26px 28px 24px}
+.rv-rest h3{font:400 30px/1.1 var(--f-serif);margin:0 0 6px;padding-right:100px}
+.rv-rest>p{color:var(--muted);margin:0 0 6px;max-width:540px;padding-right:90px}
+.rv-rest .rv-zz{position:absolute;right:24px;top:16px;width:88px;height:88px}
+.rv-rest img.rv-zz{width:72px;height:72px}
+.rv-track svg{display:block;width:100%;height:auto;margin:4px 0 14px}
+.rt-base{stroke:var(--line);stroke-width:2}.rt-hop{fill:none;stroke:var(--pink);stroke-width:2;stroke-dasharray:5 4}
+.rt-ghost{fill:var(--panel);stroke:var(--line);stroke-width:1.5;stroke-dasharray:4 3}.rt-l{fill:var(--line)}
+.rt-card{fill:color-mix(in srgb,var(--pink) 22%,var(--card));stroke:var(--pink);stroke-width:1.5}.rt-card.now{fill:var(--pink)}
+.rt-n{fill:var(--ink)}.rt-nt{font:700 11px var(--f-mono);fill:var(--bg);text-anchor:middle}
+.rt-d{font:600 11px var(--f-mono);fill:var(--muted);text-anchor:middle}
+@media (prefers-reduced-motion:no-preference){.rt-hopper{animation:rthop 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}}
+@keyframes rthop{0%,55%,100%{transform:translateY(0) scaleY(1)}62%{transform:translateY(0) scaleY(.86)}74%{transform:translateY(-14px) scaleY(1.04)}86%{transform:translateY(0) scaleY(.92)}}
+.rt-d.sm{display:none}
+@media (max-width:560px){.rv-rest{padding:18px 16px}.rv-rest h3{font-size:24px;padding-right:0}.rv-rest>p{padding-right:0}
+  .rv-rest .rv-zz{position:static;float:right;width:56px;height:56px;margin:-4px -4px 4px 8px}.rv-rest img.rv-zz{width:48px;height:48px}
+  .rv-track{clear:both}.rt-d{display:none}.rt-d.sm{display:block;font-size:26px}.rt-d:first-of-type{display:block;font-size:24px}}
 .menu-btn{display:none}
 
 @media (max-width: 860px){
@@ -420,6 +438,12 @@ th{background:var(--soft)}
 .cv-ghost{opacity:.18}
 .goals{border-radius:0 0 10px 10px}
 .goals li::marker{content:"✚  ";color:var(--pink);font-size:.8em}
+/* each goal grows its own flower through its share of the chapter's tasks: seed, sprout, bud, half open, bloom */
+.goals ul.goal-pots{list-style:none;padding:0;margin:10px 0 2px;display:grid;gap:8px}
+.goal-pots li{display:flex;align-items:flex-end;gap:12px}.goal-pots li>span{padding-bottom:3px}
+.goal-pots li::marker{content:none}
+.goal-pots canvas.goal-fl{flex:none;width:46px;height:62px;margin:-16px -4px -2px -8px}
+.goal-pots li[data-st="0"] span{color:var(--muted)}
 
 /* ---- chapter grid with the step rail */
 .chgrid{display:block}
@@ -548,6 +572,18 @@ tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--soft) 45%,transpa
 .wnode.s2 .wn,.wnode.s2 .wl{fill:#1b1a12}
 .wnode:hover .cap{stroke:var(--kc,#e6a21a);stroke-width:2.5}
 .wnode{transition:transform .15s}.wnode:hover{transform:translateY(-2px)}
+.wnode .wl.two{font-size:9.5px}
+/* picture tiles: faded until started, a dashed ring once started, a solid ring and full colour when done */
+.wpics .wnode .ring{fill:var(--card);stroke:var(--line);stroke-width:1.5}
+.wpics .wnode image{filter:saturate(.6);opacity:.88;transition:filter .2s,opacity .2s}
+.wpics .wnode.s1 image,.wpics .wnode.s2 image,.wpics .wnode:hover image{filter:none;opacity:1}
+.wpics .wnode.s1 .ring{stroke:var(--kc,#e6a21a);stroke-width:2.5;stroke-dasharray:5 3}
+.wpics .wnode.s2 .ring{fill:var(--kc,#e6a21a);stroke:var(--kc,#e6a21a);stroke-width:3}
+.wpics .wnode:hover .ring{stroke:var(--pink);stroke-width:3}
+.wpics .wnode .nb{fill:rgba(24,10,22,.74)}
+.wpics .wnode .wn{font:700 10px var(--f-display);fill:#fff;text-anchor:middle}
+.wpics .wnode .wl{font:600 12px var(--f-body);fill:var(--ink);text-anchor:middle}
+.wpics .wnode.s0 .wl{fill:var(--muted)}
 
 /* Build X blueprint: one voxel part per step stacks into the machine; reuses / unlocks on the side */
 .bp{display:flex;gap:18px;align-items:center;margin:14px 0 18px;padding:14px 18px;border:1px solid var(--line);border-radius:10px;
@@ -626,11 +662,29 @@ button.pc:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
 .stars i{width:12px;height:12px;background:var(--line);clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
 .stars i.on{background:var(--c4)}
 .pstar{margin-left:auto}
-.pwall{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:18px}
-.pkey{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:0 4px 0 var(--line);color:inherit;text-decoration:none}
-.pkey:hover{border-color:var(--pink);box-shadow:0 4px 0 var(--pink)}
-.pkey b{font:600 18px var(--f-display);color:var(--pink)}
-.pkey span{font-size:13.5px;line-height:1.35}
+/* the puzzle wall: parts, each with a star bar, and a tile per chapter with its pixel scene */
+.pwall{margin-top:8px}
+.pw-part{margin:22px 0 4px}
+.pw-part h3{display:flex;align-items:center;gap:12px;margin:0 0 12px;font:400 24px/1.1 var(--f-serif)}
+.pw-part h3 small{margin-left:auto;font:500 11.5px var(--f-mono);color:var(--muted);white-space:nowrap}
+.pw-bar{flex:none;width:90px;height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.pw-bar b{display:block;height:100%;background:var(--pink);border-radius:3px}
+.pw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:14px}
+.pkey{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;background:var(--card);box-shadow:0 4px 0 var(--line);color:inherit;text-decoration:none;overflow:hidden;transition:transform .15s,box-shadow .15s}
+.pkey:hover{transform:translateY(-3px) rotate(-.6deg);border-color:var(--pink);box-shadow:0 7px 0 var(--pink)}
+.pkey.won{border-color:color-mix(in srgb,var(--pink) 50%,var(--line))}
+.pkey .pw-pic{display:block;width:100%;aspect-ratio:1;object-fit:cover;image-rendering:pixelated;background:#3d0d33}
+.pw-b{display:grid;gap:3px;padding:9px 11px 11px}
+.pkey .pw-b b{font:600 12px var(--f-display);color:var(--pink)}
+.pw-t{font-size:13px;line-height:1.3;min-height:2.6em}
+.pw-pet{display:flex;gap:3px;margin-top:2px}
+.pw-pet svg{width:15px;height:15px}
+.pw-pet .off{fill:none;stroke:var(--line);stroke-width:1.4}
+.pw-pet .on{fill:var(--pink)}
+.pkey img.pw-stk{position:absolute;right:6px;top:6px;width:36px;height:36px;z-index:2;transform:rotate(9deg);filter:drop-shadow(0 2px 0 rgba(0,0,0,.25))}
+
+.pkey .next-tag{z-index:2;right:auto;left:8px;background:#ffd21f;color:#1b1a12;box-shadow:inset 0 -2px 0 #d9a800}
+@media (max-width:560px){.pw-grid{grid-template-columns:repeat(2,1fr);gap:10px}.pw-part h3{font-size:21px}.pw-bar{width:56px}}
 @media (max-width:560px){.pslider{grid-template-columns:1fr 56px}.pslider span{grid-column:1/-1}.pc{min-width:34px;height:34px}}
 
 /* puzzle desk: the right side of puzzle mode. A sheet that pulls up on narrow screens, a sticky rail on wide ones. */
@@ -754,7 +808,8 @@ img.stk{width:34px;height:34px}
 .cv-art.has-pic:hover img.cv-pic{transform:rotate(-2deg) scale(1.04)}
 .cv-art.has-pic .cv-ghost{opacity:.12}
 .cv-art.has-pic .cv-fl{inset:auto auto -6px -18px;width:76px;height:100px;z-index:2}
-@media (max-width:640px){.cv-art img.cv-pic{width:112px;height:112px;bottom:16px}}
+/* the cover's picture column is 92px under 860px wide: the picture stays inside it so it never covers the tagline */
+@media (max-width:860px){.cv-art img.cv-pic{width:92px;height:92px;right:0;bottom:18px;border-width:3px;border-radius:11px}.cv-art.has-pic .cv-fl{width:52px;height:70px;inset:auto auto -6px -14px}}
 @media (max-width:640px){.plot.pic .soil{aspect-ratio:5/4}}
 
 /* a bee loops over every chapter in full bloom; a watering can pours on the rail's flower when it grows */

@@ -20,7 +20,13 @@ button.iv-stage:hover{color:var(--ink)}
 .iv-stage.cur{color:var(--ink);font-style:italic;text-decoration:underline 2px var(--pink);text-underline-offset:6px}
 
 /* the interviewer speaks in serif, against a pink rule */
-.iv-say{border-left:2px solid var(--pink);padding:2px 0 2px 14px;margin:14px 0}
+/* the interviewer talks in bubbles beside a pixel face; your questions are bubbles on the right */
+.iv-say{display:flex;gap:12px;align-items:flex-start;margin:14px 0}
+.iv-bub{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:10px 16px 4px}
+.iv-av{flex:none;display:block;width:40px;height:40px;padding:4px;border-radius:10px;background:color-mix(in srgb,#f2c29b 30%,var(--card));border:1px solid var(--line)}
+.iv-av.you{background:color-mix(in srgb,var(--pink) 18%,var(--card))}
+.iv-av.sm{width:30px;height:30px;padding:3px;border-radius:8px}
+.iv-av svg{display:block;width:100%;height:100%}
 .iv-who{display:block;font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--pink);margin-bottom:3px}
 .iv-say p{font:400 19px/1.45 var(--f-serif);margin:0 0 6px}
 .iv-say code{font-size:15px}
@@ -30,11 +36,18 @@ button.iv-stage:hover{color:var(--ink)}
 .iv-prob .prompt{margin-top:8px;font-size:15px}
 .iv-prob .prompt p{margin:0 0 8px}
 
-.iv-qs{display:grid;gap:8px;margin:12px 0 18px}
-.iv-q .opt{display:flex;gap:10px;align-items:baseline;width:100%}
-.iv-you{font:600 10.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex:none}
-.iv-q.asked .opt{cursor:default;color:var(--ink);border-color:color-mix(in srgb,var(--c2) 40%,var(--line))}
-.iv-a{margin:6px 0 4px 14px;padding-left:12px;border-left:2px solid var(--pink);font:400 17px/1.45 var(--f-serif)}
+.iv-qs{display:grid;gap:10px;margin:16px 0 18px}
+.iv-q{display:grid;gap:8px}
+.iv-line{display:flex;gap:10px;align-items:flex-end;justify-content:flex-end}
+.iv-q .opt{display:block;width:auto;max-width:78%;text-align:left;border-radius:16px 16px 4px 16px;background:var(--card);border:1.5px dashed color-mix(in srgb,var(--c2) 45%,var(--line));padding:9px 14px;transition:transform .15s,border-color .15s}
+.iv-q .opt:not(:disabled):hover{border-style:solid;border-color:var(--c2);transform:translateX(-3px)}
+.iv-you{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.iv-q.asked .opt{cursor:default;color:var(--ink);opacity:1;border-style:solid;background:color-mix(in srgb,var(--c2) 12%,var(--card));border-color:color-mix(in srgb,var(--c2) 40%,var(--line))}
+.iv-ans{display:flex;gap:10px;align-items:flex-start}
+.iv-a{margin:0;max-width:78%;background:color-mix(in srgb,var(--pink) 10%,var(--card));border:1px solid color-mix(in srgb,var(--pink) 40%,var(--line));border-radius:4px 16px 16px 16px;padding:8px 14px;font:400 17px/1.4 var(--f-serif)}
+.iv-ask{margin:6px 0 -2px;text-align:right;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.iv-ask::after{content:" ↓"}
+@media (max-width:560px){.iv-q .opt,.iv-a{max-width:86%}.iv-av{width:34px;height:34px}.iv-bub{padding:8px 12px 2px}}
 
 .iv-opts{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin:8px 0}
 .iv-opts .opt:disabled{cursor:default;color:var(--ink)}

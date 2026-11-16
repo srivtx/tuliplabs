@@ -1173,11 +1173,37 @@
       h("header", { class: "ch-head cover dark" }, h("div", { class: "cv-text" },
         h("div", { class: "eyebrow" }, `${CFG.short} · puzzle mode`), h("h1", {}, "Every puzzle"),
         h("p", { class: "tag" }, all.length ? `${all.length} puzzles in ${chs.length} chapters · ${got} of ${all.length * 3} stars` : "Puzzles are on their way for this track."))),
-      h("div", { class: "pwall" }, chs.map((c) => h("a", { class: "pkey", href: `#${c.num}/puzzle` },
-        h("b", {}, String(c.num).padStart(2, "0")), h("span", {}, c.title),
-        starsEl(Math.round(c.puzzles.reduce((a, p) => a + ((S.stars || {})[p.id] || 0), 0) / c.puzzles.length)))))));
+      wallParts(chs)));
     document.title = `Puzzles · ${CFG.pageTitle}`;
     window.scrollTo(0, 0);
+  }
+
+  // The puzzle wall: one tile per chapter with its pixel scene, grouped by part, each part with its own star bar.
+  // A chapter's stars show as three petals (its average); all puzzles solved earns a sticker on the picture.
+  const PETAL = (on) => `<svg viewBox="0 0 12 12" aria-hidden="true"><path class="${on ? "on" : "off"}" d="M6 1C9 3 10 7 6 11C2 7 3 3 6 1Z"/></svg>`;
+  function wallParts(chs) {
+    const st = (p) => (S.stars || {})[p.id] || 0;
+    const got = (c) => c.puzzles.reduce((a, p) => a + st(p), 0);
+    const any = chs.some((c) => got(c));
+    const next = chs.find((c) => c.puzzles.some((p) => !st(p)));
+    const parts = [];
+    for (const c of chs) { const k = c.part || ""; let P = parts.find((x) => x.k === k); if (!P) parts.push((P = { k, cs: [] })); P.cs.push(c); }
+    return h("div", { class: "pwall" }, parts.map(({ k, cs }) => {
+      const g = cs.reduce((a, c) => a + got(c), 0), n = cs.reduce((a, c) => a + c.puzzles.length * 3, 0);
+      return h("section", { class: "pw-part" },
+        h("h3", {}, h("span", {}, k.replace(/^Part [\w]+ · /, "") || "Every chapter"), h("small", {}, `${g} of ${n} stars`),
+          h("i", { class: "pw-bar", "aria-hidden": "true" }, h("b", { style: `width:${n ? (100 * g) / n : 0}%` }))),
+        h("div", { class: "pw-grid" }, cs.map((c) => {
+          const s = got(c), all = c.puzzles.every((p) => st(p)), perfect = c.puzzles.every((p) => st(p) === 3);
+          const avg = Math.round(s / c.puzzles.length);
+          return h("a", { class: "pkey" + (CFG.cards ? " pic" : "") + (all ? " won" : ""), href: `#${c.num}/puzzle`, title: `${c.puzzles.length} puzzle${c.puzzles.length > 1 ? "s" : ""} · ${s} of ${c.puzzles.length * 3} stars` },
+            pic(c, "pw-pic"),
+            all ? sticker(perfect ? "crown" : "thumbs", "pw-stk", perfect ? "Every star" : "All solved") : null,
+            c === next ? h("span", { class: "next-tag" }, any ? "next" : "start here") : null,
+            h("span", { class: "pw-b" }, h("b", {}, String(c.num).padStart(2, "0")), h("span", { class: "pw-t" }, c.title.replace(/ \(.*\)$/, "")),
+              h("span", { class: "pw-pet", "aria-label": `${avg} of 3 stars`, html: [0, 1, 2].map((i) => PETAL(i < avg)).join("") })));
+        })));
+    }));
   }
 
   function renderBlock(b, ctx) {
@@ -1241,8 +1267,12 @@
     document.querySelectorAll("canvas[data-fl]").forEach((cv) => {
       if (!cv.isConnected || !cv.clientWidth) return;
       const id = cv.dataset.fl;
-      const ch = DATA.chapters.find((c) => c.id === id);
-      const st = cv.dataset.stage != null ? +cv.dataset.stage : GARDEN.stage(ch ? chProgress(ch).pct : trackPct());
+      // a goal's flower ("<chapter>~g<i>", one of <of> goals) grows through its own share of the chapter's tasks
+      const [cid, gi] = id.split("~g");
+      const ch = DATA.chapters.find((c) => c.id === cid);
+      const share = (pct) => { const of = +cv.dataset.of || 1; return Math.max(0, Math.min(100, (pct * of) - 100 * gi)); };
+      const st = cv.dataset.stage != null ? +cv.dataset.stage : GARDEN.stage(ch ? (gi != null ? share(chProgress(ch).pct) : chProgress(ch).pct) : trackPct());
+      if (gi != null) cv.closest("li")?.setAttribute("data-st", st);
       const key = st + ":" + cv.clientWidth + "x" + cv.clientHeight;
       if (!force && cv.dataset.drawn === key) return;
       cv.dataset.drawn = key;
@@ -1383,8 +1413,11 @@
   // A wiring map for tracks whose chapters reuse each other (CFG.wires = [[from, to], ...] by chapter
   // number, CFG.short_names = labels). Rows are layers: a build sits one row below everything it reuses.
   // A wire lights up in the track colour once both of its ends are finished.
+  // How the chapters wire together: one row per depth, each chapter under the average of the ones it builds on.
+  // Tracks with pixel scenes draw each chapter as a little picture tile (faded until started, ringed when done);
+  // the others keep the numbered keycaps. The map scales down to fit the page, never below 3/4 size; past that it scrolls.
   function wireMap() {
-    const chs = DATA.chapters, E = CFG.wires, NS = "http://www.w3.org/2000/svg";
+    const chs = DATA.chapters, E = CFG.wires, NS = "http://www.w3.org/2000/svg", PIC = !!CFG.cards;
     const by = new Map(chs.map((c) => [c.num, c])), layer = new Map();
     const depth = (n) => { if (layer.has(n)) return layer.get(n); const ps = E.filter((e) => e[1] === n); const d = ps.length ? 1 + Math.max(...ps.map((e) => depth(e[0]))) : 0; layer.set(n, d); return d; };
     chs.forEach((c) => depth(c.num));
@@ -1392,7 +1425,8 @@
     chs.forEach((c) => (rows[layer.get(c.num)] ||= []).push(c.num));
     // roots that feed something go first, then order each lower row by where its parents sit
     rows[0].sort((a, b) => (E.some((e) => e[0] === b) - E.some((e) => e[0] === a)) || a - b);
-    const pos = new Map(), W = 74, Hh = 92, KW = 62, KH = 44;
+    const KW = PIC ? 60 : 62, KH = PIC ? 60 : 44, W = 76, Hh = PIC ? 108 : 92;
+    const pos = new Map();
     // each lower build sits under the average of its parents, nudged right only to avoid overlapping
     const mid = (n) => { const ps = E.filter((e) => e[1] === n).map((e) => pos.get(e[0]).x); return ps.reduce((s, v) => s + v, 0) / ps.length; };
     rows.forEach((r, y) => {
@@ -1400,21 +1434,35 @@
       let x = -Infinity;
       r.forEach((n, i) => { x = y ? Math.max(mid(n), x + W) : 8 + i * W; pos.set(n, { x, y: 10 + y * Hh }); });
     });
-    const width = Math.max(...[...pos.values()].map((p) => p.x)) + KW + 10, height = rows.length * Hh + 8;
+    const width = Math.ceil(Math.max(...[...pos.values()].map((p) => p.x)) + KW + 14), height = rows.length * Hh + (PIC ? 4 : 8);
     const st = (n) => { const p = chProgress(by.get(n)); return p.n && p.d === p.n ? 2 : p.d ? 1 : 0; };
     const el = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
-    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width, height, class: "wires", role: "img", "aria-label": "How the builds reuse each other" });
+    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, class: "wires" + (PIC ? " wpics" : ""), role: "img", "aria-label": "How the chapters build on each other",
+      style: `width:100%;max-width:${width}px;min-width:${Math.round(width * 0.75)}px;height:auto` });
     for (const [a, b] of E) {
-      const p = pos.get(a), q = pos.get(b), x1 = p.x + KW / 2, y1 = p.y + KH, x2 = q.x + KW / 2, y2 = q.y, my = (y1 + y2) / 2;
+      const p = pos.get(a), q = pos.get(b), x1 = p.x + KW / 2, y1 = p.y + KH + (PIC ? 2 : 0), x2 = q.x + KW / 2, y2 = q.y, my = (y1 + y2) / 2;
       svg.append(el("path", { d: `M${x1} ${y1} C${x1} ${my} ${x2} ${my} ${x2} ${y2}`, class: "wire" + (st(a) === 2 && st(b) === 2 ? " lit" : "") }));
     }
+    // a short name on at most two lines of about 11 letters, so neighbours never run into each other
+    const lines = (name) => { const out = []; for (const w of name.split(" ")) { const L = out[out.length - 1]; if (L && (L + " " + w).length <= 11) out[out.length - 1] = L + " " + w; else out.push(w); } return out.slice(0, 2); };
     for (const c of chs) {
       const p = pos.get(c.num), s = st(c.num), a = el("a", { href: "#" + c.num, class: "wnode s" + s });
       const t = el("title", {}); t.textContent = `${c.num}. ${c.title}`; a.append(t);
-      a.append(el("rect", { x: p.x, y: p.y, width: KW, height: KH, rx: 7, class: "cap" }));
-      const num = el("text", { x: p.x + 8, y: p.y + 17, class: "wn" }); num.textContent = String(c.num).padStart(2, "0");
-      const lbl = el("text", { x: p.x + 8, y: p.y + 34, class: "wl" }); lbl.textContent = (CFG.short_names || [])[c.num - 1] || "";
-      a.append(num, lbl); svg.append(a);
+      const name = (CFG.short_names || [])[c.num - 1] || "";
+      if (PIC) {
+        const cp = el("clipPath", { id: "wclip" + c.num }); cp.append(el("rect", { x: p.x, y: p.y, width: KW, height: KH, rx: 8 }));
+        a.append(cp, el("rect", { x: p.x - 2.5, y: p.y - 2.5, width: KW + 5, height: KH + 5, rx: 10, class: "ring" }),
+          el("image", { href: CARDS + c.id + ".webp", x: p.x, y: p.y, width: KW, height: KH, "clip-path": `url(#wclip${c.num})`, preserveAspectRatio: "xMidYMid slice" }),
+          el("rect", { x: p.x + 3, y: p.y + 3, width: 20, height: 14, rx: 3, class: "nb" }));
+        const num = el("text", { x: p.x + 13, y: p.y + 13.5, class: "wn" }); num.textContent = String(c.num).padStart(2, "0"); a.append(num);
+        lines(name).forEach((L, i) => { const lb = el("text", { x: p.x + KW / 2, y: p.y + KH + 15 + i * 13, class: "wl" }); lb.textContent = L; a.append(lb); });
+      } else {
+        a.append(el("rect", { x: p.x, y: p.y, width: KW, height: KH, rx: 7, class: "cap" }));
+        const num = el("text", { x: p.x + 8, y: p.y + 17, class: "wn" }); num.textContent = String(c.num).padStart(2, "0");
+        a.append(num);
+        lines(name).forEach((L, i) => { const lb = el("text", { x: p.x + 8, y: p.y + 31 + i * 10, class: "wl" + (lines(name).length > 1 ? " two" : "") }); lb.textContent = L; a.append(lb); });
+      }
+      svg.append(a);
     }
     return h("div", { class: "wiremap" },
       h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), CFG.wireTitle || "How the builds wire together", h("small", {}, "each one reuses what sits above it · finish both ends and the wire lights up")),
@@ -1447,7 +1495,8 @@
           h("p", { class: "tag" }, ch.tagline),
           h("div", { class: "meta" }, pills)),
         h("div", { class: "cv-art" + (CFG.cards ? " has-pic" : "") }, flower(ch.id, "cv-ghost", { "data-stage": 4 }), pic(ch, "cv-pic"), flower(ch.id, "cv-fl"))),
-      ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"), h("ul", {}, ch.goals.map((g) => h("li", { html: g })))) : null,
+      ch.goals.length ? h("div", { class: "goals" }, h("b", {}, "By the end you can"),
+        h("ul", { class: "goal-pots" }, ch.goals.map((g, i) => h("li", {}, flower(ch.id + "~g" + i, "goal-fl", { "data-of": ch.goals.length }), h("span", { html: g }))))) : null,
     );
     // ---- step-by-step: one section at a time, the next unlocks when this one is done
     S.step = S.step || {};
@@ -1703,7 +1752,14 @@
     window.scrollTo(0, 0);
     const upcoming = Object.values(S.rev).filter((r) => r.due > Date.now()).length;
     if (!total) {
-      stage.append(h("div", { class: "empty" }, h("p", {}, Object.keys(S.rev).length ? `Nothing due right now. ${upcoming} item${upcoming === 1 ? "" : "s"} scheduled for later.` : "Your deck is empty. Work through a chapter: every prediction, quiz, puzzle and exercise you finish lands here."), h("a", { class: "btn primary", href: "#1" }, "Open chapter 1")));
+      const any = Object.keys(S.rev).length;
+      const soonest = Math.min(...Object.values(S.rev).map((r) => r.due));
+      const wait = any ? Math.max(1, Math.ceil((soonest - Date.now()) / DAY)) : 0;
+      stage.append(h("div", { class: "rv-rest" }, sticker("sleep", "rv-zz"),
+        h("h3", {}, any ? "Nothing due right now." : "Nothing to bring back yet."),
+        h("p", {}, any ? `${upcoming} card${upcoming === 1 ? " is" : "s are"} resting along the track. The next one comes back in ${wait} day${wait === 1 ? "" : "s"}.`
+          : "Every prediction, quiz, puzzle and exercise you finish becomes a card here. Get it right and it hops further away; miss it and it comes back tomorrow."),
+        reviewTrack(), h("a", { class: "btn primary", href: "#1" }, any ? "Back to chapter 1" : "Open chapter 1")));
       return;
     }
     let idx = 0, right = 0;
@@ -1711,7 +1767,8 @@
     function next() {
       stage.textContent = "";
       if (idx >= queue.length) {
-        stage.append(h("div", { class: "empty" }, h("p", {}, `Done: ${right} of ${total} on the first try. Come back tomorrow for the next batch.`), h("a", { class: "btn primary", href: "#" }, "Back to chapters")));
+        stage.append(h("div", { class: "rv-rest" }, sticker("trophy", "rv-zz slap", "Review done"), h("h3", {}, `${right} of ${total} on the first try.`),
+          h("p", {}, "Here's where your cards went. Come back tomorrow for the next batch."), reviewTrack(), h("a", { class: "btn primary", href: "#" }, "Back to chapters")));
         updateReviewCount();
         return;
       }
@@ -1733,6 +1790,22 @@
       stage.append(h("p", { class: "kbd" }, `Item ${idx + 1} of ${total} · from chapter ${ch.num}, ${ch.title}`), renderBlock(b, ctx), h("div", { class: "btns" }, nextBtn, h("a", { class: "btn", href: `#${ch.num}` }, "Revisit the chapter")));
     }
     next();
+  }
+
+  // The review track: today, then a stop for each Leitner box (1, 3, 7, 16 and 35 days). A card hops one stop
+  // further each time you get it right and drops back to the 1-day stop when you miss it. Each stop shows its cards.
+  function reviewTrack() {
+    const NS = "http://www.w3.org/2000/svg", W = 880, X = (d) => 60 + 760 * Math.sqrt(d / BOXES[BOXES.length - 1]);
+    const at = BOXES.map((_, k) => Object.values(S.rev).filter((r) => (r.box || 0) === k && r.due > Date.now()).length);
+    const due = Object.values(S.rev).filter((r) => r.due <= Date.now()).length;
+    let g = `<line x1="40" y1="96" x2="${W - 30}" y2="96" class="rt-base"/>`;
+    for (let k = 1; k < BOXES.length; k++) { const a = X(BOXES[k - 1]), b = X(BOXES[k]); g += `<path d="M${a} 76Q${(a + b) / 2} ${36 - k * 4} ${b} 76" class="rt-hop"/>`; }
+    const stack = (x, n, now) => { if (!n) return `<rect x="${x - 16}" y="58" width="32" height="38" rx="5" class="rt-ghost"/><rect x="${x - 9}" y="68" width="18" height="4" rx="2" class="rt-l"/><rect x="${x - 9}" y="77" width="12" height="4" rx="2" class="rt-l"/>`;
+      let o = ""; for (let i = Math.min(n, 3) - 1; i >= 0; i--) o += `<rect x="${x - 16 + i * 4}" y="${58 - i * 4}" width="32" height="38" rx="5" class="rt-card${now ? " now" : ""}"/>`;
+      return o + `<circle cx="${x + 17}" cy="${54 - Math.min(n, 3) * 4}" r="11" class="rt-n"/><text x="${x + 17}" y="${58 - Math.min(n, 3) * 4}" class="rt-nt">${n}</text>`; };
+    g += `<g class="rt-today">${due ? stack(X(0), due, true) : `<rect x="${X(0) - 16}" y="58" width="32" height="38" rx="5" class="rt-card now rt-hopper"/>`}</g><text x="${X(0)}" y="120" class="rt-d">today</text>`;
+    for (let k = 1; k < BOXES.length; k++) g += stack(X(BOXES[k]), at[k]) + `<text x="${X(BOXES[k])}" y="120" class="rt-d">${BOXES[k]} day${BOXES[k] > 1 ? "s" : ""}</text><text x="${X(BOXES[k])}" y="124" class="rt-d sm">${BOXES[k]}d</text>`;
+    return h("div", { class: "rv-track", html: `<svg xmlns="${NS}" viewBox="0 0 ${W} 130" role="img" aria-label="Cards waiting 1, 3, 7, 16 and 35 days">${g}</svg>` });
   }
 
   // what the mock test (learn/mock.js) may use: the page, the store, the runner and the review deck

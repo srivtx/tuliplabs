@@ -66,24 +66,39 @@
 .la-plot:hover .la-scene{transform:translateY(-5px) scale(1.03)}
 .la-plot.soon .la-scene{filter:saturate(.8) brightness(.92)}
 
-/* the system design ladder: floors on a rail, a built unit glows and links, a planned one is its name */
-.lad-wrap{border:1px solid var(--line);border-radius:16px;background:var(--card);padding:18px 22px 10px;box-shadow:0 4px 0 var(--line)}
-.lad{list-style:none;margin:0;padding:0;position:relative}
-.lad::before{content:"";position:absolute;left:17px;top:18px;bottom:24px;width:2px;background:repeating-linear-gradient(var(--line) 0 6px,transparent 6px 11px)}
-.lad-f{position:relative;display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;padding:12px 0 14px;border-bottom:1px dashed var(--line)}
-.lad-f:last-child{border-bottom:0}
-.lad-n{display:grid;grid-template-columns:36px 1fr;grid-template-rows:auto auto;column-gap:12px;align-items:baseline;align-content:start;align-self:start}
-.lad-n b{grid-row:1/3;position:relative;z-index:1;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:2px solid var(--line);background:var(--card);font:400 20px var(--f-serif);color:var(--muted)}
-.lad-f.has .lad-n b{border-color:var(--pink);color:var(--ink);box-shadow:0 0 0 4px color-mix(in srgb,var(--pink) 16%,transparent)}
-.lad-n span{font:italic 400 21px var(--f-serif);color:var(--ink);line-height:1.1}
-.lad-n small{font:600 10px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
-.lad-us p{margin:0 0 6px;font:400 16px/1.7 var(--f-serif);color:var(--muted)}
-.lad-us em{font:600 10px var(--f-mono);font-style:normal;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-right:10px;opacity:.8}
-.lad-u{color:color-mix(in srgb,var(--muted) 85%,transparent);cursor:default;border-bottom:1px dotted transparent}
-.lad-u:hover{color:var(--ink);border-bottom-color:var(--line)}
-.lad-dot{font-style:normal;opacity:.45}
-.lad-u.live{color:var(--ink);text-decoration:none;font-size:19px;cursor:pointer;padding:1px 8px 2px 6px;border-radius:9px;background:color-mix(in srgb,var(--pink) 13%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--pink) 55%,transparent)}
-.lad-u.live:hover{background:color-mix(in srgb,var(--pink) 24%,transparent)}
-.lad-t{color:var(--pink);margin-right:4px;font-size:15px}
-.lad-u.live small{font:600 11px var(--f-mono);color:var(--muted)}
-@media (max-width:860px){.lad-f{grid-template-columns:1fr;gap:6px}.lad-us{padding-left:48px}.lad-wrap{padding:14px 14px 6px}}
+/* the system design ladder as a pixel tower: floor 0 on the grass, a lit window per built unit, dark ones planned */
+.lad-wrap{border:1px solid var(--line);border-radius:16px;background:var(--card);padding:18px 22px 14px;box-shadow:0 4px 0 var(--line)}
+.tw{--brick:#5b3a52;--mortar:#3d2436;--lab:150px;position:relative}
+.tw-fs{list-style:none;margin:0;padding:0}
+.tw-f{display:grid;grid-template-columns:var(--lab) minmax(0,1fr)}
+.tw-n{display:flex;flex-direction:column;justify-content:center;padding:8px 14px 8px 0;text-align:right}
+.tw-n b{font:400 20px/1.05 var(--f-serif);color:var(--ink)}
+.tw-n em{font:600 11px var(--f-mono);font-style:normal;color:var(--muted);margin-right:6px}
+.tw-f.has .tw-n em{color:var(--pink)}
+.tw-n small{font:600 9.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tw-b{display:flex;flex-wrap:wrap;align-items:center;gap:8px 0;padding:11px 12px 12px;background:var(--brick);border-left:6px solid var(--mortar);border-right:6px solid var(--mortar);
+  background-image:linear-gradient(transparent calc(100% - 4px),var(--mortar) 0)}
+.tw-g{display:flex;flex-wrap:wrap;align-items:center;gap:7px 6px;padding-right:10px;margin-right:10px;border-right:2px solid var(--mortar)}
+.tw-g:last-child{border-right:0;margin-right:0}
+.tw-w{width:15px;height:19px;padding:0;border:0;border-radius:2px 2px 0 0;background:#2a1a26;box-shadow:inset 0 -3px 0 #1b1018;cursor:help}
+.tw-w:hover,.tw-w:focus-visible{background:#47304a;outline:2px solid #fff;outline-offset:1px}
+.tw-lit{display:inline-flex;align-items:center;gap:3px;height:22px;padding:0 8px 1px 6px;border-radius:3px 3px 0 0;background:#ffd21f;color:#1b1a12;text-decoration:none;
+  font:600 11.5px var(--f-mono);white-space:nowrap;box-shadow:inset 0 -3px 0 #d9a800,0 0 14px rgba(255,210,31,.5);transition:transform .15s}
+.tw-lit:hover{transform:translateY(-2px);box-shadow:inset 0 -3px 0 #d9a800,0 0 20px rgba(255,210,31,.8)}
+.tw-lit small{font:600 10px var(--f-mono);opacity:.6}
+.tw-lit .tw-t{color:#c8327a}
+.tw-lit.part{background:linear-gradient(#ffd21f 55%,#ff9bcd 0);box-shadow:inset 0 -3px 0 #c8327a,0 0 14px rgba(255,111,181,.5)}
+.tw-lit.done{background:#ff6fb5;box-shadow:inset 0 -3px 0 #c8327a,0 0 16px rgba(255,111,181,.6)}
+.tw-roof{margin-left:var(--lab);height:30px;position:relative}
+.tw-roof::before{content:"";position:absolute;left:0;right:0;bottom:0;height:12px;background:var(--mortar);border-radius:4px 4px 0 0}
+.tw-roof i{position:absolute;bottom:12px;left:62%;width:4px;height:18px;background:var(--mortar)}
+.tw-roof i::after{content:"";position:absolute;top:-6px;left:-3px;width:10px;height:10px;border-radius:50%;background:var(--pink);box-shadow:0 0 10px var(--pink)}
+@media (prefers-reduced-motion:no-preference){.tw-roof i::after{animation:twblink 1.6s steps(1) infinite}}
+@keyframes twblink{50%{opacity:.25}}
+.tw-ground{margin-left:calc(var(--lab) - 26px);height:18px;border-radius:0 0 6px 6px;background:repeating-linear-gradient(90deg,#3faa52 0 7px,#58bb4a 7px 14px,#24803c 14px 21px);box-shadow:0 6px 0 #6b4a2a}
+.tw-cap{margin:16px 0 0 var(--lab);min-height:1.5em;font:500 12px/1.5 var(--f-mono);color:var(--muted)}
+.tw-cap b{color:var(--ink)}
+@media (max-width:860px){.tw{--lab:0px}.tw-f{grid-template-columns:1fr}.tw-n{text-align:left;padding:10px 0 6px;flex-direction:row;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .tw-ground{margin-left:-8px;margin-right:-8px}.lad-wrap{padding:14px 14px 10px}.tw-cap{margin-left:0}}
+.tw-f:last-child .tw-b{position:relative;padding-right:46px}
+.tw-f:last-child .tw-b::after{content:"";position:absolute;right:14px;bottom:4px;width:22px;height:30px;border-radius:11px 11px 0 0;background:#2a1a26;box-shadow:inset -3px 0 0 #1b1018,inset 0 0 0 2px #ffd21f}

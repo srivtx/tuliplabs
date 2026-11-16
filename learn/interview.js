@@ -106,7 +106,12 @@
   const ART = () => window.IVART;
   // a canvas the art module draws into, once it's on the page (it needs its own size first)
   const pic = (cls, paint) => { const cv = A.h("canvas", { class: cls, "aria-hidden": "true" }); requestAnimationFrame(() => ART() && paint(cv)); return cv; };
-  const say = (html) => A.h("div", { class: "iv-say" }, A.h("span", { class: "iv-who" }, "Interviewer"), A.h("div", { html }));
+  // two pixel faces, 8×8: the interviewer (dark hair, green jumper) and you (pink hair, blue jumper)
+  const face = (rows, pal) => `<svg viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true">${rows.map((r, y) => [...r].map((c, x) => c === "." ? "" : `<rect x="${x}" y="${y}" width="1" height="1" fill="${pal[c]}"/>`).join("")).join("")}</svg>`;
+  const THEM = face(["..hhhh..", ".hhhhhh.", ".hssssh.", ".sksskS.", ".ssssss.", "..smms..", ".pppppp.", "pppppppp"], { h: "#3a2a1a", s: "#f2c29b", S: "#f2c29b", k: "#1d1b17", m: "#c8327a", p: "#18977f" });
+  const YOU = face(["..pppp..", ".pppppp.", ".pyyyyp.", ".ykyyky.", ".yyyyyy.", "..ymmy..", ".bbbbbb.", "bbbbbbbb"], { p: "#ff6fb5", y: "#f7d7b5", k: "#1d1b17", m: "#c8327a", b: "#3a4fa3" });
+  const av = (who, cls) => A.h("i", { class: "iv-av " + who + (cls ? " " + cls : ""), html: who === "you" ? YOU : THEM });
+  const say = (html) => A.h("div", { class: "iv-say" }, av("them"), A.h("div", { class: "iv-bub" }, A.h("span", { class: "iv-who" }, "Interviewer"), A.h("div", { html })));
   const advance = (r, stage) => { r.stage = stage; r.reached = Math.max(r.reached, STAGES.indexOf(stage)); save(); draw(); window.scrollTo(0, 0); };
   const problemCard = (p, open) => {
     const d = A.h("details", { class: "iv-prob", open: open ? "" : null }, A.h("summary", {}, p.title),
@@ -119,13 +124,20 @@
   function stClarify(p, r, body) {
     const { h } = A;
     const list = h("div", { class: "iv-qs" });
+    // a chat: what you've asked so far, each with its answer, then the questions still to ask as bubbles to tap
     const paint = () => {
       list.textContent = "";
-      for (const i of r.order) {
-        const c = p.clarify[i], asked = r.asked.includes(i);
-        list.append(h("div", { class: "iv-q" + (asked ? " asked" : "") },
-          h("button", { class: "opt", type: "button", disabled: asked, onclick: () => { r.asked.push(i); save(); paint(); } }, h("span", { class: "iv-you" }, "You"), c.q),
-          asked ? h("p", { class: "iv-a" }, c.a) : null));
+      for (const i of r.asked) {
+        const c = p.clarify[i];
+        list.append(h("div", { class: "iv-q asked" },
+          h("div", { class: "iv-line" }, h("button", { class: "opt", type: "button", disabled: true }, h("span", { class: "iv-you" }, "You"), c.q), av("you")),
+          h("div", { class: "iv-ans" }, av("them", "sm"), h("p", { class: "iv-a" }, c.a))));
+      }
+      const left = r.order.filter((i) => !r.asked.includes(i));
+      if (left.length) list.append(h("p", { class: "iv-ask" }, r.asked.length ? "ask another" : "tap a question to ask it"));
+      for (const i of left) {
+        list.append(h("div", { class: "iv-q" }, h("div", { class: "iv-line" },
+          h("button", { class: "opt", type: "button", onclick: () => { r.asked.push(i); save(); paint(); } }, h("span", { class: "iv-you" }, "You"), p.clarify[i].q))));
       }
     };
     paint();

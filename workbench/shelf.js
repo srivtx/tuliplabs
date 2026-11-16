@@ -202,20 +202,30 @@
   // links to its first question it hasn't solved; a planned one is its name, quiet, with its hard part on hover.
   function unitQs(u) { return [...u.w, ...u.s]; }
   const unitHref = (u) => { const qs = unitQs(u), i = qs.findIndex((b) => !done[b.id]); return `board.html#${u.id}/${(i < 0 ? 0 : i) + 1}`; };
+  // The system design ladder as a pixel tower: floor 0 on the grass, the frontier under the roof. Every unit is a
+  // window; a built one is lit with its name on it and opens it, a planned one is dark. Point at (or tap) a dark
+  // window and the caption under the tower says what it will be.
   function ladderMap(SDX) {
+    const cap = h("p", { class: "tw-cap" });
+    const live = SDX.LADDER.filter((u) => !u.soon).length;
+    const rest = () => { cap.replaceChildren(h("b", {}, String(live)), ` of ${SDX.LADDER.length} windows lit · point at a dark one to see what it will be`); };
+    const show = (u) => { cap.replaceChildren(h("b", {}, u.name), u.group ? ` · ${u.group.toLowerCase()}` : "", u.sub ? ` · ${u.sub}` : "", u.soon ? " · being drawn" : ""); };
+    const win = (u) => {
+      if (u.soon) return h("button", { class: "tw-w", type: "button", title: u.name, "aria-label": u.name + " (planned)", onmouseenter: () => show(u), onfocus: () => show(u), onclick: () => show(u), onmouseleave: rest });
+      const qs = unitQs(u), d = qs.filter((b) => done[b.id]).length;
+      return h("a", { class: "tw-lit" + (d === qs.length ? " done" : d ? " part" : ""), href: unitHref(u), title: u.sub || u.name, onmouseenter: () => show(u), onfocus: () => show(u), onmouseleave: rest },
+        h("span", { class: "tw-t", "aria-hidden": "true" }, "✿"), u.name, h("small", {}, ` ${d}/${qs.length}`));
+    };
     const floors = SDX.FLOORS.map(([name, kicker], f) => {
-      const us = SDX.LADDER.filter((u) => u.floor === f);
-      const groups = [];
+      const us = SDX.LADDER.filter((u) => u.floor === f), groups = [];
       for (const u of us) { const g = u.group || ""; let G = groups.find((x) => x.g === g); if (!G) groups.push((G = { g, us: [] })); G.us.push(u); }
-      const live = us.filter((u) => !u.soon);
-      return h("li", { class: "lad-f" + (live.length ? " has" : ""), style: `--f:${f}` },
-        h("div", { class: "lad-n" }, h("b", {}, f), h("span", {}, name), h("small", {}, kicker)),
-        h("div", { class: "lad-us" }, groups.map((G) => h("p", {}, G.g ? h("em", {}, G.g) : null, G.us.flatMap((u, i) => [i ? h("i", { class: "lad-dot" }, " · ") : null,
-          u.soon ? h("span", { class: "lad-u", title: u.sub }, u.name)
-            : h("a", { class: "lad-u live", href: unitHref(u), title: u.sub }, h("span", { class: "lad-t", "aria-hidden": "true" }, "✿"), u.name,
-              h("small", {}, ` ${unitQs(u).filter((b) => done[b.id]).length}/${unitQs(u).length}`))])))));
-    });
-    return h("ol", { class: "lad", id: "ladder" }, floors);
+      return h("li", { class: "tw-f" + (us.some((u) => !u.soon) ? " has" : ""), style: `--f:${f}` },
+        h("div", { class: "tw-n" }, h("b", {}, h("em", {}, f), name), h("small", {}, kicker)),
+        h("div", { class: "tw-b" }, groups.map((G) => h("span", { class: "tw-g", title: G.g || null }, G.us.map(win)))));
+    }).reverse();
+    rest();
+    return h("div", { class: "tw", id: "ladder" }, h("div", { class: "tw-roof", "aria-hidden": "true" }, h("i")), h("ol", { class: "tw-fs", reversed: true, start: SDX.FLOORS.length - 1 }, floors),
+      h("div", { class: "tw-ground", "aria-hidden": "true" }), cap);
   }
   const SD_KIND = { follow: "Follow it", napkin: "Napkin math", bottleneck: "Find the bottleneck", draw: "Draw it" };
   // units with a picture of their own in tunnel/shots/sd-<id>.webp: one soft clay object each; the rest show their drawing
@@ -233,6 +243,8 @@
     const live = X.filter((x) => x.live), have = live.filter((x) => done[x.id]).length;
     const next = live.find((x) => !done[x.id]) || live[0];
     const P_ = S.wt || {};
+    // planned experiments, if any: with all of them live the "Being built" part and section are left out
+    const soon = X.filter((x) => !x.live);
     const side = h("nav", { class: "side", id: "side", "aria-label": "Experiments" },
       h("h2", {}, h("i", { class: "sq" }), "Wind Tunnel"),
       h("a", { class: "top-link", href: "./", "aria-current": "page" }, h("span", { class: "n" }, "✿"), "Your tunnel"),
@@ -243,8 +255,8 @@
       UNITS.length ? h("div", { class: "branch" }, UNITS.map((u, i) => { const qs = unitQs(u), d = qs.filter((b) => done[b.id]).length;
         return h("a", { href: unitHref(u), class: d === qs.length ? "done" : null }, h("span", { class: "n" }, i + 1), h("span", { class: "t" }, u.name), glyph(d === qs.length ? 2 : d ? 1 : 0, `${d} of ${qs.length}`)); }),
         h("a", { href: "#ladder" }, h("span", { class: "n" }, "↗"), h("span", { class: "t" }, "The whole ladder"))) : null,
-      h("div", { class: "part" }, "Being built"),
-      h("div", { class: "branch" }, X.filter((x) => !x.live).map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))));
+      soon.length ? h("div", { class: "part" }, "Being built") : null,
+      soon.length ? h("div", { class: "branch" }, soon.map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))) : null);
     const plotOf = (x) => {
       const i = X.indexOf(x);
       // a live experiment shows one soft clay object (made in ChatGPT, picked by hand); a planned one asks its question
@@ -260,7 +272,7 @@
         lede: "Every experiment is a small live system. Guess where it breaks, push the crowd at it, and watch requests queue, latency climb and servers drown. Then learn the law that did it, and fix the design on a budget, as code.",
         cta: [next ? h("a", { class: "key primary", href: `lab.html#${X.indexOf(next) + 1}` }, `${have ? "Carry on" : "Start"} · ${X.indexOf(next) + 1}. ${next.title} →`) : null,
           h("a", { class: "key", href: "#how" }, "How an experiment works")],
-        foot: `${live.length} experiments live · ${X.length - live.length} being built · runs in your browser`,
+        foot: `${live.length} experiments live${soon.length ? ` · ${soon.length} being built` : ""} · runs in your browser`,
         fig: "fig. 1 — a retry storm, 25 s after the surge ended",
         art: h("img", { class: "la-storm", src: "shots/wt05.webp", alt: "A crowd sending requests at a red, smoking server under a tall tower of queued retries" }),
       }),
@@ -279,8 +291,8 @@
           pct: (100 * d) / qs.length, bloomed: d === qs.length, next: d < qs.length && UNITS.findIndex((x) => unitQs(x).some((b) => !done[b.id])) === i ? (d ? "carry on" : "start here") : null }); }))) : null,
       UNITS.length ? secH("The ladder", `${SDX.LADDER.length} units, first principles first: nothing on a floor needs a floor above it`) : null,
       UNITS.length ? h("div", { class: "lad-wrap" }, ladderMap(SDX)) : null,
-      secH("Being built", "the question each one will answer"),
-      h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, X.filter((x) => !x.live).map(plotOf))));
+      soon.length ? secH("Being built", "the question each one will answer") : null,
+      soon.length ? h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, soon.map(plotOf))) : null);
     layout(side, col);
   }
 
