@@ -548,6 +548,18 @@ tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--soft) 45%,transpa
 .wnode.s2 .wn,.wnode.s2 .wl{fill:#1b1a12}
 .wnode:hover .cap{stroke:var(--kc,#e6a21a);stroke-width:2.5}
 .wnode{transition:transform .15s}.wnode:hover{transform:translateY(-2px)}
+.wnode .wl.two{font-size:9.5px}
+/* picture tiles: faded until started, a dashed ring once started, a solid ring and full colour when done */
+.wpics .wnode .ring{fill:var(--card);stroke:var(--line);stroke-width:1.5}
+.wpics .wnode image{filter:saturate(.6);opacity:.88;transition:filter .2s,opacity .2s}
+.wpics .wnode.s1 image,.wpics .wnode.s2 image,.wpics .wnode:hover image{filter:none;opacity:1}
+.wpics .wnode.s1 .ring{stroke:var(--kc,#e6a21a);stroke-width:2.5;stroke-dasharray:5 3}
+.wpics .wnode.s2 .ring{fill:var(--kc,#e6a21a);stroke:var(--kc,#e6a21a);stroke-width:3}
+.wpics .wnode:hover .ring{stroke:var(--pink);stroke-width:3}
+.wpics .wnode .nb{fill:rgba(24,10,22,.74)}
+.wpics .wnode .wn{font:700 10px var(--f-display);fill:#fff;text-anchor:middle}
+.wpics .wnode .wl{font:600 12px var(--f-body);fill:var(--ink);text-anchor:middle}
+.wpics .wnode.s0 .wl{fill:var(--muted)}
 
 /* Build X blueprint: one voxel part per step stacks into the machine; reuses / unlocks on the side */
 .bp{display:flex;gap:18px;align-items:center;margin:14px 0 18px;padding:14px 18px;border:1px solid var(--line);border-radius:10px;

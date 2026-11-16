@@ -1409,8 +1409,11 @@
   // A wiring map for tracks whose chapters reuse each other (CFG.wires = [[from, to], ...] by chapter
   // number, CFG.short_names = labels). Rows are layers: a build sits one row below everything it reuses.
   // A wire lights up in the track colour once both of its ends are finished.
+  // How the chapters wire together: one row per depth, each chapter under the average of the ones it builds on.
+  // Tracks with pixel scenes draw each chapter as a little picture tile (faded until started, ringed when done);
+  // the others keep the numbered keycaps. The map scales down to fit the page, never below 3/4 size; past that it scrolls.
   function wireMap() {
-    const chs = DATA.chapters, E = CFG.wires, NS = "http://www.w3.org/2000/svg";
+    const chs = DATA.chapters, E = CFG.wires, NS = "http://www.w3.org/2000/svg", PIC = !!CFG.cards;
     const by = new Map(chs.map((c) => [c.num, c])), layer = new Map();
     const depth = (n) => { if (layer.has(n)) return layer.get(n); const ps = E.filter((e) => e[1] === n); const d = ps.length ? 1 + Math.max(...ps.map((e) => depth(e[0]))) : 0; layer.set(n, d); return d; };
     chs.forEach((c) => depth(c.num));
@@ -1418,7 +1421,8 @@
     chs.forEach((c) => (rows[layer.get(c.num)] ||= []).push(c.num));
     // roots that feed something go first, then order each lower row by where its parents sit
     rows[0].sort((a, b) => (E.some((e) => e[0] === b) - E.some((e) => e[0] === a)) || a - b);
-    const pos = new Map(), W = 74, Hh = 92, KW = 62, KH = 44;
+    const KW = PIC ? 60 : 62, KH = PIC ? 60 : 44, W = 76, Hh = PIC ? 108 : 92;
+    const pos = new Map();
     // each lower build sits under the average of its parents, nudged right only to avoid overlapping
     const mid = (n) => { const ps = E.filter((e) => e[1] === n).map((e) => pos.get(e[0]).x); return ps.reduce((s, v) => s + v, 0) / ps.length; };
     rows.forEach((r, y) => {
@@ -1426,21 +1430,35 @@
       let x = -Infinity;
       r.forEach((n, i) => { x = y ? Math.max(mid(n), x + W) : 8 + i * W; pos.set(n, { x, y: 10 + y * Hh }); });
     });
-    const width = Math.max(...[...pos.values()].map((p) => p.x)) + KW + 10, height = rows.length * Hh + 8;
+    const width = Math.ceil(Math.max(...[...pos.values()].map((p) => p.x)) + KW + 14), height = rows.length * Hh + (PIC ? 4 : 8);
     const st = (n) => { const p = chProgress(by.get(n)); return p.n && p.d === p.n ? 2 : p.d ? 1 : 0; };
     const el = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
-    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, width, height, class: "wires", role: "img", "aria-label": "How the builds reuse each other" });
+    const svg = el("svg", { viewBox: `0 0 ${width} ${height}`, class: "wires" + (PIC ? " wpics" : ""), role: "img", "aria-label": "How the chapters build on each other",
+      style: `width:100%;max-width:${width}px;min-width:${Math.round(width * 0.75)}px;height:auto` });
     for (const [a, b] of E) {
-      const p = pos.get(a), q = pos.get(b), x1 = p.x + KW / 2, y1 = p.y + KH, x2 = q.x + KW / 2, y2 = q.y, my = (y1 + y2) / 2;
+      const p = pos.get(a), q = pos.get(b), x1 = p.x + KW / 2, y1 = p.y + KH + (PIC ? 2 : 0), x2 = q.x + KW / 2, y2 = q.y, my = (y1 + y2) / 2;
       svg.append(el("path", { d: `M${x1} ${y1} C${x1} ${my} ${x2} ${my} ${x2} ${y2}`, class: "wire" + (st(a) === 2 && st(b) === 2 ? " lit" : "") }));
     }
+    // a short name on at most two lines of about 11 letters, so neighbours never run into each other
+    const lines = (name) => { const out = []; for (const w of name.split(" ")) { const L = out[out.length - 1]; if (L && (L + " " + w).length <= 11) out[out.length - 1] = L + " " + w; else out.push(w); } return out.slice(0, 2); };
     for (const c of chs) {
       const p = pos.get(c.num), s = st(c.num), a = el("a", { href: "#" + c.num, class: "wnode s" + s });
       const t = el("title", {}); t.textContent = `${c.num}. ${c.title}`; a.append(t);
-      a.append(el("rect", { x: p.x, y: p.y, width: KW, height: KH, rx: 7, class: "cap" }));
-      const num = el("text", { x: p.x + 8, y: p.y + 17, class: "wn" }); num.textContent = String(c.num).padStart(2, "0");
-      const lbl = el("text", { x: p.x + 8, y: p.y + 34, class: "wl" }); lbl.textContent = (CFG.short_names || [])[c.num - 1] || "";
-      a.append(num, lbl); svg.append(a);
+      const name = (CFG.short_names || [])[c.num - 1] || "";
+      if (PIC) {
+        const cp = el("clipPath", { id: "wclip" + c.num }); cp.append(el("rect", { x: p.x, y: p.y, width: KW, height: KH, rx: 8 }));
+        a.append(cp, el("rect", { x: p.x - 2.5, y: p.y - 2.5, width: KW + 5, height: KH + 5, rx: 10, class: "ring" }),
+          el("image", { href: CARDS + c.id + ".webp", x: p.x, y: p.y, width: KW, height: KH, "clip-path": `url(#wclip${c.num})`, preserveAspectRatio: "xMidYMid slice" }),
+          el("rect", { x: p.x + 3, y: p.y + 3, width: 20, height: 14, rx: 3, class: "nb" }));
+        const num = el("text", { x: p.x + 13, y: p.y + 13.5, class: "wn" }); num.textContent = String(c.num).padStart(2, "0"); a.append(num);
+        lines(name).forEach((L, i) => { const lb = el("text", { x: p.x + KW / 2, y: p.y + KH + 15 + i * 13, class: "wl" }); lb.textContent = L; a.append(lb); });
+      } else {
+        a.append(el("rect", { x: p.x, y: p.y, width: KW, height: KH, rx: 7, class: "cap" }));
+        const num = el("text", { x: p.x + 8, y: p.y + 17, class: "wn" }); num.textContent = String(c.num).padStart(2, "0");
+        a.append(num);
+        lines(name).forEach((L, i) => { const lb = el("text", { x: p.x + 8, y: p.y + 31 + i * 10, class: "wl" + (lines(name).length > 1 ? " two" : "") }); lb.textContent = L; a.append(lb); });
+      }
+      svg.append(a);
     }
     return h("div", { class: "wiremap" },
       h("h3", { class: "sec-h" }, h("span", { class: "tree" }, "└──"), CFG.wireTitle || "How the builds wire together", h("small", {}, "each one reuses what sits above it · finish both ends and the wire lights up")),
