@@ -20,6 +20,7 @@ const TX = require(path.join(__dirname, "..", "tunnel", "tix.js"));
 const LT = require(path.join(__dirname, "..", "tunnel", "lat.js"));
 const CA = require(path.join(__dirname, "..", "tunnel", "cache.js"));
 const SP = require(path.join(__dirname, "..", "tunnel", "split.js"));
+const CP = require(path.join(__dirname, "..", "tunnel", "copies.js"));
 const { BOARDS } = SD;
 
 const bad = [];
@@ -586,6 +587,68 @@ for (const b of BOARDS) {
       `${N5.splits} splits leave ${N5.count} partitions`, `asks ${N5.search.toFixed(1)} partitions at worst`, `at ${pct(D.peak)} busy`])
       ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
     ok(N5.peak < 1 && N9.peak > 1 && D.search === 16, `${b.id}: the peaks or the hash search aren't what the why says`);
+  }
+}
+
+// ------------------------------------------------------------------------------------ Copies and lag --
+for (const b of BOARDS) {
+  const says = (x) => ok(b.why.includes(x), `${b.id}: the why doesn't say "${x}"`);
+  if (b.id === "cp-napkin") {
+    // the last question's follower falls behind exactly as this napkin works out
+    const R = CP.RW.rep, behind = (6000 - 4000) * 15 * 60;
+    ok(R.to - R.from === 15 * 60 && R.peak === behind / 6000 && R.back - R.to === behind / (10000 - 6000), `${b.id}: the report in cp-ryw doesn't match the napkin`);
+    ok(Math.abs(CP.repLag(R.to) - CP.RW.base - 300) < 1e-9, `${b.id}: follower 1 isn't 300 s behind when the report ends`);
+    for (const x of ["1,800,000 writes", "last 300 seconds", "7.5 minutes to catch up", "for 22 minutes"]) says(x);
+    ok(Math.round((R.back - R.from) / 60) === 23 || (R.back - R.from) / 60 === 22.5, `${b.id}: the stale stretch isn't 22 minutes`);
+  }
+  if (b.kind === "anomaly") {
+    // each fix cures exactly its own story, over 20,000 random trials, and the worked examples show the same
+    ok(JSON.stringify(b.answer) === JSON.stringify(CP.MATCH), `${b.id}: the answer isn't the simulator's matching`);
+    const A = CP.anomalies();
+    for (const st of CP.STORIES) {
+      ok(A[st].none > 0.01, `${b.id}: ${st} hardly ever goes wrong (${pct(A[st].none, 2)})`);
+      for (const f of CP.FIXES) ok((A[st][f] === 0) === (f === b.answer[st]) && (f === b.answer[st] || A[st][f] > 0.01), `${b.id}: ${st} with ${f}: ${pct(A[st][f], 2)}`);
+      ok(CP.story(st, "none", CP.EX[st]).bad, `${b.id}: the ${st} example doesn't go wrong`);
+      for (const f of CP.FIXES) ok(CP.story(st, f, CP.EX[st]).bad === (f !== b.answer[st]), `${b.id}: the ${st} example with ${f} doesn't show what the rates say`);
+    }
+    says(`half a second later, ${pct(A.mine.none)} of reloads`); says(`still ${pct(A.mine.sticky)}`); says(`${pct(A.back.none, 1)} of the time`); says(`${pct(A.order.none, 1)} of the time`);
+  }
+  if (b.kind === "quorum") {
+    // every W and R: reads are always fresh exactly when R + W > 5, and only 3 and 3 also survive 2 copies down
+    for (let w = 1; w <= CP.QN; w++) for (let r = 1; r <= CP.QN; r++) {
+      const q = CP.quorum(w, r), pass = q.stale === 0 && q.wDown && q.rDown;
+      ok((q.stale === 0) === (r + w > CP.QN), `${b.id}: W ${w} R ${r}: ${q.stale} stale reads`);
+      ok(pass === (w === b.answer.w && r === b.answer.r), `${b.id}: W ${w} R ${r} ${pass ? "passes" : "fails"}`);
+      // a second seed agrees about which pairs go stale
+      ok((CP.quorum(w, r, 2).stale === 0) === (r + w > CP.QN), `${b.id}: W ${w} R ${r} on seed 2`);
+    }
+    const q11 = CP.quorum(1, 1), q51 = CP.quorum(5, 1), q33 = CP.quorum(3, 3);
+    says(`${num(q11.stale)} of ${num(CP.QT)} reads`); says(`slowest 1% of writes take ${Math.round(q51.wP99)} ms`);
+    ok(q33.wP99.toFixed(1) === q33.rP99.toFixed(1), `${b.id}: 3 and 3's slowest writes and reads differ`); says(`within ${q33.wP99.toFixed(1)} ms`);
+  }
+  if (b.kind === "failover") {
+    const g = b.goals, pass = (r) => r.lost <= g.lost && r.p99 <= g.p99, isAns = (o) => b.answers.some((a) => a.mode === o.mode && a.promote === o.promote), at = {};
+    for (const mode of CP.MODES) for (const promote of CP.PROMOTE) {
+      const o = { mode, promote }, r = (at[`${mode}:${promote}`] = CP.failover(o));
+      ok(pass(r) === isAns(o), `${b.id}: ${mode}, ${promote}: ${r.lost} lost, p99 ${r.p99.toFixed(1)} ms`);
+      ok((CP.failover(o, 7).lost === 0) === (r.lost === 0), `${b.id}: ${mode}, ${promote} loses writes on one seed and not the other`);
+    }
+    const A = at["async:near"], S = at["sync:ahead"], M = at["semi:ahead"];
+    says(`quickest, ${Math.round(A.p99)} ms for the slowest 1%`); says(`costs ${num(A.lost)} writes`); says(`loses ${num(at["async:ahead"].lost)}`);
+    says(`${Math.round(S.p50)} ms in the middle`); says(`${num(S.hung)} writes were still waiting`); says(`slowest 1% took ${(S.p99 / 1000).toFixed(1)} seconds`);
+    says(`middle write at ${M.p50.toFixed(1)} ms`); says(`${num(at["semi:near"].lost)} writes are gone`); says(`${num(at["semi:far"].lost)} are`); says(`slowest 1% at ${Math.round(M.p99)} ms`);
+    ok(at["semi:near"].calm.lost === 0 && at["semi:far"].stall.lost === 0 && M.stall.who === "far" && M.calm.who === "near", `${b.id}: semi-sync's losses don't happen on the days the why says`);
+  }
+  if (b.kind === "ryw") {
+    const g = b.goals, pass = (r) => r.vanished <= g.vanished && r.leader <= g.busy && r.follower <= g.busy, isAns = (o) => b.answers.some((a) => a.route === o.route && a.n === o.n), at = {};
+    for (const route of CP.ROUTES) for (const n of CP.NS) {
+      const o = { route, n }, r = (at[`${route}:${n}`] = CP.ryw(o));
+      ok(pass(r) === isAns(o), `${b.id}: ${route}, ${n}: ${r.vanished} vanished, leader ${pct(r.leader)}, follower ${pct(r.follower)}`);
+    }
+    says(`with 8 followers, ${num(at["any:8"].vanished)} people`); says(`sends it ${num(at["leader60:8"].leaderReads)} reads a second, ${pct(at["leader60:8"].leader)}`); says(`still ${num(at["leader60:8"].vanished)} posts`);
+    says(`on 4 is ${pct(at["caught:4"].follower)} busy, on 6 it's ${pct(at["caught:6"].follower)}, on 8, ${pct(at["caught:8"].follower)}`);
+    ok(at["caught:8"].leaderReads === 0, `${b.id}: the leader serves reads when followers have caught up`);
+    ok(CP.RW.looks.includes(120) && CP.repLag(CP.RW.rep.to) > 120, `${b.id}: follower 1 is never more than 2 minutes behind`);
   }
 }
 

@@ -1028,6 +1028,62 @@
     ],
   };
 
+  // ---------------------------------------------------------------------------------------- Copies and lag --
+  // First principles: every database tier keeps copies, and every copy is a little late. What that looks like to the
+  // people using it, and what to ask for. Every number is worked out by tunnel/copies.js, and tools/board-check.js
+  // checks the text against it.
+  const CP_SITE = {
+    nodes: [P("u", "people", 95, 300, { label: "people", tag: "read and post" }), P("ap", "app", 320, 300, { label: "app servers", tag: "writes → leader" }),
+      P("ld", "sql", 560, 140, { label: "leader", tag: "6,000 writes a second" }), P("f1", "rreplica", 560, 430, { label: "follower 1", tag: "runs the report" }),
+      P("f2", "rreplica", 800, 300, { label: "follower 2", tag: "replays the log" })],
+    wires: [["u", "ap"], ["ap", "ld"], ["ap", "f1"], ["ap", "f2"], ["ld", "f1"], ["ld", "f2"]],
+  };
+  const COPIES_UNIT = {
+    id: "copies", name: "Copies and lag", sub: "Followers, quorums, and reading your own writes", floor: 3,
+    w: [
+      {
+        id: "cp-napkin", kind: "napkin", title: "How far behind?",
+        lede: "A site's leader database takes <b>6,000</b> writes a second, and its followers replay them from its log. A follower can replay <b>10,000</b> a second. Every night at 9 pm a <b>15-minute</b> report runs on follower 1, and while it runs the follower replays only <b>4,000</b> a second.",
+        q: {},
+        design: CP_SITE,
+        notes: [
+          { id: "b", on: "f1", dx: 210, dy: -10, label: "writes behind when the report ends", unit: "", calc: "(6000 - 4000) * 15 * 60", hint: "it falls 2,000 further behind every second, for 15 minutes" },
+          { id: "l", on: "ld", dx: -250, dy: -10, label: "how old its newest data is then", unit: "s", calc: "1800000 / 6000", hint: "the writes it's missing, over how many the leader takes a second" },
+          { id: "c", on: "f1", dx: 210, dy: 80, label: "minutes to catch up afterwards", unit: "min", calc: "1800000 / (10000 - 6000) / 60", hint: "it replays 10,000 a second, but 6,000 new ones keep coming" },
+        ],
+        why: "The report lets follower 1 replay 4,000 writes a second while the leader takes 6,000, so it falls 2,000 further behind every second: after 15 minutes, 1,800,000 writes. Those are the last 300 seconds of the site (1,800,000 ÷ 6,000), so anyone reading from it sees the site as it was 5 minutes ago: new posts missing, an old price, a message not sent. Afterwards it replays 10,000 a second, but 6,000 new ones keep arriving, so it gains only 4,000 a second: 7.5 minutes to catch up. So lag isn't one number: most of the night it's a fraction of a second, and for 22 minutes it's minutes. Anything that reads from a follower has to live with that, or ask for more. The next questions are what that looks like to the people using it, and what to ask for.",
+      },
+      {
+        id: "cp-anomaly", kind: "anomaly", title: "Three strange reloads",
+        lede: "A forum writes to its leader and reads from <b>2</b> followers, each a little behind: usually a fraction of a second, sometimes a couple of seconds. Three people saw something strange. Drag each fix onto the story it cures.",
+        answer: { mine: "leader", back: "sticky", order: "thread" },
+        why: "Ana's comment went to the leader, but her reload went to a follower that didn't have it yet: half a second later, 37% of reloads miss it. Sending her to the same follower every time doesn't help, still 37%, because that follower can be behind too. Reading what you wrote from a copy that has it does: the leader, or a follower that has reached your write. That's read-your-writes. Ben wrote nothing, so that rule doesn't touch him: his two reloads went to two followers, the first ahead and the second behind, so the comment went back in time, 5.3% of the time. Stuck to one follower, he only ever moves forward: monotonic reads. Eve's question and answer sit in two partitions, each with its own followers and its own lag, so the answer can arrive first: 11.8% of the time. Keep a thread in one partition and it's copied in the order it was written, so whatever Eve sees has everything before it: consistent prefix. Each fix cures its own story, and none of the others.",
+      },
+      {
+        id: "cp-quorum", kind: "quorum", title: "R + W",
+        lede: "A leaderless store, like Cassandra or DynamoDB, keeps every key on <b>5</b> copies. A write goes to all 5 and is done when <b>W</b> of them say they have it. A read asks all 5 and takes the newest of the first <b>R</b> answers. Messages usually take a millisecond or two, and 3 in 100 hit a 20 ms hiccup. Tap the W and R you'd pick. The goals: a read straight after a write always sees it, and it keeps working with any <b>2</b> copies down.",
+        answer: { w: 3, r: 3 },
+        why: "With W = 1 and R = 1, a write is done once the fastest copy has it, and the read takes the fastest answer, often from a copy the write hasn't reached: 1,531 of 10,000 reads straight after a write miss it. Bigger W and R miss less, but only stop missing once R + W is more than 5: then the R copies that answer and the W copies that have the write must share at least one, whatever order the messages arrive in. W = 5 and R = 1 does that, but one copy down stops every write, and waiting for the slowest copy makes the slowest 1% of writes take 27 ms. W = 3 and R = 3 is the only pair that adds up to more than 5 and still finds enough copies with 2 down: every read fresh, and the slowest 1% of writes and of reads within 5.8 ms. That's a majority quorum, Cassandra's QUORUM. Copies that miss a write catch up later from the others: read repair, and hinted handoff.",
+      },
+    ],
+    s: [
+      {
+        id: "cp-failover", kind: "failover", title: "The leader dies",
+        lede: "A payments database: a leader, a follower in the same building (<b>0.3 ms</b> away) and one in another region (<b>35 ms</b> away), <b>2,000</b> writes a second. When the leader's machine dies a follower takes over, and any write the leader had said yes to that the new leader doesn't have is gone. It dies twice: on a calm day, and once while the near follower's disk has been stalled for <b>2 s</b>. Choose when the leader says yes, and which follower takes over. The goals: no lost writes, and the slowest 1% of writes within <b>100 ms</b>.",
+        goals: { lost: 0, p99: 100 },
+        answers: [{ mode: "semi", promote: "ahead" }],
+        why: "Saying yes at once (async) is quickest, 1 ms for the slowest 1%, but the followers are always a little behind when the leader dies. Promote the near one and the stalled disk costs 4,002 writes; even the follower furthest ahead loses 74, because the far one is 35 ms behind. Waiting for both followers (sync) loses nothing, but every write waits for the other region, 76 ms in the middle, and while the near disk stalls every write waits on it: 4,152 writes were still waiting when the leader died, and the slowest 1% took 1.4 seconds. Waiting for one follower, whichever answers first (semi-sync), keeps the middle write at 1.4 ms, and every yes is on at least one follower. Only one, though: promote the near follower during the stall and 3,854 writes are gone; promote the far one on the calm day and 71 are. Promote whichever follower is furthest ahead and nothing is lost either time, with the slowest 1% at 78 ms. MySQL's semi-sync replication and Postgres's ANY 1 standbys work this way, and failover tools promote the most caught-up follower.",
+      },
+      {
+        id: "cp-ryw", kind: "ryw", title: "Where did my post go?",
+        lede: "A social site: <b>6,000</b> posts a second and <b>300,000</b> reads a second, on a leader and its followers. A follower serves at most <b>60,000</b> reads a second; the leader has room for <b>20,000</b> besides its writes. At 9 pm follower 1 runs the nightly report and falls up to <b>5 minutes</b> behind, as in the first question. People who post look again 1 s, 10 s, 30 s, 1, 2 and 5 minutes later. Choose where their reads go, and how many followers there are. The goals: nobody's post vanishes on them, and no machine over <b>80%</b> busy.",
+        goals: { vanished: 0, busy: 0.8 },
+        answers: [{ route: "caught", n: 8 }],
+        why: "Sent to any follower, a look that lands on follower 1 while it's behind misses the post: with 8 followers, 3,474,360 people over the half hour saw their own post vanish. Reading from the leader for a minute after you post sends it 18,000 reads a second, 90% of its room, and still 1,351,465 posts vanish, because 2 and 5 minutes later follower 1 is further behind than that. The app knows where each person's last write sits in the log, so it can send their reads to a follower that has got that far, and to the leader only if none has: no post vanishes, and the leader serves no reads at all. Then it's just enough followers: 300,000 reads a second on 4 is 130% busy, on 6 it's 85%, on 8, 64%. A minute on the leader is a guess at how far behind the followers are; asking how far they've got is a measurement.",
+      },
+    ],
+  };
+
   // ---------------------------------------------------------------------------------------------- the ladder --
   // Every unit planned, floor by floor. Built ones carry their questions; the rest are the plan.
   const FLOORS = [
@@ -1043,7 +1099,7 @@
     [1, "lbs", "Load balancers", "L4 vs L7, health checks"], [1, "cdn", "Proxies and CDNs", "Edge caches and TTLs"],
     [2, "models", "Data models", "Relational, document, graph…"], [2, "indexes", "Indexes", "B-trees and query plans"], [2, "engines", "Storage engines", "B-tree vs LSM"],
     [2, "tx", "Transactions", "Isolation and lost updates"], [2, "blobs", "Blobs and search", "S3 vs a database"], [2, "geo", "Geo data", "Geohash and quadtrees"],
-    [3, "copies", "Copies and lag", "Leaders, followers, quorums"], [3, "agree", "Agreeing", "Raft"],
+    [3, "agree", "Agreeing", "Raft"],
     [3, "time", "Time and order", "Clock skew, vector clocks"], [3, "cap", "Consistency", "CAP and PACELC"], [3, "sagas", "Transactions across services", "2PC, sagas, outbox"], [3, "ids", "Unique IDs", "Snowflake"],
 [4, "queues", "Queues", "Backpressure, dead letters"], [4, "streams", "Logs and streams", "Offsets and replay"],
     [4, "stream", "Stream processing", "Windows and late events"], [4, "batch", "Batch processing", "MapReduce and skew"], [4, "limits", "Rate limiting", "Token buckets"], [4, "flows", "Workflows", "Leases and retries"],
@@ -1068,7 +1124,7 @@
     [8, "llm", "LLM serving", "Batching and the KV cache"], [8, "rag", "RAG", "Embeddings and recall"], [8, "recs", "A recommender", "Millions to 10 in 100 ms"],
     [8, "train", "A training cluster", "Parallelism, checkpoints"], [8, "agents", "An agent platform", "Tools and sandboxes"], [8, "copilot", "An AI coding assistant", "Context under 200 ms"],
   ].map(([floor, id, name, sub, group]) => ({ id, name, sub, floor, group, soon: true }));
-  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT, NUMBERS_UNIT, CACHE_UNIT, SPLIT_UNIT];
+  const UNITS = [SNIP_UNIT, REDIS_UNIT, WA_UNIT, UBER_UNIT, TWITTER_UNIT, YOUTUBE_UNIT, TICKET_UNIT, NUMBERS_UNIT, CACHE_UNIT, SPLIT_UNIT, COPIES_UNIT];
   const LADDER = [...UNITS, ...SOON].sort((a, b) => a.floor - b.floor);
   // the first real app is the beginner's door: Snip, before the tools
   // the cover drawing for a unit's card: its fullest design
@@ -1081,6 +1137,7 @@
   NUMBERS_UNIT.cover = LN_PAGE;
   CACHE_UNIT.cover = CC_SHOP;
   SPLIT_UNIT.cover = SP_CHAT;
+  COPIES_UNIT.cover = CP_SITE;
   SNIP_UNIT.cover = byId(SNIPQ, "sd06").reference;
   // every built question, flat, knowing its unit and mode
   const BOARDS = [];
