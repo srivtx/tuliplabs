@@ -754,7 +754,8 @@ img.stk{width:34px;height:34px}
 .cv-art.has-pic:hover img.cv-pic{transform:rotate(-2deg) scale(1.04)}
 .cv-art.has-pic .cv-ghost{opacity:.12}
 .cv-art.has-pic .cv-fl{inset:auto auto -6px -18px;width:76px;height:100px;z-index:2}
-@media (max-width:640px){.cv-art img.cv-pic{width:112px;height:112px;bottom:16px}}
+/* the cover's picture column is 92px under 860px wide: the picture stays inside it so it never covers the tagline */
+@media (max-width:860px){.cv-art img.cv-pic{width:92px;height:92px;right:0;bottom:18px;border-width:3px;border-radius:11px}.cv-art.has-pic .cv-fl{width:52px;height:70px;inset:auto auto -6px -14px}}
 @media (max-width:640px){.plot.pic .soil{aspect-ratio:5/4}}
 
 /* a bee loops over every chapter in full bloom; a watering can pours on the rail's flower when it grows */
