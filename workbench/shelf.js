@@ -233,6 +233,8 @@
     const live = X.filter((x) => x.live), have = live.filter((x) => done[x.id]).length;
     const next = live.find((x) => !done[x.id]) || live[0];
     const P_ = S.wt || {};
+    // planned experiments, if any: with all of them live the "Being built" part and section are left out
+    const soon = X.filter((x) => !x.live);
     const side = h("nav", { class: "side", id: "side", "aria-label": "Experiments" },
       h("h2", {}, h("i", { class: "sq" }), "Wind Tunnel"),
       h("a", { class: "top-link", href: "./", "aria-current": "page" }, h("span", { class: "n" }, "✿"), "Your tunnel"),
@@ -243,8 +245,8 @@
       UNITS.length ? h("div", { class: "branch" }, UNITS.map((u, i) => { const qs = unitQs(u), d = qs.filter((b) => done[b.id]).length;
         return h("a", { href: unitHref(u), class: d === qs.length ? "done" : null }, h("span", { class: "n" }, i + 1), h("span", { class: "t" }, u.name), glyph(d === qs.length ? 2 : d ? 1 : 0, `${d} of ${qs.length}`)); }),
         h("a", { href: "#ladder" }, h("span", { class: "n" }, "↗"), h("span", { class: "t" }, "The whole ladder"))) : null,
-      h("div", { class: "part" }, "Being built"),
-      h("div", { class: "branch" }, X.filter((x) => !x.live).map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))));
+      soon.length ? h("div", { class: "part" }, "Being built") : null,
+      soon.length ? h("div", { class: "branch" }, soon.map((x) => h("a", { class: "la-soon", "aria-disabled": "true" }, h("span", { class: "n" }, X.indexOf(x) + 1), h("span", { class: "t" }, x.title), h("small", {}, "soon")))) : null);
     const plotOf = (x) => {
       const i = X.indexOf(x);
       // a live experiment shows one soft clay object (made in ChatGPT, picked by hand); a planned one asks its question
@@ -260,7 +262,7 @@
         lede: "Every experiment is a small live system. Guess where it breaks, push the crowd at it, and watch requests queue, latency climb and servers drown. Then learn the law that did it, and fix the design on a budget, as code.",
         cta: [next ? h("a", { class: "key primary", href: `lab.html#${X.indexOf(next) + 1}` }, `${have ? "Carry on" : "Start"} · ${X.indexOf(next) + 1}. ${next.title} →`) : null,
           h("a", { class: "key", href: "#how" }, "How an experiment works")],
-        foot: `${live.length} experiments live · ${X.length - live.length} being built · runs in your browser`,
+        foot: `${live.length} experiments live${soon.length ? ` · ${soon.length} being built` : ""} · runs in your browser`,
         fig: "fig. 1 — a retry storm, 25 s after the surge ended",
         art: h("img", { class: "la-storm", src: "shots/wt05.webp", alt: "A crowd sending requests at a red, smoking server under a tall tower of queued retries" }),
       }),
@@ -279,8 +281,8 @@
           pct: (100 * d) / qs.length, bloomed: d === qs.length, next: d < qs.length && UNITS.findIndex((x) => unitQs(x).some((b) => !done[b.id])) === i ? (d ? "carry on" : "start here") : null }); }))) : null,
       UNITS.length ? secH("The ladder", `${SDX.LADDER.length} units, first principles first: nothing on a floor needs a floor above it`) : null,
       UNITS.length ? h("div", { class: "lad-wrap" }, ladderMap(SDX)) : null,
-      secH("Being built", "the question each one will answer"),
-      h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, X.filter((x) => !x.live).map(plotOf))));
+      soon.length ? secH("Being built", "the question each one will answer") : null,
+      soon.length ? h("div", { class: "bed" }, h("div", { class: "plots la-plots" }, soon.map(plotOf))) : null);
     layout(side, col);
   }
 
