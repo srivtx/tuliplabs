@@ -237,6 +237,24 @@ th{background:var(--soft)}
 .pager{display:flex;justify-content:space-between;gap:10px;margin-top:30px}
 .toast{pointer-events:none;position:fixed;top:64px;right:16px;background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:14px;z-index:50}
 .empty{color:var(--muted);text-align:center;padding:40px 10px}
+/* the review page at rest: a sticker, a line, and the track the cards hop along */
+.rv-rest{position:relative;margin:24px 0;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:26px 28px 24px}
+.rv-rest h3{font:400 30px/1.1 var(--f-serif);margin:0 0 6px;padding-right:100px}
+.rv-rest>p{color:var(--muted);margin:0 0 6px;max-width:540px;padding-right:90px}
+.rv-rest .rv-zz{position:absolute;right:24px;top:16px;width:88px;height:88px}
+.rv-rest img.rv-zz{width:72px;height:72px}
+.rv-track svg{display:block;width:100%;height:auto;margin:4px 0 14px}
+.rt-base{stroke:var(--line);stroke-width:2}.rt-hop{fill:none;stroke:var(--pink);stroke-width:2;stroke-dasharray:5 4}
+.rt-ghost{fill:var(--panel);stroke:var(--line);stroke-width:1.5;stroke-dasharray:4 3}.rt-l{fill:var(--line)}
+.rt-card{fill:color-mix(in srgb,var(--pink) 22%,var(--card));stroke:var(--pink);stroke-width:1.5}.rt-card.now{fill:var(--pink)}
+.rt-n{fill:var(--ink)}.rt-nt{font:700 11px var(--f-mono);fill:var(--bg);text-anchor:middle}
+.rt-d{font:600 11px var(--f-mono);fill:var(--muted);text-anchor:middle}
+@media (prefers-reduced-motion:no-preference){.rt-hopper{animation:rthop 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}}
+@keyframes rthop{0%,55%,100%{transform:translateY(0) scaleY(1)}62%{transform:translateY(0) scaleY(.86)}74%{transform:translateY(-14px) scaleY(1.04)}86%{transform:translateY(0) scaleY(.92)}}
+.rt-d.sm{display:none}
+@media (max-width:560px){.rv-rest{padding:18px 16px}.rv-rest h3{font-size:24px;padding-right:0}.rv-rest>p{padding-right:0}
+  .rv-rest .rv-zz{position:static;float:right;width:56px;height:56px;margin:-4px -4px 4px 8px}.rv-rest img.rv-zz{width:48px;height:48px}
+  .rv-track{clear:both}.rt-d{display:none}.rt-d.sm{display:block;font-size:26px}.rt-d:first-of-type{display:block;font-size:24px}}
 .menu-btn{display:none}
 
 @media (max-width: 860px){

@@ -1747,7 +1747,14 @@
     window.scrollTo(0, 0);
     const upcoming = Object.values(S.rev).filter((r) => r.due > Date.now()).length;
     if (!total) {
-      stage.append(h("div", { class: "empty" }, h("p", {}, Object.keys(S.rev).length ? `Nothing due right now. ${upcoming} item${upcoming === 1 ? "" : "s"} scheduled for later.` : "Your deck is empty. Work through a chapter: every prediction, quiz, puzzle and exercise you finish lands here."), h("a", { class: "btn primary", href: "#1" }, "Open chapter 1")));
+      const any = Object.keys(S.rev).length;
+      const soonest = Math.min(...Object.values(S.rev).map((r) => r.due));
+      const wait = any ? Math.max(1, Math.ceil((soonest - Date.now()) / DAY)) : 0;
+      stage.append(h("div", { class: "rv-rest" }, sticker("sleep", "rv-zz"),
+        h("h3", {}, any ? "Nothing due right now." : "Nothing to bring back yet."),
+        h("p", {}, any ? `${upcoming} card${upcoming === 1 ? " is" : "s are"} resting along the track. The next one comes back in ${wait} day${wait === 1 ? "" : "s"}.`
+          : "Every prediction, quiz, puzzle and exercise you finish becomes a card here. Get it right and it hops further away; miss it and it comes back tomorrow."),
+        reviewTrack(), h("a", { class: "btn primary", href: "#1" }, any ? "Back to chapter 1" : "Open chapter 1")));
       return;
     }
     let idx = 0, right = 0;
@@ -1755,7 +1762,8 @@
     function next() {
       stage.textContent = "";
       if (idx >= queue.length) {
-        stage.append(h("div", { class: "empty" }, h("p", {}, `Done: ${right} of ${total} on the first try. Come back tomorrow for the next batch.`), h("a", { class: "btn primary", href: "#" }, "Back to chapters")));
+        stage.append(h("div", { class: "rv-rest" }, sticker("trophy", "rv-zz slap", "Review done"), h("h3", {}, `${right} of ${total} on the first try.`),
+          h("p", {}, "Here's where your cards went. Come back tomorrow for the next batch."), reviewTrack(), h("a", { class: "btn primary", href: "#" }, "Back to chapters")));
         updateReviewCount();
         return;
       }
@@ -1777,6 +1785,22 @@
       stage.append(h("p", { class: "kbd" }, `Item ${idx + 1} of ${total} · from chapter ${ch.num}, ${ch.title}`), renderBlock(b, ctx), h("div", { class: "btns" }, nextBtn, h("a", { class: "btn", href: `#${ch.num}` }, "Revisit the chapter")));
     }
     next();
+  }
+
+  // The review track: today, then a stop for each Leitner box (1, 3, 7, 16 and 35 days). A card hops one stop
+  // further each time you get it right and drops back to the 1-day stop when you miss it. Each stop shows its cards.
+  function reviewTrack() {
+    const NS = "http://www.w3.org/2000/svg", W = 880, X = (d) => 60 + 760 * Math.sqrt(d / BOXES[BOXES.length - 1]);
+    const at = BOXES.map((_, k) => Object.values(S.rev).filter((r) => (r.box || 0) === k && r.due > Date.now()).length);
+    const due = Object.values(S.rev).filter((r) => r.due <= Date.now()).length;
+    let g = `<line x1="40" y1="96" x2="${W - 30}" y2="96" class="rt-base"/>`;
+    for (let k = 1; k < BOXES.length; k++) { const a = X(BOXES[k - 1]), b = X(BOXES[k]); g += `<path d="M${a} 76Q${(a + b) / 2} ${36 - k * 4} ${b} 76" class="rt-hop"/>`; }
+    const stack = (x, n, now) => { if (!n) return `<rect x="${x - 16}" y="58" width="32" height="38" rx="5" class="rt-ghost"/><rect x="${x - 9}" y="68" width="18" height="4" rx="2" class="rt-l"/><rect x="${x - 9}" y="77" width="12" height="4" rx="2" class="rt-l"/>`;
+      let o = ""; for (let i = Math.min(n, 3) - 1; i >= 0; i--) o += `<rect x="${x - 16 + i * 4}" y="${58 - i * 4}" width="32" height="38" rx="5" class="rt-card${now ? " now" : ""}"/>`;
+      return o + `<circle cx="${x + 17}" cy="${54 - Math.min(n, 3) * 4}" r="11" class="rt-n"/><text x="${x + 17}" y="${58 - Math.min(n, 3) * 4}" class="rt-nt">${n}</text>`; };
+    g += `<g class="rt-today">${due ? stack(X(0), due, true) : `<rect x="${X(0) - 16}" y="58" width="32" height="38" rx="5" class="rt-card now rt-hopper"/>`}</g><text x="${X(0)}" y="120" class="rt-d">today</text>`;
+    for (let k = 1; k < BOXES.length; k++) g += stack(X(BOXES[k]), at[k]) + `<text x="${X(BOXES[k])}" y="120" class="rt-d">${BOXES[k]} day${BOXES[k] > 1 ? "s" : ""}</text><text x="${X(BOXES[k])}" y="124" class="rt-d sm">${BOXES[k]}d</text>`;
+    return h("div", { class: "rv-track", html: `<svg xmlns="${NS}" viewBox="0 0 ${W} 130" role="img" aria-label="Cards waiting 1, 3, 7, 16 and 35 days">${g}</svg>` });
   }
 
   // what the mock test (learn/mock.js) may use: the page, the store, the runner and the review deck
