@@ -202,20 +202,30 @@
   // links to its first question it hasn't solved; a planned one is its name, quiet, with its hard part on hover.
   function unitQs(u) { return [...u.w, ...u.s]; }
   const unitHref = (u) => { const qs = unitQs(u), i = qs.findIndex((b) => !done[b.id]); return `board.html#${u.id}/${(i < 0 ? 0 : i) + 1}`; };
+  // The system design ladder as a pixel tower: floor 0 on the grass, the frontier under the roof. Every unit is a
+  // window; a built one is lit with its name on it and opens it, a planned one is dark. Point at (or tap) a dark
+  // window and the caption under the tower says what it will be.
   function ladderMap(SDX) {
+    const cap = h("p", { class: "tw-cap" });
+    const live = SDX.LADDER.filter((u) => !u.soon).length;
+    const rest = () => { cap.replaceChildren(h("b", {}, String(live)), ` of ${SDX.LADDER.length} windows lit · point at a dark one to see what it will be`); };
+    const show = (u) => { cap.replaceChildren(h("b", {}, u.name), u.group ? ` · ${u.group.toLowerCase()}` : "", u.sub ? ` · ${u.sub}` : "", u.soon ? " · being drawn" : ""); };
+    const win = (u) => {
+      if (u.soon) return h("button", { class: "tw-w", type: "button", title: u.name, "aria-label": u.name + " (planned)", onmouseenter: () => show(u), onfocus: () => show(u), onclick: () => show(u), onmouseleave: rest });
+      const qs = unitQs(u), d = qs.filter((b) => done[b.id]).length;
+      return h("a", { class: "tw-lit" + (d === qs.length ? " done" : d ? " part" : ""), href: unitHref(u), title: u.sub || u.name, onmouseenter: () => show(u), onfocus: () => show(u), onmouseleave: rest },
+        h("span", { class: "tw-t", "aria-hidden": "true" }, "✿"), u.name, h("small", {}, ` ${d}/${qs.length}`));
+    };
     const floors = SDX.FLOORS.map(([name, kicker], f) => {
-      const us = SDX.LADDER.filter((u) => u.floor === f);
-      const groups = [];
+      const us = SDX.LADDER.filter((u) => u.floor === f), groups = [];
       for (const u of us) { const g = u.group || ""; let G = groups.find((x) => x.g === g); if (!G) groups.push((G = { g, us: [] })); G.us.push(u); }
-      const live = us.filter((u) => !u.soon);
-      return h("li", { class: "lad-f" + (live.length ? " has" : ""), style: `--f:${f}` },
-        h("div", { class: "lad-n" }, h("b", {}, f), h("span", {}, name), h("small", {}, kicker)),
-        h("div", { class: "lad-us" }, groups.map((G) => h("p", {}, G.g ? h("em", {}, G.g) : null, G.us.flatMap((u, i) => [i ? h("i", { class: "lad-dot" }, " · ") : null,
-          u.soon ? h("span", { class: "lad-u", title: u.sub }, u.name)
-            : h("a", { class: "lad-u live", href: unitHref(u), title: u.sub }, h("span", { class: "lad-t", "aria-hidden": "true" }, "✿"), u.name,
-              h("small", {}, ` ${unitQs(u).filter((b) => done[b.id]).length}/${unitQs(u).length}`))])))));
-    });
-    return h("ol", { class: "lad", id: "ladder" }, floors);
+      return h("li", { class: "tw-f" + (us.some((u) => !u.soon) ? " has" : ""), style: `--f:${f}` },
+        h("div", { class: "tw-n" }, h("b", {}, h("em", {}, f), name), h("small", {}, kicker)),
+        h("div", { class: "tw-b" }, groups.map((G) => h("span", { class: "tw-g", title: G.g || null }, G.us.map(win)))));
+    }).reverse();
+    rest();
+    return h("div", { class: "tw", id: "ladder" }, h("div", { class: "tw-roof", "aria-hidden": "true" }, h("i")), h("ol", { class: "tw-fs", reversed: true, start: SDX.FLOORS.length - 1 }, floors),
+      h("div", { class: "tw-ground", "aria-hidden": "true" }), cap);
   }
   const SD_KIND = { follow: "Follow it", napkin: "Napkin math", bottleneck: "Find the bottleneck", draw: "Draw it" };
   // units with a picture of their own in tunnel/shots/sd-<id>.webp: one soft clay object each; the rest show their drawing
